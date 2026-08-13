@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
@@ -124,7 +124,7 @@ import { ParticipantDialogComponent } from './participant-dialog.component';
     }
   `]
 })
-export class ParticipantListComponent implements OnInit {
+export class ParticipantListComponent implements AfterViewInit {
   participants$: Observable<Participant[]>;
   loading$: Observable<boolean>;
   displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'raceNumber', 'association', 'actions'];
@@ -138,7 +138,7 @@ export class ParticipantListComponent implements OnInit {
     this.loading$ = this.store.select(ParticipantSelectors.selectParticipantLoading);
   }
 
-  ngOnInit(): void {
+  ngAfterViewInit(): void {
     this.store.dispatch(ParticipantActions.loadParticipants());
   }
 

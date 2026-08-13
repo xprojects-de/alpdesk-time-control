@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Store } from '@ngrx/store';
 import { Observable, combineLatest } from 'rxjs';
@@ -120,7 +120,7 @@ interface MeasurementWithParticipant extends Measurement {
     }
   `]
 })
-export class MeasurementListComponent implements OnInit {
+export class MeasurementListComponent implements AfterViewInit {
   measurements$: Observable<Measurement[]>;
   participants$: Observable<Participant[]>;
   measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
@@ -151,7 +151,7 @@ export class MeasurementListComponent implements OnInit {
     );
   }
 
-  ngOnInit(): void {
+  ngAfterViewInit(): void {
     this.store.dispatch(MeasurementActions.loadMeasurements());
     this.store.dispatch(ParticipantActions.loadParticipants());
   }

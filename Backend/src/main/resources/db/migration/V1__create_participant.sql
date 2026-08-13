@@ -13,7 +13,7 @@ CREATE TABLE measurement
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     participant_id INTEGER,
     duration_ms    INTEGER NOT NULL,
-    measured_at    TEXT    NOT NULL,
+    measured_at    TIMESTAMP NOT NULL,
 
     FOREIGN KEY (participant_id)
         REFERENCES participant (id)

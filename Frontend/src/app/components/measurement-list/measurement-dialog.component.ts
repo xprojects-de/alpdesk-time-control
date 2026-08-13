@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
@@ -78,7 +78,7 @@ import * as ParticipantActions from '../../store/participant/participant.actions
     }
   `]
 })
-export class MeasurementDialogComponent implements OnInit {
+export class MeasurementDialogComponent implements AfterViewInit {
   form: FormGroup;
   participants$: Observable<Participant[]>;
 
@@ -97,7 +97,7 @@ export class MeasurementDialogComponent implements OnInit {
     });
   }
 
-  ngOnInit(): void {
+  ngAfterViewInit(): void {
     this.store.dispatch(ParticipantActions.loadParticipants());
   }
 

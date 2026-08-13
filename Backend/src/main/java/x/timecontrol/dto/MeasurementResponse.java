@@ -1,6 +1,7 @@
 package x.timecontrol.dto;
 
 import x.timecontrol.entities.Measurement;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -12,7 +13,8 @@ public record MeasurementResponse(
         @Schema(description = "Unique identifier of the measurement", example = "1")
         Long id,
 
-        @Schema(description = "ID of the participant", example = "1")
+        @Schema(description = "ID of the participant", example = "1", nullable = true)
+        @Nullable
         Long participantId,
 
         @Schema(description = "Duration in milliseconds", example = "5000")

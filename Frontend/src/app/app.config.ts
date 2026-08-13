@@ -6,6 +6,7 @@ import {
 import { provideRouter } from "@angular/router";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { provideAnimationsAsync } from "@angular/platform-browser/animations/async";
+import { provideNativeDateAdapter } from "@angular/material/core";
 
 import { routes } from "./app.routes";
 import { provideStore } from "@ngrx/store";
@@ -26,6 +27,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
+    provideNativeDateAdapter(),
     provideStore({
       auth: authReducer,
       participant: participantReducer,
