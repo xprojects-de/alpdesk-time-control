@@ -59,7 +59,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.raceNumber(), request.association());
+        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Participant created = service.create(participant);
         return HttpResponse.created(ParticipantResponse.from(created));
     }
@@ -72,7 +72,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.raceNumber(), request.association());
+        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> HttpResponse.ok(ParticipantResponse.from(p)))
                 .orElse(HttpResponse.notFound());

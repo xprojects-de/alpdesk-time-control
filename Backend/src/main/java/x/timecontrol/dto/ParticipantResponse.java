@@ -1,6 +1,7 @@
 package x.timecontrol.dto;
 
 import io.micronaut.core.annotation.Nullable;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -22,6 +23,9 @@ public record ParticipantResponse(
         @Schema(description = "Birth date of the participant", example = "1990-01-15")
         LocalDate birthDate,
 
+        @Schema(description = "Gender of the participant", example = "MALE")
+        Gender gender,
+
         @Schema(description = "Race number of the participant", example = "42")
         Integer raceNumber,
 
@@ -35,6 +39,7 @@ public record ParticipantResponse(
                 participant.firstName(),
                 participant.lastName(),
                 participant.birthDate(),
+                participant.gender(),
                 participant.raceNumber(),
                 participant.association()
         );

@@ -4,6 +4,7 @@ CREATE TABLE participant
     first_name  TEXT    NOT NULL,
     last_name   TEXT    NOT NULL,
     birth_date  DATE    NOT NULL,
+    gender      TEXT    NOT NULL,
     race_number INTEGER NOT NULL,
     association TEXT
 );

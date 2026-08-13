@@ -17,6 +17,7 @@ public record Participant(
         String firstName,
         String lastName,
         LocalDate birthDate,
+        Gender gender,
         Integer raceNumber,
         @Nullable
         String association
