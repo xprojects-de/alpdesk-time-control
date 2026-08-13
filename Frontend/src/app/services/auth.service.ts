@@ -3,13 +3,14 @@ import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {tap} from 'rxjs/operators';
 import {LoginRequest, LoginResponse} from '../models/auth.model';
+import {environment} from '../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
 })
 export class AuthService {
     private http = inject(HttpClient);
-    private readonly apiUrl = '/login';
+    private readonly apiUrl = `${environment.apiUrl}/login`;
     private readonly TOKEN_KEY = 'auth_token';
     private readonly USERNAME_KEY = 'auth_username';
 

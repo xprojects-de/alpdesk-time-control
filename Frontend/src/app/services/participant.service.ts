@@ -2,13 +2,14 @@ import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Participant, ParticipantRequest} from '../models/participant.model';
+import {environment} from '../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
 })
 export class ParticipantService {
     private http = inject(HttpClient);
-    private readonly apiUrl = '/api/participants';
+    private readonly apiUrl = `${environment.apiUrl}/participants`;
 
 
     getAll(): Observable<Participant[]> {

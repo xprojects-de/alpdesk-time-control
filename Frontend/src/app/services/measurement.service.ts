@@ -2,13 +2,15 @@ import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Measurement, MeasurementRequest} from '../models/measurement.model';
+import {environment} from '../../environments/environment';
+
 
 @Injectable({
     providedIn: 'root'
 })
 export class MeasurementService {
     private http = inject(HttpClient);
-    private readonly apiUrl = '/api/measurements';
+    private readonly apiUrl = `${environment.apiUrl}/measurements`;
 
 
     getAll(): Observable<Measurement[]> {
