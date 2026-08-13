@@ -1,8 +1,8 @@
-import {Component, AfterViewInit} from '@angular/core';
+import {Component, AfterViewInit, ViewChild, OnDestroy} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {Store} from '@ngrx/store';
-import {Observable} from 'rxjs';
-import {MatTableModule} from '@angular/material/table';
+import {Observable, Subscription} from 'rxjs';
+import {MatTableModule, MatTableDataSource} from '@angular/material/table';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
@@ -10,6 +10,7 @@ import {MatDialog, MatDialogModule} from '@angular/material/dialog';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {MatCardModule} from '@angular/material/card';
 import {MatTooltipModule} from '@angular/material/tooltip';
+import {MatSortModule, MatSort} from '@angular/material/sort';
 import {Participant} from '../../models/participant.model';
 import * as ParticipantActions from '../../store/participant/participant.actions';
 import * as ParticipantSelectors from '../../store/participant/participant.selectors';
@@ -27,7 +28,8 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
         MatDialogModule,
         MatSnackBarModule,
         MatCardModule,
-        MatTooltipModule
+        MatTooltipModule,
+        MatSortModule
     ],
     template: `
         <mat-card>
@@ -46,64 +48,64 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
                     <div class="loading-container">
                         <mat-spinner></mat-spinner>
                     </div>
-                } @else {
-                    <table mat-table [dataSource]="(participants$ | async) || []" class="participant-table">
-                        <!-- ID Column -->
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef>ID</th>
-                            <td mat-cell *matCellDef="let participant">{{ participant.id }}</td>
-                        </ng-container>
-
-                        <!-- First Name Column -->
-                        <ng-container matColumnDef="firstName">
-                            <th mat-header-cell *matHeaderCellDef>Vorname</th>
-                            <td mat-cell *matCellDef="let participant">{{ participant.firstName }}</td>
-                        </ng-container>
-
-                        <!-- Last Name Column -->
-                        <ng-container matColumnDef="lastName">
-                            <th mat-header-cell *matHeaderCellDef>Nachname</th>
-                            <td mat-cell *matCellDef="let participant">{{ participant.lastName }}</td>
-                        </ng-container>
-
-                        <!-- Birth Date Column -->
-                        <ng-container matColumnDef="birthDate">
-                            <th mat-header-cell *matHeaderCellDef>Geburtsdatum</th>
-                            <td mat-cell
-                                *matCellDef="let participant">{{ participant.birthDate | date: 'dd.MM.yyyy' }}
-                            </td>
-                        </ng-container>
-
-                        <!-- Race Number Column -->
-                        <ng-container matColumnDef="raceNumber">
-                            <th mat-header-cell *matHeaderCellDef>Startnummer</th>
-                            <td mat-cell *matCellDef="let participant">{{ participant.raceNumber }}</td>
-                        </ng-container>
-
-                        <!-- Association Column -->
-                        <ng-container matColumnDef="association">
-                            <th mat-header-cell *matHeaderCellDef>Verein</th>
-                            <td mat-cell *matCellDef="let participant">{{ participant.association || '-' }}</td>
-                        </ng-container>
-
-                        <!-- Actions Column -->
-                        <ng-container matColumnDef="actions">
-                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                            <td mat-cell *matCellDef="let participant">
-                                <button mat-icon-button (click)="openEditDialog(participant)" matTooltip="Bearbeiten">
-                                    <mat-icon>edit</mat-icon>
-                                </button>
-                                <button mat-icon-button color="warn" (click)="deleteParticipant(participant)"
-                                        matTooltip="Löschen">
-                                    <mat-icon>delete</mat-icon>
-                                </button>
-                            </td>
-                        </ng-container>
-
-                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                    </table>
                 }
+                
+                <table mat-table [dataSource]="dataSource" matSort class="participant-table" [class.hidden]="loading$ | async">
+                    <!-- ID Column -->
+                    <ng-container matColumnDef="id">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
+                        <td mat-cell *matCellDef="let participant">{{ participant.id }}</td>
+                    </ng-container>
+
+                    <!-- First Name Column -->
+                    <ng-container matColumnDef="firstName">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
+                        <td mat-cell *matCellDef="let participant">{{ participant.firstName }}</td>
+                    </ng-container>
+
+                    <!-- Last Name Column -->
+                    <ng-container matColumnDef="lastName">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
+                        <td mat-cell *matCellDef="let participant">{{ participant.lastName }}</td>
+                    </ng-container>
+
+                    <!-- Birth Date Column -->
+                    <ng-container matColumnDef="birthDate">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Geburtsdatum</th>
+                        <td mat-cell
+                            *matCellDef="let participant">{{ participant.birthDate | date: 'dd.MM.yyyy' }}
+                        </td>
+                    </ng-container>
+
+                    <!-- Race Number Column -->
+                    <ng-container matColumnDef="raceNumber">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Startnummer</th>
+                        <td mat-cell *matCellDef="let participant">{{ participant.raceNumber }}</td>
+                    </ng-container>
+
+                    <!-- Association Column -->
+                    <ng-container matColumnDef="association">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Verein</th>
+                        <td mat-cell *matCellDef="let participant">{{ participant.association || '-' }}</td>
+                    </ng-container>
+
+                    <!-- Actions Column -->
+                    <ng-container matColumnDef="actions">
+                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                        <td mat-cell *matCellDef="let participant">
+                            <button mat-icon-button (click)="openEditDialog(participant)" matTooltip="Bearbeiten">
+                                <mat-icon>edit</mat-icon>
+                            </button>
+                            <button mat-icon-button color="warn" (click)="deleteParticipant(participant)"
+                                    matTooltip="Löschen">
+                                <mat-icon>delete</mat-icon>
+                            </button>
+                        </td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                </table>
             </mat-card-content>
         </mat-card>
     `,
@@ -121,16 +123,29 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
       .participant-table {
         width: 100%;
       }
+      
+      .hidden {
+        display: none;
+      }
 
       mat-card {
         margin: 20px;
       }
+
+      th.mat-sort-header-sorted {
+        color: black;
+      }
     `]
 })
-export class ParticipantListComponent implements AfterViewInit {
+export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     participants$: Observable<Participant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'raceNumber', 'association', 'actions'];
+    dataSource = new MatTableDataSource<Participant>([]);
+    private participantsSubscription?: Subscription;
+    private sortInitialized = false;
+
+    @ViewChild(MatSort, { static: false }) sort!: MatSort;
 
     constructor(
         private store: Store,
@@ -143,6 +158,31 @@ export class ParticipantListComponent implements AfterViewInit {
 
     ngAfterViewInit(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
+
+        // Wait for view to be fully initialized before setting up sort
+        setTimeout(() => {
+            console.log('Sort ViewChild:', this.sort);
+            
+            if (this.sort) {
+                this.dataSource.sort = this.sort;
+                this.sortInitialized = true;
+                
+                // Listen to sort changes for debugging
+                this.sort.sortChange.subscribe(() => {
+                    console.log('Sort changed:', this.sort.active, this.sort.direction);
+                });
+            }
+        }, 100);
+
+        // Subscribe to participants and update dataSource
+        this.participantsSubscription = this.participants$.subscribe(participants => {
+            console.log('Participants loaded:', participants.length);
+            this.dataSource.data = participants;
+        });
+    }
+
+    ngOnDestroy(): void {
+        this.participantsSubscription?.unsubscribe();
     }
 
     openCreateDialog(): void {
