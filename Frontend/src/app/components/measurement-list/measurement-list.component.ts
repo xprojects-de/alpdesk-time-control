@@ -72,7 +72,7 @@ interface MeasurementWithParticipant extends Measurement {
                         <mat-icon>add</mat-icon>
                         Neue Messung
                     </button>
-                    <button mat-raised-button (click)="manualRefresh()" [disabled]="loading$ | async">
+                    <button mat-raised-button (click)="manualRefresh()">
                         <mat-icon>refresh</mat-icon>
                         Manuell aktualisieren
                     </button>
