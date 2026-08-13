@@ -4,8 +4,8 @@
     <annotationProcessing>
       <profile name="Gradle Imported" enabled="true">
         <outputRelativeToContentRoot value="true" />
-        <option name="micronaut.processing.annotations" value="x.time.control.*" />
-        <option name="micronaut.processing.group" value="x.time.control" />
+        <option name="micronaut.processing.annotations" value="x.timecontrol.*" />
+        <option name="micronaut.processing.group" value="x.timecontrol" />
         <option name="micronaut.processing.incremental" value="true" />
         <option name="micronaut.processing.module" value="time-control" />
         <processorPath useClasspath="false">
@@ -112,8 +112,8 @@
       </profile>
       <profile name="Gradle Imported" enabled="true">
         <outputRelativeToContentRoot value="true" />
-        <option name="micronaut.processing.annotations" value="x.time.control.*" />
-        <option name="micronaut.processing.group" value="x.time.control" />
+        <option name="micronaut.processing.annotations" value="x.timecontrol.*" />
+        <option name="micronaut.processing.group" value="x.timecontrol" />
         <option name="micronaut.processing.incremental" value="true" />
         <option name="micronaut.processing.module" value="time-control" />
         <processorPath useClasspath="false">
@@ -214,6 +214,6 @@
     <bytecodeTargetLevel target="25" />
   </component>
   <component name="JavacSettings">
-    <option name="ADDITIONAL_OPTIONS_STRING" value="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=x.time.control.* -Amicronaut.processing.group=x.time.control -Amicronaut.processing.module=time-control" />
+    <option name="ADDITIONAL_OPTIONS_STRING" value="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=x.timecontrol.* -Amicronaut.processing.group=x.timecontrol -Amicronaut.processing.module=time-control" />
   </component>
 </project>

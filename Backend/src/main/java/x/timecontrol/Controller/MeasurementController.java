@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
+import x.timecontrol.services.PdfExportService;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,9 @@ public class MeasurementController {
 
     @Inject
     DataImportService dataImportService;
+
+    @Inject
+    PdfExportService pdfExportService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -132,6 +136,44 @@ public class MeasurementController {
                     .map(MeasurementResponse::from)
                     .toList();
             return HttpResponse.created(response);
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf")
+    @Operation(summary = "Export all measurements as PDF", 
+               description = "Generates a PDF document with all measurements in table format",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportAllToPdf() {
+        try {
+            Iterable<Measurement> measurements = service.findAll();
+            List<Measurement> measurementList = StreamSupport.stream(measurements.spliterator(), false)
+                    .toList();
+            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurementList);
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=messungen.pdf");
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/participant/{participantId}/export/pdf")
+    @Operation(summary = "Export measurements by participant as PDF", 
+               description = "Generates a PDF document with measurements for a specific participant",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportParticipantToPdf(@PathVariable Long participantId) {
+        try {
+            List<Measurement> measurements = service.findByParticipantId(participantId);
+            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurements);
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=messungen_teilnehmer_" + participantId + ".pdf");
         } catch (Exception e) {
             return HttpResponse.serverError();
         }
