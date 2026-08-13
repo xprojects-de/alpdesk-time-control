@@ -3,8 +3,10 @@ package x.timecontrol.Controller;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
+import x.timecontrol.entities.Participant;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.DataImportService;
+import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
@@ -19,8 +21,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.services.PdfExportService;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -36,6 +41,9 @@ public class MeasurementController {
 
     @Inject
     PdfExportService pdfExportService;
+
+    @Inject
+    ParticipantService participantService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -150,10 +158,28 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<byte[]> exportAllToPdf() {
         try {
+            // Load all measurements
             Iterable<Measurement> measurements = service.findAll();
             List<Measurement> measurementList = StreamSupport.stream(measurements.spliterator(), false)
+                    .sorted(Comparator.comparing(Measurement::measuredAt))
                     .toList();
-            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurementList);
+
+            // Load all participants and create a map of id -> name
+            Iterable<Participant> participants = participantService.findAll();
+            Map<Long, String> participantNames = participants != null
+                    ? StreamSupport.stream(participants.spliterator(), false)
+                        .filter(p -> p != null && p.id() != null)
+                        .collect(Collectors.toMap(
+                                Participant::id,
+                                p -> {
+                                    String firstName = p.firstName() != null ? p.firstName() : "";
+                                    String lastName = p.lastName() != null ? p.lastName() : "";
+                                    return (firstName + " " + lastName).trim();
+                                }
+                        ))
+                    : Map.of();
+
+            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurementList, participantNames);
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=messungen.pdf");
         } catch (Exception e) {
@@ -170,8 +196,22 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<byte[]> exportParticipantToPdf(@PathVariable Long participantId) {
         try {
-            List<Measurement> measurements = service.findByParticipantId(participantId);
-            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurements);
+            List<Measurement> measurements = service.findByParticipantId(participantId)
+                    .stream()
+                    .sorted(Comparator.comparing(Measurement::measuredAt))
+                    .toList();
+
+            // Load participant and create name map
+            Map<Long, String> participantNames = participantService.findById(participantId)
+                    .map(p -> {
+                        String firstName = p.firstName() != null ? p.firstName() : "";
+                        String lastName = p.lastName() != null ? p.lastName() : "";
+                        String fullName = (firstName + " " + lastName).trim();
+                        return Map.of(participantId, fullName);
+                    })
+                    .orElse(Map.of());
+
+            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurements, participantNames);
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=messungen_teilnehmer_" + participantId + ".pdf");
         } catch (Exception e) {

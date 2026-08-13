@@ -13,13 +13,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 @Singleton
 public class PdfExportService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
-    public byte[] generateMeasurementsPdf(List<Measurement> measurements) throws IOException {
+    public byte[] generateMeasurementsPdf(List<Measurement> measurements, Map<Long, String> participantNames) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
             document.addPage(page);
@@ -64,9 +65,14 @@ public class PdfExportService {
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
                 }
 
-                String rowText = String.format("%-10d %-20d %-20.2f %s",
+                String participantName = participantNames.getOrDefault(measurement.participantId(), "Unbekannt (ID: " + measurement.participantId() + ")");
+                // Handle empty names
+                if (participantName == null || participantName.trim().isEmpty()) {
+                    participantName = "Unbekannt (ID: " + measurement.participantId() + ")";
+                }
+                String rowText = String.format("%-10d %-30s %-20.2f %s",
                     measurement.id(),
-                    measurement.participantId(),
+                    participantName,
                     (double) measurement.durationMs(),
                     measurement.measuredAt().format(DATE_FORMATTER)
                 );
