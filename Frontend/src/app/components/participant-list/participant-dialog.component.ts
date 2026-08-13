@@ -7,7 +7,9 @@ import {MatInputModule} from '@angular/material/input';
 import {MatButtonModule} from '@angular/material/button';
 import {MatDatepickerModule} from '@angular/material/datepicker';
 import {MatNativeDateModule} from '@angular/material/core';
+import {MatSelectModule} from '@angular/material/select';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
+import {Gender, GenderLabels} from '../../models/gender.model';
 
 @Component({
     selector: 'app-participant-dialog',
@@ -20,7 +22,8 @@ import {Participant, ParticipantRequest} from '../../models/participant.model';
         MatInputModule,
         MatButtonModule,
         MatDatepickerModule,
-        MatNativeDateModule
+        MatNativeDateModule,
+        MatSelectModule
     ],
     template: `
         <h2 mat-dialog-title>{{ data ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer' }}</h2>
@@ -51,6 +54,18 @@ import {Participant, ParticipantRequest} from '../../models/participant.model';
                     <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
                     @if (form.get('birthDate')?.hasError('required') && form.get('birthDate')?.touched) {
                         <mat-error>Geburtsdatum ist erforderlich</mat-error>
+                    }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Geschlecht</mat-label>
+                    <mat-select formControlName="gender" required>
+                        @for (gender of genderOptions; track gender.value) {
+                            <mat-option [value]="gender.value">{{ gender.label }}</mat-option>
+                        }
+                    </mat-select>
+                    @if (form.get('gender')?.hasError('required') && form.get('gender')?.touched) {
+                        <mat-error>Geschlecht ist erforderlich</mat-error>
                     }
                 </mat-form-field>
 
@@ -90,6 +105,10 @@ import {Participant, ParticipantRequest} from '../../models/participant.model';
 })
 export class ParticipantDialogComponent {
     form: FormGroup;
+    genderOptions = [
+        { value: Gender.MALE, label: GenderLabels[Gender.MALE] },
+        { value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE] }
+    ];
 
     constructor(
         private fb: FormBuilder,
@@ -110,6 +129,7 @@ export class ParticipantDialogComponent {
             firstName: [data?.firstName || '', Validators.required],
             lastName: [data?.lastName || '', Validators.required],
             birthDate: [birthDate, Validators.required],
+            gender: [data?.gender || '', Validators.required],
             raceNumber: [data?.raceNumber || '', Validators.required],
             association: [data?.association || '']
         });
@@ -126,6 +146,7 @@ export class ParticipantDialogComponent {
                 firstName: formValue.firstName,
                 lastName: formValue.lastName,
                 birthDate: this.formatDate(formValue.birthDate),
+                gender: formValue.gender,
                 raceNumber: Number(formValue.raceNumber),
                 association: formValue.association || undefined
             };

@@ -12,6 +12,7 @@ import {MatCardModule} from '@angular/material/card';
 import {MatTooltipModule} from '@angular/material/tooltip';
 import {MatSortModule, MatSort} from '@angular/material/sort';
 import {Participant} from '../../models/participant.model';
+import {Gender, GenderLabels} from '../../models/gender.model';
 import * as ParticipantActions from '../../store/participant/participant.actions';
 import * as ParticipantSelectors from '../../store/participant/participant.selectors';
 import {ParticipantDialogComponent} from './participant-dialog.component';
@@ -77,6 +78,12 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
                         </td>
                     </ng-container>
 
+                    <!-- Gender Column -->
+                    <ng-container matColumnDef="gender">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Geschlecht</th>
+                        <td mat-cell *matCellDef="let participant">{{ getGenderLabel(participant.gender) }}</td>
+                    </ng-container>
+
                     <!-- Race Number Column -->
                     <ng-container matColumnDef="raceNumber">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Startnummer</th>
@@ -140,7 +147,7 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
 export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     participants$: Observable<Participant[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'raceNumber', 'association', 'actions'];
+    displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'gender', 'raceNumber', 'association', 'actions'];
     dataSource = new MatTableDataSource<Participant>([]);
     private participantsSubscription?: Subscription;
     private sortInitialized = false;
@@ -183,6 +190,10 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     ngOnDestroy(): void {
         this.participantsSubscription?.unsubscribe();
+    }
+
+    getGenderLabel(gender: Gender): string {
+        return GenderLabels[gender] || gender;
     }
 
     openCreateDialog(): void {

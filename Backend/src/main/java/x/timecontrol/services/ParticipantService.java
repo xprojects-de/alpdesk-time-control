@@ -31,7 +31,7 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
-            Participant updated = new Participant(id, participant.firstName(), participant.lastName(), participant.birthDate(), participant.raceNumber(), participant.association());
+            Participant updated = new Participant(id, participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.association());
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
