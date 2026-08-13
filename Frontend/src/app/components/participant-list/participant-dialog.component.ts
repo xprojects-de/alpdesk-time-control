@@ -44,9 +44,11 @@ import { Participant, ParticipantRequest } from '../../models/participant.model'
 
         <mat-form-field appearance="outline">
           <mat-label>Geburtsdatum</mat-label>
-          <input matInput [matDatepicker]="picker" formControlName="birthDate" required>
+          <input matInput [matDatepicker]="picker" formControlName="birthDate" 
+                 placeholder="TT.MM.JJJJ" required>
           <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
           <mat-datepicker #picker></mat-datepicker>
+          <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
           @if (form.get('birthDate')?.hasError('required') && form.get('birthDate')?.touched) {
             <mat-error>Geburtsdatum ist erforderlich</mat-error>
           }
@@ -94,10 +96,20 @@ export class ParticipantDialogComponent {
     private dialogRef: MatDialogRef<ParticipantDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: Participant | null
   ) {
+    // Parse birthDate wenn es als String vorliegt
+    let birthDate: Date | string = data?.birthDate || '';
+    if (birthDate && typeof birthDate === 'string') {
+      // Versuche ISO-Format (YYYY-MM-DD) zu parsen
+      const parts = birthDate.split('-');
+      if (parts.length === 3) {
+        birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      }
+    }
+    
     this.form = this.fb.group({
       firstName: [data?.firstName || '', Validators.required],
       lastName: [data?.lastName || '', Validators.required],
-      birthDate: [data?.birthDate || '', Validators.required],
+      birthDate: [birthDate, Validators.required],
       raceNumber: [data?.raceNumber || '', Validators.required],
       association: [data?.association || '']
     });
