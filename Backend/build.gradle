@@ -1,0 +1,105 @@
+plugins {
+    id("java")
+    id("groovy")
+    id("io.micronaut.application") version "5.0.2"
+    id("com.gradleup.shadow") version "9.4.1"
+    id("io.micronaut.aot") version "5.0.2"
+}
+
+version = "0.1"
+group = "x.time.control"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    annotationProcessor("io.micronaut:micronaut-http-validation")
+    annotationProcessor("io.micronaut.serde:micronaut-serde-processor")
+    annotationProcessor("io.micronaut.openapi:micronaut-openapi")
+    implementation("io.micronaut.serde:micronaut-serde-jackson")
+    compileOnly("io.micronaut.openapi:micronaut-openapi-annotations")
+    implementation("io.micronaut:micronaut-http-client")
+    implementation("org.slf4j:slf4j-api")
+    runtimeOnly("ch.qos.logback:logback-classic")
+    testImplementation("io.micronaut:micronaut-http-client")
+    annotationProcessor("io.micronaut.security:micronaut-security-processor")
+    annotationProcessor("io.micronaut.security:micronaut-security-annotations")
+    implementation("io.micronaut.security:micronaut-security")
+    implementation("io.micronaut.security:micronaut-security-jwt")
+    aotPlugins platform("io.micronaut.platform:micronaut-platform:5.1.0")
+    aotPlugins("io.micronaut.security:micronaut-security-aot")
+    implementation("io.micronaut.reactor:micronaut-reactor-http-client")
+    runtimeOnly("io.micronaut.sql:micronaut-jdbc-sqlite:7.1.0")
+    implementation("io.micronaut.flyway:micronaut-flyway:8.1.0")
+    implementation("io.micronaut.data:micronaut-data-jdbc:5.1.1")
+    runtimeOnly("io.micronaut.sql:micronaut-jdbc-hikari:7.1.0")
+}
+
+application {
+    mainClass = "x.time.control.Application"
+}
+
+java {
+    sourceCompatibility = JavaVersion.toVersion("25")
+    targetCompatibility = JavaVersion.toVersion("25")
+}
+
+graalvmNative.toolchainDetection = false
+graalvmNative {
+    binaries {
+        all {
+            buildArgs.add("-H:+SharedArenaSupport")
+        }
+    }
+}
+
+micronaut {
+    runtime("netty")
+    testRuntime("spock2")
+    processing {
+        incremental(true)
+        annotations("x.time.control.*")
+    }
+    aot {
+        // Please review carefully the optimizations enabled below
+        // Check https://micronaut-projects.github.io/micronaut-aot/latest/guide/ for more details
+        optimizeServiceLoading = false
+        convertYamlToJava = false
+        precomputeOperations = true
+        cacheEnvironment = true
+        optimizeClassLoading = true
+        deduceEnvironment = true
+        optimizeNetty = true
+        replaceLogbackXml = true
+        configurationProperties.put("micronaut.security.jwks.enabled", "false")
+    }
+
+}
+
+tasks.named("dockerfile") {
+    baseImage = "eclipse-temurin:25-jre"
+}
+
+tasks.withType(AbstractTestTask).configureEach {
+    failOnNoDiscoveredTests = false
+}
+
+/*jar {
+    archiveFileName = 'time-control.jar'
+    manifest {
+        attributes 'Main-Class': 'x.time.control.Application'
+    }
+}*/
+
+shadowJar {
+    archiveFileName = 'time-control.jar'
+    manifest {
+        attributes 'Main-Class': 'x.time.control.Application'
+    }
+    mergeServiceFiles()
+}
+
+
+
+
