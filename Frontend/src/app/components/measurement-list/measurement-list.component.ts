@@ -1,4 +1,4 @@
-import {Component, AfterViewInit} from '@angular/core';
+import {Component, AfterViewInit, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {Store} from '@ngrx/store';
 import {Observable, combineLatest} from 'rxjs';
@@ -125,17 +125,17 @@ interface MeasurementWithParticipant extends Measurement {
     `]
 })
 export class MeasurementListComponent implements AfterViewInit {
+    private store = inject(Store);
+    private dialog = inject(MatDialog);
+    private snackBar = inject(MatSnackBar);
+
     measurements$: Observable<Measurement[]>;
     participants$: Observable<Participant[]>;
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ['id', 'participant', 'duration', 'measuredAt', 'actions'];
 
-    constructor(
-        private store: Store,
-        private dialog: MatDialog,
-        private snackBar: MatSnackBar
-    ) {
+    constructor() {
         this.measurements$ = this.store.select(MeasurementSelectors.selectAllMeasurements);
         this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
         this.loading$ = this.store.select(MeasurementSelectors.selectMeasurementLoading);

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
@@ -78,9 +78,10 @@ import * as AuthSelectors from '../../store/auth/auth.selectors';
   `]
 })
 export class DashboardComponent {
+  private store = inject(Store);
   username$: Observable<string | null>;
 
-  constructor(private store: Store) {
+  constructor() {
     this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
   }
 

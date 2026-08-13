@@ -1,4 +1,4 @@
-import {Injectable} from '@angular/core';
+import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Measurement, MeasurementRequest} from '../models/measurement.model';
@@ -7,10 +7,9 @@ import {Measurement, MeasurementRequest} from '../models/measurement.model';
     providedIn: 'root'
 })
 export class MeasurementService {
+    private http = inject(HttpClient);
     private readonly apiUrl = '/api/measurements';
 
-    constructor(private http: HttpClient) {
-    }
 
     getAll(): Observable<Measurement[]> {
         return this.http.get<Measurement[]>(this.apiUrl);

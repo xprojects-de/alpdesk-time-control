@@ -1,4 +1,4 @@
-import {Component, Inject, AfterViewInit} from '@angular/core';
+import {Component, AfterViewInit, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from '@angular/material/dialog';
@@ -90,31 +90,31 @@ import * as ParticipantActions from '../../store/participant/participant.actions
     `]
 })
 export class MeasurementDialogComponent implements AfterViewInit {
+    private fb = inject(FormBuilder);
+    private store = inject(Store);
+    private dialogRef = inject(MatDialogRef<MeasurementDialogComponent>);
+    public data = inject<Measurement | null>(MAT_DIALOG_DATA);
+
     form: FormGroup;
     participants$: Observable<Participant[]>;
     filteredParticipants$: Observable<Participant[]>;
     selectedParticipant: Participant | null = null;
 
-    constructor(
-        private fb: FormBuilder,
-        private store: Store,
-        private dialogRef: MatDialogRef<MeasurementDialogComponent>,
-        @Inject(MAT_DIALOG_DATA) public data: Measurement | null
-    ) {
+    constructor() {
         this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
 
         // Finde den initial ausgewählten Teilnehmer
-        if (data?.participantId) {
+        if (this.data?.participantId) {
             this.participants$.subscribe(participants => {
-                this.selectedParticipant = participants.find(p => p.id === data.participantId) || null;
+                this.selectedParticipant = participants.find(p => p.id === this.data!.participantId) || null;
             });
         }
 
         this.form = this.fb.group({
-            participantId: [data?.participantId || null],
+            participantId: [this.data?.participantId || null],
             participantSearch: [this.selectedParticipant || ''],
-            durationMs: [data?.durationMs || '', Validators.required],
-            measuredAt: [this.formatDateTimeForInput(data?.measuredAt), Validators.required]
+            durationMs: [this.data?.durationMs || '', Validators.required],
+            measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt), Validators.required]
         });
 
         // Filtere Teilnehmer basierend auf Sucheingabe

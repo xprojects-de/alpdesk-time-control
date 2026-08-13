@@ -1,4 +1,4 @@
-import {Injectable} from '@angular/core';
+import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Participant, ParticipantRequest} from '../models/participant.model';
@@ -7,10 +7,9 @@ import {Participant, ParticipantRequest} from '../models/participant.model';
     providedIn: 'root'
 })
 export class ParticipantService {
+    private http = inject(HttpClient);
     private readonly apiUrl = '/api/participants';
 
-    constructor(private http: HttpClient) {
-    }
 
     getAll(): Observable<Participant[]> {
         return this.http.get<Participant[]>(this.apiUrl);

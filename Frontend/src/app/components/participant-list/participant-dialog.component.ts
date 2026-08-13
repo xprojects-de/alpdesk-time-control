@@ -1,4 +1,4 @@
-import {Component, Inject} from '@angular/core';
+import {Component, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from '@angular/material/dialog';
@@ -104,19 +104,18 @@ import {Gender, GenderLabels} from '../../models/gender.model';
     `]
 })
 export class ParticipantDialogComponent {
+    private fb = inject(FormBuilder);
+    private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
+    public data = inject<Participant | null>(MAT_DIALOG_DATA);
+
     form: FormGroup;
     genderOptions = [
         { value: Gender.MALE, label: GenderLabels[Gender.MALE] },
         { value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE] }
     ];
 
-    constructor(
-        private fb: FormBuilder,
-        private dialogRef: MatDialogRef<ParticipantDialogComponent>,
-        @Inject(MAT_DIALOG_DATA) public data: Participant | null
-    ) {
-
-        let birthDate: Date | string = data?.birthDate || '';
+    constructor() {
+        let birthDate: Date | string = this.data?.birthDate || '';
         if (birthDate && typeof birthDate === 'string') {
 
             const parts = birthDate.split('-');
@@ -126,12 +125,12 @@ export class ParticipantDialogComponent {
         }
 
         this.form = this.fb.group({
-            firstName: [data?.firstName || '', Validators.required],
-            lastName: [data?.lastName || '', Validators.required],
+            firstName: [this.data?.firstName || '', Validators.required],
+            lastName: [this.data?.lastName || '', Validators.required],
             birthDate: [birthDate, Validators.required],
-            gender: [data?.gender || '', Validators.required],
-            raceNumber: [data?.raceNumber || '', Validators.required],
-            association: [data?.association || '']
+            gender: [this.data?.gender || '', Validators.required],
+            raceNumber: [this.data?.raceNumber || '', Validators.required],
+            association: [this.data?.association || '']
         });
     }
 

@@ -1,4 +1,4 @@
-import {Component, AfterViewInit, ViewChild, OnDestroy} from '@angular/core';
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {Store} from '@ngrx/store';
 import {Observable, Subscription} from 'rxjs';
@@ -145,6 +145,10 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
     `]
 })
 export class ParticipantListComponent implements AfterViewInit, OnDestroy {
+    private store = inject(Store);
+    private dialog = inject(MatDialog);
+    private snackBar = inject(MatSnackBar);
+
     participants$: Observable<Participant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'gender', 'raceNumber', 'association', 'actions'];
@@ -152,34 +156,30 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private participantsSubscription?: Subscription;
     private sortInitialized = false;
 
-    @ViewChild(MatSort, { static: false }) sort!: MatSort;
+    sort = viewChild.required(MatSort);
 
-    constructor(
-        private store: Store,
-        private dialog: MatDialog,
-        private snackBar: MatSnackBar
-    ) {
+    constructor() {
         this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
         this.loading$ = this.store.select(ParticipantSelectors.selectParticipantLoading);
+
+        // Setup sort when signal changes
+        effect(() => {
+            const sortInstance = this.sort();
+            if (sortInstance && !this.sortInitialized) {
+                setTimeout(() => {
+                    this.dataSource.sort = sortInstance;
+                    this.sortInitialized = true;
+
+                    sortInstance.sortChange.subscribe(() => {
+                        console.log('Sort changed:', sortInstance.active, sortInstance.direction);
+                    });
+                }, 100);
+            }
+        });
     }
 
     ngAfterViewInit(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
-
-        // Wait for view to be fully initialized before setting up sort
-        setTimeout(() => {
-            console.log('Sort ViewChild:', this.sort);
-            
-            if (this.sort) {
-                this.dataSource.sort = this.sort;
-                this.sortInitialized = true;
-                
-                // Listen to sort changes for debugging
-                this.sort.sortChange.subscribe(() => {
-                    console.log('Sort changed:', this.sort.active, this.sort.direction);
-                });
-            }
-        }, 100);
 
         // Subscribe to participants and update dataSource
         this.participantsSubscription = this.participants$.subscribe(participants => {

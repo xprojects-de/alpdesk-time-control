@@ -1,4 +1,4 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Router} from '@angular/router';
@@ -161,15 +161,15 @@ import * as AuthSelectors from '../../store/auth/auth.selectors';
     `]
 })
 export class LoginComponent implements OnInit {
+    private fb = inject(FormBuilder);
+    private store = inject(Store);
+    private router = inject(Router);
+
     loginForm: FormGroup;
     loading$: Observable<boolean>;
     error$: Observable<string | null>;
 
-    constructor(
-        private fb: FormBuilder,
-        private store: Store,
-        private router: Router
-    ) {
+    constructor() {
         this.loginForm = this.fb.group({
             username: ['time-control', Validators.required],
             password: ['time-control', Validators.required]
