@@ -1,38 +1,39 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { Measurement, MeasurementRequest } from '../models/measurement.model';
+import {Injectable} from '@angular/core';
+import {HttpClient} from '@angular/common/http';
+import {Observable} from 'rxjs';
+import {Measurement, MeasurementRequest} from '../models/measurement.model';
 
 @Injectable({
-  providedIn: 'root'
+    providedIn: 'root'
 })
 export class MeasurementService {
-  private readonly apiUrl = '/api/measurements';
+    private readonly apiUrl = '/api/measurements';
 
-  constructor(private http: HttpClient) {}
+    constructor(private http: HttpClient) {
+    }
 
-  getAll(): Observable<Measurement[]> {
-    return this.http.get<Measurement[]>(this.apiUrl);
-  }
+    getAll(): Observable<Measurement[]> {
+        return this.http.get<Measurement[]>(this.apiUrl);
+    }
 
-  getByParticipant(participantId: number): Observable<Measurement[]> {
-    return this.http.get<Measurement[]>(`${this.apiUrl}/participant/${participantId}`);
-  }
+    getByParticipant(participantId: number): Observable<Measurement[]> {
+        return this.http.get<Measurement[]>(`${this.apiUrl}/participant/${participantId}`);
+    }
 
-  getById(id: number): Observable<Measurement> {
-    return this.http.get<Measurement>(`${this.apiUrl}/${id}`);
-  }
+    getById(id: number): Observable<Measurement> {
+        return this.http.get<Measurement>(`${this.apiUrl}/${id}`);
+    }
 
-  create(measurement: MeasurementRequest): Observable<Measurement> {
-    return this.http.post<Measurement>(this.apiUrl, measurement);
-  }
+    create(measurement: MeasurementRequest): Observable<Measurement> {
+        return this.http.post<Measurement>(this.apiUrl, measurement);
+    }
 
-  update(id: number, measurement: MeasurementRequest): Observable<Measurement> {
-    return this.http.put<Measurement>(`${this.apiUrl}/${id}`, measurement);
-  }
+    update(id: number, measurement: MeasurementRequest): Observable<Measurement> {
+        return this.http.put<Measurement>(`${this.apiUrl}/${id}`, measurement);
+    }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`);
-  }
+    delete(id: number): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/${id}`);
+    }
 }
 
