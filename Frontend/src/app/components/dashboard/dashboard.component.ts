@@ -55,7 +55,7 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
             </mat-tab-group>
         </div>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .dashboard-container {

@@ -115,7 +115,7 @@ import {take} from "rxjs/operators";
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .measurement-form {
@@ -149,15 +149,22 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
         );
 
         if (this.data?.participantId) {
-            this.participants$.pipe(take(1)).subscribe((participants) => {
-                this.selectedParticipant =
-                    participants.find((p) => p.id === this.data!.participantId) || null;
-            });
+            setTimeout(() => {
+                this.participants$.pipe(take(1)).subscribe((participants) => {
+                    this.selectedParticipant =
+                        participants.find((p) => p.id === this.data!.participantId) || null;
+                    if (this.selectedParticipant) {
+                        this.form.patchValue({
+                            participantSearch: this.selectedParticipant,
+                        }, { emitEvent: false });
+                    }
+                });
+            }, 0);
         }
 
         this.form = this.fb.group({
             participantId: [this.data?.participantId || null],
-            participantSearch: [this.selectedParticipant || ""],
+            participantSearch: [""],
             durationMs: [this.data?.durationMs || "", Validators.required],
             measuredAt: [
                 this.formatDateTimeForInput(this.data?.measuredAt),
@@ -169,7 +176,7 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
             this.participants$,
             this.form
                 .get("participantSearch")!
-                .valueChanges.pipe(startWith(this.selectedParticipant || "")),
+                .valueChanges.pipe(startWith("")),
         ]).pipe(
             map(([participants, searchValue]) => {
                 const searchTerm = typeof searchValue === "string" ? searchValue : "";
@@ -179,7 +186,9 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     ngAfterViewInit(): void {
-        this.store.dispatch(ParticipantActions.loadParticipants());
+        setTimeout(() => {
+            this.store.dispatch(ParticipantActions.loadParticipants());
+        }, 0);
     }
 
     ngOnDestroy(): void {

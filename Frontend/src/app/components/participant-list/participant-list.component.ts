@@ -159,7 +159,7 @@ import {takeUntil} from "rxjs/operators";
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .header-actions {

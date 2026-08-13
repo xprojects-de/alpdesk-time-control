@@ -122,7 +122,7 @@ import {Gender, GenderLabels} from "../../models/gender.model";
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .participant-form {

@@ -172,7 +172,7 @@ interface MeasurementWithParticipant extends Measurement {
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .title-row {
