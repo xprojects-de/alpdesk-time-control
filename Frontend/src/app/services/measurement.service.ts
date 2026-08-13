@@ -36,5 +36,17 @@ export class MeasurementService {
     delete(id: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
+
+    exportAllToPdf(): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportParticipantToPdf(participantId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/participant/${participantId}/export/pdf`, {
+            responseType: 'blob'
+        });
+    }
 }
 

@@ -32,6 +32,7 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
+import {MeasurementService} from "../../services/measurement.service";
 
 interface MeasurementWithParticipant extends Measurement {
     participantName?: string;
@@ -99,6 +100,15 @@ interface MeasurementWithParticipant extends Measurement {
                     <button mat-raised-button (click)="manualRefresh()">
                         <mat-icon>refresh</mat-icon>
                         Manuell aktualisieren
+                    </button>
+                    <button 
+                            mat-raised-button 
+                            color="accent"
+                            (click)="exportAllToPdf()"
+                            matTooltip="Alle Messungen als PDF exportieren"
+                    >
+                        <mat-icon>picture_as_pdf</mat-icon>
+                        PDF Export
                     </button>
                 </div>
 
@@ -264,6 +274,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private measurementService = inject(MeasurementService);
     private destroy$ = new Subject<void>();
     private autoRefresh$ = new Subject<boolean>();
 
@@ -430,5 +441,29 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 duration: 3000,
             });
         }
+    }
+
+    exportAllToPdf(): void {
+        this.measurementService.exportAllToPdf()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+                next: (blob) => {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'messungen.pdf';
+                    link.click();
+                    window.URL.revokeObjectURL(url);
+                    this.snackBar.open('PDF erfolgreich exportiert', 'OK', {
+                        duration: 3000,
+                    });
+                },
+                error: (error) => {
+                    console.error('PDF Export fehlgeschlagen:', error);
+                    this.snackBar.open('PDF Export fehlgeschlagen', 'OK', {
+                        duration: 3000,
+                    });
+                }
+            });
     }
 }
