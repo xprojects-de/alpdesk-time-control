@@ -4,6 +4,7 @@ import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.MeasurementService;
+import x.timecontrol.services.DataImportService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
@@ -28,6 +29,9 @@ public class MeasurementController {
 
     @Inject
     MeasurementService service;
+
+    @Inject
+    DataImportService dataImportService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -111,6 +115,26 @@ public class MeasurementController {
             return HttpResponse.noContent();
         }
         return HttpResponse.notFound();
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/import")
+    @Operation(summary = "Import measurements from external device",
+               description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
+                 content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+    @ApiResponse(responseCode = "500", description = "Import failed")
+    public HttpResponse<List<MeasurementResponse>> importFromDevice() {
+        try {
+            List<Measurement> imported = dataImportService.importDataFromDevice();
+            List<MeasurementResponse> response = imported.stream()
+                    .map(MeasurementResponse::from)
+                    .toList();
+            return HttpResponse.created(response);
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
     }
 
 }

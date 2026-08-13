@@ -4,12 +4,17 @@ import x.timecontrol.entities.Measurement;
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.CrudRepository;
+import io.micronaut.data.annotation.Query;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface MeasurementRepository extends CrudRepository<Measurement, Long> {
-    
+
     List<Measurement> findByParticipantId(Long participantId);
+
+    @Query(value = "INSERT OR REPLACE INTO measurement (id, participant_id, duration_ms, measured_at) VALUES (:id, :participantId, :durationMs, :measuredAt)", nativeQuery = true)
+    void insertOrReplaceWithId(Long id, Long participantId, Integer durationMs, LocalDateTime measuredAt);
 }
 

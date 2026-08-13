@@ -49,5 +49,10 @@ public class MeasurementService {
     public void delete(Long id) {
         repository.deleteById(id);
     }
+
+    public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
+        repository.insertOrReplaceWithId(id, participantId, durationMs, measuredAt);
+        return repository.findById(id).orElseThrow();
+    }
 }
 
