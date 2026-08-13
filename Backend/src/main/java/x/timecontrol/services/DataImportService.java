@@ -84,11 +84,9 @@ public class DataImportService {
             LOG.info("Successfully imported {} measurements", createdMeasurements.size());
 
         } catch (HttpClientException e) {
-            LOG.warn("Could not connect to device at {}: {}", dataUrl, e.getMessage());
-            throw new RuntimeException("Failed to connect to device: " + e.getMessage(), e);
+            LOG.debug("Could not connect to device at {}: {}", dataUrl, e.getMessage());
         } catch (Exception e) {
-            LOG.error("Error importing data from device", e);
-            throw new RuntimeException("Failed to import data from device: " + e.getMessage(), e);
+            LOG.warn("Error importing data from device: {}", e.getMessage());
         }
 
         return createdMeasurements;

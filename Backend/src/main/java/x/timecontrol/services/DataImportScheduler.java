@@ -43,8 +43,7 @@ public class DataImportScheduler {
             }
 
         } catch (Exception e) {
-            LOG.error("Scheduled data import failed: {}", e.getMessage());
-            LOG.debug("Full error details:", e);
+            LOG.debug("Scheduled data import failed (will retry in 5s): {}", e.getMessage());
         }
     }
 }
