@@ -344,15 +344,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             data: measurement
         });
 
-        dialogRef.afterClosed().subscribe(result => {
-            if (result) {
-                this.store.dispatch(MeasurementActions.updateMeasurement({
-                    id: measurement.id,
-                    measurement: result
-                }));
-                this.snackBar.open('Messung erfolgreich aktualisiert', 'OK', {duration: 3000});
-            }
-        });
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(result => {
+                if (result) {
+                    this.store.dispatch(MeasurementActions.updateMeasurement({
+                        id: measurement.id,
+                        measurement: result
+                    }));
+                    this.snackBar.open('Messung erfolgreich aktualisiert', 'OK', {duration: 3000});
+                }
+            });
     }
 
     deleteMeasurement(measurement: Measurement): void {

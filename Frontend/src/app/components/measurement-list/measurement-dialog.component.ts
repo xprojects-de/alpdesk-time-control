@@ -1,4 +1,4 @@
-import {Component, AfterViewInit, inject} from '@angular/core';
+import {Component, AfterViewInit, inject, OnDestroy} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from '@angular/material/dialog';
@@ -8,11 +8,12 @@ import {MatButtonModule} from '@angular/material/button';
 import {MatSelectModule} from '@angular/material/select';
 import {MatAutocompleteModule, MatAutocompleteSelectedEvent} from '@angular/material/autocomplete';
 import {Store} from '@ngrx/store';
-import {Observable, map, startWith, combineLatest} from 'rxjs';
+import {Observable, map, startWith, combineLatest, Subject} from 'rxjs';
 import {Measurement, MeasurementRequest} from '../../models/measurement.model';
 import {Participant} from '../../models/participant.model';
 import * as ParticipantSelectors from '../../store/participant/participant.selectors';
 import * as ParticipantActions from '../../store/participant/participant.actions';
+import {take} from "rxjs/operators";
 
 @Component({
     selector: 'app-measurement-dialog',
@@ -89,11 +90,12 @@ import * as ParticipantActions from '../../store/participant/participant.actions
       }
     `]
 })
-export class MeasurementDialogComponent implements AfterViewInit {
+export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
     private fb = inject(FormBuilder);
     private store = inject(Store);
     private dialogRef = inject(MatDialogRef<MeasurementDialogComponent>);
     public data = inject<Measurement | null>(MAT_DIALOG_DATA);
+    private destroy$ = new Subject<void>();
 
     form: FormGroup;
     participants$: Observable<Participant[]>;
@@ -103,9 +105,8 @@ export class MeasurementDialogComponent implements AfterViewInit {
     constructor() {
         this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
 
-        // Finde den initial ausgewählten Teilnehmer
         if (this.data?.participantId) {
-            this.participants$.subscribe(participants => {
+            this.participants$.pipe(take(1)).subscribe(participants => {
                 this.selectedParticipant = participants.find(p => p.id === this.data!.participantId) || null;
             });
         }
@@ -117,7 +118,6 @@ export class MeasurementDialogComponent implements AfterViewInit {
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt), Validators.required]
         });
 
-        // Filtere Teilnehmer basierend auf Sucheingabe
         this.filteredParticipants$ = combineLatest([
             this.participants$,
             this.form.get('participantSearch')!.valueChanges.pipe(
@@ -133,6 +133,11 @@ export class MeasurementDialogComponent implements AfterViewInit {
 
     ngAfterViewInit(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     onCancel(): void {

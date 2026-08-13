@@ -1,9 +1,9 @@
-import {Component, OnInit, inject} from '@angular/core';
+import {Component, OnInit, inject, OnDestroy} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Router} from '@angular/router';
 import {Store} from '@ngrx/store';
-import {Observable} from 'rxjs';
+import {Observable, Subject} from 'rxjs';
 import {MatCardModule} from '@angular/material/card';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
@@ -12,6 +12,7 @@ import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatIconModule} from '@angular/material/icon';
 import * as AuthActions from '../../store/auth/auth.actions';
 import * as AuthSelectors from '../../store/auth/auth.selectors';
+import {takeUntil} from "rxjs/operators";
 
 @Component({
     selector: 'app-login',
@@ -160,10 +161,11 @@ import * as AuthSelectors from '../../store/auth/auth.selectors';
       }
     `]
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, OnDestroy {
     private fb = inject(FormBuilder);
     private store = inject(Store);
     private router = inject(Router);
+    private destroy$ = new Subject<void>();
 
     loginForm: FormGroup;
     loading$: Observable<boolean>;
@@ -180,11 +182,18 @@ export class LoginComponent implements OnInit {
     }
 
     ngOnInit(): void {
-        this.store.select(AuthSelectors.selectIsAuthenticated).subscribe(isAuthenticated => {
-            if (isAuthenticated) {
-                this.router.navigate(['/dashboard']).then();
-            }
-        });
+        this.store.select(AuthSelectors.selectIsAuthenticated)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(isAuthenticated => {
+                if (isAuthenticated) {
+                    this.router.navigate(['/dashboard']).then();
+                }
+            });
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     onSubmit(): void {

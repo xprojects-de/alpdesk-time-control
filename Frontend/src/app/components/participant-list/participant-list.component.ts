@@ -1,7 +1,7 @@
 import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {Store} from '@ngrx/store';
-import {Observable, Subscription} from 'rxjs';
+import {Observable, Subject} from 'rxjs';
 import {MatTableModule, MatTableDataSource} from '@angular/material/table';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
@@ -16,6 +16,7 @@ import {Gender, GenderLabels} from '../../models/gender.model';
 import * as ParticipantActions from '../../store/participant/participant.actions';
 import * as ParticipantSelectors from '../../store/participant/participant.selectors';
 import {ParticipantDialogComponent} from './participant-dialog.component';
+import {takeUntil} from "rxjs/operators";
 
 @Component({
     selector: 'app-participant-list',
@@ -50,8 +51,9 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
                         <mat-spinner></mat-spinner>
                     </div>
                 }
-                
-                <table mat-table [dataSource]="dataSource" matSort class="participant-table" [class.hidden]="loading$ | async">
+
+                <table mat-table [dataSource]="dataSource" matSort class="participant-table"
+                       [class.hidden]="loading$ | async">
                     <!-- ID Column -->
                     <ng-container matColumnDef="id">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
@@ -130,7 +132,7 @@ import {ParticipantDialogComponent} from './participant-dialog.component';
       .participant-table {
         width: 100%;
       }
-      
+
       .hidden {
         display: none;
       }
@@ -148,12 +150,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ['id', 'firstName', 'lastName', 'birthDate', 'gender', 'raceNumber', 'association', 'actions'];
     dataSource = new MatTableDataSource<Participant>([]);
-    private participantsSubscription?: Subscription;
     private sortInitialized = false;
 
     sort = viewChild.required(MatSort);
@@ -180,16 +182,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     ngAfterViewInit(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
-
-        // Subscribe to participants and update dataSource
-        this.participantsSubscription = this.participants$.subscribe(participants => {
-            console.log('Participants loaded:', participants.length);
+        this.participants$.pipe(takeUntil(this.destroy$)).subscribe(participants => {
             this.dataSource.data = participants;
         });
     }
 
     ngOnDestroy(): void {
-        this.participantsSubscription?.unsubscribe();
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     getGenderLabel(gender: Gender): string {
@@ -201,12 +201,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             width: '500px'
         });
 
-        dialogRef.afterClosed().subscribe(result => {
-            if (result) {
-                this.store.dispatch(ParticipantActions.createParticipant({participant: result}));
-                this.snackBar.open('Teilnehmer erfolgreich erstellt', 'OK', {duration: 3000});
-            }
-        });
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(result => {
+                if (result) {
+                    this.store.dispatch(ParticipantActions.createParticipant({participant: result}));
+                    this.snackBar.open('Teilnehmer erfolgreich erstellt', 'OK', {duration: 3000});
+                }
+            });
     }
 
     openEditDialog(participant: Participant): void {
