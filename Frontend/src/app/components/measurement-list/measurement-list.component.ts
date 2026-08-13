@@ -1,8 +1,9 @@
-import {Component, AfterViewInit, inject} from '@angular/core';
+import {Component, AfterViewInit, OnDestroy, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
+import {FormsModule} from '@angular/forms';
 import {Store} from '@ngrx/store';
-import {Observable, combineLatest} from 'rxjs';
-import {map} from 'rxjs/operators';
+import {Observable, combineLatest, interval, Subject, EMPTY} from 'rxjs';
+import {map, takeUntil, switchMap} from 'rxjs/operators';
 import {MatTableModule} from '@angular/material/table';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
@@ -11,6 +12,8 @@ import {MatDialog, MatDialogModule} from '@angular/material/dialog';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {MatCardModule} from '@angular/material/card';
 import {MatTooltipModule} from '@angular/material/tooltip';
+import {MatBadgeModule} from '@angular/material/badge';
+import {MatSlideToggleModule} from '@angular/material/slide-toggle';
 import {Measurement} from '../../models/measurement.model';
 import {Participant} from '../../models/participant.model';
 import * as MeasurementActions from '../../store/measurement/measurement.actions';
@@ -35,18 +38,43 @@ interface MeasurementWithParticipant extends Measurement {
         MatDialogModule,
         MatSnackBarModule,
         MatCardModule,
-        MatTooltipModule
+        MatTooltipModule,
+        MatBadgeModule,
+        MatSlideToggleModule,
+        FormsModule
     ],
     template: `
         <mat-card>
             <mat-card-header>
-                <mat-card-title>Messungen</mat-card-title>
+                <mat-card-title>
+                    <div class="title-row">
+                        <span>Messungen</span>
+                        <div class="sync-status">
+                            <mat-slide-toggle 
+                                [(ngModel)]="autoRefreshEnabled"
+                                (change)="onAutoRefreshToggle()"
+                                color="primary"
+                                matTooltip="Automatische Aktualisierung">
+                            </mat-slide-toggle>
+                            @if (loading$ | async) {
+                                <mat-icon class="sync-icon syncing" matTooltip="Aktualisiere...">sync</mat-icon>
+                            } @else {
+                                <mat-icon class="sync-icon" matTooltip="Letzte Aktualisierung: {{ lastUpdate }}">sync</mat-icon>
+                            }
+                            <span class="last-update-text">{{ lastUpdate }}</span>
+                        </div>
+                    </div>
+                </mat-card-title>
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
                     <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neue Messung
+                    </button>
+                    <button mat-raised-button (click)="manualRefresh()" [disabled]="loading$ | async">
+                        <mat-icon>refresh</mat-icon>
+                        Manuell aktualisieren
                     </button>
                 </div>
 
@@ -105,8 +133,52 @@ interface MeasurementWithParticipant extends Measurement {
         </mat-card>
     `,
     styles: [`
+      .title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        gap: 32px;
+      }
+
+      .sync-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.875rem;
+        color: rgba(0, 0, 0, 0.6);
+      }
+
+      .sync-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        color: rgba(0, 0, 0, 0.6);
+      }
+
+      .sync-icon.syncing {
+        animation: spin 1s linear infinite;
+        color: #3f51b5;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .last-update-text {
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
+
       .header-actions {
         margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
       }
 
       .loading-container {
@@ -124,16 +196,20 @@ interface MeasurementWithParticipant extends Measurement {
       }
     `]
 })
-export class MeasurementListComponent implements AfterViewInit {
+export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private destroy$ = new Subject<void>();
+    private autoRefresh$ = new Subject<boolean>();
 
     measurements$: Observable<Measurement[]>;
     participants$: Observable<Participant[]>;
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ['id', 'participant', 'duration', 'measuredAt', 'actions'];
+    lastUpdate = '';
+    autoRefreshEnabled = false;
 
     constructor() {
         this.measurements$ = this.store.select(MeasurementSelectors.selectAllMeasurements);
@@ -156,8 +232,51 @@ export class MeasurementListComponent implements AfterViewInit {
     }
 
     ngAfterViewInit(): void {
+        // Initiales Laden
+        this.loadData();
+
+        // Auto-Refresh mit Toggle-Kontrolle
+        this.autoRefresh$.pipe(
+            switchMap(enabled =>
+                enabled ? interval(2000) : EMPTY
+            ),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.loadData();
+        });
+
+        // Starte mit Auto-Refresh
+        this.autoRefresh$.next(this.autoRefreshEnabled);
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
+        this.autoRefresh$.complete();
+    }
+
+    onAutoRefreshToggle(): void {
+        this.autoRefresh$.next(this.autoRefreshEnabled);
+        const message = this.autoRefreshEnabled
+            ? 'Automatische Aktualisierung aktiviert'
+            : 'Automatische Aktualisierung deaktiviert';
+        this.snackBar.open(message, 'OK', {duration: 2000});
+    }
+
+    manualRefresh(): void {
+        this.loadData();
+        this.snackBar.open('Daten wurden aktualisiert', 'OK', {duration: 2000});
+    }
+
+    private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(ParticipantActions.loadParticipants());
+        this.updateLastUpdateTime();
+    }
+
+    private updateLastUpdateTime(): void {
+        const now = new Date();
+        this.lastUpdate = now.toLocaleTimeString('de-DE');
     }
 
     getParticipantName(participantId: number, participants: Participant[]): string {
