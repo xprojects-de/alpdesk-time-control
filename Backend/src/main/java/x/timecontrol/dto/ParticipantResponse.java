@@ -1,5 +1,6 @@
 package x.timecontrol.dto;
 
+import io.micronaut.core.annotation.Nullable;
 import x.timecontrol.entities.Participant;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,6 +25,7 @@ public record ParticipantResponse(
         @Schema(description = "Race number of the participant", example = "42")
         Integer raceNumber,
 
+        @Nullable
         @Schema(description = "Association of the participant", example = "Marathon Club")
         String association
 ) {

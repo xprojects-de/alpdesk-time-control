@@ -6,8 +6,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
+import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { Store } from '@ngrx/store';
-import { Observable } from 'rxjs';
+import { Observable, map, startWith, combineLatest } from 'rxjs';
 import { Measurement, MeasurementRequest } from '../../models/measurement.model';
 import { Participant } from '../../models/participant.model';
 import * as ParticipantSelectors from '../../store/participant/participant.selectors';
@@ -23,7 +24,8 @@ import * as ParticipantActions from '../../store/participant/participant.actions
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
-    MatSelectModule
+    MatSelectModule,
+    MatAutocompleteModule
   ],
   template: `
     <h2 mat-dialog-title>{{ data ? 'Messung bearbeiten' : 'Neue Messung' }}</h2>
@@ -31,14 +33,23 @@ import * as ParticipantActions from '../../store/participant/participant.actions
       <form [formGroup]="form" class="measurement-form">
         <mat-form-field appearance="outline">
           <mat-label>Teilnehmer</mat-label>
-          <mat-select formControlName="participantId">
+          <input 
+            type="text" 
+            matInput 
+            formControlName="participantSearch"
+            [matAutocomplete]="auto"
+            placeholder="Suche nach Name oder Startnummer">
+          <mat-autocomplete 
+            #auto="matAutocomplete" 
+            [displayWith]="displayParticipant.bind(this)"
+            (optionSelected)="onParticipantSelected($event)">
             <mat-option [value]="null">Kein Teilnehmer</mat-option>
-            @for (participant of participants$ | async; track participant.id) {
-              <mat-option [value]="participant.id">
+            @for (participant of filteredParticipants$ | async; track participant.id) {
+              <mat-option [value]="participant">
                 {{ participant.firstName }} {{ participant.lastName }} ({{ participant.raceNumber }})
               </mat-option>
             }
-          </mat-select>
+          </mat-autocomplete>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
@@ -81,6 +92,8 @@ import * as ParticipantActions from '../../store/participant/participant.actions
 export class MeasurementDialogComponent implements AfterViewInit {
   form: FormGroup;
   participants$: Observable<Participant[]>;
+  filteredParticipants$: Observable<Participant[]>;
+  selectedParticipant: Participant | null = null;
 
   constructor(
     private fb: FormBuilder,
@@ -90,11 +103,32 @@ export class MeasurementDialogComponent implements AfterViewInit {
   ) {
     this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
 
+    // Finde den initial ausgewählten Teilnehmer
+    if (data?.participantId) {
+      this.participants$.subscribe(participants => {
+        this.selectedParticipant = participants.find(p => p.id === data.participantId) || null;
+      });
+    }
+
     this.form = this.fb.group({
       participantId: [data?.participantId || null],
+      participantSearch: [this.selectedParticipant || ''],
       durationMs: [data?.durationMs || '', Validators.required],
       measuredAt: [this.formatDateTimeForInput(data?.measuredAt), Validators.required]
     });
+
+    // Filtere Teilnehmer basierend auf Sucheingabe
+    this.filteredParticipants$ = combineLatest([
+      this.participants$,
+      this.form.get('participantSearch')!.valueChanges.pipe(
+        startWith(this.selectedParticipant || '')
+      )
+    ]).pipe(
+      map(([participants, searchValue]) => {
+        const searchTerm = typeof searchValue === 'string' ? searchValue : '';
+        return this.filterParticipants(participants, searchTerm);
+      })
+    );
   }
 
   ngAfterViewInit(): void {
@@ -115,6 +149,34 @@ export class MeasurementDialogComponent implements AfterViewInit {
       };
       this.dialogRef.close(measurement);
     }
+  }
+
+  onParticipantSelected(event: MatAutocompleteSelectedEvent): void {
+    const participant = event.option.value;
+    this.selectedParticipant = participant;
+    this.form.patchValue({
+      participantId: participant ? participant.id : null
+    });
+  }
+
+  displayParticipant(participant: Participant | null): string {
+    if (!participant) {
+      return '';
+    }
+    return `${participant.firstName} ${participant.lastName} (${participant.raceNumber})`;
+  }
+
+  private filterParticipants(participants: Participant[], searchTerm: string): Participant[] {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return participants;
+    }
+
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return participants.filter(participant => {
+      const fullName = `${participant.firstName} ${participant.lastName}`.toLowerCase();
+      const raceNumber = participant.raceNumber.toString();
+      return fullName.includes(lowerSearchTerm) || raceNumber.includes(lowerSearchTerm);
+    });
   }
 
   private formatDateTimeForInput(dateTime?: string): string {

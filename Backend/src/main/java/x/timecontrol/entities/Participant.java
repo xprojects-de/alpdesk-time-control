@@ -1,5 +1,6 @@
 package x.timecontrol.entities;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
@@ -17,6 +18,7 @@ public record Participant(
         String lastName,
         LocalDate birthDate,
         Integer raceNumber,
+        @Nullable
         String association
 ) {
 }
