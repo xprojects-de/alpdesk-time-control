@@ -3,7 +3,7 @@ import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {Store} from '@ngrx/store';
 import {Observable, combineLatest, interval, Subject, EMPTY} from 'rxjs';
-import {map, takeUntil, switchMap} from 'rxjs/operators';
+import {map, takeUntil, switchMap, distinctUntilChanged} from 'rxjs/operators';
 import {MatTableModule} from '@angular/material/table';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
@@ -79,12 +79,14 @@ interface MeasurementWithParticipant extends Measurement {
                 </div>
 
                 @if (loading$ | async) {
-                    <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                    <div class="loading-overlay">
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
-                } @else {
-                    <table mat-table [dataSource]="(measurementsWithParticipants$ | async) || []"
-                           class="measurement-table">
+                }
+                
+                <table mat-table [dataSource]="(measurementsWithParticipants$ | async) || []"
+                       class="measurement-table"
+                       [class.loading]="loading$ | async">
                         <!-- ID Column -->
                         <ng-container matColumnDef="id">
                             <th mat-header-cell *matHeaderCellDef>ID</th>
@@ -128,7 +130,6 @@ interface MeasurementWithParticipant extends Measurement {
                         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                         <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                     </table>
-                }
             </mat-card-content>
         </mat-card>
     `,
@@ -179,6 +180,18 @@ interface MeasurementWithParticipant extends Measurement {
         margin-bottom: 20px;
         display: flex;
         gap: 10px;
+        position: relative;
+      }
+
+      .loading-overlay {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
       }
 
       .loading-container {
@@ -189,10 +202,19 @@ interface MeasurementWithParticipant extends Measurement {
 
       .measurement-table {
         width: 100%;
+        transition: opacity 0.2s ease;
+      }
+
+      .measurement-table.loading {
+        opacity: 0.6;
       }
 
       mat-card {
         margin: 20px;
+      }
+
+      mat-card-content {
+        position: relative;
       }
     `]
 })
@@ -227,6 +249,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                         ? this.getParticipantName(m.participantId, participants)
                         : undefined
                 }))
+            ),
+            distinctUntilChanged((prev, curr) =>
+                JSON.stringify(prev) === JSON.stringify(curr)
             )
         );
     }
