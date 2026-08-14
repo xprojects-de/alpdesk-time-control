@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, OnInit} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -23,9 +23,10 @@ import {
 } from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {Store} from "@ngrx/store";
-import {selectAllRaces} from "../../store/race/race.selectors";
+import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
 import {Observable} from "rxjs";
 import {Race} from "../../models/race.model";
+
 
 @Component({
     selector: "app-participant-dialog",
@@ -156,7 +157,7 @@ import {Race} from "../../models/race.model";
          `,
      ],
 })
-export class ParticipantDialogComponent {
+export class ParticipantDialogComponent implements OnInit {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
@@ -168,6 +169,7 @@ export class ParticipantDialogComponent {
         {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
     ];
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
+    selectedRaceId$: Observable<number | null> = this.store.select(selectSelectedRaceId);
 
     constructor() {
         let birthDate: Date | string = this.data?.birthDate || "";
@@ -191,6 +193,17 @@ export class ParticipantDialogComponent {
             raceNumber: [this.data?.raceNumber || "", Validators.required],
             association: [this.data?.association || ""],
         });
+    }
+
+    ngOnInit(): void {
+
+        if (!this.data) {
+            this.selectedRaceId$.subscribe(selectedRaceId => {
+                if (selectedRaceId) {
+                    this.form.patchValue({race: selectedRaceId});
+                }
+            }).unsubscribe();
+        }
     }
 
     onCancel(): void {

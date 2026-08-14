@@ -23,3 +23,14 @@ export const selectRaceById = (id: number) => createSelector(
     (races) => races.find(race => race.id === id)
 );
 
+export const selectSelectedRaceId = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.selectedRaceId
+);
+
+export const selectSelectedRace = createSelector(
+    selectAllRaces,
+    selectSelectedRaceId,
+    (races, selectedId) => selectedId ? races.find(race => race.id === selectedId) : null
+);
+

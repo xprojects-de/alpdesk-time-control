@@ -1,5 +1,6 @@
 import {createFeatureSelector, createSelector} from '@ngrx/store';
 import {ParticipantState} from './participant.reducer';
+import * as RaceSelectors from '../race/race.selectors';
 
 export const selectParticipantState = createFeatureSelector<ParticipantState>('participant');
 
@@ -33,5 +34,16 @@ export const selectSelectedParticipant = createSelector(
 export const selectParticipantById = (id: number) => createSelector(
     selectAllParticipants,
     participants => participants.find(p => p.id === id)
+);
+
+export const selectFilteredParticipants = createSelector(
+    selectAllParticipants,
+    RaceSelectors.selectSelectedRaceId,
+    (participants, selectedRaceId) => {
+        if (!selectedRaceId) {
+            return participants;
+        }
+        return participants.filter(p => p.race?.id === selectedRaceId);
+    }
 );
 

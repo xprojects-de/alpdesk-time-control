@@ -19,10 +19,15 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatSelectModule} from "@angular/material/select";
+import {MatFormFieldModule} from "@angular/material/form-field";
 import {Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
+import {Race} from "../../models/race.model";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
+import * as RaceActions from "../../store/race/race.actions";
+import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
 import {takeUntil} from "rxjs/operators";
 
@@ -40,6 +45,8 @@ import {takeUntil} from "rxjs/operators";
         MatCardModule,
         MatTooltipModule,
         MatSortModule,
+        MatSelectModule,
+        MatFormFieldModule,
     ],
     template: `
         <mat-card>
@@ -47,6 +54,19 @@ import {takeUntil} from "rxjs/operators";
                 <mat-card-title>Teilnehmer</mat-card-title>
             </mat-card-header>
             <mat-card-content>
+                <div class="filter-section">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Nach Rennen filtern</mat-label>
+                        <mat-select [value]="selectedRaceId$ | async" 
+                                   (selectionChange)="onRaceFilterChange($event.value)">
+                            <mat-option [value]="null">Alle Rennen</mat-option>
+                            @for (race of races$ | async; track race.id) {
+                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+
                 <div class="header-actions">
                     <button
                             mat-raised-button
@@ -186,6 +206,12 @@ import {takeUntil} from "rxjs/operators";
     changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
+          .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+          }
+
           .header-actions {
             margin-bottom: 20px;
             display: flex;
@@ -213,6 +239,10 @@ import {takeUntil} from "rxjs/operators";
           th.mat-sort-header-sorted {
             color: black;
           }
+
+          mat-form-field {
+            min-width: 250px;
+          }
         `,
     ],
 })
@@ -223,6 +253,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
+    races$: Observable<Race[]>;
+    selectedRaceId$: Observable<number | null>;
     loading$: Observable<boolean>;
     displayedColumns = [
         "id",
@@ -243,8 +275,10 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     constructor() {
         this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
+            ParticipantSelectors.selectFilteredParticipants,
         );
+        this.races$ = this.store.select(RaceSelectors.selectAllRaces);
+        this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(
             ParticipantSelectors.selectParticipantLoading,
         );
@@ -271,6 +305,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     ngAfterViewInit(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
+        this.store.dispatch(RaceActions.loadRaces());
         this.participants$
             .pipe(takeUntil(this.destroy$))
             .subscribe((participants) => {
@@ -285,6 +320,21 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     getGenderLabel(gender: Gender): string {
         return GenderLabels[gender] || gender;
+    }
+
+    formatRaceDate(dateString: string): string {
+        const parts = dateString.split("-");
+        if (parts.length === 3) {
+            const year = parts[0];
+            const month = parts[1];
+            const day = parts[2];
+            return `${day}.${month}.${year}`;
+        }
+        return dateString;
+    }
+
+    onRaceFilterChange(raceId: number | null): void {
+        this.store.dispatch(RaceActions.selectRace({id: raceId}));
     }
 
     openCreateDialog(): void {

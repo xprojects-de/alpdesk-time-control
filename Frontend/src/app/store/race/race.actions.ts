@@ -60,3 +60,8 @@ export const deleteRaceFailure = createAction(
     props<{ error: any }>()
 );
 
+export const selectRace = createAction(
+    '[Race] Select Race',
+    props<{ id: number | null }>()
+);
+

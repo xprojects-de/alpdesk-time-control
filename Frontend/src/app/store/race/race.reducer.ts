@@ -4,15 +4,18 @@ import * as RaceActions from './race.actions';
 
 export interface RaceState {
     races: Race[];
+    selectedRaceId: number | null;
     loading: boolean;
     error: any;
 }
 
 export const initialState: RaceState = {
     races: [],
+    selectedRaceId: null,
     loading: false,
     error: null
 };
+
 
 export const raceReducer = createReducer(
     initialState,
@@ -72,6 +75,10 @@ export const raceReducer = createReducer(
         ...state,
         loading: false,
         error
+    })),
+    on(RaceActions.selectRace, (state, {id}) => ({
+        ...state,
+        selectedRaceId: id
     }))
 );
 
