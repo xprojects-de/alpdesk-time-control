@@ -25,7 +25,7 @@ import {Gender, GenderLabels} from "../../models/gender.model";
 import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
 import {Observable, Subject} from "rxjs";
-import {takeUntil, take} from "rxjs/operators";
+import {take, takeUntil} from "rxjs/operators";
 import {Race} from "../../models/race.model";
 
 
@@ -197,21 +197,21 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
         });
     }
 
-    ngOnInit(): void {
+     ngOnInit(): void {
 
-        if (!this.data) {
-            this.selectedRaceId$
+         if (!this.data) {
+             this.selectedRaceId$
                 .pipe(
                     take(1),
                     takeUntil(this.destroy$)
                 )
-                .subscribe(selectedRaceId => {
-                    if (selectedRaceId) {
-                        this.form.patchValue({race: selectedRaceId});
-                    }
-                });
-        }
-    }
+                 .subscribe(selectedRaceId => {
+                     if (selectedRaceId) {
+                         this.form.patchValue({race: selectedRaceId});
+                     }
+                 });
+         }
+     }
 
     ngOnDestroy(): void {
         this.destroy$.next();

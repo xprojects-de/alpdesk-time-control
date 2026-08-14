@@ -477,22 +477,24 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    openCreateDialog(): void {
-        const dialogRef = this.dialog.open(MeasurementDialogComponent, {
-            width: "500px",
-        });
+     openCreateDialog(): void {
+         const dialogRef = this.dialog.open(MeasurementDialogComponent, {
+             width: "500px",
+         });
 
-        dialogRef.afterClosed().subscribe((result) => {
-            if (result) {
-                this.store.dispatch(
-                    MeasurementActions.createMeasurement({measurement: result}),
-                );
-                this.snackBar.open("Messung erfolgreich erstellt", "OK", {
-                    duration: 3000,
-                });
-            }
-        });
-    }
+         dialogRef.afterClosed()
+             .pipe(takeUntil(this.destroy$))
+             .subscribe((result) => {
+             if (result) {
+                 this.store.dispatch(
+                     MeasurementActions.createMeasurement({measurement: result}),
+                 );
+                 this.snackBar.open("Messung erfolgreich erstellt", "OK", {
+                     duration: 3000,
+                 });
+             }
+         });
+     }
 
     openEditDialog(measurement: Measurement): void {
         const dialogRef = this.dialog.open(MeasurementDialogComponent, {

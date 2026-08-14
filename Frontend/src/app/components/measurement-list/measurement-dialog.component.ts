@@ -34,7 +34,7 @@ import {
 import {Participant} from "../../models/participant.model";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
-import {take} from "rxjs/operators";
+import {take, takeUntil} from "rxjs/operators";
 
 @Component({
     selector: "app-measurement-dialog",
@@ -151,7 +151,10 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
 
         if (this.data?.participantId) {
             setTimeout(() => {
-                this.participants$.pipe(take(1)).subscribe((participants) => {
+                this.participants$.pipe(
+                    take(1),
+                    takeUntil(this.destroy$)
+                ).subscribe((participants) => {
                     this.selectedParticipant =
                         participants.find((p) => p.id === this.data!.participantId) || null;
                     if (this.selectedParticipant) {
