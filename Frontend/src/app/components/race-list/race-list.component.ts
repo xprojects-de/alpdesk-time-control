@@ -237,19 +237,21 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
             data: race,
         });
 
-        dialogRef.afterClosed().subscribe((result) => {
-            if (result) {
-                this.store.dispatch(
-                    RaceActions.updateRace({
-                        id: race.id,
-                        race: result,
-                    })
-                );
-                this.snackBar.open('Rennen erfolgreich aktualisiert', 'OK', {
-                    duration: 3000,
-                });
-            }
-        });
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (result) {
+                    this.store.dispatch(
+                        RaceActions.updateRace({
+                            id: race.id,
+                            race: result,
+                        })
+                    );
+                    this.snackBar.open('Rennen erfolgreich aktualisiert', 'OK', {
+                        duration: 3000,
+                    });
+                }
+            });
     }
 
     deleteRace(race: Race): void {

@@ -277,19 +277,21 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             data: ageGroup,
         });
 
-        dialogRef.afterClosed().subscribe((result) => {
-            if (result) {
-                this.store.dispatch(
-                    AgeGroupActions.updateAgeGroup({
-                        id: ageGroup.id,
-                        ageGroup: result,
-                    }),
-                );
-                this.snackBar.open("Altersgruppe erfolgreich aktualisiert", "OK", {
-                    duration: 3000,
-                });
-            }
-        });
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (result) {
+                    this.store.dispatch(
+                        AgeGroupActions.updateAgeGroup({
+                            id: ageGroup.id,
+                            ageGroup: result,
+                        }),
+                    );
+                    this.snackBar.open("Altersgruppe erfolgreich aktualisiert", "OK", {
+                        duration: 3000,
+                    });
+                }
+            });
     }
 
     deleteAgeGroup(ageGroup: AgeGroup): void {

@@ -363,19 +363,21 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             data: participant,
         });
 
-        dialogRef.afterClosed().subscribe((result) => {
-            if (result) {
-                this.store.dispatch(
-                    ParticipantActions.updateParticipant({
-                        id: participant.id,
-                        participant: result,
-                    }),
-                );
-                this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {
-                    duration: 3000,
-                });
-            }
-        });
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (result) {
+                    this.store.dispatch(
+                        ParticipantActions.updateParticipant({
+                            id: participant.id,
+                            participant: result,
+                        }),
+                    );
+                    this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {
+                        duration: 3000,
+                    });
+                }
+            });
     }
 
     deleteParticipant(participant: Participant): void {
