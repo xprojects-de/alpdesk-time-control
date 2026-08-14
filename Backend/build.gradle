@@ -101,6 +101,125 @@ shadowJar {
     mergeServiceFiles()
 }
 
+// Task to copy Angular frontend to public directory
+task copyFrontend(type: Copy) {
+    from '../Frontend/dist/time-control/browser'
+    into 'src/main/resources/public'
+    doFirst {
+        println 'Copying Angular frontend to public directory...'
+    }
+    doLast {
+        println 'Frontend copied successfully!'
+    }
+}
+
+// Ensure frontend is copied before building
+processResources.dependsOn copyFrontend
+
+// Task to build macOS installer (.pkg)
+task buildMacInstaller(type: Exec) {
+    group = 'distribution'
+    description = 'Builds macOS .pkg installer using jpackage'
+    dependsOn shadowJar
+
+    doFirst {
+        println 'Building macOS installer...'
+        def outputDir = file("${buildDir}/installers/mac")
+        outputDir.mkdirs()
+    }
+
+    commandLine 'jpackage',
+        '--type', 'pkg',
+        '--name', 'TimeControl',
+        '--input', "${buildDir}/libs",
+        '--main-jar', 'time-control.jar',
+        '--main-class', 'x.timecontrol.Application',
+        '--app-version', "${version}",
+        '--vendor', 'Time Control',
+        '--dest', "${buildDir}/installers/mac",
+        '--mac-package-name', 'TimeControl',
+        '--mac-package-identifier', 'x.timecontrol'
+        // Füge '--icon', 'src/main/resources/icons/app.icns' hinzu wenn vorhanden
+}
+
+// Task to build macOS .dmg
+task buildMacDmg(type: Exec) {
+    group = 'distribution'
+    description = 'Builds macOS .dmg installer using jpackage'
+    dependsOn shadowJar
+
+    doFirst {
+        println 'Building macOS DMG...'
+        def outputDir = file("${buildDir}/installers/mac")
+        outputDir.mkdirs()
+    }
+
+    commandLine 'jpackage',
+        '--type', 'dmg',
+        '--name', 'TimeControl',
+        '--input', "${buildDir}/libs",
+        '--main-jar', 'time-control.jar',
+        '--main-class', 'x.timecontrol.Application',
+        '--app-version', "${version}",
+        '--vendor', 'Time Control',
+        '--dest', "${buildDir}/installers/mac",
+        '--mac-package-name', 'TimeControl',
+        '--mac-package-identifier', 'x.timecontrol'
+}
+
+// Task to build Windows .msi installer
+task buildWindowsMsi(type: Exec) {
+    group = 'distribution'
+    description = 'Builds Windows .msi installer using jpackage (run on Windows)'
+    dependsOn shadowJar
+
+    doFirst {
+        println 'Building Windows MSI installer...'
+        def outputDir = file("${buildDir}/installers/windows")
+        outputDir.mkdirs()
+    }
+
+    commandLine 'jpackage',
+        '--type', 'msi',
+        '--name', 'TimeControl',
+        '--input', "${buildDir}/libs",
+        '--main-jar', 'time-control.jar',
+        '--main-class', 'x.timecontrol.Application',
+        '--app-version', "${version}",
+        '--vendor', 'Time Control',
+        '--dest', "${buildDir}/installers/windows",
+        '--win-shortcut',
+        '--win-menu',
+        '--win-dir-chooser'
+        // Füge '--icon', 'src/main/resources/icons/app.ico' hinzu wenn vorhanden
+}
+
+// Task to build Windows .exe installer
+task buildWindowsExe(type: Exec) {
+    group = 'distribution'
+    description = 'Builds Windows .exe installer using jpackage (run on Windows)'
+    dependsOn shadowJar
+
+    doFirst {
+        println 'Building Windows EXE installer...'
+        def outputDir = file("${buildDir}/installers/windows")
+        outputDir.mkdirs()
+    }
+
+    commandLine 'jpackage',
+        '--type', 'exe',
+        '--name', 'TimeControl',
+        '--input', "${buildDir}/libs",
+        '--main-jar', 'time-control.jar',
+        '--main-class', 'x.timecontrol.Application',
+        '--app-version', "${version}",
+        '--vendor', 'Time Control',
+        '--dest', "${buildDir}/installers/windows",
+        '--win-shortcut',
+        '--win-menu',
+        '--win-dir-chooser'
+}
+
 
 
 
