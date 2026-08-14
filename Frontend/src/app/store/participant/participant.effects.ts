@@ -79,5 +79,19 @@ export class ParticipantEffects {
             )
         )
     );
+
+    deleteParticipantsByRaceId$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantsByRaceId),
+            mergeMap(({raceId}) =>
+                this.participantService.deleteByRaceId(raceId).pipe(
+                    map(() => ParticipantActions.deleteParticipantsByRaceIdSuccess({raceId})),
+                    catchError(error => of(ParticipantActions.deleteParticipantsByRaceIdFailure({
+                        error: error.message || 'Failed to delete participants by race'
+                    })))
+                )
+            )
+        )
+    );
 }
 

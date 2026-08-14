@@ -31,5 +31,9 @@ export class ParticipantService {
     delete(id: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
+
+    deleteByRaceId(raceId: number): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/race/${raceId}`);
+    }
 }
 

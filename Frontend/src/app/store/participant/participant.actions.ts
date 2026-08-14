@@ -68,6 +68,20 @@ export const deleteParticipantFailure = createAction(
     props<{ error: string }>()
 );
 
+// Delete participants by race
+export const deleteParticipantsByRaceId = createAction(
+    '[Participant] Delete Participants By Race Id',
+    props<{ raceId: number }>()
+);
+export const deleteParticipantsByRaceIdSuccess = createAction(
+    '[Participant] Delete Participants By Race Id Success',
+    props<{ raceId: number }>()
+);
+export const deleteParticipantsByRaceIdFailure = createAction(
+    '[Participant] Delete Participants By Race Id Failure',
+    props<{ error: string }>()
+);
+
 // Select participant
 export const selectParticipant = createAction(
     '[Participant] Select Participant',

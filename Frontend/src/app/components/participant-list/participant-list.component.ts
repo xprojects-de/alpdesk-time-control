@@ -65,6 +65,17 @@ import {takeUntil} from "rxjs/operators";
                             }
                         </mat-select>
                     </mat-form-field>
+                    @if ((selectedRaceId$ | async) !== null) {
+                        <button
+                                mat-raised-button
+                                color="warn"
+                                (click)="deleteParticipantsByRace()"
+                                matTooltip="Alle Teilnehmer des gefilterten Rennens löschen"
+                        >
+                            <mat-icon>delete_sweep</mat-icon>
+                            Alle Teilnehmer löschen
+                        </button>
+                    }
                 </div>
 
                 <div class="header-actions">
@@ -211,6 +222,7 @@ import {takeUntil} from "rxjs/operators";
             margin-bottom: 20px;
             display: flex;
             gap: 10px;
+            align-items: center;
           }
 
           .header-actions {
@@ -397,6 +409,28 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 duration: 3000,
             });
         }
+    }
+
+    deleteParticipantsByRace(): void {
+        this.selectedRaceId$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(raceId => {
+                if (raceId === null) return;
+
+                const raceName = this.dataSource.data[0]?.race?.name || 'diesem Rennen';
+                if (
+                    confirm(
+                        `Möchten Sie wirklich ALLE Teilnehmer von "${raceName}" löschen? Diese Aktion kann nicht rückgängig gemacht werden!`,
+                    )
+                ) {
+                    this.store.dispatch(
+                        ParticipantActions.deleteParticipantsByRaceId({raceId}),
+                    );
+                    this.snackBar.open("Alle Teilnehmer des Rennens erfolgreich gelöscht", "OK", {
+                        duration: 3000,
+                    });
+                }
+            });
     }
 
     refreshData(): void {

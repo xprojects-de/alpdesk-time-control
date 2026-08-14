@@ -107,6 +107,23 @@ export const participantReducer = createReducer(
         error
     })),
 
+    // Delete participants by race
+    on(ParticipantActions.deleteParticipantsByRaceId, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(ParticipantActions.deleteParticipantsByRaceIdSuccess, (state, {raceId}) => ({
+        ...state,
+        participants: state.participants.filter(p => p.race?.id !== raceId),
+        loading: false
+    })),
+    on(ParticipantActions.deleteParticipantsByRaceIdFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
     // Select participant
     on(ParticipantActions.selectParticipant, (state, {id}) => ({
         ...state,
