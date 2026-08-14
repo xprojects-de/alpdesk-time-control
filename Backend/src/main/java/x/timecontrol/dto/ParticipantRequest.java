@@ -10,6 +10,9 @@ import java.time.LocalDate;
 @Serdeable
 @Schema(description = "Request object for creating or updating a participant")
 public record ParticipantRequest(
+        @Schema(description = "ID of the race", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+        Long raceId,
+
         @Schema(description = "First name of the participant", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
         String firstName,
 

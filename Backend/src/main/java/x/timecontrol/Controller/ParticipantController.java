@@ -33,12 +33,19 @@ public class ParticipantController {
     @Get
     @Operation(summary = "List all participants", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of all participants", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
-    public HttpResponse<List<ParticipantResponse>> list() {
-        Iterable<Participant> participants = service.findAll();
+    public HttpResponse<List<ParticipantResponse>> list(@QueryValue Optional<Long> raceId) {
+        Iterable<Participant> participants;
+        if (raceId.isPresent()) {
+            participants = service.findByRaceId(raceId.get());
+        } else {
+            participants = service.findAll();
+        }
+        
         List<ParticipantResponse> response = StreamSupport.stream(participants.spliterator(), false)
                 .map(participant -> {
+                    var race = service.findRaceForParticipant(participant).orElse(null);
                     var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
-                    return ParticipantResponse.from(participant, ageGroup);
+                    return ParticipantResponse.from(participant, race, ageGroup);
                 })
                 .toList();
         return HttpResponse.ok(response);
@@ -52,8 +59,9 @@ public class ParticipantController {
     public HttpResponse<ParticipantResponse> getById(@PathVariable Long id) {
         Optional<Participant> participant = service.findById(id);
         return participant.map(p -> {
+            var race = service.findRaceForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -64,10 +72,11 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Participant created = service.create(participant);
+        var race = service.findRaceForParticipant(created).orElse(null);
         var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
-        return HttpResponse.created(ParticipantResponse.from(created, ageGroup));
+        return HttpResponse.created(ParticipantResponse.from(created, race, ageGroup));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -78,11 +87,12 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> {
+            var race = service.findRaceForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 

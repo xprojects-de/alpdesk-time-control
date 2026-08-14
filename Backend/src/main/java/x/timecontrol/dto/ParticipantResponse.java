@@ -14,6 +14,10 @@ public record ParticipantResponse(
         @Schema(description = "Unique identifier of the participant", example = "1")
         Long id,
 
+        @Nullable
+        @Schema(description = "Race information", nullable = true)
+        RaceResponse race,
+
         @Schema(description = "First name of the participant", example = "John")
         String firstName,
 
@@ -40,6 +44,7 @@ public record ParticipantResponse(
     public static ParticipantResponse from(Participant participant) {
         return new ParticipantResponse(
                 participant.id(),
+                null,
                 participant.firstName(),
                 participant.lastName(),
                 participant.birthDate(),
@@ -50,9 +55,10 @@ public record ParticipantResponse(
         );
     }
 
-    public static ParticipantResponse from(Participant participant, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, RaceResponse race, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),
+                race,
                 participant.firstName(),
                 participant.lastName(),
                 participant.birthDate(),

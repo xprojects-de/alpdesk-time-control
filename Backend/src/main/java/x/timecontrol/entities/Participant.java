@@ -14,6 +14,8 @@ public record Participant(
         @GeneratedValue
         Long id,
 
+        Long raceId,
+
         String firstName,
         String lastName,
         LocalDate birthDate,

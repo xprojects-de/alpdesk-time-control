@@ -1,2 +1,0 @@
-ALTER TABLE age_group ADD COLUMN gender TEXT NOT NULL DEFAULT 'BOTH' CHECK(gender IN ('MALE', 'FEMALE', 'BOTH'));
-
