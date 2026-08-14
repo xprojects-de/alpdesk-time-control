@@ -31,7 +31,11 @@ public record ParticipantResponse(
 
         @Nullable
         @Schema(description = "Association of the participant", example = "Marathon Club")
-        String association
+        String association,
+
+        @Nullable
+        @Schema(description = "Age group of the participant based on birth date", nullable = true)
+        AgeGroupResponse ageGroup
 ) {
     public static ParticipantResponse from(Participant participant) {
         return new ParticipantResponse(
@@ -41,7 +45,21 @@ public record ParticipantResponse(
                 participant.birthDate(),
                 participant.gender(),
                 participant.raceNumber(),
-                participant.association()
+                participant.association(),
+                null
+        );
+    }
+
+    public static ParticipantResponse from(Participant participant, AgeGroupResponse ageGroup) {
+        return new ParticipantResponse(
+                participant.id(),
+                participant.firstName(),
+                participant.lastName(),
+                participant.birthDate(),
+                participant.gender(),
+                participant.raceNumber(),
+                participant.association(),
+                ageGroup
         );
     }
 }

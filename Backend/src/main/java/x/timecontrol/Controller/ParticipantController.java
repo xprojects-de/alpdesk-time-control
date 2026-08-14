@@ -36,7 +36,10 @@ public class ParticipantController {
     public HttpResponse<List<ParticipantResponse>> list() {
         Iterable<Participant> participants = service.findAll();
         List<ParticipantResponse> response = StreamSupport.stream(participants.spliterator(), false)
-                .map(ParticipantResponse::from)
+                .map(participant -> {
+                    var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
+                    return ParticipantResponse.from(participant, ageGroup);
+                })
                 .toList();
         return HttpResponse.ok(response);
     }
@@ -48,8 +51,10 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     public HttpResponse<ParticipantResponse> getById(@PathVariable Long id) {
         Optional<Participant> participant = service.findById(id);
-        return participant.map(p -> HttpResponse.ok(ParticipantResponse.from(p)))
-                .orElse(HttpResponse.notFound());
+        return participant.map(p -> {
+            var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
+            return HttpResponse.ok(ParticipantResponse.from(p, ageGroup));
+        }).orElse(HttpResponse.notFound());
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -61,7 +66,8 @@ public class ParticipantController {
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
         Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Participant created = service.create(participant);
-        return HttpResponse.created(ParticipantResponse.from(created));
+        var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
+        return HttpResponse.created(ParticipantResponse.from(created, ageGroup));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -74,8 +80,10 @@ public class ParticipantController {
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
         Participant participant = new Participant(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association());
         Optional<Participant> updated = service.update(id, participant);
-        return updated.map(p -> HttpResponse.ok(ParticipantResponse.from(p)))
-                .orElse(HttpResponse.notFound());
+        return updated.map(p -> {
+            var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
+            return HttpResponse.ok(ParticipantResponse.from(p, ageGroup));
+        }).orElse(HttpResponse.notFound());
     }
 
     @Delete("/{id}")

@@ -1,5 +1,7 @@
 package x.timecontrol.services;
 
+import x.timecontrol.dto.AgeGroupResponse;
+import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.ParticipantRepository;
 import jakarta.inject.Singleton;
@@ -10,9 +12,11 @@ import java.util.Optional;
 public class ParticipantService {
 
     private final ParticipantRepository repository;
+    private final AgeGroupService ageGroupService;
 
-    public ParticipantService(ParticipantRepository repository) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService) {
         this.repository = repository;
+        this.ageGroupService = ageGroupService;
     }
 
     public Participant create(Participant participant) {
@@ -39,5 +43,23 @@ public class ParticipantService {
 
     public void delete(Long id) {
         repository.deleteById(id);
+    }
+
+    public Optional<AgeGroupResponse> findAgeGroupForParticipant(Participant participant) {
+        if (participant.birthDate() == null) {
+            return Optional.empty();
+        }
+
+        int birthYear = participant.birthDate().getYear();
+
+        Iterable<AgeGroup> ageGroups = ageGroupService.findAll();
+
+        for (AgeGroup ageGroup : ageGroups) {
+            if (ageGroupService.isYearInAgeGroup(ageGroup, birthYear)) {
+                return Optional.of(AgeGroupResponse.from(ageGroup));
+            }
+        }
+
+        return Optional.empty();
     }
 }
