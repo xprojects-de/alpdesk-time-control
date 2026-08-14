@@ -14,6 +14,7 @@ import {
     takeUntil,
     switchMap,
     distinctUntilChanged,
+    take,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -606,24 +607,51 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     // PDF Export Methods using ngrx
     exportAllPdf(): void {
-        this.store.dispatch(MeasurementActions.exportAllPdf());
+        const selectedRaceId = this.getSelectedRaceId();
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(MeasurementActions.exportAllPdf({ raceId: selectedRaceId }));
         this.snackBar.open('PDF Export gestartet: Gesamtwertung', 'OK', {
             duration: 2000,
         });
     }
 
     exportByGenderPdf(gender: string): void {
-        this.store.dispatch(MeasurementActions.exportByGenderPdf({gender}));
+        const selectedRaceId = this.getSelectedRaceId();
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(MeasurementActions.exportByGenderPdf({ gender, raceId: selectedRaceId }));
         this.snackBar.open(`PDF Export gestartet: Alle ${this.getGenderLabel(gender)}`, 'OK', {
             duration: 2000,
         });
     }
 
     exportAllAgeGroupsPdf(): void {
-        this.store.dispatch(MeasurementActions.exportAllAgeGroupsPdf());
+        const selectedRaceId = this.getSelectedRaceId();
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(MeasurementActions.exportAllAgeGroupsPdf({ raceId: selectedRaceId }));
         this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
             duration: 2000,
         });
+    }
+
+    private getSelectedRaceId(): number | null {
+        let selectedRaceId: number | null = null;
+        this.selectedRaceId$.pipe(take(1)).subscribe(id => selectedRaceId = id);
+        return selectedRaceId;
     }
 
     resetMeasurements(resetDevice: boolean): void {

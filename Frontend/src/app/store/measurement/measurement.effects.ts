@@ -98,8 +98,8 @@ export class MeasurementEffects {
     exportAllPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.exportAllPdf),
-            mergeMap(() =>
-                this.measurementService.exportAllToPdf().pipe(
+            mergeMap(({raceId}) =>
+                this.measurementService.exportAllToPdf(raceId).pipe(
                     map(blob => MeasurementActions.exportAllPdfSuccess({
                         blob,
                         filename: 'gesamtwertung.pdf'
@@ -115,8 +115,8 @@ export class MeasurementEffects {
     exportByGenderPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.exportByGenderPdf),
-            mergeMap(({gender}) =>
-                this.measurementService.exportByGenderToPdf(gender).pipe(
+            mergeMap(({gender, raceId}) =>
+                this.measurementService.exportByGenderToPdf(gender, raceId).pipe(
                     map(blob => MeasurementActions.exportByGenderPdfSuccess({
                         blob,
                         filename: `wertung_${gender.toLowerCase()}.pdf`
@@ -132,8 +132,8 @@ export class MeasurementEffects {
     exportAllAgeGroupsPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.exportAllAgeGroupsPdf),
-            mergeMap(() =>
-                this.measurementService.exportAllAgeGroupsToPdf().pipe(
+            mergeMap(({raceId}) =>
+                this.measurementService.exportAllAgeGroupsToPdf(raceId).pipe(
                     map(blob => MeasurementActions.exportAllAgeGroupsPdfSuccess({
                         blob,
                         filename: 'wertung_altersklassen.pdf'
