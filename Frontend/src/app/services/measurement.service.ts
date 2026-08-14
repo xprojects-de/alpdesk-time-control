@@ -50,8 +50,8 @@ export class MeasurementService {
         });
     }
 
-    exportByAgeGroupAndGenderToPdf(ageGroupName: string, gender: string): Observable<Blob> {
-        return this.http.get(`${this.apiUrl}/export/pdf/agegroup/${ageGroupName}/gender/${gender}`, {
+    exportAllAgeGroupsToPdf(): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/agegroups/all`, {
             responseType: 'blob'
         });
     }

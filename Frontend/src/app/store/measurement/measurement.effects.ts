@@ -129,16 +129,16 @@ export class MeasurementEffects {
         )
     );
 
-    exportByAgeGroupAndGenderPdf$ = createEffect(() =>
+    exportAllAgeGroupsPdf$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(MeasurementActions.exportByAgeGroupAndGenderPdf),
-            mergeMap(({ageGroupName, gender}) =>
-                this.measurementService.exportByAgeGroupAndGenderToPdf(ageGroupName, gender).pipe(
-                    map(blob => MeasurementActions.exportByAgeGroupAndGenderPdfSuccess({
+            ofType(MeasurementActions.exportAllAgeGroupsPdf),
+            mergeMap(() =>
+                this.measurementService.exportAllAgeGroupsToPdf().pipe(
+                    map(blob => MeasurementActions.exportAllAgeGroupsPdfSuccess({
                         blob,
-                        filename: `wertung_${ageGroupName.toLowerCase()}_${gender.toLowerCase()}.pdf`
+                        filename: 'wertung_altersklassen.pdf'
                     })),
-                    catchError(error => of(MeasurementActions.exportByAgeGroupAndGenderPdfFailure({
+                    catchError(error => of(MeasurementActions.exportAllAgeGroupsPdfFailure({
                         error: error.message || 'Failed to export PDF'
                     })))
                 )
@@ -152,7 +152,7 @@ export class MeasurementEffects {
             ofType(
                 MeasurementActions.exportAllPdfSuccess,
                 MeasurementActions.exportByGenderPdfSuccess,
-                MeasurementActions.exportByAgeGroupAndGenderPdfSuccess
+                MeasurementActions.exportAllAgeGroupsPdfSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

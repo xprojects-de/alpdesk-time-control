@@ -29,14 +29,11 @@ import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
 import {Measurement} from "../../models/measurement.model";
 import {Participant} from "../../models/participant.model";
-import {AgeGroup} from "../../models/age-group.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
-import * as AgeGroupActions from "../../store/age-group/age-group.actions";
-import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 
 interface MeasurementWithParticipant extends Measurement {
@@ -121,48 +118,28 @@ interface MeasurementWithParticipant extends Measurement {
                     
                     <mat-menu #exportMenu="matMenu">
                         <button mat-menu-item (click)="exportAllPdf()">
-                            <mat-icon>description</mat-icon>
-                            <span>Gesamtwertung</span>
+                            <mat-icon>groups</mat-icon>
+                            <span>Gesamtwertung (Alle)</span>
                         </button>
                         
                         <mat-divider></mat-divider>
-                        <button mat-menu-item disabled class="menu-section-header">
-                            <span><strong>Nach Geschlecht</strong></span>
-                        </button>
                         
                         <button mat-menu-item (click)="exportByGenderPdf('MALE')">
                             <mat-icon>male</mat-icon>
-                            <span>{{ getGenderLabel('MALE') }}</span>
-                        </button>
-                        <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
-                            <mat-icon>female</mat-icon>
-                            <span>{{ getGenderLabel('FEMALE') }}</span>
+                            <span>Alle {{ getGenderLabel('MALE') }}</span>
                         </button>
                         
-                        @if ((ageGroups$ | async)?.length) {
-                            <mat-divider></mat-divider>
-                            <button mat-menu-item disabled class="menu-section-header">
-                                <span><strong>Nach Altersgruppe</strong></span>
-                            </button>
-                            
-                            @for (ageGroup of (ageGroups$ | async); track ageGroup.id) {
-                                <button mat-menu-item [matMenuTriggerFor]="ageGroupMenu">
-                                    <mat-icon>group</mat-icon>
-                                    <span>{{ ageGroup.name }}</span>
-                                </button>
-                                
-                                <mat-menu #ageGroupMenu="matMenu">
-                                    <button mat-menu-item (click)="exportByAgeGroupAndGenderPdf(ageGroup.name, 'MALE')">
-                                        <mat-icon>male</mat-icon>
-                                        <span>{{ getGenderLabel('MALE') }}</span>
-                                    </button>
-                                    <button mat-menu-item (click)="exportByAgeGroupAndGenderPdf(ageGroup.name, 'FEMALE')">
-                                        <mat-icon>female</mat-icon>
-                                        <span>{{ getGenderLabel('FEMALE') }}</span>
-                                    </button>
-                                </mat-menu>
-                            }
-                        }
+                        <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
+                            <mat-icon>female</mat-icon>
+                            <span>Alle {{ getGenderLabel('FEMALE') }}</span>
+                        </button>
+                        
+                        <mat-divider></mat-divider>
+                        
+                        <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
+                            <mat-icon>view_list</mat-icon>
+                            <span>Nach Altersklassen aufgeteilt</span>
+                        </button>
                     </mat-menu>
                 </div>
 
@@ -342,7 +319,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     measurements$: Observable<Measurement[]>;
     participants$: Observable<Participant[]>;
-    ageGroups$: Observable<AgeGroup[]>;
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
@@ -355,9 +331,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.participants$ = this.store.select(
             ParticipantSelectors.selectAllParticipants,
-        );
-        this.ageGroups$ = this.store.select(
-            AgeGroupSelectors.selectAllAgeGroups,
         );
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
@@ -420,7 +393,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(ParticipantActions.loadParticipants());
-        this.store.dispatch(AgeGroupActions.loadAgeGroups());
         this.updateLastUpdateTime();
     }
 
@@ -516,24 +488,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     // PDF Export Methods using ngrx
     exportAllPdf(): void {
         this.store.dispatch(MeasurementActions.exportAllPdf());
-        this.snackBar.open('PDF Export gestartet...', 'OK', {
+        this.snackBar.open('PDF Export gestartet: Gesamtwertung', 'OK', {
             duration: 2000,
         });
     }
 
     exportByGenderPdf(gender: string): void {
         this.store.dispatch(MeasurementActions.exportByGenderPdf({gender}));
-        this.snackBar.open(`PDF Export für ${this.getGenderLabel(gender)} gestartet...`, 'OK', {
+        this.snackBar.open(`PDF Export gestartet: Alle ${this.getGenderLabel(gender)}`, 'OK', {
             duration: 2000,
         });
     }
 
-    exportByAgeGroupAndGenderPdf(ageGroupName: string, gender: string): void {
-        this.store.dispatch(MeasurementActions.exportByAgeGroupAndGenderPdf({
-            ageGroupName,
-            gender
-        }));
-        this.snackBar.open(`PDF Export für ${ageGroupName} - ${this.getGenderLabel(gender)} gestartet...`, 'OK', {
+    exportAllAgeGroupsPdf(): void {
+        this.store.dispatch(MeasurementActions.exportAllAgeGroupsPdf());
+        this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
             duration: 2000,
         });
     }

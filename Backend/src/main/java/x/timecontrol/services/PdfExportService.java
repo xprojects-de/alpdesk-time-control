@@ -83,27 +83,17 @@ public class PdfExportService {
                 .toList();
 
         try (PDDocument document = new PDDocument()) {
-            boolean firstPage = true;
-
             for (String ageGroupName : uniqueAgeGroupNames) {
                 // Male ranking for this age group
                 List<RankingEntry> maleEntries = createRankingEntries(measurements, participantMap, Gender.MALE, ageGroupName);
                 if (!maleEntries.isEmpty()) {
-                    if (!firstPage) {
-                        addPageBreak(document);
-                    }
-                    addRankingToDocument(document, "Wertung " + ageGroupName + " Männer", maleEntries, firstPage);
-                    firstPage = false;
+                    addRankingToDocument(document, "Wertung " + ageGroupName + " Männer", maleEntries);
                 }
 
                 // Female ranking for this age group
                 List<RankingEntry> femaleEntries = createRankingEntries(measurements, participantMap, Gender.FEMALE, ageGroupName);
                 if (!femaleEntries.isEmpty()) {
-                    if (!firstPage) {
-                        addPageBreak(document);
-                    }
-                    addRankingToDocument(document, "Wertung " + ageGroupName + " Frauen", femaleEntries, firstPage);
-                    firstPage = false;
+                    addRankingToDocument(document, "Wertung " + ageGroupName + " Frauen", femaleEntries);
                 }
             }
 
@@ -114,23 +104,10 @@ public class PdfExportService {
         }
     }
 
-    private void addPageBreak(PDDocument document) {
-        // Just add a new page
+    private void addRankingToDocument(PDDocument document, String title, List<RankingEntry> entries) throws IOException {
+        // Always add a new page for each ranking
         PDPage page = new PDPage(PDRectangle.A4);
         document.addPage(page);
-    }
-
-    private void addRankingToDocument(PDDocument document, String title, List<RankingEntry> entries, boolean isFirstPage) throws IOException {
-        PDPage page;
-        if (isFirstPage && document.getNumberOfPages() == 0) {
-            page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-        } else if (!isFirstPage) {
-            page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-        } else {
-            page = document.getPage(document.getNumberOfPages() - 1);
-        }
 
         PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
