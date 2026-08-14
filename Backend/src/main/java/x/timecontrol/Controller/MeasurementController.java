@@ -206,5 +206,25 @@ public class MeasurementController {
         }
     }
 
+    @Produces("application/pdf")
+    @Get("/export/pdf/agegroups/all")
+    @Operation(summary = "Export all age groups separated by gender as PDF",
+               description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportAllAgeGroupsToPdf() {
+        try {
+            Iterable<Measurement> measurements = service.findAll();
+            Iterable<Participant> participants = participantService.findAll();
+
+            byte[] pdfBytes = pdfExportService.generateAllAgeGroupsRanking(measurements, participants);
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=wertung_altersklassen.pdf");
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
 }
 

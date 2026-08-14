@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.Participant;
@@ -14,13 +15,18 @@ import x.timecontrol.entities.Participant;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Singleton
 public class PdfExportService {
+
+    private final AgeGroupService ageGroupService;
+
+    public PdfExportService(AgeGroupService ageGroupService) {
+        this.ageGroupService = ageGroupService;
+    }
 
     private static class RankingEntry {
         int place;
@@ -60,6 +66,147 @@ public class PdfExportService {
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
         String title = "Wertung " + ageGroup + " " + genderLabel;
         return generatePdf(title, entries);
+    }
+
+    public byte[] generateAllAgeGroupsRanking(Iterable<Measurement> measurements, Iterable<Participant> participants) throws IOException {
+        Map<Long, Participant> participantMap = createParticipantMap(participants);
+
+        // Load age groups from database and sort by birthYearTo descending (youngest first)
+        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .toList();
+
+        // Get unique age group names in order
+        List<String> uniqueAgeGroupNames = ageGroups.stream()
+                .map(AgeGroup::name)
+                .distinct()
+                .toList();
+
+        try (PDDocument document = new PDDocument()) {
+            boolean firstPage = true;
+
+            for (String ageGroupName : uniqueAgeGroupNames) {
+                // Male ranking for this age group
+                List<RankingEntry> maleEntries = createRankingEntries(measurements, participantMap, Gender.MALE, ageGroupName);
+                if (!maleEntries.isEmpty()) {
+                    if (!firstPage) {
+                        addPageBreak(document);
+                    }
+                    addRankingToDocument(document, "Wertung " + ageGroupName + " Männer", maleEntries, firstPage);
+                    firstPage = false;
+                }
+
+                // Female ranking for this age group
+                List<RankingEntry> femaleEntries = createRankingEntries(measurements, participantMap, Gender.FEMALE, ageGroupName);
+                if (!femaleEntries.isEmpty()) {
+                    if (!firstPage) {
+                        addPageBreak(document);
+                    }
+                    addRankingToDocument(document, "Wertung " + ageGroupName + " Frauen", femaleEntries, firstPage);
+                    firstPage = false;
+                }
+            }
+
+            // Convert to byte array
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            document.save(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private void addPageBreak(PDDocument document) {
+        // Just add a new page
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+    }
+
+    private void addRankingToDocument(PDDocument document, String title, List<RankingEntry> entries, boolean isFirstPage) throws IOException {
+        PDPage page;
+        if (isFirstPage && document.getNumberOfPages() == 0) {
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+        } else if (!isFirstPage) {
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+        } else {
+            page = document.getPage(document.getNumberOfPages() - 1);
+        }
+
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+
+        // Title
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 16);
+        contentStream.beginText();
+        contentStream.newLineAtOffset(50, 800);
+        contentStream.showText(title);
+        contentStream.endText();
+
+        // Table headers
+        float yPosition = 760;
+        float margin = 50;
+
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+        contentStream.beginText();
+        contentStream.newLineAtOffset(margin, yPosition);
+        contentStream.showText(String.format("%-8s %-30s %-20s %-15s %s",
+            "Platz", "Name Vorname", "Altersgruppe", "Absolutzeit", "Diffzeit"));
+        contentStream.endText();
+
+        // Draw header line
+        yPosition -= 15;
+        contentStream.moveTo(margin, yPosition);
+        contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
+        contentStream.stroke();
+
+        // Table data
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
+        yPosition -= 20;
+
+        for (RankingEntry entry : entries) {
+            if (yPosition < 50) {
+                // Close current page and create new one
+                contentStream.close();
+                page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+                contentStream = new PDPageContentStream(document, page);
+                yPosition = 800;
+                contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
+            }
+
+            String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
+            String rowText = String.format("%-8d %-30s %-20s %-15s %s",
+                entry.place,
+                truncate(entry.name, 30),
+                truncate(entry.ageGroup, 20),
+                formatTime(entry.timeMs),
+                diffStr
+            );
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(margin, yPosition);
+            contentStream.showText(rowText);
+            contentStream.endText();
+
+            yPosition -= 18;
+        }
+
+        // Summary at the bottom
+        yPosition -= 20;
+        if (yPosition < 50) {
+            contentStream.close();
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            contentStream = new PDPageContentStream(document, page);
+            yPosition = 800;
+        }
+
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+        contentStream.beginText();
+        contentStream.newLineAtOffset(margin, yPosition);
+        contentStream.showText("Gesamt: " + entries.size() + " Teilnehmer");
+        contentStream.endText();
+
+        contentStream.close();
     }
 
     private Map<Long, Participant> createParticipantMap(Iterable<Participant> participants) {
@@ -140,19 +287,20 @@ public class PdfExportService {
             return "Unbekannt";
         }
 
-        int age = Period.between(birthDate, LocalDate.now()).getYears();
+        int birthYear = birthDate.getYear();
 
-        if (age < 10) return "U10";
-        if (age < 12) return "U12";
-        if (age < 14) return "U14";
-        if (age < 16) return "U16";
-        if (age < 18) return "U18";
-        if (age < 21) return "U21";
-        if (age < 30) return "Erwachsene";
-        if (age < 40) return "Master 30";
-        if (age < 50) return "Master 40";
-        if (age < 60) return "Master 50";
-        return "Master 60+";
+        // Load all age groups from database
+        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+                .toList();
+
+        // Find matching age group
+        for (AgeGroup ageGroup : ageGroups) {
+            if (birthYear >= ageGroup.birthYearFrom() && birthYear <= ageGroup.birthYearTo()) {
+                return ageGroup.name();
+            }
+        }
+
+        return "Unbekannt";
     }
 
     private String formatTime(Integer timeMs) {
