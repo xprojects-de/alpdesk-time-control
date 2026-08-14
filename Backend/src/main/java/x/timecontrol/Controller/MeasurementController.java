@@ -230,7 +230,7 @@ public class MeasurementController {
             }
 
             Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findAll();
+            Iterable<Participant> participants = participantService.findByRaceId(raceId);
 
             byte[] pdfBytes = pdfExportService.generateGenderRanking(measurements, participants, gender, race.get());
             return HttpResponse.ok(pdfBytes)
@@ -258,7 +258,7 @@ public class MeasurementController {
             }
 
             Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findAll();
+            Iterable<Participant> participants = participantService.findByRaceId(raceId);
 
             byte[] pdfBytes = pdfExportService.generateAgeGroupGenderRanking(measurements, participants, ageGroup, gender, race.get());
             return HttpResponse.ok(pdfBytes)
