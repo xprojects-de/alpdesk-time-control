@@ -1,5 +1,7 @@
 import {createFeatureSelector, createSelector} from '@ngrx/store';
 import {MeasurementState} from './measurement.reducer';
+import * as RaceSelectors from '../race/race.selectors';
+import * as ParticipantSelectors from '../participant/participant.selectors';
 
 export const selectMeasurementState = createFeatureSelector<MeasurementState>('measurement');
 
@@ -40,3 +42,18 @@ export const selectMeasurementsByParticipantId = (participantId: number) => crea
     measurements => measurements.filter(m => m.participantId === participantId)
 );
 
+export const selectFilteredMeasurements = createSelector(
+    selectAllMeasurements,
+    ParticipantSelectors.selectAllParticipants,
+    RaceSelectors.selectSelectedRaceId,
+    (measurements, participants, selectedRaceId) => {
+        if (!selectedRaceId) {
+            return measurements;
+        }
+
+        const participantIdsInRace = participants
+            .filter(p => p.race?.id === selectedRaceId)
+            .map(p => p.id);
+        return measurements.filter(m => m.participantId && participantIdsInRace.includes(m.participantId));
+    }
+);

@@ -211,6 +211,10 @@ import {takeUntil, take} from "rxjs/operators";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
+                
+                <div class="count-info" [class.hidden]="loading$ | async">
+                    Anzahl der Teilnehmer: {{ dataSource.data.length }}
+                </div>
             </mat-card-content>
         </mat-card>
     `,
@@ -256,6 +260,16 @@ import {takeUntil, take} from "rxjs/operators";
 
           mat-form-field {
             min-width: 250px;
+          }
+
+          .count-info {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.87);
           }
         `,
     ],
