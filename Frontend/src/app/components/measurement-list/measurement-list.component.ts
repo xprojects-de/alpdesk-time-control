@@ -35,6 +35,7 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
+import {Actions, ofType} from "@ngrx/effects";
 
 interface MeasurementWithParticipant extends Measurement {
     participantName?: string;
@@ -337,6 +338,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
     private autoRefresh$ = new Subject<boolean>();
 
@@ -347,6 +349,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
+    private lastResetDevice = false;
 
     constructor() {
         this.measurements$ = this.store.select(
@@ -375,6 +378,29 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
             ),
         );
+
+        // Listen for successful reset and show success message
+        this.actions$.pipe(
+            ofType(MeasurementActions.resetMeasurementsSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            const successMsg = this.lastResetDevice
+                ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
+                : 'Alle Messungen wurden gelöscht (nur Datenbank)';
+            this.snackBar.open(successMsg, 'OK', {
+                duration: 3000,
+            });
+        });
+
+        // Listen for failed reset and show error message
+        this.actions$.pipe(
+            ofType(MeasurementActions.resetMeasurementsFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Fehler beim Löschen der Messungen', 'OK', {
+                duration: 3000,
+            });
+        });
     }
 
     ngAfterViewInit(): void {
@@ -536,13 +562,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
 
         if (confirm(message)) {
+            this.lastResetDevice = resetDevice;
             this.store.dispatch(MeasurementActions.resetMeasurements({ resetDevice }));
-            const successMsg = resetDevice
-                ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
-                : 'Alle Messungen wurden gelöscht (nur Datenbank)';
-            this.snackBar.open(successMsg, 'OK', {
-                duration: 3000,
-            });
         }
     }
 }

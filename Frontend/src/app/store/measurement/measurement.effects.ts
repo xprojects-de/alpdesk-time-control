@@ -179,5 +179,13 @@ export class MeasurementEffects {
             )
         )
     );
+
+    // Reload measurements after successful reset
+    reloadAfterReset$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.resetMeasurementsSuccess),
+            map(() => MeasurementActions.loadMeasurements())
+        )
+    );
 }
 
