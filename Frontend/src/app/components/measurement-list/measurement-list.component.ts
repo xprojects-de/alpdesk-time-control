@@ -8,13 +8,12 @@ import {
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
+import {Observable, combineLatest, interval, Subject, EMPTY, firstValueFrom} from "rxjs";
 import {
     map,
     takeUntil,
     switchMap,
     distinctUntilChanged,
-    take,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -606,8 +605,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     // PDF Export Methods using ngrx
-    exportAllPdf(): void {
-        const selectedRaceId = this.getSelectedRaceId();
+    async exportAllPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
             this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
                 duration: 3000,
@@ -620,8 +619,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         });
     }
 
-    exportByGenderPdf(gender: string): void {
-        const selectedRaceId = this.getSelectedRaceId();
+    async exportByGenderPdf(gender: string): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
             this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
                 duration: 3000,
@@ -634,8 +633,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         });
     }
 
-    exportAllAgeGroupsPdf(): void {
-        const selectedRaceId = this.getSelectedRaceId();
+    async exportAllAgeGroupsPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
             this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
                 duration: 3000,
@@ -648,11 +647,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         });
     }
 
-    private getSelectedRaceId(): number | null {
-        let selectedRaceId: number | null = null;
-        this.selectedRaceId$.pipe(take(1)).subscribe(id => selectedRaceId = id);
-        return selectedRaceId;
-    }
 
     resetMeasurements(resetDevice: boolean): void {
         const message = resetDevice
