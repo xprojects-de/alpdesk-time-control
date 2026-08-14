@@ -23,6 +23,9 @@ public class DataImportService {
     @Property(name = "data-import.url", defaultValue = "http://192.168.4.1/data")
     String dataUrl;
 
+    @Property(name = "data-import.reset-url", defaultValue = "http://192.168.4.1/reset")
+    String resetUrl;
+
     @Inject
     @Client("/")
     HttpClient httpClient;
@@ -90,6 +93,21 @@ public class DataImportService {
         }
 
         return createdMeasurements;
+    }
+
+    public boolean resetDevice() {
+        try {
+            LOG.info("Resetting device at {}", resetUrl);
+            httpClient.toBlocking().retrieve(HttpRequest.GET(resetUrl));
+            LOG.info("Successfully reset device");
+            return true;
+        } catch (HttpClientException e) {
+            LOG.warn("Could not connect to device at {}: {}", resetUrl, e.getMessage());
+            return false;
+        } catch (Exception e) {
+            LOG.warn("Error resetting device: {}", e.getMessage());
+            return false;
+        }
     }
 }
 

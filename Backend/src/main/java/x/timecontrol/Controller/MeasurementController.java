@@ -126,6 +126,31 @@ public class MeasurementController {
         return HttpResponse.notFound();
     }
 
+    @Delete("/reset")
+    @Operation(summary = "Delete all measurements and optionally reset device",
+               description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
+    @ApiResponse(responseCode = "500", description = "Reset failed")
+    public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
+        try {
+            service.deleteAll();
+
+            if (resetDevice) {
+                boolean deviceReset = dataImportService.resetDevice();
+                if (deviceReset) {
+                    return HttpResponse.ok("All measurements deleted and device reset successfully");
+                } else {
+                    return HttpResponse.ok("All measurements deleted, but device reset failed");
+                }
+            }
+
+            return HttpResponse.ok("All measurements deleted successfully");
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
     @Operation(summary = "Import measurements from external device",

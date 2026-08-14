@@ -17,5 +17,8 @@ public interface MeasurementRepository extends CrudRepository<Measurement, Long>
 
     @Query(value = "INSERT OR REPLACE INTO measurement (id, participant_id, duration_ms, measured_at) VALUES (:id, :participantId, :durationMs, :measuredAt)", nativeQuery = true)
     void insertOrReplaceWithId(Long id, @Nullable Long participantId, Integer durationMs, LocalDateTime measuredAt);
+
+    @Query(value = "DELETE FROM measurement; DELETE FROM sqlite_sequence WHERE name='measurement'", nativeQuery = true)
+    void deleteAll();
 }
 
