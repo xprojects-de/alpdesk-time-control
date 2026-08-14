@@ -22,6 +22,10 @@ import {
     ParticipantRequest,
 } from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
+import {Store} from "@ngrx/store";
+import {selectAllRaces} from "../../store/race/race.selectors";
+import {Observable} from "rxjs";
+import {Race} from "../../models/race.model";
 
 @Component({
     selector: "app-participant-dialog",
@@ -96,6 +100,19 @@ import {Gender, GenderLabels} from "../../models/gender.model";
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
+                    <mat-label>Rennen</mat-label>
+                    <mat-select formControlName="race" required>
+                        @for (race of races$ | async; track race.id) {
+                            <mat-option [value]="race.id">{{ race.name }} ({{ race.date }})</mat-option>
+                        }
+                    </mat-select>
+                    @if (form.get("race")?.hasError("required") &&
+                    form.get("race")?.touched) {
+                        <mat-error>Rennen ist erforderlich</mat-error>
+                    }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
                     <mat-label>Startnummer</mat-label>
                     <input matInput type="number" formControlName="raceNumber" required/>
                     @if (form.get("raceNumber")?.hasError("required") &&
@@ -142,12 +159,14 @@ export class ParticipantDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
+    private store = inject(Store);
 
     form: FormGroup;
     genderOptions = [
         {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
         {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
     ];
+    races$: Observable<Race[]> = this.store.select(selectAllRaces);
 
     constructor() {
         let birthDate: Date | string = this.data?.birthDate || "";
@@ -167,6 +186,7 @@ export class ParticipantDialogComponent {
             lastName: [this.data?.lastName || "", Validators.required],
             birthDate: [birthDate, Validators.required],
             gender: [this.data?.gender || "", Validators.required],
+            race: [this.data?.race?.id || "", Validators.required],
             raceNumber: [this.data?.raceNumber || "", Validators.required],
             association: [this.data?.association || ""],
         });
@@ -180,7 +200,7 @@ export class ParticipantDialogComponent {
         if (this.form.valid) {
             const formValue = this.form.value;
             const participant: ParticipantRequest = {
-                raceId: Number(formValue.raceId),
+                raceId: Number(formValue.race),
                 firstName: formValue.firstName,
                 lastName: formValue.lastName,
                 birthDate: this.formatDate(formValue.birthDate),
