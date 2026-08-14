@@ -155,6 +155,7 @@ import {takeUntil} from "rxjs/operators";
     styles: [
         `
           .header-actions {
+            margin-top: 20px;
             margin-bottom: 20px;
             display: flex;
             gap: 10px;

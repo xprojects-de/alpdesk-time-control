@@ -207,12 +207,14 @@ import {takeUntil} from "rxjs/operators";
     styles: [
         `
           .filter-section {
+            margin-top: 20px;
             margin-bottom: 20px;
             display: flex;
             gap: 10px;
           }
 
           .header-actions {
+            margin-top: 20px;
             margin-bottom: 20px;
             display: flex;
             gap: 10px;
