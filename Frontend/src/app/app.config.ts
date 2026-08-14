@@ -29,10 +29,12 @@ import {participantReducer} from "./store/participant/participant.reducer";
 import {measurementReducer} from "./store/measurement/measurement.reducer";
 import {authReducer} from "./store/auth/auth.reducer";
 import {ageGroupReducer} from "./store/age-group/age-group.reducer";
+import {raceReducer} from "./store/race/race.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {AuthEffects} from "./store/auth/auth.effects";
 import {AgeGroupEffects} from "./store/age-group/age-group.effects";
+import {RaceEffects} from "./store/race/race.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 
 registerLocaleData(localeDe);
@@ -61,11 +63,12 @@ export const appConfig: ApplicationConfig = {
         {provide: MAT_DATE_FORMATS, useValue: DE_DATE_FORMATS},
         provideStore({
             auth: authReducer,
+            race: raceReducer,
             participant: participantReducer,
             measurement: measurementReducer,
             ageGroup: ageGroupReducer,
         }),
-        provideEffects([AuthEffects, ParticipantEffects, MeasurementEffects, AgeGroupEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, AgeGroupEffects]),
         provideStoreDevtools({
             maxAge: 25,
             logOnly: !isDevMode(),

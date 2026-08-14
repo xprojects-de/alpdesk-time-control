@@ -1,8 +1,10 @@
-import { Gender } from './gender.model';
-import { AgeGroup } from './age-group.model';
+import {Gender} from './gender.model';
+import {AgeGroup} from './age-group.model';
+import {Race} from './race.model';
 
 export interface Participant {
     id: number;
+    race?: Race;
     firstName: string;
     lastName: string;
     birthDate: string;
@@ -13,6 +15,7 @@ export interface Participant {
 }
 
 export interface ParticipantRequest {
+    raceId: number;
     firstName: string;
     lastName: string;
     birthDate: string;

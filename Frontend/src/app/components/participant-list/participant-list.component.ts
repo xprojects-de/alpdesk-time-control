@@ -218,6 +218,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     displayedColumns = [
         "id",
+        "race",
         "firstName",
         "lastName",
         "birthDate",

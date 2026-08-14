@@ -1,0 +1,25 @@
+import {createFeatureSelector, createSelector} from '@ngrx/store';
+import {RaceState} from './race.reducer';
+
+export const selectRaceState = createFeatureSelector<RaceState>('race');
+
+export const selectAllRaces = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.races
+);
+
+export const selectRaceLoading = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.loading
+);
+
+export const selectRaceError = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.error
+);
+
+export const selectRaceById = (id: number) => createSelector(
+    selectAllRaces,
+    (races) => races.find(race => race.id === id)
+);
+

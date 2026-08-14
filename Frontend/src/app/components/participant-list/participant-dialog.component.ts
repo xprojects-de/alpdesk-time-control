@@ -180,6 +180,7 @@ export class ParticipantDialogComponent {
         if (this.form.valid) {
             const formValue = this.form.value;
             const participant: ParticipantRequest = {
+                raceId: Number(formValue.raceId),
                 firstName: formValue.firstName,
                 lastName: formValue.lastName,
                 birthDate: this.formatDate(formValue.birthDate),

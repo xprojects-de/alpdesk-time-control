@@ -7,6 +7,7 @@ import {MatToolbarModule} from "@angular/material/toolbar";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
 import {MatMenuModule} from "@angular/material/menu";
+import {RaceListComponent} from "../race-list/race-list.component";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
 import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
@@ -23,6 +24,7 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
         MatButtonModule,
         MatIconModule,
         MatMenuModule,
+        RaceListComponent,
         ParticipantListComponent,
         MeasurementListComponent,
         AgeGroupListComponent,
@@ -50,6 +52,9 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
             <mat-tab-group>
                 <mat-tab label="Altersgruppen">
                     <app-age-group-list/>
+                </mat-tab>
+                <mat-tab label="Rennen">
+                    <app-race-list/>
                 </mat-tab>
                 <mat-tab label="Teilnehmer">
                     <app-participant-list/>
