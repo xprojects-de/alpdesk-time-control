@@ -165,5 +165,19 @@ export class MeasurementEffects {
         ),
         {dispatch: false}
     );
+
+    resetMeasurements$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.resetMeasurements),
+            mergeMap(({resetDevice}) =>
+                this.measurementService.reset(resetDevice).pipe(
+                    map(() => MeasurementActions.resetMeasurementsSuccess()),
+                    catchError(error => of(MeasurementActions.resetMeasurementsFailure({
+                        error: error.message || 'Failed to reset measurements'
+                    })))
+                )
+            )
+        )
+    );
 }
 

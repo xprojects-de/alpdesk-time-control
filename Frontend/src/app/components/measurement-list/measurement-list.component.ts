@@ -141,6 +141,29 @@ interface MeasurementWithParticipant extends Measurement {
                             <span>Nach Altersklassen aufgeteilt</span>
                         </button>
                     </mat-menu>
+                    
+                    <button 
+                            mat-raised-button 
+                            color="warn"
+                            [matMenuTriggerFor]="resetMenu"
+                            matTooltip="Alle Messungen zurücksetzen"
+                    >
+                        <mat-icon>delete_sweep</mat-icon>
+                        Zurücksetzen
+                        <mat-icon>arrow_drop_down</mat-icon>
+                    </button>
+                    
+                    <mat-menu #resetMenu="matMenu">
+                        <button mat-menu-item (click)="resetMeasurements(false)">
+                            <mat-icon>delete_sweep</mat-icon>
+                            <span>Alle Messungen löschen (nur Datenbank)</span>
+                        </button>
+                        
+                        <button mat-menu-item (click)="resetMeasurements(true)">
+                            <mat-icon>delete_forever</mat-icon>
+                            <span>Alle löschen (inkl. Gerät)</span>
+                        </button>
+                    </mat-menu>
                 </div>
 
                 @if (loading$ | async) {
@@ -505,5 +528,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
             duration: 2000,
         });
+    }
+
+    resetMeasurements(resetDevice: boolean): void {
+        const message = resetDevice
+            ? 'Möchten Sie wirklich ALLE Messungen löschen? Dies betrifft auch die Messungen auf dem Gerät!'
+            : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
+
+        if (confirm(message)) {
+            this.store.dispatch(MeasurementActions.resetMeasurements({ resetDevice }));
+            const successMsg = resetDevice
+                ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
+                : 'Alle Messungen wurden gelöscht (nur Datenbank)';
+            this.snackBar.open(successMsg, 'OK', {
+                duration: 3000,
+            });
+        }
     }
 }

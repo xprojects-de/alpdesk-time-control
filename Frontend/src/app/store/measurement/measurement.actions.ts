@@ -123,3 +123,17 @@ export const exportAllAgeGroupsPdfFailure = createAction(
     '[Measurement] Export All Age Groups PDF Failure',
     props<{ error: string }>()
 );
+
+// Reset all measurements
+export const resetMeasurements = createAction(
+    '[Measurement] Reset Measurements',
+    props<{ resetDevice: boolean }>()
+);
+export const resetMeasurementsSuccess = createAction(
+    '[Measurement] Reset Measurements Success'
+);
+export const resetMeasurementsFailure = createAction(
+    '[Measurement] Reset Measurements Failure',
+    props<{ error: string }>()
+);
+

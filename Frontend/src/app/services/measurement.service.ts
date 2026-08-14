@@ -55,5 +55,11 @@ export class MeasurementService {
             responseType: 'blob'
         });
     }
+
+    reset(resetDevice: boolean): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/reset`, {
+            params: { resetDevice: resetDevice.toString() }
+        });
+    }
 }
 

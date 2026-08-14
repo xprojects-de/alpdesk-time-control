@@ -128,6 +128,24 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.selectMeasurement, (state, {id}) => ({
         ...state,
         selectedMeasurementId: id
+    })),
+
+    // Reset measurements
+    on(MeasurementActions.resetMeasurements, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.resetMeasurementsSuccess, state => ({
+        ...state,
+        measurements: [],
+        selectedMeasurementId: null,
+        loading: false
+    })),
+    on(MeasurementActions.resetMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
     }))
 );
 
