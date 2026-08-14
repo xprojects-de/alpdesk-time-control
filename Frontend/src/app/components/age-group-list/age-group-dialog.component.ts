@@ -126,20 +126,21 @@ import {Gender, GenderLabels} from "../../models/gender.model";
         </mat-dialog-actions>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    styles: [
-        `
-          .age-group-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-          }
+     styles: [
+         `
+           .age-group-form {
+             display: flex;
+             flex-direction: column;
+             gap: 16px;
+             min-width: 400px;
+             margin-top: 16px;
+           }
 
-          mat-form-field {
-            width: 100%;
-          }
-        `,
-    ],
+           mat-form-field {
+             width: 100%;
+           }
+         `,
+     ],
 })
 export class AgeGroupDialogComponent {
     private fb = inject(FormBuilder);

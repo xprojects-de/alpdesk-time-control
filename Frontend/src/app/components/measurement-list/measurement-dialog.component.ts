@@ -116,20 +116,21 @@ import {take} from "rxjs/operators";
         </mat-dialog-actions>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    styles: [
-        `
-          .measurement-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-          }
+     styles: [
+         `
+           .measurement-form {
+             display: flex;
+             flex-direction: column;
+             gap: 16px;
+             min-width: 400px;
+             margin-top: 16px;
+           }
 
-          mat-form-field {
-            width: 100%;
-          }
-        `,
-    ],
+           mat-form-field {
+             width: 100%;
+           }
+         `,
+     ],
 })
 export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
     private fb = inject(FormBuilder);

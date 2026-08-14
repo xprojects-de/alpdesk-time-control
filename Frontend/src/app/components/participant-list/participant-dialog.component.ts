@@ -140,20 +140,21 @@ import {Race} from "../../models/race.model";
         </mat-dialog-actions>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    styles: [
-        `
-          .participant-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-          }
+     styles: [
+         `
+           .participant-form {
+             display: flex;
+             flex-direction: column;
+             gap: 16px;
+             min-width: 400px;
+             margin-top: 16px;
+           }
 
-          mat-form-field {
-            width: 100%;
-          }
-        `,
-    ],
+           mat-form-field {
+             width: 100%;
+           }
+         `,
+     ],
 })
 export class ParticipantDialogComponent {
     private fb = inject(FormBuilder);
