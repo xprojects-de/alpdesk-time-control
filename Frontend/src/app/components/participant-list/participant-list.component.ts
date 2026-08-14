@@ -56,6 +56,14 @@ import {takeUntil} from "rxjs/operators";
                         <mat-icon>add</mat-icon>
                         Neuer Teilnehmer
                     </button>
+                    <button
+                            mat-raised-button
+                            (click)="refreshData()"
+                            matTooltip="Daten aktualisieren"
+                    >
+                        <mat-icon>refresh</mat-icon>
+                        Aktualisieren
+                    </button>
                 </div>
 
                 @if (loading$ | async) {
@@ -172,6 +180,8 @@ import {takeUntil} from "rxjs/operators";
         `
           .header-actions {
             margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
           }
 
           .loading-container {
@@ -322,5 +332,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 duration: 3000,
             });
         }
+    }
+
+    refreshData(): void {
+        this.store.dispatch(ParticipantActions.loadParticipants());
+        this.snackBar.open("Daten werden aktualisiert...", "OK", {
+            duration: 2000,
+        });
     }
 }
