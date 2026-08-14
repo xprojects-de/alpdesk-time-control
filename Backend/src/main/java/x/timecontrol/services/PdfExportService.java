@@ -47,7 +47,6 @@ public class PdfExportService {
 
     public byte[] generateOverallRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
-        validateParticipantsInSameRace(participantMap, race.id());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, null, null);
         String title = race.name() + " - Gesamtwertung";
         return generatePdf(title, entries);
@@ -55,7 +54,6 @@ public class PdfExportService {
 
     public byte[] generateGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
-        validateParticipantsInSameRace(participantMap, race.id());
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, null);
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
@@ -66,7 +64,6 @@ public class PdfExportService {
     public byte[] generateAgeGroupGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants,
                                                  String ageGroup, String genderStr, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
-        validateParticipantsInSameRace(participantMap, race.id());
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, ageGroup);
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
@@ -76,7 +73,6 @@ public class PdfExportService {
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
-        validateParticipantsInSameRace(participantMap, race.id());
 
         // Load age groups from database and sort by birthYearTo descending (youngest first)
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
@@ -713,17 +709,6 @@ public class PdfExportService {
         }
     }
 
-    private void validateParticipantsInSameRace(Map<Long, Participant> participantMap, Long raceId) {
-        for (Participant participant : participantMap.values()) {
-            if (!participant.raceId().equals(raceId)) {
-                throw new IllegalArgumentException(
-                    "Teilnehmer '" + formatName(participant) +
-                    "' gehört zu einem anderen Race (ID: " + participant.raceId() +
-                    "). Erwartet wurde Race ID: " + raceId
-                );
-            }
-        }
-    }
 
     private String truncate(String str, int maxLength) {
         if (str == null) return "";
