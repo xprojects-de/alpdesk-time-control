@@ -41,7 +41,36 @@ export class AuthService {
     }
 
     isAuthenticated(): boolean {
-        return !!this.getToken();
+        const token = this.getToken();
+        if (!token) {
+            return false;
+        }
+        return !this.isTokenExpired(token);
+    }
+
+    isTokenExpired(token: string): boolean {
+        try {
+            const payload = this.decodeToken(token);
+            if (!payload.exp) {
+                return false;
+            }
+
+            const expirationDate = payload.exp * 1000;
+            return Date.now() >= expirationDate;
+
+        } catch (error) {
+            return true;
+        }
+    }
+
+    private decodeToken(token: string): any {
+        try {
+            const payload = token.split('.')[1];
+            const decodedPayload = atob(payload);
+            return JSON.parse(decodedPayload);
+        } catch (error) {
+            throw new Error('Invalid token format');
+        }
     }
 
     private setToken(token: string): void {

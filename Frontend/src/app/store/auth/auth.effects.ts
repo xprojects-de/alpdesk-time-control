@@ -68,6 +68,11 @@ export class AuthEffects {
                 const username = this.authService.getUsername();
 
                 if (token && username) {
+
+                    if (this.authService.isTokenExpired(token)) {
+                        this.authService.logout();
+                        return AuthActions.checkAuthFailure();
+                    }
                     return AuthActions.checkAuthSuccess({token, username});
                 } else {
                     return AuthActions.checkAuthFailure();
