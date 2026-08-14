@@ -10,6 +10,8 @@ import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
@@ -127,6 +129,7 @@ public class MeasurementController {
     }
 
     @Delete("/reset")
+    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Delete all measurements and optionally reset device",
                description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
                security = @SecurityRequirement(name = "BearerAuth"))
@@ -159,6 +162,7 @@ public class MeasurementController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
+    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Import measurements from external device",
                description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
                security = @SecurityRequirement(name = "BearerAuth"))
