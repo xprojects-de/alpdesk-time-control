@@ -11,6 +11,7 @@ import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Race;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -44,32 +45,38 @@ public class PdfExportService {
         }
     }
 
-    public byte[] generateOverallRanking(Iterable<Measurement> measurements, Iterable<Participant> participants) throws IOException {
+    public byte[] generateOverallRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
+        validateParticipantsInSameRace(participantMap, race.id());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, null, null);
-        return generatePdf("Gesamtwertung", entries);
+        String title = race.name() + " - Gesamtwertung";
+        return generatePdf(title, entries);
     }
 
-    public byte[] generateGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, String genderStr) throws IOException {
+    public byte[] generateGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
+        validateParticipantsInSameRace(participantMap, race.id());
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, null);
-        String title = gender == Gender.MALE ? "Wertung Männer" : "Wertung Frauen";
+        String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
+        String title = race.name() + " - Wertung " + genderLabel;
         return generatePdf(title, entries);
     }
 
     public byte[] generateAgeGroupGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants,
-                                                 String ageGroup, String genderStr) throws IOException {
+                                                 String ageGroup, String genderStr, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
+        validateParticipantsInSameRace(participantMap, race.id());
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, ageGroup);
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
-        String title = "Wertung " + ageGroup + " " + genderLabel;
+        String title = race.name() + " - Wertung " + ageGroup + " " + genderLabel;
         return generatePdf(title, entries);
     }
 
-    public byte[] generateAllAgeGroupsRanking(Iterable<Measurement> measurements, Iterable<Participant> participants) throws IOException {
+    public byte[] generateAllAgeGroupsRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, Race race) throws IOException {
         Map<Long, Participant> participantMap = createParticipantMap(participants);
+        validateParticipantsInSameRace(participantMap, race.id());
 
         // Load age groups from database and sort by birthYearTo descending (youngest first)
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
@@ -114,11 +121,11 @@ public class PdfExportService {
                     // Add some spacing between rankings
                     yPosition -= 15;
 
-                    // Title
+                    // Title with race name
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
                     contentStream.beginText();
                     contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Wertung " + ageGroupName + " Männer");
+                    contentStream.showText(race.name() + " - Wertung " + ageGroupName + " Männer");
                     contentStream.endText();
                     yPosition -= 25;
 
@@ -228,11 +235,10 @@ public class PdfExportService {
                     // Add some spacing between rankings
                     yPosition -= 15;
 
-                    // Title
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
                     contentStream.beginText();
                     contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Wertung " + ageGroupName + " Frauen");
+                    contentStream.showText(race.name() + " - Wertung " + ageGroupName + " Frauen");
                     contentStream.endText();
                     yPosition -= 25;
 
@@ -704,6 +710,18 @@ public class PdfExportService {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             document.save(outputStream);
             return outputStream.toByteArray();
+        }
+    }
+
+    private void validateParticipantsInSameRace(Map<Long, Participant> participantMap, Long raceId) {
+        for (Participant participant : participantMap.values()) {
+            if (!participant.raceId().equals(raceId)) {
+                throw new IllegalArgumentException(
+                    "Teilnehmer '" + formatName(participant) +
+                    "' gehört zu einem anderen Race (ID: " + participant.raceId() +
+                    "). Erwartet wurde Race ID: " + raceId
+                );
+            }
         }
     }
 
