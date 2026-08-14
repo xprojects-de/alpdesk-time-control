@@ -21,11 +21,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.services.PdfExportService;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -150,70 +147,60 @@ public class MeasurementController {
     }
 
     @Produces("application/pdf")
-    @Get("/export/pdf")
-    @Operation(summary = "Export all measurements as PDF", 
-               description = "Generates a PDF document with all measurements in table format",
+    @Get("/export/pdf/all")
+    @Operation(summary = "Export all measurements as PDF",
+               description = "Generates a PDF with all measurements sorted by time (fastest to slowest)",
                security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<byte[]> exportAllToPdf() {
         try {
-            // Load all measurements
             Iterable<Measurement> measurements = service.findAll();
-            List<Measurement> measurementList = StreamSupport.stream(measurements.spliterator(), false)
-                    .sorted(Comparator.comparing(Measurement::measuredAt))
-                    .toList();
-
-            // Load all participants and create a map of id -> name
             Iterable<Participant> participants = participantService.findAll();
-            Map<Long, String> participantNames = participants != null
-                    ? StreamSupport.stream(participants.spliterator(), false)
-                        .filter(p -> p != null && p.id() != null)
-                        .collect(Collectors.toMap(
-                                Participant::id,
-                                p -> {
-                                    String firstName = p.firstName() != null ? p.firstName() : "";
-                                    String lastName = p.lastName() != null ? p.lastName() : "";
-                                    return (firstName + " " + lastName).trim();
-                                }
-                        ))
-                    : Map.of();
 
-            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurementList, participantNames);
+            byte[] pdfBytes = pdfExportService.generateOverallRanking(measurements, participants);
             return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=messungen.pdf");
+                    .header("Content-Disposition", "attachment; filename=gesamtwertung.pdf");
         } catch (Exception e) {
             return HttpResponse.serverError();
         }
     }
 
     @Produces("application/pdf")
-    @Get("/participant/{participantId}/export/pdf")
-    @Operation(summary = "Export measurements by participant as PDF", 
-               description = "Generates a PDF document with measurements for a specific participant",
+    @Get("/export/pdf/gender/{gender}")
+    @Operation(summary = "Export measurements by gender as PDF",
+               description = "Generates a PDF with measurements filtered by gender, sorted by time",
                security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportParticipantToPdf(@PathVariable Long participantId) {
+    public HttpResponse<byte[]> exportByGenderToPdf(@PathVariable String gender) {
         try {
-            List<Measurement> measurements = service.findByParticipantId(participantId)
-                    .stream()
-                    .sorted(Comparator.comparing(Measurement::measuredAt))
-                    .toList();
+            Iterable<Measurement> measurements = service.findAll();
+            Iterable<Participant> participants = participantService.findAll();
 
-            // Load participant and create name map
-            Map<Long, String> participantNames = participantService.findById(participantId)
-                    .map(p -> {
-                        String firstName = p.firstName() != null ? p.firstName() : "";
-                        String lastName = p.lastName() != null ? p.lastName() : "";
-                        String fullName = (firstName + " " + lastName).trim();
-                        return Map.of(participantId, fullName);
-                    })
-                    .orElse(Map.of());
-
-            byte[] pdfBytes = pdfExportService.generateMeasurementsPdf(measurements, participantNames);
+            byte[] pdfBytes = pdfExportService.generateGenderRanking(measurements, participants, gender);
             return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=messungen_teilnehmer_" + participantId + ".pdf");
+                    .header("Content-Disposition", "attachment; filename=wertung_" + gender.toLowerCase() + ".pdf");
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf/agegroup/{ageGroup}/gender/{gender}")
+    @Operation(summary = "Export measurements by age group and gender as PDF",
+               description = "Generates a PDF with measurements filtered by age group and gender, sorted by time",
+               security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportByAgeGroupAndGenderToPdf(@PathVariable String ageGroup, @PathVariable String gender) {
+        try {
+            Iterable<Measurement> measurements = service.findAll();
+            Iterable<Participant> participants = participantService.findAll();
+
+            byte[] pdfBytes = pdfExportService.generateAgeGroupGenderRanking(measurements, participants, ageGroup, gender);
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf");
         } catch (Exception e) {
             return HttpResponse.serverError();
         }

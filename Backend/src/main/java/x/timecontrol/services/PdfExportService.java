@@ -7,20 +7,166 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Measurement;
+import x.timecontrol.entities.Participant;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Singleton
 public class PdfExportService {
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+    private static class RankingEntry {
+        int place;
+        String name;
+        String ageGroup;
+        Integer timeMs;
+        Integer diffMs;
 
-    public byte[] generateMeasurementsPdf(List<Measurement> measurements, Map<Long, String> participantNames) throws IOException {
+        RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
+            this.place = place;
+            this.name = name;
+            this.ageGroup = ageGroup;
+            this.timeMs = timeMs;
+            this.diffMs = diffMs;
+        }
+    }
+
+    public byte[] generateOverallRanking(Iterable<Measurement> measurements, Iterable<Participant> participants) throws IOException {
+        Map<Long, Participant> participantMap = createParticipantMap(participants);
+        List<RankingEntry> entries = createRankingEntries(measurements, participantMap, null, null);
+        return generatePdf("Gesamtwertung", entries);
+    }
+
+    public byte[] generateGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants, String genderStr) throws IOException {
+        Map<Long, Participant> participantMap = createParticipantMap(participants);
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, null);
+        String title = gender == Gender.MALE ? "Wertung Männer" : "Wertung Frauen";
+        return generatePdf(title, entries);
+    }
+
+    public byte[] generateAgeGroupGenderRanking(Iterable<Measurement> measurements, Iterable<Participant> participants,
+                                                 String ageGroup, String genderStr) throws IOException {
+        Map<Long, Participant> participantMap = createParticipantMap(participants);
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<RankingEntry> entries = createRankingEntries(measurements, participantMap, gender, ageGroup);
+        String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
+        String title = "Wertung " + ageGroup + " " + genderLabel;
+        return generatePdf(title, entries);
+    }
+
+    private Map<Long, Participant> createParticipantMap(Iterable<Participant> participants) {
+        return StreamSupport.stream(participants.spliterator(), false)
+                .filter(p -> p != null && p.id() != null)
+                .collect(Collectors.toMap(Participant::id, p -> p));
+    }
+
+    private List<RankingEntry> createRankingEntries(Iterable<Measurement> measurements,
+                                                     Map<Long, Participant> participantMap,
+                                                     Gender filterGender,
+                                                     String filterAgeGroup) {
+        // Filter measurements: only those with participantId not null
+        List<Measurement> validMeasurements = StreamSupport.stream(measurements.spliterator(), false)
+                .filter(m -> m.participantId() != null && participantMap.containsKey(m.participantId()))
+                .toList();
+
+        // Apply gender and age group filters
+        if (filterGender != null || filterAgeGroup != null) {
+            validMeasurements = validMeasurements.stream()
+                    .filter(m -> {
+                        Participant p = participantMap.get(m.participantId());
+                        if (p == null) return false;
+
+                        if (filterGender != null && p.gender() != filterGender) {
+                            return false;
+                        }
+
+                        if (filterAgeGroup != null) {
+                            String ageGroup = calculateAgeGroup(p.birthDate());
+                            return filterAgeGroup.equalsIgnoreCase(ageGroup);
+                        }
+
+                        return true;
+                    })
+                    .toList();
+        }
+
+        // Group by participantId and keep only the fastest time
+        Map<Long, Measurement> fastestByParticipant = validMeasurements.stream()
+                .collect(Collectors.toMap(
+                        Measurement::participantId,
+                        m -> m,
+                        (m1, m2) -> m1.durationMs() < m2.durationMs() ? m1 : m2
+                ));
+
+        // Sort by time ascending (fastest first)
+        List<Measurement> sortedMeasurements = fastestByParticipant.values().stream()
+                .sorted(Comparator.comparing(Measurement::durationMs))
+                .toList();
+
+        // Create ranking entries with place and time difference
+        List<RankingEntry> entries = new ArrayList<>();
+
+        for (int i = 0; i < sortedMeasurements.size(); i++) {
+            Measurement m = sortedMeasurements.get(i);
+            Participant p = participantMap.get(m.participantId());
+
+            String name = formatName(p);
+            String ageGroup = calculateAgeGroup(p.birthDate());
+            Integer timeMs = m.durationMs();
+            Integer diffMs = (i > 0) ? timeMs - sortedMeasurements.get(i - 1).durationMs() : null;
+
+            entries.add(new RankingEntry(i + 1, name, ageGroup, timeMs, diffMs));
+        }
+
+        return entries;
+    }
+
+    private String formatName(Participant p) {
+        String firstName = p.firstName() != null ? p.firstName() : "";
+        String lastName = p.lastName() != null ? p.lastName() : "";
+        return (lastName + " " + firstName).trim();
+    }
+
+    private String calculateAgeGroup(LocalDate birthDate) {
+        if (birthDate == null) {
+            return "Unbekannt";
+        }
+
+        int age = Period.between(birthDate, LocalDate.now()).getYears();
+
+        if (age < 10) return "U10";
+        if (age < 12) return "U12";
+        if (age < 14) return "U14";
+        if (age < 16) return "U16";
+        if (age < 18) return "U18";
+        if (age < 21) return "U21";
+        if (age < 30) return "Erwachsene";
+        if (age < 40) return "Master 30";
+        if (age < 50) return "Master 40";
+        if (age < 60) return "Master 50";
+        return "Master 60+";
+    }
+
+    private String formatTime(Integer timeMs) {
+        if (timeMs == null) return "-";
+
+        int totalSeconds = timeMs / 1000;
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        int millis = timeMs % 1000;
+
+        return String.format("%d:%02d.%03d", minutes, seconds, millis);
+    }
+
+    private byte[] generatePdf(String title, List<RankingEntry> entries) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
             document.addPage(page);
@@ -31,17 +177,18 @@ public class PdfExportService {
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 18);
             contentStream.beginText();
             contentStream.newLineAtOffset(50, 800);
-            contentStream.showText("Messungen - Zeitmessung");
+            contentStream.showText(title);
             contentStream.endText();
 
             // Table headers
             float yPosition = 760;
             float margin = 50;
 
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText(String.format("%-10s %-20s %-20s %s", "ID", "Teilnehmer-ID", "Dauer (ms)", "Zeitpunkt"));
+            contentStream.showText(String.format("%-8s %-30s %-20s %-15s %s",
+                "Platz", "Name Vorname", "Altersgruppe", "Absolutzeit", "Diffzeit"));
             contentStream.endText();
 
             // Draw header line
@@ -54,7 +201,7 @@ public class PdfExportService {
             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
             yPosition -= 20;
 
-            for (Measurement measurement : measurements) {
+            for (RankingEntry entry : entries) {
                 if (yPosition < 50) {
                     // Close current page and create new one
                     contentStream.close();
@@ -65,16 +212,13 @@ public class PdfExportService {
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
                 }
 
-                String participantName = participantNames.getOrDefault(measurement.participantId(), "Unbekannt (ID: " + measurement.participantId() + ")");
-                // Handle empty names
-                if (participantName == null || participantName.trim().isEmpty()) {
-                    participantName = "Unbekannt (ID: " + measurement.participantId() + ")";
-                }
-                String rowText = String.format("%-10d %-30s %-20.2f %s",
-                    measurement.id(),
-                    participantName,
-                    (double) measurement.durationMs(),
-                    measurement.measuredAt().format(DATE_FORMATTER)
+                String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
+                String rowText = String.format("%-8d %-30s %-20s %-15s %s",
+                    entry.place,
+                    truncate(entry.name, 30),
+                    truncate(entry.ageGroup, 20),
+                    formatTime(entry.timeMs),
+                    diffStr
                 );
 
                 contentStream.beginText();
@@ -82,11 +226,11 @@ public class PdfExportService {
                 contentStream.showText(rowText);
                 contentStream.endText();
 
-                yPosition -= 20;
+                yPosition -= 18;
             }
 
             // Summary at the bottom
-            yPosition -= 30;
+            yPosition -= 20;
             if (yPosition < 50) {
                 contentStream.close();
                 page = new PDPage(PDRectangle.A4);
@@ -98,7 +242,7 @@ public class PdfExportService {
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Gesamt: " + measurements.size() + " Messungen");
+            contentStream.showText("Gesamt: " + entries.size() + " Teilnehmer");
             contentStream.endText();
 
             contentStream.close();
@@ -108,6 +252,11 @@ public class PdfExportService {
             document.save(outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    private String truncate(String str, int maxLength) {
+        if (str == null) return "";
+        return str.length() > maxLength ? str.substring(0, maxLength - 3) + "..." : str;
     }
 }
 
