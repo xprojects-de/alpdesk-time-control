@@ -139,16 +139,24 @@ import {takeUntil} from "rxjs/operators";
                         </td>
                     </ng-container>
 
-                    <!-- Age Group Column -->
-                    <ng-container matColumnDef="ageGroup">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Altersgruppe</th>
-                        <td mat-cell *matCellDef="let participant">
-                            {{ participant.ageGroup?.name || "-" }}
-                        </td>
-                    </ng-container>
+                     <!-- Age Group Column -->
+                     <ng-container matColumnDef="ageGroup">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Altersgruppe</th>
+                         <td mat-cell *matCellDef="let participant">
+                             {{ participant.ageGroup?.name || "-" }}
+                         </td>
+                     </ng-container>
 
-                    <!-- Actions Column -->
-                    <ng-container matColumnDef="actions">
+                     <!-- Race Column -->
+                     <ng-container matColumnDef="race">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Rennen</th>
+                         <td mat-cell *matCellDef="let participant">
+                             {{ participant.race?.name || "-" }}
+                         </td>
+                     </ng-container>
+
+                     <!-- Actions Column -->
+                     <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                         <td mat-cell *matCellDef="let participant">
                             <button
@@ -218,7 +226,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     displayedColumns = [
         "id",
-        "race",
         "firstName",
         "lastName",
         "birthDate",
@@ -226,6 +233,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "raceNumber",
         "association",
         "ageGroup",
+        "race",
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
