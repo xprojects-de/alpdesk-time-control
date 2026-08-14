@@ -26,6 +26,7 @@ public class BrowserStartupListener implements ApplicationEventListener<ServerSt
 
     @Override
     public void onApplicationEvent(@NonNull ServerStartupEvent event) {
+
         if (!openBrowser) {
             LOG.info("Browser auto-start disabled via configuration");
             return;
