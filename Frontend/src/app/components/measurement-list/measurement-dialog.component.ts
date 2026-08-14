@@ -79,14 +79,43 @@ import {take, takeUntil} from "rxjs/operators";
                     </mat-autocomplete>
                 </mat-form-field>
 
-                <mat-form-field appearance="outline">
-                    <mat-label>Dauer (Millisekunden)</mat-label>
-                    <input matInput type="number" formControlName="durationMs" required/>
-                    @if (form.get("durationMs")?.hasError("required") &&
-                    form.get("durationMs")?.touched) {
-                        <mat-error>Dauer ist erforderlich</mat-error>
-                    }
-                </mat-form-field>
+                <div class="time-input-group">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Minuten</mat-label>
+                        <input matInput type="number" formControlName="minutes" min="0" required/>
+                        @if (form.get("minutes")?.hasError("required") &&
+                        form.get("minutes")?.touched) {
+                            <mat-error>Minuten erforderlich</mat-error>
+                        }
+                        @if (form.get("minutes")?.hasError("min")) {
+                            <mat-error>Minuten müssen >= 0 sein</mat-error>
+                        }
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Sekunden</mat-label>
+                        <input matInput type="number" formControlName="seconds" min="0" max="59" required/>
+                        @if (form.get("seconds")?.hasError("required") &&
+                        form.get("seconds")?.touched) {
+                            <mat-error>Sekunden erforderlich</mat-error>
+                        }
+                        @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
+                            <mat-error>Sekunden: 0-59</mat-error>
+                        }
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Millisekunden</mat-label>
+                        <input matInput type="number" formControlName="milliseconds" min="0" max="999" required/>
+                        @if (form.get("milliseconds")?.hasError("required") &&
+                        form.get("milliseconds")?.touched) {
+                            <mat-error>Millisekunden erforderlich</mat-error>
+                        }
+                        @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
+                            <mat-error>Millisekunden: 0-999</mat-error>
+                        }
+                    </mat-form-field>
+                </div>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Gemessen am (ISO Format)</mat-label>
@@ -124,6 +153,16 @@ import {take, takeUntil} from "rxjs/operators";
              gap: 16px;
              min-width: 400px;
              margin-top: 16px;
+           }
+
+           .time-input-group {
+             display: flex;
+             gap: 12px;
+             width: 100%;
+           }
+
+           .time-input-group mat-form-field {
+             flex: 1;
            }
 
            mat-form-field {
@@ -166,10 +205,14 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
             }, 0);
         }
 
+        const timeComponents = this.splitMilliseconds(this.data?.durationMs || 0);
+
         this.form = this.fb.group({
             participantId: [this.data?.participantId || null],
             participantSearch: [""],
-            durationMs: [this.data?.durationMs || "", Validators.required],
+            minutes: [timeComponents.minutes, [Validators.required, Validators.min(0)]],
+            seconds: [timeComponents.seconds, [Validators.required, Validators.min(0), Validators.max(59)]],
+            milliseconds: [timeComponents.milliseconds, [Validators.required, Validators.min(0), Validators.max(999)]],
             measuredAt: [
                 this.formatDateTimeForInput(this.data?.measuredAt),
                 Validators.required,
@@ -207,9 +250,15 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
     onSave(): void {
         if (this.form.valid) {
             const formValue = this.form.value;
+            const durationMs = this.convertToMilliseconds(
+                Number(formValue.minutes),
+                Number(formValue.seconds),
+                Number(formValue.milliseconds)
+            );
+
             const measurement: MeasurementRequest = {
                 participantId: formValue.participantId || undefined,
-                durationMs: Number(formValue.durationMs),
+                durationMs: durationMs,
                 measuredAt: this.formatDateTimeForBackend(formValue.measuredAt),
             };
             this.dialogRef.close(measurement);
@@ -278,5 +327,18 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
         const minutes = String(date.getMinutes()).padStart(2, "0");
         const seconds = String(date.getSeconds()).padStart(2, "0");
         return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    }
+
+    private convertToMilliseconds(minutes: number, seconds: number, milliseconds: number): number {
+        return (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
+    }
+
+    private splitMilliseconds(totalMs: number): { minutes: number; seconds: number; milliseconds: number } {
+        const minutes = Math.floor(totalMs / (60 * 1000));
+        const remainingAfterMinutes = totalMs % (60 * 1000);
+        const seconds = Math.floor(remainingAfterMinutes / 1000);
+        const milliseconds = remainingAfterMinutes % 1000;
+        
+        return { minutes, seconds, milliseconds };
     }
 }
