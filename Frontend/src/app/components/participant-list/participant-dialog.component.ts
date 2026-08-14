@@ -103,7 +103,7 @@ import {Race} from "../../models/race.model";
                     <mat-label>Rennen</mat-label>
                     <mat-select formControlName="race" required>
                         @for (race of races$ | async; track race.id) {
-                            <mat-option [value]="race.id">{{ race.name }} ({{ race.date }})</mat-option>
+                            <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
                         }
                     </mat-select>
                     @if (form.get("race")?.hasError("required") &&
@@ -221,5 +221,16 @@ export class ParticipantDialogComponent {
         const month = String(d.getMonth() + 1).padStart(2, "0");
         const day = String(d.getDate()).padStart(2, "0");
         return `${year}-${month}-${day}`;
+    }
+
+    formatRaceDate(dateString: string): string {
+        const parts = dateString.split("-");
+        if (parts.length === 3) {
+            const year = parts[0];
+            const month = parts[1];
+            const day = parts[2];
+            return `${day}.${month}.${year}`;
+        }
+        return dateString;
     }
 }
