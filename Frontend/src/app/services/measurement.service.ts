@@ -37,14 +37,21 @@ export class MeasurementService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 
+    // PDF Exports
     exportAllToPdf(): Observable<Blob> {
-        return this.http.get(`${this.apiUrl}/export/pdf`, {
+        return this.http.get(`${this.apiUrl}/export/pdf/all`, {
             responseType: 'blob'
         });
     }
 
-    exportParticipantToPdf(participantId: number): Observable<Blob> {
-        return this.http.get(`${this.apiUrl}/participant/${participantId}/export/pdf`, {
+    exportByGenderToPdf(gender: string): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/gender/${gender}`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportByAgeGroupAndGenderToPdf(ageGroupName: string, gender: string): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/agegroup/${ageGroupName}/gender/${gender}`, {
             responseType: 'blob'
         });
     }

@@ -1,7 +1,7 @@
 import {inject, Injectable} from '@angular/core';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
-import {catchError, map, mergeMap} from 'rxjs/operators';
+import {catchError, map, mergeMap, tap} from 'rxjs/operators';
 import {MeasurementService} from '../../services/measurement.service';
 import * as MeasurementActions from './measurement.actions';
 
@@ -92,6 +92,78 @@ export class MeasurementEffects {
                 )
             )
         )
+    );
+
+    // PDF Export Effects
+    exportAllPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportAllPdf),
+            mergeMap(() =>
+                this.measurementService.exportAllToPdf().pipe(
+                    map(blob => MeasurementActions.exportAllPdfSuccess({
+                        blob,
+                        filename: 'gesamtwertung.pdf'
+                    })),
+                    catchError(error => of(MeasurementActions.exportAllPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportByGenderPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportByGenderPdf),
+            mergeMap(({gender}) =>
+                this.measurementService.exportByGenderToPdf(gender).pipe(
+                    map(blob => MeasurementActions.exportByGenderPdfSuccess({
+                        blob,
+                        filename: `wertung_${gender.toLowerCase()}.pdf`
+                    })),
+                    catchError(error => of(MeasurementActions.exportByGenderPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportByAgeGroupAndGenderPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportByAgeGroupAndGenderPdf),
+            mergeMap(({ageGroupName, gender}) =>
+                this.measurementService.exportByAgeGroupAndGenderToPdf(ageGroupName, gender).pipe(
+                    map(blob => MeasurementActions.exportByAgeGroupAndGenderPdfSuccess({
+                        blob,
+                        filename: `wertung_${ageGroupName.toLowerCase()}_${gender.toLowerCase()}.pdf`
+                    })),
+                    catchError(error => of(MeasurementActions.exportByAgeGroupAndGenderPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
+    // Auto-download PDF when export is successful
+    downloadPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(
+                MeasurementActions.exportAllPdfSuccess,
+                MeasurementActions.exportByGenderPdfSuccess,
+                MeasurementActions.exportByAgeGroupAndGenderPdfSuccess
+            ),
+            tap(({blob, filename}) => {
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.click();
+                window.URL.revokeObjectURL(url);
+            })
+        ),
+        {dispatch: false}
     );
 }
 

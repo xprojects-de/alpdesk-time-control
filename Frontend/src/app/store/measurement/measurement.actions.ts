@@ -88,3 +88,41 @@ export const selectMeasurement = createAction(
     props<{ id: number | null }>()
 );
 
+// PDF Export - All
+export const exportAllPdf = createAction('[Measurement] Export All PDF');
+export const exportAllPdfSuccess = createAction(
+    '[Measurement] Export All PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportAllPdfFailure = createAction(
+    '[Measurement] Export All PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - By Gender
+export const exportByGenderPdf = createAction(
+    '[Measurement] Export By Gender PDF',
+    props<{ gender: string }>()
+);
+export const exportByGenderPdfSuccess = createAction(
+    '[Measurement] Export By Gender PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportByGenderPdfFailure = createAction(
+    '[Measurement] Export By Gender PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - By Age Group and Gender
+export const exportByAgeGroupAndGenderPdf = createAction(
+    '[Measurement] Export By Age Group And Gender PDF',
+    props<{ ageGroupName: string; gender: string }>()
+);
+export const exportByAgeGroupAndGenderPdfSuccess = createAction(
+    '[Measurement] Export By Age Group And Gender PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportByAgeGroupAndGenderPdfFailure = createAction(
+    '[Measurement] Export By Age Group And Gender PDF Failure',
+    props<{ error: string }>()
+);
