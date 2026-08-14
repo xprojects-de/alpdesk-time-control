@@ -146,7 +146,7 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
 
     constructor() {
         this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
+            ParticipantSelectors.selectFilteredParticipants,
         );
 
         if (this.data?.participantId) {

@@ -27,13 +27,18 @@ import {MatBadgeModule} from "@angular/material/badge";
 import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
+import {MatSelectModule} from "@angular/material/select";
+import {MatFormFieldModule} from "@angular/material/form-field";
 import {Measurement} from "../../models/measurement.model";
 import {Participant} from "../../models/participant.model";
+import {Race} from "../../models/race.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
+import * as RaceActions from "../../store/race/race.actions";
+import * as RaceSelectors from "../../store/race/race.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -59,6 +64,8 @@ interface MeasurementWithParticipant extends Measurement {
         MatMenuModule,
         MatDividerModule,
         FormsModule,
+        MatSelectModule,
+        MatFormFieldModule,
     ],
     template: `
         <mat-card>
@@ -93,6 +100,19 @@ interface MeasurementWithParticipant extends Measurement {
                 </mat-card-title>
             </mat-card-header>
             <mat-card-content>
+                <div class="filter-section">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Nach Rennen filtern</mat-label>
+                        <mat-select [value]="selectedRaceId$ | async" 
+                                   (selectionChange)="onRaceFilterChange($event.value)">
+                            <mat-option [value]="null">Alle Rennen</mat-option>
+                            @for (race of races$ | async; track race.id) {
+                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+
                 <div class="header-actions">
                     <button
                             mat-raised-button
@@ -240,6 +260,14 @@ interface MeasurementWithParticipant extends Measurement {
     changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
+          .filter-section {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+          }
+
           .title-row {
             display: flex;
             justify-content: space-between;
@@ -332,6 +360,10 @@ interface MeasurementWithParticipant extends Measurement {
           .menu-section-header span {
             font-size: 0.875rem;
           }
+
+          mat-form-field {
+            min-width: 250px;
+          }
         `,
     ],
 })
@@ -345,6 +377,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     measurements$: Observable<Measurement[]>;
     participants$: Observable<Participant[]>;
+    races$: Observable<Race[]>;
+    selectedRaceId$: Observable<number | null>;
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
@@ -359,6 +393,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.participants$ = this.store.select(
             ParticipantSelectors.selectAllParticipants,
         );
+        this.races$ = this.store.select(RaceSelectors.selectAllRaces);
+        this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
         );
@@ -444,6 +480,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(ParticipantActions.loadParticipants());
+        this.store.dispatch(RaceActions.loadRaces());
         this.updateLastUpdateTime();
     }
 
@@ -536,6 +573,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     getGenderLabel(gender: string): string {
         return GenderLabels[gender as Gender] || gender;
+    }
+
+    onRaceFilterChange(raceId: number | null): void {
+        this.store.dispatch(RaceActions.selectRace({id: raceId}));
+    }
+
+    formatRaceDate(dateString: string): string {
+        const parts = dateString.split("-");
+        if (parts.length === 3) {
+            const year = parts[0];
+            const month = parts[1];
+            const day = parts[2];
+            return `${day}.${month}.${year}`;
+        }
+        return dateString;
     }
 
     // PDF Export Methods using ngrx
