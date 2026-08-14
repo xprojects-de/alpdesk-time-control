@@ -29,7 +29,7 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
-import {takeUntil} from "rxjs/operators";
+import {takeUntil, take} from "rxjs/operators";
 
 @Component({
     selector: "app-participant-list",
@@ -413,7 +413,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     deleteParticipantsByRace(): void {
         this.selectedRaceId$
-            .pipe(takeUntil(this.destroy$))
+            .pipe(take(1))
             .subscribe(raceId => {
                 if (raceId === null) return;
 
