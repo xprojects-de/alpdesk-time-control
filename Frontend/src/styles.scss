@@ -38,3 +38,19 @@ body {
 }
 
 /* You can add global styles to this file, and also import other style files */
+
+/* Error Snackbar Styling */
+.error-snackbar {
+  --mdc-snackbar-container-color: #f44336 !important;
+  --mat-snack-bar-button-color: #ffffff !important;
+  --mdc-snackbar-supporting-text-color: #ffffff !important;
+
+  .mat-mdc-snack-bar-label {
+    color: #ffffff !important;
+  }
+
+  .mat-mdc-button {
+    color: #ffffff !important;
+  }
+}
+
