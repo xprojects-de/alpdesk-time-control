@@ -16,7 +16,7 @@ public record AgeGroupRequest(
         @Schema(description = "Ending birth year for range (e.g., 2000)", example = "2000", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer birthYearTo,
 
-        @Schema(description = "Gender category for the age group", example = "MALE", requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"MALE", "FEMALE", "BOTH"})
+        @Schema(description = "Gender category for the age group", example = "MALE", requiredMode = Schema.RequiredMode.REQUIRED)
         Gender gender
 ) {
 }
