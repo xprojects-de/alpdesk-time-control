@@ -28,9 +28,11 @@ import {provideStoreDevtools} from "@ngrx/store-devtools";
 import {participantReducer} from "./store/participant/participant.reducer";
 import {measurementReducer} from "./store/measurement/measurement.reducer";
 import {authReducer} from "./store/auth/auth.reducer";
+import {ageGroupReducer} from "./store/age-group/age-group.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {AuthEffects} from "./store/auth/auth.effects";
+import {AgeGroupEffects} from "./store/age-group/age-group.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 
 registerLocaleData(localeDe);
@@ -61,8 +63,9 @@ export const appConfig: ApplicationConfig = {
             auth: authReducer,
             participant: participantReducer,
             measurement: measurementReducer,
+            ageGroup: ageGroupReducer,
         }),
-        provideEffects([AuthEffects, ParticipantEffects, MeasurementEffects]),
+        provideEffects([AuthEffects, ParticipantEffects, MeasurementEffects, AgeGroupEffects]),
         provideStoreDevtools({
             maxAge: 25,
             logOnly: !isDevMode(),

@@ -9,6 +9,7 @@ import {MatIconModule} from "@angular/material/icon";
 import {MatMenuModule} from "@angular/material/menu";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
+import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
 
@@ -24,6 +25,7 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
         MatMenuModule,
         ParticipantListComponent,
         MeasurementListComponent,
+        AgeGroupListComponent,
     ],
     template: `
         <mat-toolbar color="primary">
@@ -46,6 +48,9 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
 
         <div class="dashboard-container">
             <mat-tab-group>
+                <mat-tab label="Altersgruppen">
+                    <app-age-group-list/>
+                </mat-tab>
                 <mat-tab label="Teilnehmer">
                     <app-participant-list/>
                 </mat-tab>
