@@ -131,6 +131,14 @@ import {takeUntil} from "rxjs/operators";
                         </td>
                     </ng-container>
 
+                    <!-- Age Group Column -->
+                    <ng-container matColumnDef="ageGroup">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Altersgruppe</th>
+                        <td mat-cell *matCellDef="let participant">
+                            {{ participant.ageGroup?.name || "-" }}
+                        </td>
+                    </ng-container>
+
                     <!-- Actions Column -->
                     <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
@@ -206,6 +214,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "gender",
         "raceNumber",
         "association",
+        "ageGroup",
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
