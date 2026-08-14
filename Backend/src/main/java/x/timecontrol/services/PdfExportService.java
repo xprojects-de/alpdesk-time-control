@@ -83,18 +83,250 @@ public class PdfExportService {
                 .toList();
 
         try (PDDocument document = new PDDocument()) {
+            PDPage page = null;
+            PDPageContentStream contentStream = null;
+            float yPosition = 0;
+            float margin = 50;
+
+            // Define fixed column positions for better alignment
+            float colPlatz = margin;
+            float colName = margin + 40;
+            float colAgeGroup = margin + 200;
+            float colTime = margin + 320;
+            float colDiff = margin + 420;
+
             for (String ageGroupName : uniqueAgeGroupNames) {
                 // Male ranking for this age group
                 List<RankingEntry> maleEntries = createRankingEntries(measurements, participantMap, Gender.MALE, ageGroupName);
+
                 if (!maleEntries.isEmpty()) {
-                    addRankingToDocument(document, "Wertung " + ageGroupName + " Männer", maleEntries);
+                    // Check if we need a new page
+                    if (page == null || yPosition < 100) {
+                        if (contentStream != null) {
+                            contentStream.close();
+                        }
+                        page = new PDPage(PDRectangle.A4);
+                        document.addPage(page);
+                        contentStream = new PDPageContentStream(document, page);
+                        yPosition = 800;
+                    }
+
+                    // Add some spacing between rankings
+                    yPosition -= 15;
+
+                    // Title
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(margin, yPosition);
+                    contentStream.showText("Wertung " + ageGroupName + " Männer");
+                    contentStream.endText();
+                    yPosition -= 25;
+
+                    // Table headers
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colPlatz, yPosition);
+                    contentStream.showText("Platz");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colName, yPosition);
+                    contentStream.showText("Name Vorname");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colAgeGroup, yPosition);
+                    contentStream.showText("Altersgruppe");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colTime, yPosition);
+                    contentStream.showText("Absolutzeit");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colDiff, yPosition);
+                    contentStream.showText("Diffzeit");
+                    contentStream.endText();
+
+                    // Draw header line
+                    yPosition -= 12;
+                    contentStream.moveTo(margin, yPosition);
+                    contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
+                    contentStream.stroke();
+
+                    // Table data
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+                    yPosition -= 14;
+
+                    for (RankingEntry entry : maleEntries) {
+                        if (yPosition < 50) {
+                            // Close current page and create new one
+                            contentStream.close();
+                            page = new PDPage(PDRectangle.A4);
+                            document.addPage(page);
+                            contentStream = new PDPageContentStream(document, page);
+                            yPosition = 800;
+                            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+                        }
+
+                        String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colPlatz, yPosition);
+                        contentStream.showText(String.valueOf(entry.place));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colName, yPosition);
+                        contentStream.showText(truncate(entry.name, 35));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colAgeGroup, yPosition);
+                        contentStream.showText(truncate(entry.ageGroup, 20));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colTime, yPosition);
+                        contentStream.showText(formatTime(entry.timeMs));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colDiff, yPosition);
+                        contentStream.showText(diffStr);
+                        contentStream.endText();
+
+                        yPosition -= 12;
+                    }
+
+                    // Summary
+                    yPosition -= 10;
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(margin, yPosition);
+                    contentStream.showText("Gesamt: " + maleEntries.size() + " Teilnehmer");
+                    contentStream.endText();
+                    yPosition -= 15;
                 }
 
                 // Female ranking for this age group
                 List<RankingEntry> femaleEntries = createRankingEntries(measurements, participantMap, Gender.FEMALE, ageGroupName);
+
                 if (!femaleEntries.isEmpty()) {
-                    addRankingToDocument(document, "Wertung " + ageGroupName + " Frauen", femaleEntries);
+                    // Check if we need a new page
+                    if (page == null || yPosition < 100) {
+                        if (contentStream != null) {
+                            contentStream.close();
+                        }
+                        page = new PDPage(PDRectangle.A4);
+                        document.addPage(page);
+                        contentStream = new PDPageContentStream(document, page);
+                        yPosition = 800;
+                    }
+
+                    // Add some spacing between rankings
+                    yPosition -= 15;
+
+                    // Title
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(margin, yPosition);
+                    contentStream.showText("Wertung " + ageGroupName + " Frauen");
+                    contentStream.endText();
+                    yPosition -= 25;
+
+                    // Table headers
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colPlatz, yPosition);
+                    contentStream.showText("Platz");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colName, yPosition);
+                    contentStream.showText("Name Vorname");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colAgeGroup, yPosition);
+                    contentStream.showText("Altersgruppe");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colTime, yPosition);
+                    contentStream.showText("Absolutzeit");
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colDiff, yPosition);
+                    contentStream.showText("Diffzeit");
+                    contentStream.endText();
+
+                    // Draw header line
+                    yPosition -= 12;
+                    contentStream.moveTo(margin, yPosition);
+                    contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
+                    contentStream.stroke();
+
+                    // Table data
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+                    yPosition -= 14;
+
+                    for (RankingEntry entry : femaleEntries) {
+                        if (yPosition < 50) {
+                            // Close current page and create new one
+                            contentStream.close();
+                            page = new PDPage(PDRectangle.A4);
+                            document.addPage(page);
+                            contentStream = new PDPageContentStream(document, page);
+                            yPosition = 800;
+                            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+                        }
+
+                        String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colPlatz, yPosition);
+                        contentStream.showText(String.valueOf(entry.place));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colName, yPosition);
+                        contentStream.showText(truncate(entry.name, 35));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colAgeGroup, yPosition);
+                        contentStream.showText(truncate(entry.ageGroup, 20));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colTime, yPosition);
+                        contentStream.showText(formatTime(entry.timeMs));
+                        contentStream.endText();
+
+                        contentStream.beginText();
+                        contentStream.newLineAtOffset(colDiff, yPosition);
+                        contentStream.showText(diffStr);
+                        contentStream.endText();
+
+                        yPosition -= 12;
+                    }
+
+                    // Summary
+                    yPosition -= 10;
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(margin, yPosition);
+                    contentStream.showText("Gesamt: " + femaleEntries.size() + " Teilnehmer");
+                    contentStream.endText();
+                    yPosition -= 15;
                 }
+            }
+
+            if (contentStream != null) {
+                contentStream.close();
             }
 
             // Convert to byte array
@@ -105,39 +337,83 @@ public class PdfExportService {
     }
 
     private void addRankingToDocument(PDDocument document, String title, List<RankingEntry> entries) throws IOException {
-        // Always add a new page for each ranking
-        PDPage page = new PDPage(PDRectangle.A4);
-        document.addPage(page);
+        addRankingToDocument(document, title, entries, false);
+    }
 
-        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+    private void addRankingToDocument(PDDocument document, String title, List<RankingEntry> entries, boolean continueOnSamePage) throws IOException {
+        PDPage page;
+        PDPageContentStream contentStream;
+        float yPosition;
 
-        // Title
-        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 16);
+        // Check if we can continue on the same page or need a new one
+        if (continueOnSamePage && document.getNumberOfPages() > 0) {
+            page = document.getPage(document.getNumberOfPages() - 1);
+            // We'll try to continue, but we need to track position separately
+            // For simplicity, we'll start a new page if this is the first ranking
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            yPosition = 800;
+        } else {
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            yPosition = 800;
+        }
+
+        contentStream = new PDPageContentStream(document, page);
+
+        // Title - smaller font
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
         contentStream.beginText();
-        contentStream.newLineAtOffset(50, 800);
+        contentStream.newLineAtOffset(50, yPosition);
         contentStream.showText(title);
         contentStream.endText();
 
         // Table headers
-        float yPosition = 760;
+        yPosition -= 25;
         float margin = 50;
 
-        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+        // Define fixed column positions for better alignment
+        float colPlatz = margin;
+        float colName = margin + 40;
+        float colAgeGroup = margin + 200;
+        float colTime = margin + 320;
+        float colDiff = margin + 420;
+
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
         contentStream.beginText();
-        contentStream.newLineAtOffset(margin, yPosition);
-        contentStream.showText(String.format("%-8s %-30s %-20s %-15s %s",
-            "Platz", "Name Vorname", "Altersgruppe", "Absolutzeit", "Diffzeit"));
+        contentStream.newLineAtOffset(colPlatz, yPosition);
+        contentStream.showText("Platz");
+        contentStream.endText();
+
+        contentStream.beginText();
+        contentStream.newLineAtOffset(colName, yPosition);
+        contentStream.showText("Name Vorname");
+        contentStream.endText();
+
+        contentStream.beginText();
+        contentStream.newLineAtOffset(colAgeGroup, yPosition);
+        contentStream.showText("Altersgruppe");
+        contentStream.endText();
+
+        contentStream.beginText();
+        contentStream.newLineAtOffset(colTime, yPosition);
+        contentStream.showText("Absolutzeit");
+        contentStream.endText();
+
+        contentStream.beginText();
+        contentStream.newLineAtOffset(colDiff, yPosition);
+        contentStream.showText("Diffzeit");
         contentStream.endText();
 
         // Draw header line
-        yPosition -= 15;
+        yPosition -= 12;
         contentStream.moveTo(margin, yPosition);
         contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
         contentStream.stroke();
 
-        // Table data
-        contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
-        yPosition -= 20;
+        // Table data - smaller font
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+        yPosition -= 14;
 
         for (RankingEntry entry : entries) {
             if (yPosition < 50) {
@@ -147,28 +423,41 @@ public class PdfExportService {
                 document.addPage(page);
                 contentStream = new PDPageContentStream(document, page);
                 yPosition = 800;
-                contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
+                contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
             }
 
             String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
-            String rowText = String.format("%-8d %-30s %-20s %-15s %s",
-                entry.place,
-                truncate(entry.name, 30),
-                truncate(entry.ageGroup, 20),
-                formatTime(entry.timeMs),
-                diffStr
-            );
 
             contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText(rowText);
+            contentStream.newLineAtOffset(colPlatz, yPosition);
+            contentStream.showText(String.valueOf(entry.place));
             contentStream.endText();
 
-            yPosition -= 18;
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colName, yPosition);
+            contentStream.showText(truncate(entry.name, 35));
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colAgeGroup, yPosition);
+            contentStream.showText(truncate(entry.ageGroup, 20));
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colTime, yPosition);
+            contentStream.showText(formatTime(entry.timeMs));
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colDiff, yPosition);
+            contentStream.showText(diffStr);
+            contentStream.endText();
+
+            yPosition -= 12;
         }
 
         // Summary at the bottom
-        yPosition -= 20;
+        yPosition -= 10;
         if (yPosition < 50) {
             contentStream.close();
             page = new PDPage(PDRectangle.A4);
@@ -177,7 +466,7 @@ public class PdfExportService {
             yPosition = 800;
         }
 
-        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
         contentStream.beginText();
         contentStream.newLineAtOffset(margin, yPosition);
         contentStream.showText("Gesamt: " + entries.size() + " Teilnehmer");
@@ -298,33 +587,59 @@ public class PdfExportService {
 
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
-            // Title
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 18);
+            // Title - smaller font
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 14);
             contentStream.beginText();
             contentStream.newLineAtOffset(50, 800);
             contentStream.showText(title);
             contentStream.endText();
 
             // Table headers
-            float yPosition = 760;
+            float yPosition = 770;
             float margin = 50;
 
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+            // Define fixed column positions for better alignment
+            float colPlatz = margin;
+            float colName = margin + 40;
+            float colAgeGroup = margin + 200;
+            float colTime = margin + 320;
+            float colDiff = margin + 420;
+
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
             contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText(String.format("%-8s %-30s %-20s %-15s %s",
-                "Platz", "Name Vorname", "Altersgruppe", "Absolutzeit", "Diffzeit"));
+            contentStream.newLineAtOffset(colPlatz, yPosition);
+            contentStream.showText("Platz");
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colName, yPosition);
+            contentStream.showText("Name Vorname");
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colAgeGroup, yPosition);
+            contentStream.showText("Altersgruppe");
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colTime, yPosition);
+            contentStream.showText("Absolutzeit");
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colDiff, yPosition);
+            contentStream.showText("Diffzeit");
             contentStream.endText();
 
             // Draw header line
-            yPosition -= 15;
+            yPosition -= 12;
             contentStream.moveTo(margin, yPosition);
             contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
             contentStream.stroke();
 
-            // Table data
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
-            yPosition -= 20;
+            // Table data - smaller font
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+            yPosition -= 14;
 
             for (RankingEntry entry : entries) {
                 if (yPosition < 50) {
@@ -334,28 +649,41 @@ public class PdfExportService {
                     document.addPage(page);
                     contentStream = new PDPageContentStream(document, page);
                     yPosition = 800;
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 10);
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                 }
 
                 String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
-                String rowText = String.format("%-8d %-30s %-20s %-15s %s",
-                    entry.place,
-                    truncate(entry.name, 30),
-                    truncate(entry.ageGroup, 20),
-                    formatTime(entry.timeMs),
-                    diffStr
-                );
 
                 contentStream.beginText();
-                contentStream.newLineAtOffset(margin, yPosition);
-                contentStream.showText(rowText);
+                contentStream.newLineAtOffset(colPlatz, yPosition);
+                contentStream.showText(String.valueOf(entry.place));
                 contentStream.endText();
 
-                yPosition -= 18;
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colName, yPosition);
+                contentStream.showText(truncate(entry.name, 35));
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colAgeGroup, yPosition);
+                contentStream.showText(truncate(entry.ageGroup, 20));
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colTime, yPosition);
+                contentStream.showText(formatTime(entry.timeMs));
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colDiff, yPosition);
+                contentStream.showText(diffStr);
+                contentStream.endText();
+
+                yPosition -= 12;
             }
 
             // Summary at the bottom
-            yPosition -= 20;
+            yPosition -= 10;
             if (yPosition < 50) {
                 contentStream.close();
                 page = new PDPage(PDRectangle.A4);
@@ -364,7 +692,7 @@ public class PdfExportService {
                 yPosition = 800;
             }
 
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, yPosition);
             contentStream.showText("Gesamt: " + entries.size() + " Teilnehmer");
