@@ -82,4 +82,8 @@ public class ParticipantService {
     public Iterable<Participant> findByRaceId(Long raceId) {
         return repository.findByRaceId(raceId);
     }
+
+    public void deleteByRaceId(Long raceId) {
+        repository.deleteByRaceId(raceId);
+    }
 }

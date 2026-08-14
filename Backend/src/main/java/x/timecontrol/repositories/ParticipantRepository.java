@@ -9,4 +9,5 @@ import io.micronaut.data.repository.CrudRepository;
 public interface ParticipantRepository
         extends CrudRepository<Participant, Long> {
     Iterable<Participant> findByRaceId(Long raceId);
+    void deleteByRaceId(Long raceId);
 }

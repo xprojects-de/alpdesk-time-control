@@ -109,4 +109,12 @@ public class ParticipantController {
         return HttpResponse.notFound();
     }
 
+    @Delete("/race/{raceId}")
+    @Operation(summary = "Delete all participants of a race", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "204", description = "All participants of the race deleted")
+    public HttpResponse<Void> deleteByRaceId(@PathVariable Long raceId) {
+        service.deleteByRaceId(raceId);
+        return HttpResponse.noContent();
+    }
+
 }
