@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -24,7 +24,8 @@ import {
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
-import {Observable} from "rxjs";
+import {Observable, Subject} from "rxjs";
+import {takeUntil, take} from "rxjs/operators";
 import {Race} from "../../models/race.model";
 
 
@@ -141,27 +142,28 @@ import {Race} from "../../models/race.model";
         </mat-dialog-actions>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,
-     styles: [
-         `
-           .participant-form {
-             display: flex;
-             flex-direction: column;
-             gap: 16px;
-             min-width: 400px;
-             margin-top: 16px;
-           }
+    styles: [
+        `
+          .participant-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 400px;
+            margin-top: 16px;
+          }
 
-           mat-form-field {
-             width: 100%;
-           }
-         `,
-     ],
+          mat-form-field {
+            width: 100%;
+          }
+        `,
+    ],
 })
-export class ParticipantDialogComponent implements OnInit {
+export class ParticipantDialogComponent implements OnInit, OnDestroy {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
     private store = inject(Store);
+    private destroy$ = new Subject<void>();
 
     form: FormGroup;
     genderOptions = [
@@ -198,12 +200,22 @@ export class ParticipantDialogComponent implements OnInit {
     ngOnInit(): void {
 
         if (!this.data) {
-            this.selectedRaceId$.subscribe(selectedRaceId => {
-                if (selectedRaceId) {
-                    this.form.patchValue({race: selectedRaceId});
-                }
-            }).unsubscribe();
+            this.selectedRaceId$
+                .pipe(
+                    take(1),
+                    takeUntil(this.destroy$)
+                )
+                .subscribe(selectedRaceId => {
+                    if (selectedRaceId) {
+                        this.form.patchValue({race: selectedRaceId});
+                    }
+                });
         }
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     onCancel(): void {
