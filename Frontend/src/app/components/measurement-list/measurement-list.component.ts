@@ -397,9 +397,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ofType(MeasurementActions.resetMeasurementsFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('Fehler beim Löschen der Messungen', 'OK', {
-                duration: 3000,
-                panelClass: ['error-snackbar']
+            this.snackBar.open('FEHLER beim Löschen der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
             });
         });
     }

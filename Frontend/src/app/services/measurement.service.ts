@@ -56,9 +56,10 @@ export class MeasurementService {
         });
     }
 
-    reset(resetDevice: boolean): Observable<void> {
-        return this.http.delete<void>(`${this.apiUrl}/reset`, {
-            params: { resetDevice: resetDevice.toString() }
+    reset(resetDevice: boolean): Observable<string> {
+        return this.http.delete(`${this.apiUrl}/reset`, {
+            params: { resetDevice: resetDevice.toString() },
+            responseType: 'text'
         });
     }
 }
