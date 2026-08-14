@@ -20,6 +20,7 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
 import {AgeGroup} from "../../models/age-group.model";
+import {Gender, GenderLabels} from "../../models/gender.model";
 import * as AgeGroupActions from "../../store/age-group/age-group.actions";
 import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {AgeGroupDialogComponent} from "./age-group-dialog.component";
@@ -89,6 +90,16 @@ import {takeUntil} from "rxjs/operators";
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
                         <td mat-cell *matCellDef="let ageGroup">
                             {{ ageGroup.name }}
+                        </td>
+                    </ng-container>
+
+                    <!-- Gender Column -->
+                    <ng-container matColumnDef="gender">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                            Geschlecht
+                        </th>
+                        <td mat-cell *matCellDef="let ageGroup">
+                            {{ getGenderLabel(ageGroup.gender) }}
                         </td>
                     </ng-container>
 
@@ -184,6 +195,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = [
         "id",
         "name",
+        "gender",
         "birthYearFrom",
         "birthYearTo",
         "actions",
@@ -233,6 +245,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    getGenderLabel(gender: Gender): string {
+        return GenderLabels[gender] || gender;
     }
 
     openCreateDialog(): void {

@@ -14,10 +14,12 @@ import {
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
+import {MatSelectModule} from "@angular/material/select";
 import {
     AgeGroup,
     AgeGroupRequest,
 } from "../../models/age-group.model";
+import {Gender, GenderLabels} from "../../models/gender.model";
 
 @Component({
     selector: "app-age-group-dialog",
@@ -29,6 +31,7 @@ import {
         MatFormFieldModule,
         MatInputModule,
         MatButtonModule,
+        MatSelectModule,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -44,6 +47,20 @@ import {
                         <mat-error>Name ist erforderlich</mat-error>
                     }
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Geschlecht</mat-label>
+                    <mat-select formControlName="gender" required>
+                        @for (gender of genderOptions; track gender.value) {
+                            <mat-option [value]="gender.value">{{ gender.label }}</mat-option>
+                        }
+                    </mat-select>
+                    @if (form.get("gender")?.hasError("required") &&
+                    form.get("gender")?.touched) {
+                        <mat-error>Geschlecht ist erforderlich</mat-error>
+                    }
+                    <mat-hint>Für welches Geschlecht gilt diese Altersgruppe?</mat-hint>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
@@ -130,10 +147,16 @@ export class AgeGroupDialogComponent {
     public data = inject<AgeGroup | null>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    genderOptions = [
+        {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
+        {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
+        {value: Gender.BOTH, label: GenderLabels[Gender.BOTH]},
+    ];
 
     constructor() {
         this.form = this.fb.group({
             name: [this.data?.name || "", Validators.required],
+            gender: [this.data?.gender || "", Validators.required],
             birthYearFrom: [
                 this.data?.birthYearFrom || "",
                 [Validators.required, Validators.min(1900), Validators.max(2100)]
@@ -142,7 +165,7 @@ export class AgeGroupDialogComponent {
                 this.data?.birthYearTo || "",
                 [Validators.required, Validators.min(1900), Validators.max(2100)]
             ],
-        }, {validators: this.yearRangeValidator});
+        }, { validators: this.yearRangeValidator });
     }
 
     yearRangeValidator(form: FormGroup) {
@@ -164,6 +187,7 @@ export class AgeGroupDialogComponent {
             const formValue = this.form.value;
             const ageGroup: AgeGroupRequest = {
                 name: formValue.name,
+                gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),
                 birthYearTo: Number(formValue.birthYearTo),
             };
