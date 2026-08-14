@@ -3,6 +3,7 @@ package x.timecontrol.dto;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.Gender;
 
 @Serdeable
 @Schema(description = "Response object containing age group information")
@@ -17,14 +18,18 @@ public record AgeGroupResponse(
         Integer birthYearFrom,
 
         @Schema(description = "Ending birth year for range", example = "2000")
-        Integer birthYearTo
+        Integer birthYearTo,
+
+        @Schema(description = "Gender category for the age group", example = "MALE")
+        Gender gender
 ) {
     public static AgeGroupResponse from(AgeGroup ageGroup) {
         return new AgeGroupResponse(
                 ageGroup.id(),
                 ageGroup.name(),
                 ageGroup.birthYearFrom(),
-                ageGroup.birthYearTo()
+                ageGroup.birthYearTo(),
+                ageGroup.gender()
         );
     }
 }

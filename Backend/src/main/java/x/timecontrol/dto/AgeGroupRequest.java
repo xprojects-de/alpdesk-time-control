@@ -2,6 +2,7 @@ package x.timecontrol.dto;
 
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
+import x.timecontrol.entities.Gender;
 
 @Serdeable
 @Schema(description = "Request object for creating or updating an age group")
@@ -13,7 +14,10 @@ public record AgeGroupRequest(
         Integer birthYearFrom,
 
         @Schema(description = "Ending birth year for range (e.g., 2000)", example = "2000", requiredMode = Schema.RequiredMode.REQUIRED)
-        Integer birthYearTo
+        Integer birthYearTo,
+
+        @Schema(description = "Gender category for the age group", example = "MALE", requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"MALE", "FEMALE", "BOTH"})
+        Gender gender
 ) {
 }
 

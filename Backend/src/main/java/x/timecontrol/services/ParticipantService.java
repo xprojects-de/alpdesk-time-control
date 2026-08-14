@@ -55,7 +55,12 @@ public class ParticipantService {
         Iterable<AgeGroup> ageGroups = ageGroupService.findAll();
 
         for (AgeGroup ageGroup : ageGroups) {
-            if (ageGroupService.isYearInAgeGroup(ageGroup, birthYear)) {
+
+            boolean yearMatches = ageGroupService.isYearInAgeGroup(ageGroup, birthYear);
+            boolean genderMatches = ageGroup.gender() == participant.gender() ||
+                                   ageGroup.gender() == x.timecontrol.entities.Gender.BOTH;
+
+            if (yearMatches && genderMatches) {
                 return Optional.of(AgeGroupResponse.from(ageGroup));
             }
         }

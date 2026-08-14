@@ -13,7 +13,8 @@ public record AgeGroup(
 
         String name,
         Integer birthYearFrom,
-        Integer birthYearTo
+        Integer birthYearTo,
+        Gender gender
 ) {
 }
 

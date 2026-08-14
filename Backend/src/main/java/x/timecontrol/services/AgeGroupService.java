@@ -39,7 +39,8 @@ public class AgeGroupService {
                     id,
                     ageGroup.name(),
                     ageGroup.birthYearFrom(),
-                    ageGroup.birthYearTo()
+                    ageGroup.birthYearTo(),
+                    ageGroup.gender()
             );
             return Optional.of(repository.update(updated));
         }
@@ -55,7 +56,8 @@ public class AgeGroupService {
                 null,
                 request.name(),
                 request.birthYearFrom(),
-                request.birthYearTo()
+                request.birthYearTo(),
+                request.gender()
         );
     }
 
