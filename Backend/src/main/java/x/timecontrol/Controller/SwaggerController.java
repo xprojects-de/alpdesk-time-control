@@ -11,14 +11,14 @@ import io.swagger.v3.oas.annotations.Hidden;
 import java.net.URI;
 
 @Secured(SecurityRule.IS_ANONYMOUS)
-@Controller
-class HomeController {
+@Controller("/swagger")
+class SwaggerController {
 
     private final static URI SWAGGER_UI = UriBuilder.of("/swagger-ui").path("index.html").build();
 
     @Get
     @Hidden
-    HttpResponse<?> home() {
+    HttpResponse<?> swagger() {
         return HttpResponse.seeOther(SWAGGER_UI);
     }
 }
