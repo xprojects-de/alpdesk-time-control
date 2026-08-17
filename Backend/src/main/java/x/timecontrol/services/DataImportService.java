@@ -44,7 +44,7 @@ public class DataImportService {
 
         try {
 
-            LOG.debug("Fetching data from {}", dataUrl);
+            LOG.info("Fetching data from {}", dataUrl);
 
             String response = httpClient.toBlocking().retrieve(HttpRequest.GET(dataUrl));
 
