@@ -26,6 +26,12 @@ public class DataImportService {
     @Property(name = "data-import.reset-url", defaultValue = "http://192.168.4.1/reset")
     String resetUrl;
 
+    @Property(name = "data-import.enable-continuous-mode", defaultValue = "http://192.168.4.1/enableContinuousMode")
+    String enableContinuousModeUrl;
+
+    @Property(name = "data-import.disable-continuous-mode", defaultValue = "http://192.168.4.1/disableContinuousMode")
+    String disableContinuousModeUrl;
+
     @Inject
     @Client("/")
     HttpClient httpClient;
@@ -96,17 +102,55 @@ public class DataImportService {
     }
 
     public boolean resetDevice() {
+
         try {
+
             LOG.info("Resetting device at {}", resetUrl);
             httpClient.toBlocking().retrieve(HttpRequest.GET(resetUrl));
             LOG.info("Successfully reset device");
+
             return true;
+
         } catch (HttpClientException e) {
+
             LOG.warn("Could not connect to device at {}: {}", resetUrl, e.getMessage());
             return false;
+
         } catch (Exception e) {
+
             LOG.warn("Error resetting device: {}", e.getMessage());
             return false;
+
+        }
+
+    }
+
+    public boolean continuousMode(boolean enableContinuousMode) {
+
+        try {
+
+            LOG.info("set continuousMode: {}", enableContinuousMode);
+
+            if (enableContinuousMode) {
+                httpClient.toBlocking().retrieve(HttpRequest.GET(enableContinuousModeUrl));
+            } else {
+                httpClient.toBlocking().retrieve(HttpRequest.GET(disableContinuousModeUrl));
+            }
+
+            LOG.info("Successfully set continuousMode");
+
+            return true;
+
+        } catch (HttpClientException e) {
+
+            LOG.warn("Could not connect to device {}", e.getMessage());
+            return false;
+
+        } catch (Exception e) {
+
+            LOG.warn("Error set continuousMode on device: {}", e.getMessage());
+            return false;
+
         }
     }
 }
