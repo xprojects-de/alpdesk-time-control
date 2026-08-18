@@ -48,7 +48,7 @@ jobs:
       - name: Build Angular Frontend
         working-directory: Frontend
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npm run deploy
 
       # --- 2. GRAALVM SETUP & FRONTEND COPY ---
