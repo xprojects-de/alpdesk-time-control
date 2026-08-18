@@ -544,9 +544,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         if (!selectedRaceId) {
             this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
                 duration: 5000,
-                panelClass: ['error-snackbar'],
-                horizontalPosition: 'center',
-                verticalPosition: 'top',
+                panelClass: ['error-snackbar']
             });
             return;
         }
@@ -561,9 +559,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         if (!selectedRaceId) {
             this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
                 duration: 5000,
-                panelClass: ['error-snackbar'],
-                horizontalPosition: 'center',
-                verticalPosition: 'top',
+                panelClass: ['error-snackbar']
             });
             return;
         }
@@ -577,11 +573,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     async exportAllAgeGroupsPdf(): Promise<void> {
         const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
-            this.snackBar.open('⚠️ Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
                 duration: 5000,
-                panelClass: ['error-snackbar'],
-                horizontalPosition: 'center',
-                verticalPosition: 'top',
+                panelClass: ['error-snackbar']
             });
             return;
         }
