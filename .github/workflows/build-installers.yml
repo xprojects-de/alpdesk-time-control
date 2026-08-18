@@ -10,7 +10,6 @@ on:
       - '.github/workflows/build-installers.yml'
   workflow_dispatch:
 
-# Benötigt Schreibrechte zum Erstellen von Releases
 permissions:
   contents: write
 
@@ -18,6 +17,10 @@ jobs:
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: Backend
 
     strategy:
       fail-fast: false
@@ -43,8 +46,8 @@ jobs:
           cache-dependency-path: Frontend/package-lock.json
 
       - name: Build Angular Frontend
+        working-directory: Frontend
         run: |
-          cd Frontend
           npm ci
           npm run deploy
 
@@ -59,9 +62,6 @@ jobs:
           cache-dependency-path: Backend/build.gradle
 
       - name: Copy Frontend Assets to Backend
-        defaults:
-          run:
-            working-directory: Backend
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             .\gradlew.bat copyFrontend --no-daemon
@@ -77,13 +77,11 @@ jobs:
 
       - name: Build macOS Native Image
         if: matrix.platform == 'macos'
-        defaults:
-          run:
-            working-directory: Backend
         run: ./gradlew nativeCompile --no-daemon
 
       - name: Package macOS DMG
         if: matrix.platform == 'macos'
+        working-directory: .
         run: |
           mkdir -p Backend/dist
           create-dmg \
@@ -98,9 +96,6 @@ jobs:
       # --- 4. WINDOWS BUILD & INNO SETUP ---
       - name: Build Windows Native Image
         if: matrix.platform == 'windows'
-        defaults:
-          run:
-            working-directory: Backend
         run: .\gradlew.bat nativeCompile --no-daemon
 
       - name: Install Inno Setup (Windows)
@@ -109,6 +104,7 @@ jobs:
 
       - name: Create Inno Setup Script
         if: matrix.platform == 'windows'
+        working-directory: .
         shell: pwsh
         run: |
           $issContent = @'
@@ -140,6 +136,7 @@ jobs:
 
       - name: Build Windows Installer (.exe)
         if: matrix.platform == 'windows'
+        working-directory: .
         shell: cmd
         run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
 
