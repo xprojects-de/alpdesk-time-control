@@ -39,7 +39,7 @@ public class MeasurementService {
                     id,
                     measurement.participantId(),
                     measurement.durationMs(),
-                    measurement.measuredAt()
+                    existing.get().measuredAt()  // Keep the original measuredAt timestamp
             );
             return Optional.of(repository.update(updated));
         }
