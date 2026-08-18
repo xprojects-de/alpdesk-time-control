@@ -6,6 +6,7 @@ import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @MappedEntity
 public record Participant(
@@ -22,6 +23,10 @@ public record Participant(
         Gender gender,
         Integer raceNumber,
         @Nullable
-        String association
+        String association,
+        @Nullable
+        Integer durationMs,
+        @Nullable
+        LocalDateTime measuredAt
 ) {
 }

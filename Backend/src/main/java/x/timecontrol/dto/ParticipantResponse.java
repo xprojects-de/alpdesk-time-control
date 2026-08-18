@@ -7,6 +7,7 @@ import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Serdeable
 @Schema(description = "Response object containing participant information")
@@ -39,7 +40,15 @@ public record ParticipantResponse(
 
         @Nullable
         @Schema(description = "Age group of the participant based on birth date", nullable = true)
-        AgeGroupResponse ageGroup
+        AgeGroupResponse ageGroup,
+
+        @Nullable
+        @Schema(description = "Duration of the race in milliseconds", example = "125000", nullable = true)
+        Integer durationMs,
+
+        @Nullable
+        @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
+        LocalDateTime measuredAt
 ) {
     public static ParticipantResponse from(Participant participant) {
         return new ParticipantResponse(
@@ -51,7 +60,9 @@ public record ParticipantResponse(
                 participant.gender(),
                 participant.raceNumber(),
                 participant.association(),
-                null
+                null,
+                participant.durationMs(),
+                participant.measuredAt()
         );
     }
 
@@ -65,7 +76,9 @@ public record ParticipantResponse(
                 participant.gender(),
                 participant.raceNumber(),
                 participant.association(),
-                ageGroup
+                ageGroup,
+                participant.durationMs(),
+                participant.measuredAt()
         );
     }
 }

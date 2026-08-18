@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.Gender;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Serdeable
 @Schema(description = "Request object for creating or updating a participant")
@@ -30,7 +31,15 @@ public record ParticipantRequest(
 
         @Nullable
         @Schema(description = "Association of the participant", example = "Marathon Club", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        String association
+        String association,
+
+        @Nullable
+        @Schema(description = "Duration of the race in milliseconds", example = "125000", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Integer durationMs,
+
+        @Nullable
+        @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        LocalDateTime measuredAt
 ) {
 }
 
