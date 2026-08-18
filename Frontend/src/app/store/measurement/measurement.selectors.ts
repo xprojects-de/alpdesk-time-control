@@ -63,3 +63,8 @@ export const selectContinuousModeEnabled = createSelector(
     state => state.continuousModeEnabled
 );
 
+export const selectScheduledImportEnabled = createSelector(
+    selectMeasurementState,
+    state => state.scheduledImportEnabled
+);
+

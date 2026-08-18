@@ -69,5 +69,16 @@ export class MeasurementService {
             responseType: 'text'
         });
     }
+
+    setScheduledImport(enable: boolean): Observable<string> {
+        return this.http.put(`${this.apiUrl}/scheduled-import`, null, {
+            params: { enable: enable.toString() },
+            responseType: 'text'
+        });
+    }
+
+    getScheduledImportStatus(): Observable<boolean> {
+        return this.http.get<boolean>(`${this.apiUrl}/scheduled-import/status`);
+    }
 }
 

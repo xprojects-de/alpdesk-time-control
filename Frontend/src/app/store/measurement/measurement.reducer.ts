@@ -8,6 +8,7 @@ export interface MeasurementState {
     loading: boolean;
     error: string | null;
     continuousModeEnabled: boolean;
+    scheduledImportEnabled: boolean;
 }
 
 export const initialState: MeasurementState = {
@@ -15,7 +16,8 @@ export const initialState: MeasurementState = {
     selectedMeasurementId: null,
     loading: false,
     error: null,
-    continuousModeEnabled: false
+    continuousModeEnabled: false,
+    scheduledImportEnabled: false
 };
 
 export const measurementReducer = createReducer(
@@ -162,6 +164,40 @@ export const measurementReducer = createReducer(
         loading: false
     })),
     on(MeasurementActions.setContinuousModeFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Scheduled import
+    on(MeasurementActions.setScheduledImport, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.setScheduledImportSuccess, (state, {enabled}) => ({
+        ...state,
+        scheduledImportEnabled: enabled,
+        loading: false
+    })),
+    on(MeasurementActions.setScheduledImportFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Load scheduled import status
+    on(MeasurementActions.loadScheduledImportStatus, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.loadScheduledImportStatusSuccess, (state, {enabled}) => ({
+        ...state,
+        scheduledImportEnabled: enabled,
+        loading: false
+    })),
+    on(MeasurementActions.loadScheduledImportStatusFailure, (state, {error}) => ({
         ...state,
         loading: false,
         error

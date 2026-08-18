@@ -157,3 +157,30 @@ export const setContinuousModeFailure = createAction(
     props<{ error: string }>()
 );
 
+// Set scheduled import
+export const setScheduledImport = createAction(
+    '[Measurement] Set Scheduled Import',
+    props<{ enable: boolean }>()
+);
+export const setScheduledImportSuccess = createAction(
+    '[Measurement] Set Scheduled Import Success',
+    props<{ enabled: boolean }>()
+);
+export const setScheduledImportFailure = createAction(
+    '[Measurement] Set Scheduled Import Failure',
+    props<{ error: string }>()
+);
+
+// Load scheduled import status
+export const loadScheduledImportStatus = createAction(
+    '[Measurement] Load Scheduled Import Status'
+);
+export const loadScheduledImportStatusSuccess = createAction(
+    '[Measurement] Load Scheduled Import Status Success',
+    props<{ enabled: boolean }>()
+);
+export const loadScheduledImportStatusFailure = createAction(
+    '[Measurement] Load Scheduled Import Status Failure',
+    props<{ error: string }>()
+);
+

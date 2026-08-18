@@ -148,6 +148,27 @@ interface MeasurementWithParticipant extends Measurement {
                         </button>
                     }
                     
+                    @if (scheduledImportEnabled$ | async) {
+                        <button 
+                                mat-raised-button 
+                                color="accent"
+                                (click)="toggleScheduledImport(false)"
+                                matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
+                        >
+                            <mat-icon>cloud_sync</mat-icon>
+                            Auto-Import AUS
+                        </button>
+                    } @else {
+                        <button 
+                                mat-raised-button
+                                (click)="toggleScheduledImport(true)"
+                                matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
+                        >
+                            <mat-icon>cloud_download</mat-icon>
+                            Auto-Import AN
+                        </button>
+                    }
+                    
                     <button 
                             mat-raised-button 
                             color="accent"
@@ -418,6 +439,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
+    scheduledImportEnabled$: Observable<boolean>;
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
@@ -437,6 +459,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.continuousModeEnabled$ = this.store.select(
             MeasurementSelectors.selectContinuousModeEnabled,
+        );
+        this.scheduledImportEnabled$ = this.store.select(
+            MeasurementSelectors.selectScheduledImportEnabled,
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -503,11 +528,38 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 panelClass: 'error-snackbar'
             });
         });
+
+        // Listen for successful scheduled import change
+        this.actions$.pipe(
+            ofType(MeasurementActions.setScheduledImportSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({enabled}) => {
+            const message = enabled
+                ? 'Automatischer Import aktiviert (alle 5 Sekunden)'
+                : 'Automatischer Import deaktiviert';
+            this.snackBar.open(message, 'OK', {
+                duration: 3000,
+            });
+        });
+
+        // Listen for failed scheduled import change
+        this.actions$.pipe(
+            ofType(MeasurementActions.setScheduledImportFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Ändern des automatischen Imports', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
     }
 
     ngAfterViewInit(): void {
         // Initiales Laden
         this.loadData();
+
+        // Lade Scheduled Import Status
+        this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
 
         // Auto-Refresh mit Toggle-Kontrolle
         this.autoRefresh$
@@ -711,5 +763,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     toggleContinuousMode(enable: boolean): void {
         this.store.dispatch(MeasurementActions.setContinuousMode({ enable }));
+    }
+
+    toggleScheduledImport(enable: boolean): void {
+        this.store.dispatch(MeasurementActions.setScheduledImport({ enable }));
     }
 }

@@ -201,5 +201,33 @@ export class MeasurementEffects {
             )
         )
     );
+
+    setScheduledImport$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.setScheduledImport),
+            mergeMap(({enable}) =>
+                this.measurementService.setScheduledImport(enable).pipe(
+                    map(() => MeasurementActions.setScheduledImportSuccess({enabled: enable})),
+                    catchError(error => of(MeasurementActions.setScheduledImportFailure({
+                        error: error.message || 'Failed to set scheduled import'
+                    })))
+                )
+            )
+        )
+    );
+
+    loadScheduledImportStatus$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.loadScheduledImportStatus),
+            mergeMap(() =>
+                this.measurementService.getScheduledImportStatus().pipe(
+                    map(enabled => MeasurementActions.loadScheduledImportStatusSuccess({enabled})),
+                    catchError(error => of(MeasurementActions.loadScheduledImportStatusFailure({
+                        error: error.message || 'Failed to load scheduled import status'
+                    })))
+                )
+            )
+        )
+    );
 }
 
