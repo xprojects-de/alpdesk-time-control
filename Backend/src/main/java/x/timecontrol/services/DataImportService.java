@@ -136,9 +136,9 @@ public class DataImportService {
             LOG.info("set continuousMode: {}", enableContinuousMode);
 
             if (enableContinuousMode) {
-                httpClient.toBlocking().retrieve(HttpRequest.GET(enableContinuousModeUrl));
+                httpClient.toBlocking().exchange(HttpRequest.GET(enableContinuousModeUrl));
             } else {
-                httpClient.toBlocking().retrieve(HttpRequest.GET(disableContinuousModeUrl));
+                httpClient.toBlocking().exchange(HttpRequest.GET(disableContinuousModeUrl));
             }
 
             LOG.info("Successfully set continuousMode");
