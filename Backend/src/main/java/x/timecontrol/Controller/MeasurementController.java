@@ -136,8 +136,8 @@ public class MeasurementController {
     @Delete("/reset")
     @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Delete all measurements and optionally reset device",
-               description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
     public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
@@ -165,14 +165,40 @@ public class MeasurementController {
         }
     }
 
+    @Put("/continuous-mode")
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    @Operation(summary = "Enable or disable continuous mode on device",
+            description = "Enables or disables continuous mode on the SKitiming Controller device. When enabled, the device will continuously measure. When disabled, manual triggering is required.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Continuous mode set successfully")
+    @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
+    public HttpResponse<String> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
+        try {
+            boolean success = dataImportService.continuousMode(enable);
+            if (!success) {
+                return HttpResponse.serverError()
+                        .body("Failed to set continuous mode on device");
+            }
+
+            if (enable) {
+                return HttpResponse.ok("Continuous mode enabled successfully");
+            } else {
+                return HttpResponse.ok("Continuous mode disabled successfully");
+            }
+        } catch (Exception e) {
+            return HttpResponse.serverError()
+                    .body("Error during continuous mode operation: " + e.getMessage());
+        }
+    }
+
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
     @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Import measurements from external device",
-               description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
-                 content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "500", description = "Import failed")
     public HttpResponse<List<MeasurementResponse>> importFromDevice() {
         try {
@@ -189,8 +215,8 @@ public class MeasurementController {
     @Produces("application/pdf")
     @Get("/export/pdf/all/{raceId}")
     @Operation(summary = "Export all measurements as PDF",
-               description = "Generates a PDF with all measurements sorted by time (fastest to slowest) for a specific race",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Generates a PDF with all measurements sorted by time (fastest to slowest) for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -217,8 +243,8 @@ public class MeasurementController {
     @Produces("application/pdf")
     @Get("/export/pdf/gender/{gender}/{raceId}")
     @Operation(summary = "Export measurements by gender as PDF",
-               description = "Generates a PDF with measurements filtered by gender, sorted by time for a specific race",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Generates a PDF with measurements filtered by gender, sorted by time for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -245,8 +271,8 @@ public class MeasurementController {
     @Produces("application/pdf")
     @Get("/export/pdf/agegroup/{ageGroup}/gender/{gender}/{raceId}")
     @Operation(summary = "Export measurements by age group and gender as PDF",
-               description = "Generates a PDF with measurements filtered by age group and gender, sorted by time for a specific race",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Generates a PDF with measurements filtered by age group and gender, sorted by time for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -273,8 +299,8 @@ public class MeasurementController {
     @Produces("application/pdf")
     @Get("/export/pdf/agegroups/all/{raceId}")
     @Operation(summary = "Export all age groups separated by gender as PDF",
-               description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest for a specific race",
-               security = @SecurityRequirement(name = "BearerAuth"))
+            description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
