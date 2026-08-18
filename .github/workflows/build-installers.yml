@@ -6,17 +6,18 @@ on:
       - main
     paths:
       - 'Backend/**'
+      - 'Frontend/**'
       - '.github/workflows/build-installers.yml'
   workflow_dispatch:
+
+# Benötigt Schreibrechte zum Erstellen von Releases
+permissions:
+  contents: write
 
 jobs:
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-
-    defaults:
-      run:
-        working-directory: Backend
 
     strategy:
       fail-fast: false
@@ -33,6 +34,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # --- 1. FRONTEND BUILD ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Build Angular Frontend
+        run: |
+          cd Frontend
+          npm ci
+          npm run deploy
+
+      # --- 2. GRAALVM SETUP & FRONTEND COPY ---
       - name: Setup GraalVM Java 25
         uses: graalvm/setup-graalvm@v1
         with:
@@ -42,32 +58,49 @@ jobs:
           cache: 'gradle'
           cache-dependency-path: Backend/build.gradle
 
-      - name: Grant execute permission for gradlew (macOS)
-        if: matrix.platform == 'macos'
-        run: chmod +x gradlew
+      - name: Copy Frontend Assets to Backend
+        defaults:
+          run:
+            working-directory: Backend
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            .\gradlew.bat copyFrontend --no-daemon
+          else
+            chmod +x gradlew
+            ./gradlew copyFrontend --no-daemon
+          fi
 
-      # ----------------------------------------------------------------
-      # MACOS BUILD & DMG
-      # ----------------------------------------------------------------
+      # --- 3. MACOS BUILD & DMG ---
       - name: Install create-dmg (macOS)
         if: matrix.platform == 'macos'
         run: brew install create-dmg
 
-      - name: Build macOS Native Image & DMG
+      - name: Build macOS Native Image
         if: matrix.platform == 'macos'
-        run: ./gradlew createDmg --no-daemon
+        defaults:
+          run:
+            working-directory: Backend
+        run: ./gradlew nativeCompile --no-daemon
 
-      - name: Move macOS Artifact
+      - name: Package macOS DMG
         if: matrix.platform == 'macos'
         run: |
-          mkdir -p dist
-          cp build/distributions/TimeControl-*.dmg dist/${{ matrix.artifact-name }}
+          mkdir -p Backend/dist
+          create-dmg \
+            --volname "Time Control" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "Backend/dist/${{ matrix.artifact-name }}" \
+            "Backend/build/native/nativeCompile/"
 
-      # ----------------------------------------------------------------
-      # WINDOWS BUILD & INNO SETUP INSTALLER
-      # ----------------------------------------------------------------
+      # --- 4. WINDOWS BUILD & INNO SETUP ---
       - name: Build Windows Native Image
         if: matrix.platform == 'windows'
+        defaults:
+          run:
+            working-directory: Backend
         run: .\gradlew.bat nativeCompile --no-daemon
 
       - name: Install Inno Setup (Windows)
@@ -84,7 +117,7 @@ jobs:
           AppVersion=0.1
           DefaultDirName={autopf}\TimeControl
           DefaultGroupName=Time Control
-          OutputDir=dist
+          OutputDir=Backend\dist
           OutputBaseFilename=TimeControl-Windows-Setup
           Compression=lzma
           SolidCompression=yes
@@ -94,7 +127,7 @@ jobs:
           Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
           [Files]
-          Source: "build\native\nativeCompile\time-control.exe"; DestDir: "{app}"; Flags: ignoreversion
+          Source: "Backend\build\native\nativeCompile\time-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 
           [Icons]
           Name: "{group}\Time Control"; Filename: "{app}\time-control.exe"
@@ -110,12 +143,39 @@ jobs:
         shell: cmd
         run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
 
-      # ----------------------------------------------------------------
-      # ARTEFAKTE HOCHLADEN
-      # ----------------------------------------------------------------
+      # --- 5. ARTEFAKTE ZWISCHENSPEICHERN ---
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-installer
           path: Backend/dist/*
           retention-days: 14
+
+  # ----------------------------------------------------------------
+  # 6. AUTOMATISCHES GITHUB RELEASE ERSTELLEN
+  # ----------------------------------------------------------------
+  create-release:
+    name: Create GitHub Release
+    needs: build-native-installer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Flatten Directory Structure
+        run: |
+          mkdir -p final-assets
+          cp release-assets/*/* final-assets/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.run_number }}
+          name: Release v0.1.${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: final-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
