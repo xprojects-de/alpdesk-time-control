@@ -186,6 +186,22 @@ import {takeUntil, take} from "rxjs/operators";
                          </td>
                      </ng-container>
 
+                     <!-- Duration Column -->
+                     <ng-container matColumnDef="durationMs">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Zeit (ms)</th>
+                         <td mat-cell *matCellDef="let participant">
+                             {{ participant.durationMs !== undefined && participant.durationMs !== null ? participant.durationMs : "-" }}
+                         </td>
+                     </ng-container>
+
+                     <!-- Measured At Column -->
+                     <ng-container matColumnDef="measuredAt">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Gemessen am</th>
+                         <td mat-cell *matCellDef="let participant">
+                             {{ participant.measuredAt ? (participant.measuredAt | date: "dd.MM.yyyy HH:mm:ss") : "-" }}
+                         </td>
+                     </ng-container>
+
                      <!-- Actions Column -->
                      <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
@@ -294,6 +310,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "association",
         "ageGroup",
         "race",
+        "durationMs",
+        "measuredAt",
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);

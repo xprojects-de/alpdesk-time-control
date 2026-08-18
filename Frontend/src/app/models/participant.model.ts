@@ -12,6 +12,8 @@ export interface Participant {
     raceNumber: number;
     association?: string;
     ageGroup?: AgeGroup;
+    durationMs?: number;
+    measuredAt?: string;
 }
 
 export interface ParticipantRequest {
