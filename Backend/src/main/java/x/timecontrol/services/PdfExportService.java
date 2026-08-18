@@ -45,16 +45,16 @@ public class PdfExportService {
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null);
-        String title = race.name() + " - Gesamtwertung";
-        return generatePdf(title, entries);
+        String title = "Gesamtwertung";
+        return generatePdf(title, entries, race);
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null);
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
-        String title = race.name() + " - Wertung " + genderLabel;
-        return generatePdf(title, entries);
+        String title = "Wertung " + genderLabel;
+        return generatePdf(title, entries, race);
     }
 
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
@@ -62,8 +62,8 @@ public class PdfExportService {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroup);
         String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
-        String title = race.name() + " - Wertung " + ageGroup + " " + genderLabel;
-        return generatePdf(title, entries);
+        String title = "Wertung " + ageGroup + " " + genderLabel;
+        return generatePdf(title, entries, race);
     }
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Participant> participants, Race race) throws IOException {
@@ -105,17 +105,19 @@ public class PdfExportService {
                         page = new PDPage(PDRectangle.A4);
                         document.addPage(page);
                         contentStream = new PDPageContentStream(document, page);
-                        yPosition = 800;
+                        
+                        // Draw header with race name and date
+                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
                     }
 
                     // Add some spacing between rankings
                     yPosition -= 15;
 
-                    // Title with race name
+                    // Title without race name
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
                     contentStream.beginText();
                     contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText(race.name() + " - Wertung " + ageGroupName + " Männer");
+                    contentStream.showText("Wertung " + ageGroupName + " Männer");
                     contentStream.endText();
                     yPosition -= 25;
 
@@ -163,7 +165,10 @@ public class PdfExportService {
                             page = new PDPage(PDRectangle.A4);
                             document.addPage(page);
                             contentStream = new PDPageContentStream(document, page);
-                            yPosition = 800;
+                            
+                            // Draw header with race name and date
+                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                            yPosition -= 10;
                             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                         }
 
@@ -219,16 +224,19 @@ public class PdfExportService {
                         page = new PDPage(PDRectangle.A4);
                         document.addPage(page);
                         contentStream = new PDPageContentStream(document, page);
-                        yPosition = 800;
+                        
+                        // Draw header with race name and date
+                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
                     }
 
                     // Add some spacing between rankings
                     yPosition -= 15;
 
+                    // Title without race name
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
                     contentStream.beginText();
                     contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText(race.name() + " - Wertung " + ageGroupName + " Frauen");
+                    contentStream.showText("Wertung " + ageGroupName + " Frauen");
                     contentStream.endText();
                     yPosition -= 25;
 
@@ -276,7 +284,10 @@ public class PdfExportService {
                             page = new PDPage(PDRectangle.A4);
                             document.addPage(page);
                             contentStream = new PDPageContentStream(document, page);
-                            yPosition = 800;
+                            
+                            // Draw header with race name and date
+                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                            yPosition -= 10;
                             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                         }
 
@@ -418,22 +429,26 @@ public class PdfExportService {
         return String.format("%d:%02d.%03d", minutes, seconds, millis);
     }
 
-    private byte[] generatePdf(String title, List<RankingEntry> entries) throws IOException {
+    private byte[] generatePdf(String title, List<RankingEntry> entries, Race race) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
             document.addPage(page);
 
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
+            // Draw page header with race name and date
+            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+
             // Title - smaller font
+            yPosition -= 10;
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 14);
             contentStream.beginText();
-            contentStream.newLineAtOffset(50, 800);
+            contentStream.newLineAtOffset(50, yPosition);
             contentStream.showText(title);
             contentStream.endText();
 
             // Table headers
-            float yPosition = 770;
+            yPosition -= 30;
             float margin = 50;
 
             // Define fixed column positions for better alignment
@@ -486,7 +501,10 @@ public class PdfExportService {
                     page = new PDPage(PDRectangle.A4);
                     document.addPage(page);
                     contentStream = new PDPageContentStream(document, page);
-                    yPosition = 800;
+                    
+                    // Draw header on new page
+                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                    yPosition -= 10;
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                 }
 
@@ -527,7 +545,10 @@ public class PdfExportService {
                 page = new PDPage(PDRectangle.A4);
                 document.addPage(page);
                 contentStream = new PDPageContentStream(document, page);
-                yPosition = 800;
+                
+                // Draw header on new page
+                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                yPosition -= 10;
             }
 
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
@@ -549,6 +570,44 @@ public class PdfExportService {
     private String truncate(String str, int maxLength) {
         if (str == null) return "";
         return str.length() > maxLength ? str.substring(0, maxLength - 3) + "..." : str;
+    }
+
+    /**
+     * Draws a header with the race name and date at the top of the page
+     * @return the Y position after the header
+     */
+    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth) throws IOException {
+        float margin = 50;
+        float headerY = 820;
+        
+        // Format the date as dd.MM.yyyy
+        String formattedDate = "";
+        if (race.date() != null) {
+            formattedDate = String.format("%02d.%02d.%04d",
+                race.date().getDayOfMonth(),
+                race.date().getMonthValue(),
+                race.date().getYear());
+        }
+
+        // Combine race name and date
+        String headerText = race.name();
+        if (!formattedDate.isEmpty()) {
+            headerText += " - " + formattedDate;
+        }
+
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
+        contentStream.beginText();
+        contentStream.newLineAtOffset(margin, headerY);
+        contentStream.showText(headerText);
+        contentStream.endText();
+        
+        // Draw a line under the header
+        float lineY = headerY - 5;
+        contentStream.moveTo(margin, lineY);
+        contentStream.lineTo(pageWidth - margin, lineY);
+        contentStream.stroke();
+        
+        return lineY - 15; // Return position for content to start
     }
 }
 
