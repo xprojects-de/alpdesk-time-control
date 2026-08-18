@@ -4,12 +4,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Backend/**'
+      - '.github/workflows/build-installers.yml'
   workflow_dispatch:
 
 jobs:
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: Backend
 
     strategy:
       fail-fast: false
@@ -33,6 +40,7 @@ jobs:
           distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'gradle'
+          cache-dependency-path: Backend/build.gradle
 
       - name: Grant execute permission for gradlew (macOS)
         if: matrix.platform == 'macos'
@@ -108,5 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-installer
-          path: dist/*
+          # upload-artifact nutzt defaults.run.working-directory NICHT,
+          # daher muss der Pfad hier vom Repository-Root ausgehen!
+          path: Backend/dist/*
           retention-days: 14
