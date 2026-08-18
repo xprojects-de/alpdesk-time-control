@@ -188,9 +188,9 @@ import {takeUntil, take} from "rxjs/operators";
 
                      <!-- Duration Column -->
                      <ng-container matColumnDef="durationMs">
-                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Zeit (ms)</th>
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Zeit</th>
                          <td mat-cell *matCellDef="let participant">
-                             {{ participant.durationMs !== undefined && participant.durationMs !== null ? participant.durationMs : "-" }}
+                             {{ participant.durationMs !== undefined && participant.durationMs !== null ? formatDuration(participant.durationMs) : "-" }}
                          </td>
                      </ng-container>
 
@@ -379,6 +379,22 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             return `${day}.${month}.${year}`;
         }
         return dateString;
+    }
+
+    formatDuration(ms: number): string {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const milliseconds = ms % 1000;
+
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
+        } else if (minutes > 0) {
+            return `${minutes}:${String(seconds).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
+        } else {
+            return `${seconds}.${String(milliseconds).padStart(3, "0")}s`;
+        }
     }
 
     onRaceFilterChange(raceId: number | null): void {

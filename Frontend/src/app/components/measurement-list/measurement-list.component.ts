@@ -566,8 +566,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.actions$.pipe(
             ofType(MeasurementActions.syncMeasurementsToParticipantsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(({message}) => {
-            this.snackBar.open(message || 'Messungen erfolgreich mit Teilnehmern synchronisiert', 'OK', {
+        ).subscribe(() => {
+            this.snackBar.open('Messungen erfolgreich mit Teilnehmern synchronisiert', 'OK', {
                 duration: 3000,
             });
             this.loadData();
