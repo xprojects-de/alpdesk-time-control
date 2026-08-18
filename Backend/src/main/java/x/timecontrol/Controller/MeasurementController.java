@@ -23,9 +23,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
-import x.timecontrol.services.PdfExportService;
-import x.timecontrol.services.RaceService;
-import x.timecontrol.entities.Race;
 
 import java.util.List;
 import java.util.Optional;
@@ -46,13 +43,8 @@ public class MeasurementController {
     DataImportScheduler dataImportScheduler;
 
     @Inject
-    PdfExportService pdfExportService;
-
-    @Inject
     ParticipantService participantService;
 
-    @Inject
-    RaceService raceService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -241,117 +233,6 @@ public class MeasurementController {
         return HttpResponse.ok(dataImportScheduler.isScheduledImportActive());
     }
 
-    @Produces("application/pdf")
-    @Get("/export/pdf/all/{raceId}")
-    @Operation(summary = "Export all measurements as PDF",
-            description = "Generates a PDF with all measurements sorted by time (fastest to slowest) for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
-    @ApiResponse(responseCode = "404", description = "Race not found")
-    @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateOverallRanking(measurements, participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gesamtwertung.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
-    }
-
-    @Produces("application/pdf")
-    @Get("/export/pdf/gender/{gender}/{raceId}")
-    @Operation(summary = "Export measurements by gender as PDF",
-            description = "Generates a PDF with measurements filtered by gender, sorted by time for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
-    @ApiResponse(responseCode = "404", description = "Race not found")
-    @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByGenderToPdf(@PathVariable String gender, @PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateGenderRanking(measurements, participants, gender, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_" + gender.toLowerCase() + ".pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
-    }
-
-    @Produces("application/pdf")
-    @Get("/export/pdf/agegroup/{ageGroup}/gender/{gender}/{raceId}")
-    @Operation(summary = "Export measurements by age group and gender as PDF",
-            description = "Generates a PDF with measurements filtered by age group and gender, sorted by time for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
-    @ApiResponse(responseCode = "404", description = "Race not found")
-    @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByAgeGroupAndGenderToPdf(@PathVariable String ageGroup, @PathVariable String gender, @PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateAgeGroupGenderRanking(measurements, participants, ageGroup, gender, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
-    }
-
-    @Produces("application/pdf")
-    @Get("/export/pdf/agegroups/all/{raceId}")
-    @Operation(summary = "Export all age groups separated by gender as PDF",
-            description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
-    @ApiResponse(responseCode = "404", description = "Race not found")
-    @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllAgeGroupsToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Measurement> measurements = service.findAll();
-            Iterable<Participant> participants = participantService.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateAllAgeGroupsRanking(measurements, participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_altersklassen.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
-    }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/sync-to-participants")
