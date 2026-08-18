@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'Backend/**' # Workflow startet nur bei Änderungen im Backend-Code
+      - 'Backend/**'
       - '.github/workflows/build-installers.yml'
   workflow_dispatch:
 
@@ -14,7 +14,6 @@ jobs:
     name: Build Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
-    # 1. WICHTIG: Setzt das Standard-Verzeichnis für alle 'run'-Befehle
     defaults:
       run:
         working-directory: Backend
@@ -41,7 +40,6 @@ jobs:
           distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'gradle'
-          # WICHTIG: Teile dem Cache-Mechanismus mit, wo die build.gradle liegt
           cache-dependency-path: Backend/build.gradle
 
       - name: Grant execute permission for gradlew (macOS)
