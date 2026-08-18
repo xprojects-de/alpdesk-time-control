@@ -75,11 +75,15 @@ public class DataImportService {
                     double timeValue = Double.parseDouble(parts[1].trim());
                     int durationMs = (int) Math.round(timeValue);
 
-                    Long existingParticipantId = measurementService.findById(id)
+                    var existingMeasurement = measurementService.findById(id);
+                    Long existingParticipantId = existingMeasurement
                             .map(Measurement::participantId)
                             .orElse(null);
+                    LocalDateTime timestamp = existingMeasurement
+                            .map(Measurement::measuredAt)
+                            .orElse(now);
 
-                    Measurement saved = measurementService.upsertWithId(id, existingParticipantId, durationMs, now);
+                    Measurement saved = measurementService.upsertWithId(id, existingParticipantId, durationMs, timestamp);
                     createdMeasurements.add(saved);
                     LOG.debug("Upserted measurement ID {}: {} ms", id, durationMs);
 
