@@ -126,6 +126,28 @@ interface MeasurementWithParticipant extends Measurement {
                         <mat-icon>refresh</mat-icon>
                         Manuell aktualisieren
                     </button>
+                    
+                    @if (continuousModeEnabled$ | async) {
+                        <button 
+                                mat-raised-button 
+                                color="accent"
+                                (click)="toggleContinuousMode(false)"
+                                matTooltip="Kontinuierlichen Modus deaktivieren"
+                        >
+                            <mat-icon>stop</mat-icon>
+                            Kontinuierlich AUS
+                        </button>
+                    } @else {
+                        <button 
+                                mat-raised-button
+                                (click)="toggleContinuousMode(true)"
+                                matTooltip="Kontinuierlichen Modus aktivieren"
+                        >
+                            <mat-icon>play_arrow</mat-icon>
+                            Kontinuierlich AN
+                        </button>
+                    }
+                    
                     <button 
                             mat-raised-button 
                             color="accent"
@@ -395,6 +417,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
+    continuousModeEnabled$: Observable<boolean>;
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
@@ -411,6 +434,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
+        );
+        this.continuousModeEnabled$ = this.store.select(
+            MeasurementSelectors.selectContinuousModeEnabled,
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -449,6 +475,30 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$)
         ).subscribe(() => {
             this.snackBar.open('FEHLER beim Löschen der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
+        // Listen for successful continuous mode change
+        this.actions$.pipe(
+            ofType(MeasurementActions.setContinuousModeSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({enabled}) => {
+            const message = enabled
+                ? 'Kontinuierlicher Modus aktiviert'
+                : 'Kontinuierlicher Modus deaktiviert';
+            this.snackBar.open(message, 'OK', {
+                duration: 3000,
+            });
+        });
+
+        // Listen for failed continuous mode change
+        this.actions$.pipe(
+            ofType(MeasurementActions.setContinuousModeFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Ändern des kontinuierlichen Modus', 'OK', {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
@@ -657,5 +707,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             this.lastResetDevice = resetDevice;
             this.store.dispatch(MeasurementActions.resetMeasurements({ resetDevice }));
         }
+    }
+
+    toggleContinuousMode(enable: boolean): void {
+        this.store.dispatch(MeasurementActions.setContinuousMode({ enable }));
     }
 }

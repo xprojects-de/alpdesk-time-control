@@ -142,3 +142,18 @@ export const resetMeasurementsFailure = createAction(
     '[Measurement] Reset Measurements Failure',
     props<{ error: string }>()
 );
+
+// Set continuous mode
+export const setContinuousMode = createAction(
+    '[Measurement] Set Continuous Mode',
+    props<{ enable: boolean }>()
+);
+export const setContinuousModeSuccess = createAction(
+    '[Measurement] Set Continuous Mode Success',
+    props<{ enabled: boolean }>()
+);
+export const setContinuousModeFailure = createAction(
+    '[Measurement] Set Continuous Mode Failure',
+    props<{ error: string }>()
+);
+

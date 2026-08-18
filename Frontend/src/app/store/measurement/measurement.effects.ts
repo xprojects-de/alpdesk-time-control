@@ -187,5 +187,19 @@ export class MeasurementEffects {
             map(() => MeasurementActions.loadMeasurements())
         )
     );
+
+    setContinuousMode$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.setContinuousMode),
+            mergeMap(({enable}) =>
+                this.measurementService.setContinuousMode(enable).pipe(
+                    map(() => MeasurementActions.setContinuousModeSuccess({enabled: enable})),
+                    catchError(error => of(MeasurementActions.setContinuousModeFailure({
+                        error: error.message || 'Failed to set continuous mode'
+                    })))
+                )
+            )
+        )
+    );
 }
 

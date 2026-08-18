@@ -57,3 +57,9 @@ export const selectFilteredMeasurements = createSelector(
         return measurements.filter(m => m.participantId && participantIdsInRace.includes(m.participantId));
     }
 );
+
+export const selectContinuousModeEnabled = createSelector(
+    selectMeasurementState,
+    state => state.continuousModeEnabled
+);
+

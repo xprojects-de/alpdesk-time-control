@@ -62,5 +62,12 @@ export class MeasurementService {
             responseType: 'text'
         });
     }
+
+    setContinuousMode(enable: boolean): Observable<string> {
+        return this.http.put(`${this.apiUrl}/continuous-mode`, null, {
+            params: { enable: enable.toString() },
+            responseType: 'text'
+        });
+    }
 }
 

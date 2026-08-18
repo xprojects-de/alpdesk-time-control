@@ -7,13 +7,15 @@ export interface MeasurementState {
     selectedMeasurementId: number | null;
     loading: boolean;
     error: string | null;
+    continuousModeEnabled: boolean;
 }
 
 export const initialState: MeasurementState = {
     measurements: [],
     selectedMeasurementId: null,
     loading: false,
-    error: null
+    error: null,
+    continuousModeEnabled: false
 };
 
 export const measurementReducer = createReducer(
@@ -143,6 +145,23 @@ export const measurementReducer = createReducer(
         loading: false
     })),
     on(MeasurementActions.resetMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Continuous mode
+    on(MeasurementActions.setContinuousMode, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.setContinuousModeSuccess, (state, {enabled}) => ({
+        ...state,
+        continuousModeEnabled: enabled,
+        loading: false
+    })),
+    on(MeasurementActions.setContinuousModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
         error
