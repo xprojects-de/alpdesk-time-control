@@ -14,8 +14,37 @@ permissions:
   contents: write
 
 jobs:
+
+  build-frontend:
+    name: Build Angular Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Build Angular
+        working-directory: Frontend
+        run: |
+          npm ci --legacy-peer-deps
+          npm run deploy
+
+      - name: Upload Frontend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: Frontend/dist/
+          retention-days: 1
+
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
+    needs: build-frontend
     runs-on: ${{ matrix.os }}
 
     defaults:
@@ -37,21 +66,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- 1. FRONTEND BUILD ---
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: Frontend/package-lock.json
+          name: frontend-dist
+          path: Frontend/dist/
 
-      - name: Build Angular Frontend
-        working-directory: Frontend
-        run: |
-          npm ci
-          npm run deploy
-
-      # --- 2. GRAALVM SETUP & FRONTEND COPY ---
       - name: Setup GraalVM Java 25
         uses: graalvm/setup-graalvm@v1
         with:
@@ -70,7 +90,6 @@ jobs:
             ./gradlew copyFrontend --no-daemon
           fi
 
-      # --- 3. MACOS BUILD & DMG ---
       - name: Install create-dmg (macOS)
         if: matrix.platform == 'macos'
         run: brew install create-dmg
@@ -93,7 +112,6 @@ jobs:
             "Backend/dist/${{ matrix.artifact-name }}" \
             "Backend/build/native/nativeCompile/"
 
-      # --- 4. WINDOWS BUILD & INNO SETUP ---
       - name: Build Windows Native Image
         if: matrix.platform == 'windows'
         run: .\gradlew.bat nativeCompile --no-daemon
@@ -140,7 +158,6 @@ jobs:
         shell: cmd
         run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
 
-      # --- 5. ARTEFAKTE ZWISCHENSPEICHERN ---
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -148,9 +165,6 @@ jobs:
           path: Backend/dist/*
           retention-days: 14
 
-  # ----------------------------------------------------------------
-  # 6. AUTOMATISCHES GITHUB RELEASE ERSTELLEN
-  # ----------------------------------------------------------------
   create-release:
     name: Create GitHub Release
     needs: build-native-installer
@@ -164,7 +178,7 @@ jobs:
       - name: Flatten Directory Structure
         run: |
           mkdir -p final-assets
-          cp release-assets/*/* final-assets/
+          cp release-assets/*-installer/* final-assets/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
