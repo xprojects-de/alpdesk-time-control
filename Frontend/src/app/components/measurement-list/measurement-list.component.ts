@@ -418,7 +418,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     constructor() {
         this.measurements$ = this.store.select(
-            MeasurementSelectors.selectFilteredMeasurements,
+            MeasurementSelectors.selectAllMeasurements,
         );
         this.participants$ = this.store.select(
             ParticipantSelectors.selectAllParticipants,
