@@ -70,7 +70,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: Frontend/dist/
+          path: Frontend/dist
 
       - name: Setup GraalVM Java 25
         uses: graalvm/setup-graalvm@v1
@@ -82,9 +82,10 @@ jobs:
           cache-dependency-path: Backend/build.gradle
 
       - name: Copy Frontend Assets to Backend
+        shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            .\gradlew.bat copyFrontend --no-daemon
+            ./gradlew.bat copyFrontend --no-daemon
           else
             chmod +x gradlew
             ./gradlew copyFrontend --no-daemon
