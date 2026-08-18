@@ -229,5 +229,19 @@ export class MeasurementEffects {
             )
         )
     );
+
+    syncMeasurementsToParticipants$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.syncMeasurementsToParticipants),
+            mergeMap(() =>
+                this.measurementService.syncMeasurementsToParticipants().pipe(
+                    map(message => MeasurementActions.syncMeasurementsToParticipantsSuccess({message})),
+                    catchError(error => of(MeasurementActions.syncMeasurementsToParticipantsFailure({
+                        error: error.message || 'Failed to sync measurements to participants'
+                    })))
+                )
+            )
+        )
+    );
 }
 

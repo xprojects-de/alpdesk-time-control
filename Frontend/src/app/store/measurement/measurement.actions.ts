@@ -184,3 +184,16 @@ export const loadScheduledImportStatusFailure = createAction(
     props<{ error: string }>()
 );
 
+// Sync measurements to participants
+export const syncMeasurementsToParticipants = createAction(
+    '[Measurement] Sync Measurements To Participants'
+);
+export const syncMeasurementsToParticipantsSuccess = createAction(
+    '[Measurement] Sync Measurements To Participants Success',
+    props<{ message: string }>()
+);
+export const syncMeasurementsToParticipantsFailure = createAction(
+    '[Measurement] Sync Measurements To Participants Failure',
+    props<{ error: string }>()
+);
+

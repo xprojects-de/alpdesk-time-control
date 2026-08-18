@@ -126,6 +126,15 @@ interface MeasurementWithParticipant extends Measurement {
                         <mat-icon>refresh</mat-icon>
                         Manuell aktualisieren
                     </button>
+                    <button 
+                            mat-raised-button 
+                            color="accent"
+                            (click)="syncMeasurementsToParticipants()"
+                            matTooltip="Messungen mit Teilnehmern synchronisieren"
+                    >
+                        <mat-icon>sync</mat-icon>
+                        Sync zu Teilnehmern
+                    </button>
                     
                     @if (continuousModeEnabled$ | async) {
                         <button 
@@ -552,16 +561,36 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 panelClass: 'error-snackbar'
             });
         });
+
+        // Listen for successful sync to participants
+        this.actions$.pipe(
+            ofType(MeasurementActions.syncMeasurementsToParticipantsSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({message}) => {
+            this.snackBar.open(message || 'Messungen erfolgreich mit Teilnehmern synchronisiert', 'OK', {
+                duration: 3000,
+            });
+            this.loadData();
+        });
+
+        // Listen for failed sync to participants
+        this.actions$.pipe(
+            ofType(MeasurementActions.syncMeasurementsToParticipantsFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Synchronisieren der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
     }
 
     ngAfterViewInit(): void {
-        // Initiales Laden
+
         this.loadData();
 
-        // Lade Scheduled Import Status
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
 
-        // Auto-Refresh mit Toggle-Kontrolle
         this.autoRefresh$
             .pipe(
                 switchMap((enabled) => (enabled ? interval(2000) : EMPTY)),
@@ -767,5 +796,12 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     toggleScheduledImport(enable: boolean): void {
         this.store.dispatch(MeasurementActions.setScheduledImport({ enable }));
+    }
+
+    syncMeasurementsToParticipants(): void {
+        this.store.dispatch(MeasurementActions.syncMeasurementsToParticipants());
+        this.snackBar.open('Synchronisierung gestartet...', 'OK', {
+            duration: 2000,
+        });
     }
 }

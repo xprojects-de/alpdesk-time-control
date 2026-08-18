@@ -80,5 +80,11 @@ export class MeasurementService {
     getScheduledImportStatus(): Observable<boolean> {
         return this.http.get<boolean>(`${this.apiUrl}/scheduled-import/status`);
     }
+
+    syncMeasurementsToParticipants(): Observable<string> {
+        return this.http.post(`${this.apiUrl}/sync-to-participants`, null, {
+            responseType: 'text'
+        });
+    }
 }
 
