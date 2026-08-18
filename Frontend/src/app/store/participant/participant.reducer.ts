@@ -6,6 +6,7 @@ export interface ParticipantState {
     participants: Participant[];
     selectedParticipantId: number | null;
     loading: boolean;
+    pdfExportLoading: boolean;
     error: string | null;
 }
 
@@ -13,6 +14,7 @@ export const initialState: ParticipantState = {
     participants: [],
     selectedParticipantId: null,
     loading: false,
+    pdfExportLoading: false,
     error: null
 };
 
@@ -128,6 +130,37 @@ export const participantReducer = createReducer(
     on(ParticipantActions.selectParticipant, (state, {id}) => ({
         ...state,
         selectedParticipantId: id
-    }))
+    })),
+
+    // PDF Export
+    on(
+        ParticipantActions.exportAllPdf,
+        ParticipantActions.exportByGenderPdf,
+        ParticipantActions.exportAllAgeGroupsPdf,
+        state => ({
+            ...state,
+            pdfExportLoading: true,
+            error: null
+        })
+    ),
+    on(
+        ParticipantActions.exportAllPdfSuccess,
+        ParticipantActions.exportByGenderPdfSuccess,
+        ParticipantActions.exportAllAgeGroupsPdfSuccess,
+        state => ({
+            ...state,
+            pdfExportLoading: false
+        })
+    ),
+    on(
+        ParticipantActions.exportAllPdfFailure,
+        ParticipantActions.exportByGenderPdfFailure,
+        ParticipantActions.exportAllAgeGroupsPdfFailure,
+        (state, {error}) => ({
+            ...state,
+            pdfExportLoading: false,
+            error
+        })
+    )
 );
 

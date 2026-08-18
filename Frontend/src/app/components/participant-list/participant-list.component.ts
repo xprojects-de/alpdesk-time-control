@@ -104,9 +104,14 @@ import {takeUntil, take} from "rxjs/operators";
                             mat-raised-button 
                             color="accent"
                             [matMenuTriggerFor]="exportMenu"
+                            [disabled]="pdfExportLoading$ | async"
                             matTooltip="PDF Export Optionen"
                     >
-                        <mat-icon>picture_as_pdf</mat-icon>
+                        @if (pdfExportLoading$ | async) {
+                            <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                        } @else {
+                            <mat-icon>picture_as_pdf</mat-icon>
+                        }
                         PDF Export
                         <mat-icon>arrow_drop_down</mat-icon>
                     </button>
@@ -341,6 +346,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
     loading$: Observable<boolean>;
+    pdfExportLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
         "firstName",
@@ -368,6 +374,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(
             ParticipantSelectors.selectParticipantLoading,
+        );
+        this.pdfExportLoading$ = this.store.select(
+            ParticipantSelectors.selectPdfExportLoading,
         );
 
         // Setup sort when signal changes
@@ -533,8 +542,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     async exportAllPdf(): Promise<void> {
         const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+                horizontalPosition: 'center',
+                verticalPosition: 'top',
             });
             return;
         }
@@ -547,8 +559,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     async exportByGenderPdf(gender: string): Promise<void> {
         const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+                horizontalPosition: 'center',
+                verticalPosition: 'top',
             });
             return;
         }
@@ -562,8 +577,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     async exportAllAgeGroupsPdf(): Promise<void> {
         const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
         if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
+            this.snackBar.open('⚠️ Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+                horizontalPosition: 'center',
+                verticalPosition: 'top',
             });
             return;
         }
