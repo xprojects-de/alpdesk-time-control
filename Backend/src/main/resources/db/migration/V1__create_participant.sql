@@ -24,6 +24,8 @@ CREATE TABLE participant
     gender      TEXT    NOT NULL,
     race_number INTEGER NOT NULL,
     association TEXT,
+    duration_ms INTEGER,
+    measured_at TIMESTAMP,
 
     FOREIGN KEY (race_id)
         REFERENCES race (id)
