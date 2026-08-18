@@ -88,47 +88,6 @@ export const selectMeasurement = createAction(
     props<{ id: number | null }>()
 );
 
-// PDF Export - All (Gesamtwertung)
-export const exportAllPdf = createAction(
-    '[Measurement] Export All PDF',
-    props<{ raceId: number }>()
-);
-export const exportAllPdfSuccess = createAction(
-    '[Measurement] Export All PDF Success',
-    props<{ blob: Blob; filename: string }>()
-);
-export const exportAllPdfFailure = createAction(
-    '[Measurement] Export All PDF Failure',
-    props<{ error: string }>()
-);
-
-// PDF Export - By Gender (Herren oder Damen)
-export const exportByGenderPdf = createAction(
-    '[Measurement] Export By Gender PDF',
-    props<{ gender: string; raceId: number }>()
-);
-export const exportByGenderPdfSuccess = createAction(
-    '[Measurement] Export By Gender PDF Success',
-    props<{ blob: Blob; filename: string }>()
-);
-export const exportByGenderPdfFailure = createAction(
-    '[Measurement] Export By Gender PDF Failure',
-    props<{ error: string }>()
-);
-
-// PDF Export - All Age Groups (Nach Altersklassen aufgeteilt)
-export const exportAllAgeGroupsPdf = createAction(
-    '[Measurement] Export All Age Groups PDF',
-    props<{ raceId: number }>()
-);
-export const exportAllAgeGroupsPdfSuccess = createAction(
-    '[Measurement] Export All Age Groups PDF Success',
-    props<{ blob: Blob; filename: string }>()
-);
-export const exportAllAgeGroupsPdfFailure = createAction(
-    '[Measurement] Export All Age Groups PDF Failure',
-    props<{ error: string }>()
-);
 
 // Reset all measurements
 export const resetMeasurements = createAction(

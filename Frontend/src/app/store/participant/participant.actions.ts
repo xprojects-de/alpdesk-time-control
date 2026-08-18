@@ -88,3 +88,45 @@ export const selectParticipant = createAction(
     props<{ id: number | null }>()
 );
 
+// PDF Export - All (Gesamtwertung)
+export const exportAllPdf = createAction(
+    '[Participant] Export All PDF',
+    props<{ raceId: number }>()
+);
+export const exportAllPdfSuccess = createAction(
+    '[Participant] Export All PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportAllPdfFailure = createAction(
+    '[Participant] Export All PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - By Gender (Herren oder Damen)
+export const exportByGenderPdf = createAction(
+    '[Participant] Export By Gender PDF',
+    props<{ gender: string; raceId: number }>()
+);
+export const exportByGenderPdfSuccess = createAction(
+    '[Participant] Export By Gender PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportByGenderPdfFailure = createAction(
+    '[Participant] Export By Gender PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - All Age Groups (Nach Altersklassen aufgeteilt)
+export const exportAllAgeGroupsPdf = createAction(
+    '[Participant] Export All Age Groups PDF',
+    props<{ raceId: number }>()
+);
+export const exportAllAgeGroupsPdfSuccess = createAction(
+    '[Participant] Export All Age Groups PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportAllAgeGroupsPdfFailure = createAction(
+    '[Participant] Export All Age Groups PDF Failure',
+    props<{ error: string }>()
+);
+

@@ -8,7 +8,7 @@ import {
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, combineLatest, interval, Subject, EMPTY, firstValueFrom} from "rxjs";
+import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
 import {
     map,
     takeUntil,
@@ -32,7 +32,6 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {Measurement} from "../../models/measurement.model";
 import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
-import {Gender, GenderLabels} from "../../models/gender.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
@@ -173,58 +172,21 @@ interface MeasurementWithParticipant extends Measurement {
                                 (click)="toggleScheduledImport(true)"
                                 matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
                         >
-                            <mat-icon>cloud_download</mat-icon>
-                            Auto-Import AN
-                        </button>
-                    }
-                    
-                    <button 
-                            mat-raised-button 
-                            color="accent"
-                            [matMenuTriggerFor]="exportMenu"
-                            matTooltip="PDF Export Optionen"
-                    >
-                        <mat-icon>picture_as_pdf</mat-icon>
-                        PDF Export
-                        <mat-icon>arrow_drop_down</mat-icon>
+                        <mat-icon>cloud_download</mat-icon>
+                        Auto-Import AN
                     </button>
-                    
-                    <mat-menu #exportMenu="matMenu">
-                        <button mat-menu-item (click)="exportAllPdf()">
-                            <mat-icon>groups</mat-icon>
-                            <span>Gesamtwertung (Alle)</span>
-                        </button>
-                        
-                        <mat-divider></mat-divider>
-                        
-                        <button mat-menu-item (click)="exportByGenderPdf('MALE')">
-                            <mat-icon>male</mat-icon>
-                            <span>Alle {{ getGenderLabel('MALE') }}</span>
-                        </button>
-                        
-                        <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
-                            <mat-icon>female</mat-icon>
-                            <span>Alle {{ getGenderLabel('FEMALE') }}</span>
-                        </button>
-                        
-                        <mat-divider></mat-divider>
-                        
-                        <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
-                            <mat-icon>view_list</mat-icon>
-                            <span>Nach Altersklassen aufgeteilt</span>
-                        </button>
-                    </mat-menu>
-                    
-                    <button 
-                            mat-raised-button 
-                            color="warn"
-                            [matMenuTriggerFor]="resetMenu"
-                            matTooltip="Alle Messungen zurücksetzen"
-                    >
-                        <mat-icon>delete_sweep</mat-icon>
-                        Zurücksetzen
-                        <mat-icon>arrow_drop_down</mat-icon>
-                    </button>
+                }
+                
+                <button 
+                        mat-raised-button 
+                        color="warn"
+                        [matMenuTriggerFor]="resetMenu"
+                        matTooltip="Alle Messungen zurücksetzen"
+                >
+                    <mat-icon>delete_sweep</mat-icon>
+                    Zurücksetzen
+                    <mat-icon>arrow_drop_down</mat-icon>
+                </button>
                     
                     <mat-menu #resetMenu="matMenu">
                         <button mat-menu-item (click)="resetMeasurements(false)">
@@ -716,10 +678,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    getGenderLabel(gender: string): string {
-        return GenderLabels[gender as Gender] || gender;
-    }
-
     onRaceFilterChange(raceId: number | null): void {
         this.store.dispatch(RaceActions.selectRace({id: raceId}));
     }
@@ -735,48 +693,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         return dateString;
     }
 
-    // PDF Export Methods using ngrx
-    async exportAllPdf(): Promise<void> {
-        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
-        if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
-            });
-            return;
-        }
-        this.store.dispatch(MeasurementActions.exportAllPdf({ raceId: selectedRaceId }));
-        this.snackBar.open('PDF Export gestartet: Gesamtwertung', 'OK', {
-            duration: 2000,
-        });
-    }
-
-    async exportByGenderPdf(gender: string): Promise<void> {
-        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
-        if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
-            });
-            return;
-        }
-        this.store.dispatch(MeasurementActions.exportByGenderPdf({ gender, raceId: selectedRaceId }));
-        this.snackBar.open(`PDF Export gestartet: Alle ${this.getGenderLabel(gender)}`, 'OK', {
-            duration: 2000,
-        });
-    }
-
-    async exportAllAgeGroupsPdf(): Promise<void> {
-        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
-        if (!selectedRaceId) {
-            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
-                duration: 3000,
-            });
-            return;
-        }
-        this.store.dispatch(MeasurementActions.exportAllAgeGroupsPdf({ raceId: selectedRaceId }));
-        this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
-            duration: 2000,
-        });
-    }
 
 
     resetMeasurements(resetDevice: boolean): void {

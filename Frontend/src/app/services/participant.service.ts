@@ -35,5 +35,24 @@ export class ParticipantService {
     deleteByRaceId(raceId: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/race/${raceId}`);
     }
+
+    // PDF Exports
+    exportAllToPdf(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/all/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportByGenderToPdf(gender: string, raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/gender/${gender}/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportAllAgeGroupsToPdf(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/agegroups/all/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
 }
 

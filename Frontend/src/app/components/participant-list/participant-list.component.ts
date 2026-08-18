@@ -9,7 +9,7 @@ import {
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
+import {Observable, Subject, firstValueFrom} from "rxjs";
 import {MatTableModule, MatTableDataSource} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -21,6 +21,8 @@ import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatMenuModule} from "@angular/material/menu";
+import {MatDividerModule} from "@angular/material/divider";
 import {Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {Race} from "../../models/race.model";
@@ -47,6 +49,8 @@ import {takeUntil, take} from "rxjs/operators";
         MatSortModule,
         MatSelectModule,
         MatFormFieldModule,
+        MatMenuModule,
+        MatDividerModule,
     ],
     template: `
         <mat-card>
@@ -95,6 +99,43 @@ import {takeUntil, take} from "rxjs/operators";
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
+                    
+                    <button 
+                            mat-raised-button 
+                            color="accent"
+                            [matMenuTriggerFor]="exportMenu"
+                            matTooltip="PDF Export Optionen"
+                    >
+                        <mat-icon>picture_as_pdf</mat-icon>
+                        PDF Export
+                        <mat-icon>arrow_drop_down</mat-icon>
+                    </button>
+                    
+                    <mat-menu #exportMenu="matMenu">
+                        <button mat-menu-item (click)="exportAllPdf()">
+                            <mat-icon>groups</mat-icon>
+                            <span>Gesamtwertung (Alle)</span>
+                        </button>
+                        
+                        <mat-divider></mat-divider>
+                        
+                        <button mat-menu-item (click)="exportByGenderPdf('MALE')">
+                            <mat-icon>male</mat-icon>
+                            <span>Alle Herren</span>
+                        </button>
+                        
+                        <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
+                            <mat-icon>female</mat-icon>
+                            <span>Alle Damen</span>
+                        </button>
+                        
+                        <mat-divider></mat-divider>
+                        
+                        <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
+                            <mat-icon>view_list</mat-icon>
+                            <span>Nach Altersklassen aufgeteilt</span>
+                        </button>
+                    </mat-menu>
                 </div>
 
                 @if (loading$ | async) {
@@ -484,6 +525,50 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     refreshData(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.snackBar.open("Daten werden aktualisiert...", "OK", {
+            duration: 2000,
+        });
+    }
+
+    // PDF Export Methods using ngrx
+    async exportAllPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Gesamtwertung', 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportByGenderPdf(gender: string): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportByGenderPdf({ gender, raceId: selectedRaceId }));
+        const genderLabel = gender === 'MALE' ? 'Herren' : 'Damen';
+        this.snackBar.open(`PDF Export gestartet: Alle ${genderLabel}`, 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportAllAgeGroupsPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus', 'OK', {
+                duration: 3000,
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllAgeGroupsPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
             duration: 2000,
         });
     }
