@@ -78,7 +78,7 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $issContent = @"
+          $issContent = @'
           [Setup]
           AppName=Time Control
           AppVersion=0.1
@@ -102,12 +102,13 @@ jobs:
 
           [Run]
           Filename: "{app}\time-control.exe"; Description: "{cm:LaunchProgram,Time Control}"; Flags: nowait postinstall skipifsilent
-          "@
-          Set-Content -Path setup.iss -Value $issContent
+          '@
+          Set-Content -Path setup.iss -Value $issContent -Encoding UTF8
 
       - name: Build Windows Installer (.exe)
         if: matrix.platform == 'windows'
-        run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+        shell: cmd
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
 
       # ----------------------------------------------------------------
       # ARTEFAKTE HOCHLADEN
@@ -116,7 +117,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-installer
-          # upload-artifact nutzt defaults.run.working-directory NICHT,
-          # daher muss der Pfad hier vom Repository-Root ausgehen!
           path: Backend/dist/*
           retention-days: 14
