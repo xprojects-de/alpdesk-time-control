@@ -23,11 +23,27 @@ public class DataImportScheduler {
     @Property(name = "data-import.enabled", defaultValue = "true")
     boolean enabled;
 
+    private volatile boolean scheduledImportActive = false;
+
+    public boolean isScheduledImportActive() {
+        return scheduledImportActive;
+    }
+
+    public void setScheduledImportActive(boolean active) {
+        this.scheduledImportActive = active;
+        LOG.info("Scheduled data import has been {} by user", active ? "enabled" : "disabled");
+    }
+
     @Scheduled(fixedDelay = "5s", initialDelay = "10s")
     public void importDataPeriodically() {
 
         if (!enabled) {
             LOG.trace("Data import is disabled, skipping scheduled import");
+            return;
+        }
+
+        if (!scheduledImportActive) {
+            LOG.trace("Scheduled import is not active, skipping");
             return;
         }
 

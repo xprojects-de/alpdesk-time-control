@@ -6,6 +6,7 @@ import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.DataImportService;
+import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
@@ -39,6 +40,9 @@ public class MeasurementController {
 
     @Inject
     DataImportService dataImportService;
+
+    @Inject
+    DataImportScheduler dataImportScheduler;
 
     @Inject
     PdfExportService pdfExportService;
@@ -210,6 +214,30 @@ public class MeasurementController {
         } catch (Exception e) {
             return HttpResponse.serverError();
         }
+    }
+
+    @Put("/scheduled-import")
+    @Operation(summary = "Enable or disable scheduled data import",
+            description = "Enables or disables the automatic data import that runs every 5 seconds. When enabled, the system will automatically fetch new measurements from the device.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Scheduled import status set successfully")
+    public HttpResponse<String> setScheduledImport(@QueryValue(defaultValue = "true") boolean enable) {
+        dataImportScheduler.setScheduledImportActive(enable);
+
+        if (enable) {
+            return HttpResponse.ok("Scheduled data import enabled successfully");
+        } else {
+            return HttpResponse.ok("Scheduled data import disabled successfully");
+        }
+    }
+
+    @Get("/scheduled-import/status")
+    @Operation(summary = "Get scheduled import status",
+            description = "Returns whether the automatic data import is currently enabled or disabled",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Scheduled import status")
+    public HttpResponse<Boolean> getScheduledImportStatus() {
+        return HttpResponse.ok(dataImportScheduler.isScheduledImportActive());
     }
 
     @Produces("application/pdf")
