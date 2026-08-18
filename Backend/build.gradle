@@ -44,13 +44,19 @@ application {
 java {
     sourceCompatibility = JavaVersion.toVersion("25")
     targetCompatibility = JavaVersion.toVersion("25")
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.GRAAL_VM
+    }
 }
 
-graalvmNative.toolchainDetection = false
 graalvmNative {
+    toolchainDetection = true
     binaries {
         all {
             buildArgs.add("-H:+SharedArenaSupport")
+            // Optional für SQLite JNI-Support:
+            buildArgs.add("--enable-native-access=ALL-UNNAMED")
         }
     }
 }
@@ -114,6 +120,41 @@ tasks.register('copyFrontend', Copy) {
     }
     doLast {
         println 'Frontend copied successfully!'
+    }
+}
+
+import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+
+tasks.register('runNativeCompile', Exec) {
+
+    group = 'build'
+    description = 'Executes nativeCompile using the GraalVM JDK installed by IntelliJ'
+
+    def jvmDir = file("${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines")
+
+    def graalHome = jvmDir.listFiles()?.find {
+        it.isDirectory() && (it.name.toLowerCase().contains('graalvm') && it.name.toLowerCase().contains('25'))
+    }
+
+    doFirst {
+
+        if (!graalHome) {
+            throw new GradleException("No Graal found on ${jvmDir.path}.")
+        }
+
+        def homePath = "${graalHome.absolutePath}/Contents/Home"
+        println "--------------------------------------------------"
+        println "GraalVM: ${homePath}"
+        println "--------------------------------------------------"
+
+        environment "JAVA_HOME", homePath
+        environment "GRAALVM_HOME", homePath
+    }
+
+    if (DefaultNativePlatform.currentOperatingSystem.isWindows()) {
+        commandLine 'cmd', '/c', 'gradlew.bat', 'nativeCompile'
+    } else {
+        commandLine './gradlew', 'nativeCompile'
     }
 }
 
