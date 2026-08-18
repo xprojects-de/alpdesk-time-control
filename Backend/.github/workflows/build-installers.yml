@@ -1,0 +1,112 @@
+name: Build Native Installers (Mac & Windows)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-native-installer:
+    name: Build Installer on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            artifact-name: TimeControl-macOS.dmg
+          - os: windows-latest
+            platform: windows
+            artifact-name: TimeControl-Windows-Setup.exe
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew (macOS)
+        if: matrix.platform == 'macos'
+        run: chmod +x gradlew
+
+      # ----------------------------------------------------------------
+      # MACOS BUILD & DMG
+      # ----------------------------------------------------------------
+      - name: Install create-dmg (macOS)
+        if: matrix.platform == 'macos'
+        run: brew install create-dmg
+
+      - name: Build macOS Native Image & DMG
+        if: matrix.platform == 'macos'
+        run: ./gradlew createDmg --no-daemon
+
+      - name: Move macOS Artifact
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p dist
+          cp build/distributions/TimeControl-*.dmg dist/${{ matrix.artifact-name }}
+
+      # ----------------------------------------------------------------
+      # WINDOWS BUILD & INNO SETUP INSTALLER
+      # ----------------------------------------------------------------
+      - name: Build Windows Native Image
+        if: matrix.platform == 'windows'
+        run: .\gradlew.bat nativeCompile --no-daemon
+
+      - name: Install Inno Setup (Windows)
+        if: matrix.platform == 'windows'
+        run: choco install innosetup -y
+
+      - name: Create Inno Setup Script
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $issContent = @"
+          [Setup]
+          AppName=Time Control
+          AppVersion=0.1
+          DefaultDirName={autopf}\TimeControl
+          DefaultGroupName=Time Control
+          OutputDir=dist
+          OutputBaseFilename=TimeControl-Windows-Setup
+          Compression=lzma
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64compatible
+
+          [Tasks]
+          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+          [Files]
+          Source: "build\native\nativeCompile\time-control.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+          [Icons]
+          Name: "{group}\Time Control"; Filename: "{app}\time-control.exe"
+          Name: "{autodesktop}\Time Control"; Filename: "{app}\time-control.exe"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\time-control.exe"; Description: "{cm:LaunchProgram,Time Control}"; Flags: nowait postinstall skipifsilent
+          "@
+          Set-Content -Path setup.iss -Value $issContent
+
+      - name: Build Windows Installer (.exe)
+        if: matrix.platform == 'windows'
+        run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+
+      # ----------------------------------------------------------------
+      # ARTEFAKTE HOCHLADEN
+      # ----------------------------------------------------------------
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-installer
+          path: dist/*
+          retention-days: 14
