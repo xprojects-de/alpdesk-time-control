@@ -188,6 +188,49 @@ public class MeasurementController {
         }
     }
 
+    @Get("/device-status")
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    @Operation(summary = "Get device status",
+            description = "Returns the current mode of the SKitiming Controller device ('continuous' or 'normal')",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Device status retrieved successfully")
+    @ApiResponse(responseCode = "500", description = "Failed to get device status")
+    public HttpResponse<String> getDeviceStatus() {
+        try {
+            String status = dataImportService.getDeviceStatus();
+            if (status == null) {
+                return HttpResponse.serverError()
+                        .body("Failed to get device status");
+            }
+            return HttpResponse.ok(status);
+        } catch (Exception e) {
+            return HttpResponse.serverError()
+                    .body("Error getting device status: " + e.getMessage());
+        }
+    }
+
+    @Post("/discard")
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    @Operation(summary = "Discard oldest start from device queue",
+            description = "Discards the oldest start from the device's internal queue. Only works in normal mode (not in continuous mode)",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Oldest start discarded successfully")
+    @ApiResponse(responseCode = "400", description = "Queue empty or not applicable in continuous mode")
+    @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
+    public HttpResponse<String> discardOldestStart() {
+        try {
+            boolean success = dataImportService.discardOldestStart();
+            if (!success) {
+                return HttpResponse.badRequest()
+                        .body("Failed to discard oldest start. Queue may be empty or device is in continuous mode.");
+            }
+            return HttpResponse.ok("Oldest start discarded successfully");
+        } catch (Exception e) {
+            return HttpResponse.serverError()
+                    .body("Error discarding oldest start: " + e.getMessage());
+        }
+    }
+
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
     @ExecuteOn(TaskExecutors.BLOCKING)

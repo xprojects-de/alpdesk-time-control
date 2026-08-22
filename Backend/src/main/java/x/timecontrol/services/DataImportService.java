@@ -32,6 +32,12 @@ public class DataImportService {
     @Property(name = "data-import.disable-continuous-mode", defaultValue = "http://192.168.4.1/disableContinuousMode")
     String disableContinuousModeUrl;
 
+    @Property(name = "data-import.status-url", defaultValue = "http://192.168.4.1/status")
+    String statusUrl;
+
+    @Property(name = "data-import.discard-url", defaultValue = "http://192.168.4.1/discard")
+    String discardUrl;
+
     @Inject
     @Client("/")
     HttpClient httpClient;
@@ -153,6 +159,52 @@ public class DataImportService {
         } catch (Exception e) {
 
             LOG.warn("Error set continuousMode on device: {}", e.getMessage());
+            return false;
+
+        }
+    }
+
+    public String getDeviceStatus() {
+
+        try {
+
+            LOG.info("Getting device status from {}", statusUrl);
+            String response = httpClient.toBlocking().retrieve(HttpRequest.GET(statusUrl));
+            LOG.info("Device status: {}", response);
+
+            return response.trim();
+
+        } catch (HttpClientException e) {
+
+            LOG.warn("Could not connect to device at {}: {}", statusUrl, e.getMessage());
+            return null;
+
+        } catch (Exception e) {
+
+            LOG.warn("Error getting device status: {}", e.getMessage());
+            return null;
+
+        }
+    }
+
+    public boolean discardOldestStart() {
+
+        try {
+
+            LOG.info("Discarding oldest start at {}", discardUrl);
+            httpClient.toBlocking().retrieve(HttpRequest.GET(discardUrl));
+            LOG.info("Successfully discarded oldest start");
+
+            return true;
+
+        } catch (HttpClientException e) {
+
+            LOG.warn("Could not connect to device at {}: {}", discardUrl, e.getMessage());
+            return false;
+
+        } catch (Exception e) {
+
+            LOG.warn("Error discarding oldest start: {}", e.getMessage());
             return false;
 
         }
