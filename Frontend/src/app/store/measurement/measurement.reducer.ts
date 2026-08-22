@@ -9,6 +9,7 @@ export interface MeasurementState {
     error: string | null;
     continuousModeEnabled: boolean;
     scheduledImportEnabled: boolean;
+    deviceStatus: string | null;
 }
 
 export const initialState: MeasurementState = {
@@ -17,7 +18,8 @@ export const initialState: MeasurementState = {
     loading: false,
     error: null,
     continuousModeEnabled: false,
-    scheduledImportEnabled: false
+    scheduledImportEnabled: false,
+    deviceStatus: null
 };
 
 export const measurementReducer = createReducer(
@@ -198,6 +200,40 @@ export const measurementReducer = createReducer(
         loading: false
     })),
     on(MeasurementActions.loadScheduledImportStatusFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Load device status
+    on(MeasurementActions.loadDeviceStatus, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.loadDeviceStatusSuccess, (state, {status}) => ({
+        ...state,
+        deviceStatus: status,
+        continuousModeEnabled: status === 'continuous',
+        loading: false
+    })),
+    on(MeasurementActions.loadDeviceStatusFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Discard oldest start
+    on(MeasurementActions.discardOldestStart, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.discardOldestStartSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(MeasurementActions.discardOldestStartFailure, (state, {error}) => ({
         ...state,
         loading: false,
         error

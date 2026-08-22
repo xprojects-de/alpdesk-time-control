@@ -156,3 +156,29 @@ export const syncMeasurementsToParticipantsFailure = createAction(
     props<{ error: string }>()
 );
 
+// Get device status
+export const loadDeviceStatus = createAction(
+    '[Measurement] Load Device Status'
+);
+export const loadDeviceStatusSuccess = createAction(
+    '[Measurement] Load Device Status Success',
+    props<{ status: string }>()
+);
+export const loadDeviceStatusFailure = createAction(
+    '[Measurement] Load Device Status Failure',
+    props<{ error: string }>()
+);
+
+// Discard oldest start
+export const discardOldestStart = createAction(
+    '[Measurement] Discard Oldest Start'
+);
+export const discardOldestStartSuccess = createAction(
+    '[Measurement] Discard Oldest Start Success',
+    props<{ message: string }>()
+);
+export const discardOldestStartFailure = createAction(
+    '[Measurement] Discard Oldest Start Failure',
+    props<{ error: string }>()
+);
+

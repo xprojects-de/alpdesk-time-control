@@ -68,5 +68,17 @@ export class MeasurementService {
             responseType: 'text'
         });
     }
+
+    getDeviceStatus(): Observable<string> {
+        return this.http.get(`${this.apiUrl}/device-status`, {
+            responseType: 'text'
+        });
+    }
+
+    discardOldestStart(): Observable<string> {
+        return this.http.post(`${this.apiUrl}/discard`, null, {
+            responseType: 'text'
+        });
+    }
 }
 
