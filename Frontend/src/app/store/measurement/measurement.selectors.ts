@@ -68,3 +68,8 @@ export const selectScheduledImportEnabled = createSelector(
     state => state.scheduledImportEnabled
 );
 
+export const selectDeviceStatus = createSelector(
+    selectMeasurementState,
+    state => state.deviceStatus
+);
+

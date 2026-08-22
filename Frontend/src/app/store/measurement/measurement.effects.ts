@@ -172,5 +172,33 @@ export class MeasurementEffects {
             )
         )
     );
+
+    loadDeviceStatus$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.loadDeviceStatus),
+            mergeMap(() =>
+                this.measurementService.getDeviceStatus().pipe(
+                    map(status => MeasurementActions.loadDeviceStatusSuccess({status})),
+                    catchError(error => of(MeasurementActions.loadDeviceStatusFailure({
+                        error: error.message || 'Failed to load device status'
+                    })))
+                )
+            )
+        )
+    );
+
+    discardOldestStart$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.discardOldestStart),
+            mergeMap(() =>
+                this.measurementService.discardOldestStart().pipe(
+                    map(message => MeasurementActions.discardOldestStartSuccess({message})),
+                    catchError(error => of(MeasurementActions.discardOldestStartFailure({
+                        error: error.message || 'Failed to discard oldest start'
+                    })))
+                )
+            )
+        )
+    );
 }
 

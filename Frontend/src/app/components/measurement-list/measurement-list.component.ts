@@ -135,7 +135,7 @@ interface MeasurementWithParticipant extends Measurement {
                         Sync zu Teilnehmern
                     </button>
                     
-                    @if (continuousModeEnabled$ | async) {
+                    @if ((deviceStatus$ | async) === 'continuous') {
                         <button 
                                 mat-raised-button 
                                 color="accent"
@@ -153,6 +153,18 @@ interface MeasurementWithParticipant extends Measurement {
                         >
                             <mat-icon>play_arrow</mat-icon>
                             Kontinuierlich AN
+                        </button>
+                    }
+                    
+                    @if ((deviceStatus$ | async) === 'normal') {
+                        <button 
+                                mat-raised-button 
+                                color="warn"
+                                (click)="discardOldestStart()"
+                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                        >
+                            <mat-icon>person_off</mat-icon>
+                            Sturz signalisieren
                         </button>
                     }
                     
@@ -411,6 +423,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
+    deviceStatus$: Observable<string | null>;
     displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
@@ -433,6 +446,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.scheduledImportEnabled$ = this.store.select(
             MeasurementSelectors.selectScheduledImportEnabled,
+        );
+        this.deviceStatus$ = this.store.select(
+            MeasurementSelectors.selectDeviceStatus,
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -545,6 +561,54 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 panelClass: 'error-snackbar'
             });
         });
+
+        // Listen for successful device status load
+        this.actions$.pipe(
+            ofType(MeasurementActions.loadDeviceStatusSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({status}) => {
+            console.log('Device status loaded:', status);
+        });
+
+        // Listen for failed device status load
+        this.actions$.pipe(
+            ofType(MeasurementActions.loadDeviceStatusFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Laden des Gerätestatus', 'OK', {
+                duration: 5000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
+        // Listen for successful discard
+        this.actions$.pipe(
+            ofType(MeasurementActions.discardOldestStartSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Ältester Start erfolgreich verworfen', 'OK', {
+                duration: 3000,
+            });
+        });
+
+        // Listen for failed discard
+        this.actions$.pipe(
+            ofType(MeasurementActions.discardOldestStartFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Verwerfen des ältesten Starts', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
+        // Reload device status after continuous mode change
+        this.actions$.pipe(
+            ofType(MeasurementActions.setContinuousModeSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.store.dispatch(MeasurementActions.loadDeviceStatus());
+        });
     }
 
     ngAfterViewInit(): void {
@@ -552,6 +616,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.loadData();
 
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
+        this.store.dispatch(MeasurementActions.loadDeviceStatus());
 
         this.autoRefresh$
             .pipe(
@@ -719,5 +784,11 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.snackBar.open('Synchronisierung gestartet...', 'OK', {
             duration: 2000,
         });
+    }
+
+    discardOldestStart(): void {
+        if (confirm('Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.')) {
+            this.store.dispatch(MeasurementActions.discardOldestStart());
+        }
     }
 }
