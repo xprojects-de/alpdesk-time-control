@@ -209,6 +209,29 @@ public class DataImportService {
 
         }
     }
+
+    public boolean isDeviceConnected() {
+
+        try {
+
+            LOG.debug("Checking device connection at {}", statusUrl);
+            httpClient.toBlocking().retrieve(HttpRequest.GET(statusUrl));
+            LOG.debug("Device is connected");
+
+            return true;
+
+        } catch (HttpClientException e) {
+
+            LOG.debug("Could not connect to device at {}: {}", statusUrl, e.getMessage());
+            return false;
+
+        } catch (Exception e) {
+
+            LOG.debug("Error checking device connection: {}", e.getMessage());
+            return false;
+
+        }
+    }
 }
 
 

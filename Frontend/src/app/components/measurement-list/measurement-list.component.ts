@@ -623,6 +623,16 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(() => {
         });
 
+        // Load device status when device connection is successful
+        this.actions$.pipe(
+            ofType(MeasurementActions.checkDeviceConnectionSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({connected}) => {
+            if (connected) {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            }
+        });
+
         // Listen for successful discard
         this.actions$.pipe(
             ofType(MeasurementActions.discardOldestStartSuccess),
