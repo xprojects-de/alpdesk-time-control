@@ -35,6 +35,9 @@ public class DataImportService {
     @Property(name = "data-import.status-url", defaultValue = "http://192.168.4.1/status")
     String statusUrl;
 
+    @Property(name = "data-import.ping-url", defaultValue = "http://192.168.4.1/ping")
+    String pingUrl;
+
     @Property(name = "data-import.discard-url", defaultValue = "http://192.168.4.1/discard")
     String discardUrl;
 
@@ -214,15 +217,15 @@ public class DataImportService {
 
         try {
 
-            LOG.debug("Checking device connection at {}", statusUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(statusUrl));
+            LOG.debug("Checking device connection at {}", pingUrl);
+            httpClient.toBlocking().retrieve(HttpRequest.GET(pingUrl));
             LOG.debug("Device is connected");
 
             return true;
 
         } catch (HttpClientException e) {
 
-            LOG.debug("Could not connect to device at {}: {}", statusUrl, e.getMessage());
+            LOG.debug("Could not connect to device at {}: {}", pingUrl, e.getMessage());
             return false;
 
         } catch (Exception e) {
