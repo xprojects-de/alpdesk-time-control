@@ -35,6 +35,9 @@ public class DataImportService {
     @Property(name = "data-import.status-url", defaultValue = "http://192.168.4.1/status")
     String statusUrl;
 
+    @Property(name = "data-import.ping-url", defaultValue = "http://192.168.4.1/ping")
+    String pingUrl;
+
     @Property(name = "data-import.discard-url", defaultValue = "http://192.168.4.1/discard")
     String discardUrl;
 
@@ -205,6 +208,29 @@ public class DataImportService {
         } catch (Exception e) {
 
             LOG.warn("Error discarding oldest start: {}", e.getMessage());
+            return false;
+
+        }
+    }
+
+    public boolean isDeviceConnected() {
+
+        try {
+
+            LOG.debug("Checking device connection at {}", pingUrl);
+            httpClient.toBlocking().retrieve(HttpRequest.GET(pingUrl));
+            LOG.debug("Device is connected");
+
+            return true;
+
+        } catch (HttpClientException e) {
+
+            LOG.debug("Could not connect to device at {}: {}", pingUrl, e.getMessage());
+            return false;
+
+        } catch (Exception e) {
+
+            LOG.debug("Error checking device connection: {}", e.getMessage());
             return false;
 
         }

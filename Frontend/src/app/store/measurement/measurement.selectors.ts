@@ -73,3 +73,13 @@ export const selectDeviceStatus = createSelector(
     state => state.deviceStatus
 );
 
+export const selectDeviceConnected = createSelector(
+    selectMeasurementState,
+    state => state.deviceConnected
+);
+
+export const selectIsPollingDeviceConnection = createSelector(
+    selectMeasurementState,
+    state => state.isPollingDeviceConnection
+);
+

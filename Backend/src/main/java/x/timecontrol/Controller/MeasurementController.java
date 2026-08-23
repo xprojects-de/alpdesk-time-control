@@ -209,6 +209,27 @@ public class MeasurementController {
         }
     }
 
+    @Get("/device-connection")
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    @Operation(summary = "Check device connection",
+            description = "Checks if the SKitiming Controller device is reachable and returns the connection status via HTTP status code",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Device is connected")
+    @ApiResponse(responseCode = "503", description = "Device is not connected")
+    @ApiResponse(responseCode = "500", description = "Error checking device connection")
+    public HttpResponse<Void> checkDeviceConnection() {
+        try {
+            boolean isConnected = dataImportService.isDeviceConnected();
+            if (isConnected) {
+                return HttpResponse.ok();
+            } else {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE);
+            }
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
     @Post("/discard")
     @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Discard oldest start from device queue",

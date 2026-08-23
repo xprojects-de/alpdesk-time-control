@@ -102,115 +102,134 @@ interface MeasurementWithParticipant extends Measurement {
                 <div class="filter-section">
                     <mat-form-field appearance="outline">
                         <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async" 
-                                   (selectionChange)="onRaceFilterChange($event.value)">
+                        <mat-select [value]="selectedRaceId$ | async"
+                                    (selectionChange)="onRaceFilterChange($event.value)">
                             <mat-option [value]="null">Alle Rennen</mat-option>
                             @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
+                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})
+                                </mat-option>
                             }
                         </mat-select>
                     </mat-form-field>
                 </div>
 
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
-                        <mat-icon>add</mat-icon>
-                        Neue Messung
-                    </button>
-                    <button mat-raised-button (click)="manualRefresh()">
-                        <mat-icon>refresh</mat-icon>
-                        Manuell aktualisieren
-                    </button>
-                    <button 
-                            mat-raised-button 
-                            color="accent"
-                            (click)="syncMeasurementsToParticipants()"
-                            matTooltip="Messungen mit Teilnehmern synchronisieren"
-                    >
-                        <mat-icon>sync</mat-icon>
-                        Sync zu Teilnehmern
-                    </button>
-                    
-                    @if ((deviceStatus$ | async) === 'continuous') {
-                        <button 
-                                mat-raised-button 
-                                color="accent"
-                                (click)="toggleContinuousMode(false)"
-                                matTooltip="Kontinuierlichen Modus deaktivieren"
-                        >
-                            <mat-icon>stop</mat-icon>
-                            Kontinuierlich AUS
-                        </button>
-                    } @else {
-                        <button 
+                    <!-- Gruppe 1: Neue Messung & Aktualisierung -->
+                    <div class="button-group">
+                        <button
                                 mat-raised-button
-                                (click)="toggleContinuousMode(true)"
-                                matTooltip="Kontinuierlichen Modus aktivieren"
+                                color="primary"
+                                (click)="openCreateDialog()"
                         >
-                            <mat-icon>play_arrow</mat-icon>
-                            Kontinuierlich AN
+                            <mat-icon>add</mat-icon>
+                            Neue Messung
                         </button>
-                    }
-                    
-                    @if ((deviceStatus$ | async) === 'normal') {
-                        <button 
-                                mat-raised-button 
+                        <button mat-raised-button (click)="manualRefresh()">
+                            <mat-icon>refresh</mat-icon>
+                            Manuell aktualisieren
+                        </button>
+                    </div>
+
+                    <!-- Gruppe 2: Sync zu Teilnehmern -->
+                    <div class="button-group">
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                (click)="syncMeasurementsToParticipants()"
+                                matTooltip="Messungen mit Teilnehmern synchronisieren"
+                        >
+                            <mat-icon>sync</mat-icon>
+                            Sync zu Teilnehmern
+                        </button>
+                    </div>
+
+                    <!-- Gruppe 3: Kontinuierlich & Sturz -->
+                    <div class="button-group">
+                        @if ((deviceStatus$ | async) === 'continuous') {
+                            <button
+                                    mat-raised-button
+                                    color="accent"
+                                    class="active-mode"
+                                    (click)="toggleContinuousMode(false)"
+                                    matTooltip="Kontinuierlichen Modus deaktivieren"
+                            >
+                                <mat-icon>stop</mat-icon>
+                                Kontinuierlich AUS
+                            </button>
+                        } @else {
+                            <button
+                                    mat-raised-button
+                                    (click)="toggleContinuousMode(true)"
+                                    matTooltip="Kontinuierlichen Modus aktivieren"
+                            >
+                                <mat-icon>play_arrow</mat-icon>
+                                Kontinuierlich AN
+                            </button>
+                        }
+
+                        @if ((deviceStatus$ | async) === 'normal') {
+                            <button
+                                    mat-raised-button
+                                    color="warn"
+                                    (click)="discardOldestStart()"
+                                    matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                            >
+                                <mat-icon>person_off</mat-icon>
+                                Sturz signalisieren
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Gruppe 4: Auto-Import -->
+                    <div class="button-group">
+                        @if (scheduledImportEnabled$ | async) {
+                            <button
+                                    mat-raised-button
+                                    color="accent"
+                                    class="active-mode"
+                                    (click)="toggleScheduledImport(false)"
+                                    matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
+                            >
+                                <mat-icon>cloud_sync</mat-icon>
+                                Auto-Import AUS
+                            </button>
+                        } @else {
+                            <button
+                                    mat-raised-button
+                                    (click)="toggleScheduledImport(true)"
+                                    matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
+                            >
+                                <mat-icon>cloud_download</mat-icon>
+                                Auto-Import AN
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Zurücksetzen - ganz rechts -->
+                    <div class="button-group reset-group">
+                        <button
+                                mat-raised-button
                                 color="warn"
-                                (click)="discardOldestStart()"
-                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                                [matMenuTriggerFor]="resetMenu"
+                                matTooltip="Alle Messungen zurücksetzen"
                         >
-                            <mat-icon>person_off</mat-icon>
-                            Sturz signalisieren
-                        </button>
-                    }
-                    
-                    @if (scheduledImportEnabled$ | async) {
-                        <button 
-                                mat-raised-button 
-                                color="accent"
-                                (click)="toggleScheduledImport(false)"
-                                matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
-                        >
-                            <mat-icon>cloud_sync</mat-icon>
-                            Auto-Import AUS
-                        </button>
-                    } @else {
-                        <button 
-                                mat-raised-button
-                                (click)="toggleScheduledImport(true)"
-                                matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
-                        >
-                        <mat-icon>cloud_download</mat-icon>
-                        Auto-Import AN
-                    </button>
-                }
-                
-                <button 
-                        mat-raised-button 
-                        color="warn"
-                        [matMenuTriggerFor]="resetMenu"
-                        matTooltip="Alle Messungen zurücksetzen"
-                >
-                    <mat-icon>delete_sweep</mat-icon>
-                    Zurücksetzen
-                    <mat-icon>arrow_drop_down</mat-icon>
-                </button>
-                    
-                    <mat-menu #resetMenu="matMenu">
-                        <button mat-menu-item (click)="resetMeasurements(false)">
                             <mat-icon>delete_sweep</mat-icon>
-                            <span>Alle Messungen löschen (nur Datenbank)</span>
+                            Zurücksetzen
+                            <mat-icon>arrow_drop_down</mat-icon>
                         </button>
-                        
-                        <button mat-menu-item (click)="resetMeasurements(true)">
-                            <mat-icon>delete_forever</mat-icon>
-                            <span>Alle löschen (inkl. Gerät)</span>
-                        </button>
-                    </mat-menu>
+
+                        <mat-menu #resetMenu="matMenu">
+                            <button mat-menu-item (click)="resetMeasurements(false)">
+                                <mat-icon>delete_sweep</mat-icon>
+                                <span>Alle Messungen löschen (nur Datenbank)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="resetMeasurements(true)">
+                                <mat-icon>delete_forever</mat-icon>
+                                <span>Alle löschen (inkl. Gerät)</span>
+                            </button>
+                        </mat-menu>
+                    </div>
                 </div>
 
                 @if (loading$ | async) {
@@ -280,7 +299,7 @@ interface MeasurementWithParticipant extends Measurement {
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
-                
+
                 <div class="count-info">
                     Anzahl der Messungen: {{ ((measurementsWithParticipants$ | async) || []).length }}
                 </div>
@@ -344,8 +363,35 @@ interface MeasurementWithParticipant extends Measurement {
             margin-top: 20px;
             margin-bottom: 20px;
             display: flex;
-            gap: 10px;
+            gap: 16px;
             position: relative;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+
+          .button-group {
+            display: flex;
+            gap: 8px;
+            padding-right: 16px;
+            border-right: 1px solid rgba(0, 0, 0, 0.12);
+          }
+
+          .button-group:last-child {
+            border-right: none;
+          }
+
+          .reset-group {
+            margin-left: auto;
+            padding-right: 0;
+          }
+
+          .active-mode {
+            background-color: #4caf50 !important;
+            color: white !important;
+          }
+
+          .active-mode:hover {
+            background-color: #45a049 !important;
           }
 
           .loading-overlay {
@@ -575,10 +621,16 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ofType(MeasurementActions.loadDeviceStatusFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Laden des Gerätestatus', 'OK', {
-                duration: 5000,
-                panelClass: 'error-snackbar'
-            });
+        });
+
+        // Load device status when device connection is successful
+        this.actions$.pipe(
+            ofType(MeasurementActions.checkDeviceConnectionSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({connected}) => {
+            if (connected) {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            }
         });
 
         // Listen for successful discard
@@ -687,24 +739,24 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-     openCreateDialog(): void {
-         const dialogRef = this.dialog.open(MeasurementDialogComponent, {
-             width: "500px",
-         });
+    openCreateDialog(): void {
+        const dialogRef = this.dialog.open(MeasurementDialogComponent, {
+            width: "500px",
+        });
 
-         dialogRef.afterClosed()
-             .pipe(takeUntil(this.destroy$))
-             .subscribe((result) => {
-             if (result) {
-                 this.store.dispatch(
-                     MeasurementActions.createMeasurement({measurement: result}),
-                 );
-                 this.snackBar.open("Messung erfolgreich erstellt", "OK", {
-                     duration: 3000,
-                 });
-             }
-         });
-     }
+        dialogRef.afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (result) {
+                    this.store.dispatch(
+                        MeasurementActions.createMeasurement({measurement: result}),
+                    );
+                    this.snackBar.open("Messung erfolgreich erstellt", "OK", {
+                        duration: 3000,
+                    });
+                }
+            });
+    }
 
     openEditDialog(measurement: Measurement): void {
         const dialogRef = this.dialog.open(MeasurementDialogComponent, {
@@ -759,7 +811,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
 
-
     resetMeasurements(resetDevice: boolean): void {
         const message = resetDevice
             ? 'Möchten Sie wirklich ALLE Messungen löschen? Dies betrifft auch die Messungen auf dem Gerät!'
@@ -767,16 +818,16 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         if (confirm(message)) {
             this.lastResetDevice = resetDevice;
-            this.store.dispatch(MeasurementActions.resetMeasurements({ resetDevice }));
+            this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
         }
     }
 
     toggleContinuousMode(enable: boolean): void {
-        this.store.dispatch(MeasurementActions.setContinuousMode({ enable }));
+        this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
     }
 
     toggleScheduledImport(enable: boolean): void {
-        this.store.dispatch(MeasurementActions.setScheduledImport({ enable }));
+        this.store.dispatch(MeasurementActions.setScheduledImport({enable}));
     }
 
     syncMeasurementsToParticipants(): void {

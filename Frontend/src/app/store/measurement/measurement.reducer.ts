@@ -10,6 +10,8 @@ export interface MeasurementState {
     continuousModeEnabled: boolean;
     scheduledImportEnabled: boolean;
     deviceStatus: string | null;
+    deviceConnected: boolean | null;
+    isPollingDeviceConnection: boolean;
 }
 
 export const initialState: MeasurementState = {
@@ -19,7 +21,9 @@ export const initialState: MeasurementState = {
     error: null,
     continuousModeEnabled: false,
     scheduledImportEnabled: false,
-    deviceStatus: null
+    deviceStatus: null,
+    deviceConnected: null,
+    isPollingDeviceConnection: false
 };
 
 export const measurementReducer = createReducer(
@@ -236,6 +240,25 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.discardOldestStartFailure, (state, {error}) => ({
         ...state,
         loading: false,
+        error
+    })),
+
+    // Device connection polling
+    on(MeasurementActions.startDeviceConnectionPolling, state => ({
+        ...state,
+        isPollingDeviceConnection: true
+    })),
+    on(MeasurementActions.stopDeviceConnectionPolling, state => ({
+        ...state,
+        isPollingDeviceConnection: false
+    })),
+    on(MeasurementActions.checkDeviceConnectionSuccess, (state, {connected}) => ({
+        ...state,
+        deviceConnected: connected
+    })),
+    on(MeasurementActions.checkDeviceConnectionFailure, (state, {error}) => ({
+        ...state,
+        deviceConnected: false,
         error
     }))
 );
