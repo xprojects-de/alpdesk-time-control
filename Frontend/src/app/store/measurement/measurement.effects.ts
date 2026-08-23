@@ -206,7 +206,7 @@ export class MeasurementEffects {
         this.actions$.pipe(
             ofType(MeasurementActions.startDeviceConnectionPolling),
             switchMap(() =>
-                interval(7500).pipe(
+                interval(10000).pipe(
                     map(() => MeasurementActions.checkDeviceConnection()),
                     takeUntil(this.actions$.pipe(ofType(MeasurementActions.stopDeviceConnectionPolling)))
                 )
