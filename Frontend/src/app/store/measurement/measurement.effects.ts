@@ -1,7 +1,7 @@
 import {inject, Injectable} from '@angular/core';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {catchError, map, mergeMap} from 'rxjs/operators';
+import {interval, of} from 'rxjs';
+import {catchError, map, mergeMap, switchMap, takeUntil} from 'rxjs/operators';
 import {MeasurementService} from '../../services/measurement.service';
 import * as MeasurementActions from './measurement.actions';
 
@@ -195,6 +195,33 @@ export class MeasurementEffects {
                     map(message => MeasurementActions.discardOldestStartSuccess({message})),
                     catchError(error => of(MeasurementActions.discardOldestStartFailure({
                         error: error.message || 'Failed to discard oldest start'
+                    })))
+                )
+            )
+        )
+    );
+
+    // Device connection polling
+    startDeviceConnectionPolling$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.startDeviceConnectionPolling),
+            switchMap(() =>
+                interval(5000).pipe(
+                    map(() => MeasurementActions.checkDeviceConnection()),
+                    takeUntil(this.actions$.pipe(ofType(MeasurementActions.stopDeviceConnectionPolling)))
+                )
+            )
+        )
+    );
+
+    checkDeviceConnection$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.checkDeviceConnection),
+            mergeMap(() =>
+                this.measurementService.checkDeviceConnection().pipe(
+                    map(connected => MeasurementActions.checkDeviceConnectionSuccess({connected})),
+                    catchError(error => of(MeasurementActions.checkDeviceConnectionFailure({
+                        error: error.message || 'Failed to check device connection'
                     })))
                 )
             )

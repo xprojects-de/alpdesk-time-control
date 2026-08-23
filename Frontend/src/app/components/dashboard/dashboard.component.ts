@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable} from "rxjs";
@@ -7,12 +7,15 @@ import {MatToolbarModule} from "@angular/material/toolbar";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
 import {MatMenuModule} from "@angular/material/menu";
+import {MatTooltipModule} from "@angular/material/tooltip";
 import {RaceListComponent} from "../race-list/race-list.component";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
 import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
+import * as MeasurementActions from "../../store/measurement/measurement.actions";
+import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 
 @Component({
     selector: "app-dashboard",
@@ -24,6 +27,7 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
         MatButtonModule,
         MatIconModule,
         MatMenuModule,
+        MatTooltipModule,
         RaceListComponent,
         ParticipantListComponent,
         MeasurementListComponent,
@@ -33,6 +37,29 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
         <mat-toolbar color="primary">
             <span>TimeControl - Zeitnahme System</span>
             <span class="spacer"></span>
+
+            <!-- Device Connection Status -->
+            <div class="connection-status">
+                @if (deviceConnected$ | async; as connected) {
+                    @if (connected) {
+                        <mat-icon class="status-icon connected"
+                                  [matTooltip]="'Gerät verbunden'">
+                            wifi
+                        </mat-icon>
+                    } @else if (connected === false) {
+                        <mat-icon class="status-icon disconnected"
+                                  [matTooltip]="'Gerät nicht verbunden'">
+                            wifi_off
+                        </mat-icon>
+                    }
+                } @else {
+                    <mat-icon class="status-icon unknown"
+                              [matTooltip]="'Verbindungsstatus unbekannt'">
+                        help_outline
+                    </mat-icon>
+                }
+            </div>
+
             <button mat-icon-button [matMenuTriggerFor]="menu">
                 <mat-icon>account_circle</mat-icon>
             </button>
@@ -87,15 +114,53 @@ import * as AuthSelectors from "../../store/auth/auth.selectors";
             padding: 8px 16px;
             cursor: default;
           }
+
+          .connection-status {
+            display: flex;
+            align-items: center;
+            margin-right: 16px;
+          }
+
+          .status-icon {
+            font-size: 24px;
+            width: 24px;
+            height: 24px;
+          }
+
+          .status-icon.connected {
+            color: #4caf50;
+          }
+
+          .status-icon.disconnected {
+            color: #f44336;
+          }
+
+          .status-icon.unknown {
+            color: #ff9800;
+          }
         `,
     ],
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     username$: Observable<string | null>;
+    deviceConnected$: Observable<boolean | null>;
 
     constructor() {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
+        this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
+    }
+
+    ngOnInit(): void {
+        // Start polling device connection every 5 seconds
+        this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
+        // Trigger immediate check
+        this.store.dispatch(MeasurementActions.checkDeviceConnection());
+    }
+
+    ngOnDestroy(): void {
+        // Stop polling when component is destroyed
+        this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
     }
 
     logout(): void {

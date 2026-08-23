@@ -80,5 +80,24 @@ export class MeasurementService {
             responseType: 'text'
         });
     }
+
+    checkDeviceConnection(): Observable<boolean> {
+        return new Observable<boolean>(observer => {
+            this.http.get(`${this.apiUrl}/device-connection`, {
+                observe: 'response'
+            }).subscribe({
+                next: (response) => {
+                    observer.next(response.status === 200);
+                    observer.complete();
+                },
+                error: () => {
+                    // 503 = device not connected, treat as false
+                    // Any other error also means not connected
+                    observer.next(false);
+                    observer.complete();
+                }
+            });
+        });
+    }
 }
 

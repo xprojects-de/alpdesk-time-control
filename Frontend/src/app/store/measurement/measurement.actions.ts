@@ -182,3 +182,22 @@ export const discardOldestStartFailure = createAction(
     props<{ error: string }>()
 );
 
+// Device connection polling
+export const startDeviceConnectionPolling = createAction(
+    '[Measurement] Start Device Connection Polling'
+);
+export const stopDeviceConnectionPolling = createAction(
+    '[Measurement] Stop Device Connection Polling'
+);
+export const checkDeviceConnection = createAction(
+    '[Measurement] Check Device Connection'
+);
+export const checkDeviceConnectionSuccess = createAction(
+    '[Measurement] Check Device Connection Success',
+    props<{ connected: boolean }>()
+);
+export const checkDeviceConnectionFailure = createAction(
+    '[Measurement] Check Device Connection Failure',
+    props<{ error: string }>()
+);
+
