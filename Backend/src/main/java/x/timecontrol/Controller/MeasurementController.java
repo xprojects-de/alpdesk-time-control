@@ -10,6 +10,7 @@ import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.scheduling.TaskExecutors;
@@ -350,6 +351,42 @@ public class MeasurementController {
             );
             return HttpResponse.serverError().body(errorResponse);
         }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/export")
+    @Operation(summary = "Export all measurements as JSON download",
+            description = "Returns all measurements as a JSON file download",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
+    public HttpResponse<List<MeasurementResponse>> exportMeasurements() {
+        Iterable<Measurement> measurements = service.findAll();
+        List<MeasurementResponse> response = StreamSupport.stream(measurements.spliterator(), false)
+                .map(MeasurementResponse::from)
+                .toList();
+        return HttpResponse.ok(response)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/import-json")
+    @Operation(summary = "Import measurements from JSON",
+            description = "Imports a list of measurements from a JSON body. Existing measurements are kept; duplicates are inserted as new entries.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
+            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid JSON input")
+    public HttpResponse<List<MeasurementResponse>> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return HttpResponse.badRequest();
+        }
+        List<MeasurementResponse> created = requests.stream()
+                .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))
+                .map(service::create)
+                .map(MeasurementResponse::from)
+                .toList();
+        return HttpResponse.created(created);
     }
 
 }
