@@ -356,13 +356,13 @@ public class MeasurementController {
     @Produces(MediaType.APPLICATION_JSON)
     @Get("/export")
     @Operation(summary = "Export all measurements as JSON download",
-            description = "Returns all measurements as a JSON file download",
+            description = "Returns all measurements as a JSON file download (without IDs, suitable for re-import)",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
-    public HttpResponse<List<MeasurementResponse>> exportMeasurements() {
+    public HttpResponse<List<MeasurementRequest>> exportMeasurements() {
         Iterable<Measurement> measurements = service.findAll();
-        List<MeasurementResponse> response = StreamSupport.stream(measurements.spliterator(), false)
-                .map(MeasurementResponse::from)
+        List<MeasurementRequest> response = StreamSupport.stream(measurements.spliterator(), false)
+                .map(m -> new MeasurementRequest(m.participantId(), m.durationMs(), m.measuredAt()))
                 .toList();
         return HttpResponse.ok(response)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
