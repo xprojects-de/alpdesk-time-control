@@ -479,6 +479,55 @@ interface MeasurementWithParticipant extends Measurement {
             font-weight: 500;
             color: rgba(0, 0, 0, 0.87);
           }
+
+          @media (max-width: 768px) {
+            mat-card {
+              margin: 8px;
+            }
+
+            .title-row {
+              flex-wrap: wrap;
+              gap: 8px;
+            }
+
+            .header-actions {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 8px;
+            }
+
+            .button-group {
+              flex-wrap: wrap;
+              padding-right: 0;
+              border-right: none;
+              border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+              padding-bottom: 8px;
+            }
+
+            .button-group:last-child {
+              border-bottom: none;
+              padding-bottom: 0;
+            }
+
+            .reset-group {
+              margin-left: 0;
+            }
+
+            .button-group button {
+              flex: 1 1 auto;
+              min-width: 0;
+              font-size: 12px;
+            }
+
+            mat-form-field {
+              min-width: 100%;
+              width: 100%;
+            }
+
+            .measurement-table {
+              font-size: 12px;
+            }
+          }
         `,
     ],
 })
