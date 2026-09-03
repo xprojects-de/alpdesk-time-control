@@ -182,6 +182,32 @@ export const discardOldestStartFailure = createAction(
     props<{ error: string }>()
 );
 
+// Export measurements as JSON
+export const exportMeasurements = createAction(
+    '[Measurement] Export Measurements'
+);
+export const exportMeasurementsSuccess = createAction(
+    '[Measurement] Export Measurements Success'
+);
+export const exportMeasurementsFailure = createAction(
+    '[Measurement] Export Measurements Failure',
+    props<{ error: string }>()
+);
+
+// Import measurements from JSON
+export const importMeasurementsFromJson = createAction(
+    '[Measurement] Import Measurements From Json',
+    props<{ measurements: { participantId: number | null; durationMs: number; measuredAt: string }[] }>()
+);
+export const importMeasurementsFromJsonSuccess = createAction(
+    '[Measurement] Import Measurements From Json Success',
+    props<{ count: number }>()
+);
+export const importMeasurementsFromJsonFailure = createAction(
+    '[Measurement] Import Measurements From Json Failure',
+    props<{ error: string }>()
+);
+
 // Device connection polling
 export const startDeviceConnectionPolling = createAction(
     '[Measurement] Start Device Connection Polling'

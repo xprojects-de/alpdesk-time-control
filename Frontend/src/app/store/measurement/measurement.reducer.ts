@@ -243,6 +243,38 @@ export const measurementReducer = createReducer(
         error
     })),
 
+    // Export measurements
+    on(MeasurementActions.exportMeasurements, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.exportMeasurementsSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(MeasurementActions.exportMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Import measurements from JSON
+    on(MeasurementActions.importMeasurementsFromJson, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.importMeasurementsFromJsonSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(MeasurementActions.importMeasurementsFromJsonFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
     // Device connection polling
     on(MeasurementActions.startDeviceConnectionPolling, state => ({
         ...state,

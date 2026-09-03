@@ -4,6 +4,8 @@ import {
     OnDestroy,
     inject,
     ChangeDetectionStrategy,
+    viewChild,
+    ElementRef,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
@@ -143,7 +145,34 @@ interface MeasurementWithParticipant extends Measurement {
                         </button>
                     </div>
 
-                    <!-- Gruppe 3: Kontinuierlich & Sturz -->
+                    <!-- Gruppe 3: Export & Import -->
+                    <div class="button-group">
+                        <button
+                                mat-raised-button
+                                (click)="exportMeasurements()"
+                                matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                        >
+                            <mat-icon>download</mat-icon>
+                            JSON Export
+                        </button>
+                        <button
+                                mat-raised-button
+                                (click)="triggerJsonImport()"
+                                matTooltip="Messungen aus JSON-Datei importieren"
+                        >
+                            <mat-icon>upload</mat-icon>
+                            JSON Import
+                        </button>
+                        <input
+                                #jsonImportInput
+                                type="file"
+                                accept=".json,application/json"
+                                style="display:none"
+                                (change)="onJsonFileSelected($event)"
+                        />
+                    </div>
+
+                    <!-- Gruppe 4: Kontinuierlich & Sturz -->
                     <div class="button-group">
                         @if ((deviceStatus$ | async) === 'continuous') {
                             <button
@@ -475,6 +504,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     autoRefreshEnabled = false;
     private lastResetDevice = false;
 
+    jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
+
     constructor() {
         this.measurements$ = this.store.select(
             MeasurementSelectors.selectAllMeasurements,
@@ -661,6 +692,45 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(() => {
             this.store.dispatch(MeasurementActions.loadDeviceStatus());
         });
+
+        // Listen for successful export
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurementsSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Messungen erfolgreich exportiert', 'OK', {duration: 3000});
+        });
+
+        // Listen for failed export
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurementsFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Exportieren der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
+        // Listen for successful JSON import
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJsonSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({count}) => {
+            this.snackBar.open(`${count} Messung(en) erfolgreich importiert`, 'OK', {duration: 3000});
+            this.loadData();
+        });
+
+        // Listen for failed JSON import
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJsonFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Importieren der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
     }
 
     ngAfterViewInit(): void {
@@ -841,5 +911,36 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         if (confirm('Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.')) {
             this.store.dispatch(MeasurementActions.discardOldestStart());
         }
+    }
+
+    exportMeasurements(): void {
+        this.store.dispatch(MeasurementActions.exportMeasurements());
+    }
+
+    triggerJsonImport(): void {
+        this.jsonImportInput().nativeElement.value = '';
+        this.jsonImportInput().nativeElement.click();
+    }
+
+    onJsonFileSelected(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const content = e.target?.result as string;
+                const measurements = JSON.parse(content);
+                if (!Array.isArray(measurements)) {
+                    this.snackBar.open('Ungültiges JSON-Format: Array erwartet', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
+                    return;
+                }
+                this.store.dispatch(MeasurementActions.importMeasurementsFromJson({measurements}));
+            } catch {
+                this.snackBar.open('Fehler beim Lesen der JSON-Datei', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
+            }
+        };
+        reader.readAsText(file);
     }
 }

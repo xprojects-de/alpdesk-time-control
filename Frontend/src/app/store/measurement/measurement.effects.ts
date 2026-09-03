@@ -201,6 +201,42 @@ export class MeasurementEffects {
         )
     );
 
+    exportMeasurements$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurements),
+            mergeMap(() =>
+                this.measurementService.exportMeasurements().pipe(
+                    map(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'measurements.json';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        return MeasurementActions.exportMeasurementsSuccess();
+                    }),
+                    catchError(error => of(MeasurementActions.exportMeasurementsFailure({
+                        error: error.message || 'Export fehlgeschlagen'
+                    })))
+                )
+            )
+        )
+    );
+
+    importMeasurementsFromJson$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJson),
+            mergeMap(({measurements}) =>
+                this.measurementService.importMeasurementsFromJson(measurements).pipe(
+                    map(created => MeasurementActions.importMeasurementsFromJsonSuccess({count: created.length})),
+                    catchError(error => of(MeasurementActions.importMeasurementsFromJsonFailure({
+                        error: error.message || 'Import fehlgeschlagen'
+                    })))
+                )
+            )
+        )
+    );
+
     // Device connection polling
     startDeviceConnectionPolling$ = createEffect(() =>
         this.actions$.pipe(

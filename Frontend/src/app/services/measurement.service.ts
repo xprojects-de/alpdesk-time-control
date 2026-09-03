@@ -81,6 +81,14 @@ export class MeasurementService {
         });
     }
 
+    exportMeasurements(): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export`, {responseType: 'blob'});
+    }
+
+    importMeasurementsFromJson(measurements: { participantId: number | null; durationMs: number; measuredAt: string }[]): Observable<Measurement[]> {
+        return this.http.post<Measurement[]>(`${this.apiUrl}/import-json`, measurements);
+    }
+
     checkDeviceConnection(): Observable<boolean> {
         return new Observable<boolean>(observer => {
             this.http.get(`${this.apiUrl}/device-connection`, {
