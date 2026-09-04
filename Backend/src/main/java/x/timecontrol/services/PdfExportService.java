@@ -287,8 +287,9 @@ public class PdfExportService {
                 .sorted(Comparator.comparing(Participant::durationMs))
                 .toList();
 
-        // Create ranking entries with place and time difference to the previous participant
+        // Create ranking entries with place and time difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
+        Integer leaderTimeMs = sortedParticipants.isEmpty() ? null : sortedParticipants.get(0).durationMs();
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
             Participant p = sortedParticipants.get(i);
@@ -296,7 +297,7 @@ public class PdfExportService {
             String name = formatName(p);
             String ageGroup = calculateAgeGroup(p.birthDate());
             Integer timeMs = p.durationMs();
-            Integer diffMs = (i > 0) ? timeMs - sortedParticipants.get(i - 1).durationMs() : null;
+            Integer diffMs = (i > 0) ? timeMs - leaderTimeMs : null;
 
             entries.add(new RankingEntry(i + 1, name, ageGroup, timeMs, diffMs));
         }
