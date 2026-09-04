@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["src/app/components/participant-list/participant-dialog.component.ts"],
-  "sourcesContent": ["\n          .participant-form {\n            display: flex;\n            flex-direction: column;\n            gap: 16px;\n            min-width: 400px;\n            margin-top: 16px;\n          }\n\n          mat-form-field {\n            width: 100%;\n          }\n        "],
-  "mappings": ";AACU,CAAA;AACE,WAAA;AACA,kBAAA;AACA,OAAA;AACA,aAAA;AACA,cAAA;;AAGF;AACE,SAAA;;",
-  "names": []
-}

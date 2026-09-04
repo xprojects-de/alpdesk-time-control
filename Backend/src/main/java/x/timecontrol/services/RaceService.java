@@ -38,7 +38,16 @@ public class RaceService {
             Race updated = new Race(
                     id,
                     race.name(),
-                    race.date()
+                    race.date(),
+                    race.organisation(),
+                    race.referee(),
+                    race.raceDirector(),
+                    race.timeControl(),
+                    race.routeName(),
+                    race.elevationDifference(),
+                    race.routeLength(),
+                    race.courseSetter(),
+                    race.weather()
             );
             return Optional.of(repository.update(updated));
         }
@@ -53,7 +62,16 @@ public class RaceService {
         return new Race(
                 null,
                 request.name(),
-                request.date()
+                request.date(),
+                request.organisation(),
+                request.referee(),
+                request.raceDirector(),
+                request.timeControl(),
+                request.routeName(),
+                request.elevationDifference(),
+                request.routeLength(),
+                request.courseSetter(),
+                request.weather()
         );
     }
 }

@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["src/app/components/measurement-list/measurement-dialog.component.ts"],
-  "sourcesContent": ["\n           .measurement-form {\n             display: flex;\n             flex-direction: column;\n             gap: 16px;\n             min-width: 400px;\n             margin-top: 16px;\n           }\n\n           .time-input-group {\n             display: flex;\n             gap: 12px;\n             width: 100%;\n           }\n\n           .time-input-group mat-form-field {\n             flex: 1;\n           }\n\n           mat-form-field {\n             width: 100%;\n           }\n         "],
-  "mappings": ";AACW,CAAA;AACE,WAAA;AACA,kBAAA;AACA,OAAA;AACA,aAAA;AACA,cAAA;;AAGF,CAAA;AACE,WAAA;AACA,OAAA;AACA,SAAA;;AAGF,CANA,iBAMA;AACE,QAAA;;AAGF;AACE,SAAA;;",
-  "names": []
-}

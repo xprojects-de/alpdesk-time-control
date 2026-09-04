@@ -66,6 +66,54 @@ import {Race, RaceRequest} from '../../models/race.model';
                         <mat-error>Datum ist erforderlich</mat-error>
                     }
                 </mat-form-field>
+
+                <h3 class="section-title">Zusatzinformationen (optional)</h3>
+                <div class="race-form-grid">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Veranstalter</mat-label>
+                        <input matInput formControlName="organisation"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Schiedsrichter</mat-label>
+                        <input matInput formControlName="referee"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Rennleiter</mat-label>
+                        <input matInput formControlName="raceDirector"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Zeitnahme</mat-label>
+                        <input matInput formControlName="timeControl"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Streckenname</mat-label>
+                        <input matInput formControlName="routeName"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Höhendifferenz</mat-label>
+                        <input matInput formControlName="elevationDifference" placeholder="z.B. 350 m"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Streckenlänge</mat-label>
+                        <input matInput formControlName="routeLength" placeholder="z.B. 1200 m"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Kurssetzer</mat-label>
+                        <input matInput formControlName="courseSetter"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Wetter</mat-label>
+                        <input matInput formControlName="weather"/>
+                    </mat-form-field>
+                </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -94,6 +142,19 @@ import {Race, RaceRequest} from '../../models/race.model';
            mat-form-field {
              width: 100%;
            }
+
+           .section-title {
+             margin: 0 0 -8px;
+             font-size: 14px;
+             font-weight: 500;
+             color: rgba(0, 0, 0, 0.6);
+           }
+
+           .race-form-grid {
+             display: grid;
+             grid-template-columns: 1fr 1fr;
+             gap: 0 16px;
+           }
          `,
      ],
 })
@@ -120,6 +181,15 @@ export class RaceDialogComponent {
         this.form = this.fb.group({
             name: [this.data?.name || '', Validators.required],
             date: [date, Validators.required],
+            organisation: [this.data?.organisation || ''],
+            referee: [this.data?.referee || ''],
+            raceDirector: [this.data?.raceDirector || ''],
+            timeControl: [this.data?.timeControl || ''],
+            routeName: [this.data?.routeName || ''],
+            elevationDifference: [this.data?.elevationDifference || ''],
+            routeLength: [this.data?.routeLength || ''],
+            courseSetter: [this.data?.courseSetter || ''],
+            weather: [this.data?.weather || ''],
         });
     }
 
@@ -133,6 +203,15 @@ export class RaceDialogComponent {
             const race: RaceRequest = {
                 name: formValue.name,
                 date: this.formatDate(formValue.date),
+                organisation: formValue.organisation || undefined,
+                referee: formValue.referee || undefined,
+                raceDirector: formValue.raceDirector || undefined,
+                timeControl: formValue.timeControl || undefined,
+                routeName: formValue.routeName || undefined,
+                elevationDifference: formValue.elevationDifference || undefined,
+                routeLength: formValue.routeLength || undefined,
+                courseSetter: formValue.courseSetter || undefined,
+                weather: formValue.weather || undefined,
             };
             this.dialogRef.close(race);
         }

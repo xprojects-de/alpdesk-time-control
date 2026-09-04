@@ -12,7 +12,33 @@ public record RaceRequest(
         String name,
 
         @Schema(description = "Date of the race", example = "2026-01-15", requiredMode = Schema.RequiredMode.REQUIRED)
-        LocalDate date
+        LocalDate date,
+
+        @Schema(description = "Organisation hosting the race", example = "Skiclub Musterhausen")
+        String organisation,
+
+        @Schema(description = "Referee of the race", example = "Max Mustermann")
+        String referee,
+
+        @Schema(description = "Race director", example = "Erika Musterfrau")
+        String raceDirector,
+
+        @Schema(description = "Timing provider/company", example = "TimeControl GmbH")
+        String timeControl,
+
+        @Schema(description = "Name of the race route", example = "Talabfahrt")
+        String routeName,
+
+        @Schema(description = "Elevation difference of the route", example = "350 m")
+        String elevationDifference,
+
+        @Schema(description = "Length of the route", example = "1200 m")
+        String routeLength,
+
+        @Schema(description = "Course setter", example = "Hans Kurssetzer")
+        String courseSetter,
+
+        @Schema(description = "Weather on race day", example = "Sunny, -3°C")
+        String weather
 ) {
 }
-

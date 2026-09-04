@@ -1,5 +1,6 @@
 package x.timecontrol.entities;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
@@ -14,7 +15,16 @@ public record Race(
         Long id,
 
         String name,
-        LocalDate date
+        LocalDate date,
+
+        @Nullable String organisation,
+        @Nullable String referee,
+        @Nullable String raceDirector,
+        @Nullable String timeControl,
+        @Nullable String routeName,
+        @Nullable String elevationDifference,
+        @Nullable String routeLength,
+        @Nullable String courseSetter,
+        @Nullable String weather
 ) {
 }
-
