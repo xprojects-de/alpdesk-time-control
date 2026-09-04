@@ -109,6 +109,14 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                             </th>
                             <td mat-cell *matCellDef="let r">{{ r.label }}</td>
                         </ng-container>
+                        <ng-container matColumnDef="time1Ms">
+                            <th mat-header-cell *matHeaderCellDef>Zeit 1</th>
+                            <td mat-cell *matCellDef="let r">{{ formatDuration(r.time1Ms) }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="time2Ms">
+                            <th mat-header-cell *matHeaderCellDef>Zeit 2</th>
+                            <td mat-cell *matCellDef="let r">{{ formatDuration(r.time2Ms) }}</td>
+                        </ng-container>
                         <ng-container matColumnDef="valueMs">
                             <th mat-header-cell *matHeaderCellDef>
                                 {{ gaudiMode.type === gaudiModeType.LOS ? 'Ø-Zeit Paar' : 'Gesamtzeit' }}
@@ -174,7 +182,7 @@ export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
 
     ngOnChanges(): void {
         this.rankingColumns = this.gaudiMode.type === GaudiModeType.LOS
-            ? ["place", "label", "valueMs", "referenceMs", "diffMs"]
+            ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
             : ["place", "label", "valueMs"];
 
         if (this.gaudiMode.type === GaudiModeType.LOS) {

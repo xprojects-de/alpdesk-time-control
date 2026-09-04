@@ -56,7 +56,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
 
         double overallAverage = allTimes.stream().mapToInt(Integer::intValue).average().orElse(0);
 
-        record PairResult(String label, double pairAverage, double diff) {
+        record PairResult(String label, Integer time1Ms, Integer time2Ms, double pairAverage, double diff) {
         }
 
         List<PairResult> results = new ArrayList<>();
@@ -80,7 +80,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     ? formatName(p1) + " & " + formatName(p2)
                     : formatName(p1) + " (Einzel)";
 
-            results.add(new PairResult(label, pairAverage, Math.abs(pairAverage - overallAverage)));
+            results.add(new PairResult(
+                    label,
+                    p1.durationMs(),
+                    p2 != null ? p2.durationMs() : null,
+                    pairAverage,
+                    Math.abs(pairAverage - overallAverage)
+            ));
         }
 
         results.sort(Comparator.comparingDouble(PairResult::diff));
@@ -91,6 +97,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
             entries.add(new GaudiRankingEntryResponse(
                     i + 1,
                     r.label(),
+                    r.time1Ms(),
+                    r.time2Ms(),
                     (int) Math.round(r.pairAverage()),
                     (int) Math.round(overallAverage),
                     (int) Math.round(r.diff())

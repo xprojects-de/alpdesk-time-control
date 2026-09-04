@@ -35,6 +35,8 @@ export interface GaudiLosPairing {
 export interface GaudiRankingEntry {
     place: number;
     label: string;
+    time1Ms?: number;
+    time2Ms?: number;
     valueMs?: number;
     referenceMs?: number;
     diffMs?: number;

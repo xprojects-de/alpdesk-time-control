@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 @Singleton
@@ -108,7 +109,7 @@ public class PdfExportService {
                         contentStream = new PDPageContentStream(document, page);
                         
                         // Draw header with race name and date
-                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                     }
 
                     // Add some spacing between rankings
@@ -168,7 +169,7 @@ public class PdfExportService {
                             contentStream = new PDPageContentStream(document, page);
                             
                             // Draw header with race name and date
-                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                             yPosition -= 10;
                             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                         }
@@ -227,7 +228,7 @@ public class PdfExportService {
                         contentStream = new PDPageContentStream(document, page);
                         
                         // Draw header with race name and date
-                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                     }
 
                     // Add some spacing between rankings
@@ -287,7 +288,7 @@ public class PdfExportService {
                             contentStream = new PDPageContentStream(document, page);
                             
                             // Draw header with race name and date
-                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                             yPosition -= 10;
                             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                         }
@@ -438,7 +439,7 @@ public class PdfExportService {
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
             // Draw page header with race name and date
-            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
 
             // Title - smaller font
             yPosition -= 10;
@@ -504,7 +505,7 @@ public class PdfExportService {
                     contentStream = new PDPageContentStream(document, page);
                     
                     // Draw header on new page
-                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                     yPosition -= 10;
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                 }
@@ -548,7 +549,7 @@ public class PdfExportService {
                 contentStream = new PDPageContentStream(document, page);
                 
                 // Draw header on new page
-                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                 yPosition -= 10;
             }
 
@@ -568,112 +569,83 @@ public class PdfExportService {
     }
 
 
+    private record GaudiPdfColumn(String header, float widthWeight, Function<GaudiRankingEntryResponse, String> valueFn) {
+    }
+
     public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
-        String[] headers = {"Platz", "Paarung", "Ø-Zeit Paar", "Ø-Zeit Gesamt", "Abweichung"};
-        return generateGaudiPdf(title, headers, entries, race, true);
+        List<GaudiPdfColumn> columns = List.of(
+                new GaudiPdfColumn("Platz", 0.6f, e -> String.valueOf(e.place())),
+                new GaudiPdfColumn("Paarung", 2.5f, GaudiRankingEntryResponse::label),
+                new GaudiPdfColumn("Zeit 1", 1f, e -> formatTime(e.time1Ms())),
+                new GaudiPdfColumn("Zeit 2", 1f, e -> formatTime(e.time2Ms())),
+                new GaudiPdfColumn("Ø-Zeit Paar", 1f, e -> formatTime(e.valueMs())),
+                new GaudiPdfColumn("Ø-Zeit Gesamt", 1f, e -> formatTime(e.referenceMs())),
+                new GaudiPdfColumn("Abweichung", 1f, e -> formatTime(e.diffMs()))
+        );
+        return generateGaudiPdf(title, columns, entries, race, "Paare", true);
     }
 
     public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
-        String[] headers = {"Platz", "Mannschaft", "Gesamtzeit"};
-        return generateGaudiPdf(title, headers, entries, race, false);
+        List<GaudiPdfColumn> columns = List.of(
+                new GaudiPdfColumn("Platz", 0.6f, e -> String.valueOf(e.place())),
+                new GaudiPdfColumn("Mannschaft", 2.5f, GaudiRankingEntryResponse::label),
+                new GaudiPdfColumn("Gesamtzeit", 1f, e -> formatTime(e.valueMs()))
+        );
+        return generateGaudiPdf(title, columns, entries, race, "Mannschaften", false);
     }
 
-    private byte[] generateGaudiPdf(String title, String[] headers, List<GaudiRankingEntryResponse> entries,
-                                     Race race, boolean withDiff) throws IOException {
+    private byte[] generateGaudiPdf(String title, List<GaudiPdfColumn> columns, List<GaudiRankingEntryResponse> entries,
+                                     Race race, String unitLabel, boolean landscape) throws IOException {
+        PDRectangle pageSize = landscape
+                ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth())
+                : PDRectangle.A4;
+
         try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
+            PDPage page = new PDPage(pageSize);
             document.addPage(page);
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
-            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+            float margin = 50;
+            float usableWidth = page.getMediaBox().getWidth() - margin * 2;
+            float totalWeight = (float) columns.stream().mapToDouble(GaudiPdfColumn::widthWeight).sum();
+            float[] colX = new float[columns.size()];
+            float x = margin;
+            for (int i = 0; i < columns.size(); i++) {
+                colX[i] = x;
+                x += usableWidth * columns.get(i).widthWeight() / totalWeight;
+            }
+
+            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
 
             yPosition -= 10;
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 14);
             contentStream.beginText();
-            contentStream.newLineAtOffset(50, yPosition);
+            contentStream.newLineAtOffset(margin, yPosition);
             contentStream.showText(title);
             contentStream.endText();
 
             yPosition -= 30;
-            float margin = 50;
-            float colPlatz = margin;
-            float colLabel = margin + 40;
-            float colValue = margin + 280;
-            float colRef = margin + 380;
-            float colDiff = margin + 470;
-
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colPlatz, yPosition);
-            contentStream.showText(headers[0]);
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colLabel, yPosition);
-            contentStream.showText(headers[1]);
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colValue, yPosition);
-            contentStream.showText(headers[2]);
-            contentStream.endText();
-
-            if (withDiff) {
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colRef, yPosition);
-                contentStream.showText(headers[3]);
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colDiff, yPosition);
-                contentStream.showText(headers[4]);
-                contentStream.endText();
-            }
-
-            yPosition -= 12;
-            contentStream.moveTo(margin, yPosition);
-            contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
-            contentStream.stroke();
+            yPosition = drawGaudiTableHeader(contentStream, columns, colX, yPosition, margin, page.getMediaBox().getWidth());
 
             contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-            yPosition -= 14;
 
             for (GaudiRankingEntryResponse entry : entries) {
                 if (yPosition < 50) {
                     contentStream.close();
-                    page = new PDPage(PDRectangle.A4);
+                    page = new PDPage(pageSize);
                     document.addPage(page);
                     contentStream = new PDPageContentStream(document, page);
 
-                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                     yPosition -= 10;
+                    yPosition = drawGaudiTableHeader(contentStream, columns, colX, yPosition, margin, page.getMediaBox().getWidth());
                     contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
                 }
 
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colPlatz, yPosition);
-                contentStream.showText(String.valueOf(entry.place()));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colLabel, yPosition);
-                contentStream.showText(truncate(entry.label(), 45));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colValue, yPosition);
-                contentStream.showText(formatTime(entry.valueMs()));
-                contentStream.endText();
-
-                if (withDiff) {
+                for (int i = 0; i < columns.size(); i++) {
                     contentStream.beginText();
-                    contentStream.newLineAtOffset(colRef, yPosition);
-                    contentStream.showText(formatTime(entry.referenceMs()));
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colDiff, yPosition);
-                    contentStream.showText(formatTime(entry.diffMs()));
+                    contentStream.newLineAtOffset(colX[i], yPosition);
+                    contentStream.showText(truncate(columns.get(i).valueFn().apply(entry), 40));
                     contentStream.endText();
                 }
 
@@ -683,18 +655,18 @@ public class PdfExportService {
             yPosition -= 10;
             if (yPosition < 50) {
                 contentStream.close();
-                page = new PDPage(PDRectangle.A4);
+                page = new PDPage(pageSize);
                 document.addPage(page);
                 contentStream = new PDPageContentStream(document, page);
 
-                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
                 yPosition -= 10;
             }
 
             contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Gesamt: " + entries.size() + (withDiff ? " Paare" : " Mannschaften"));
+            contentStream.showText("Gesamt: " + entries.size() + " " + unitLabel);
             contentStream.endText();
 
             contentStream.close();
@@ -703,6 +675,25 @@ public class PdfExportService {
             document.save(outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    private float drawGaudiTableHeader(PDPageContentStream contentStream, List<GaudiPdfColumn> columns, float[] colX,
+                                        float yPosition, float margin, float pageWidth) throws IOException {
+        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+        for (int i = 0; i < columns.size(); i++) {
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colX[i], yPosition);
+            contentStream.showText(columns.get(i).header());
+            contentStream.endText();
+        }
+
+        yPosition -= 12;
+        contentStream.moveTo(margin, yPosition);
+        contentStream.lineTo(pageWidth - margin, yPosition);
+        contentStream.stroke();
+        yPosition -= 14;
+
+        return yPosition;
     }
 
     private String truncate(String str, int maxLength) {
@@ -714,9 +705,9 @@ public class PdfExportService {
      * Draws a header with the race name and date at the top of the page
      * @return the Y position after the header
      */
-    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth) throws IOException {
+    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth, float pageHeight) throws IOException {
         float margin = 50;
-        float headerY = 820;
+        float headerY = pageHeight - 22;
         
         // Format the date as dd.MM.yyyy
         String formattedDate = "";

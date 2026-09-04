@@ -14,6 +14,14 @@ public record GaudiRankingEntryResponse(
         @Schema(description = "Human readable label for this entry (e.g. pairing of two names, or a team name)", example = "Doe John & Mustermann Max")
         String label,
 
+        @Nullable
+        @Schema(description = "Individual time of the first participant in milliseconds (Los-Modus only)", example = "120000", nullable = true)
+        Integer time1Ms,
+
+        @Nullable
+        @Schema(description = "Individual time of the second participant in milliseconds (Los-Modus only, null for a self-paired leftover)", example = "130000", nullable = true)
+        Integer time2Ms,
+
         @Schema(description = "The computed metric for this entry in milliseconds (e.g. pair average time, or team total time)", example = "125000")
         Integer valueMs,
 

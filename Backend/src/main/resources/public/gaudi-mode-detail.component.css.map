@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["src/app/components/gaudi-modus/gaudi-mode-detail.component.ts"],
+  "sourcesContent": ["\n          .detail-card {\n            margin-top: 20px;\n          }\n\n          .section-actions {\n            display: flex;\n            gap: 10px;\n            margin: 16px 0;\n          }\n\n          .detail-table {\n            width: 100%;\n            margin-bottom: 16px;\n          }\n\n          .hint {\n            color: rgba(0, 0, 0, 0.6);\n            font-style: italic;\n          }\n        "],
+  "mappings": ";AACU,CAAA;AACE,cAAA;;AAGF,CAAA;AACE,WAAA;AACA,OAAA;AACA,UAAA,KAAA;;AAGF,CAAA;AACE,SAAA;AACA,iBAAA;;AAGF,CAAA;AACE,SAAA,KAAA,CAAA,EAAA,CAAA,EAAA,CAAA,EAAA;AACA,cAAA;;",
+  "names": []
+}

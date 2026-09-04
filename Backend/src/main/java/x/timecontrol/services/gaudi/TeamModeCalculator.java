@@ -73,6 +73,8 @@ public class TeamModeCalculator implements GaudiModeCalculator {
             ranking.add(new GaudiRankingEntryResponse(
                     i + 1,
                     r.label(),
+                    null,
+                    null,
                     (int) r.totalMs(),
                     null,
                     null
