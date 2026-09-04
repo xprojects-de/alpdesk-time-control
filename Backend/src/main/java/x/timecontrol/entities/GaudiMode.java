@@ -5,28 +5,22 @@ import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @MappedEntity
-public record Participant(
+public record GaudiMode(
 
         @Id
         @GeneratedValue
         Long id,
 
         Long raceId,
+        GaudiModeType type,
+        String name,
 
-        String firstName,
-        String lastName,
-        LocalDate birthDate,
-        Gender gender,
-        Integer raceNumber,
         @Nullable
-        Long teamId,
-        @Nullable
-        Integer durationMs,
-        @Nullable
-        LocalDateTime measuredAt
+        Integer teamSize,
+
+        LocalDateTime createdAt
 ) {
 }

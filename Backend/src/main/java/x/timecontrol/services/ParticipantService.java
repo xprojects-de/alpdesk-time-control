@@ -2,6 +2,7 @@ package x.timecontrol.services;
 
 import x.timecontrol.dto.AgeGroupResponse;
 import x.timecontrol.dto.RaceResponse;
+import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.ParticipantRepository;
@@ -15,11 +16,13 @@ public class ParticipantService {
     private final ParticipantRepository repository;
     private final AgeGroupService ageGroupService;
     private final RaceService raceService;
+    private final TeamService teamService;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
+        this.teamService = teamService;
     }
 
     public Participant create(Participant participant) {
@@ -38,7 +41,7 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
-            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.association(), participant.durationMs(), participant.measuredAt());
+            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.teamId(), participant.durationMs(), participant.measuredAt());
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
@@ -54,6 +57,14 @@ public class ParticipantService {
         }
         return raceService.findById(participant.raceId())
                 .map(RaceResponse::from);
+    }
+
+    public Optional<TeamResponse> findTeamForParticipant(Participant participant) {
+        if (participant.teamId() == null) {
+            return Optional.empty();
+        }
+        return teamService.findById(participant.teamId())
+                .map(TeamResponse::from);
     }
 
     public Optional<AgeGroupResponse> findAgeGroupForParticipant(Participant participant) {

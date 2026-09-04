@@ -53,8 +53,9 @@ public class ParticipantController {
         List<ParticipantResponse> response = StreamSupport.stream(participants.spliterator(), false)
                 .map(participant -> {
                     var race = service.findRaceForParticipant(participant).orElse(null);
+                    var team = service.findTeamForParticipant(participant).orElse(null);
                     var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
-                    return ParticipantResponse.from(participant, race, ageGroup);
+                    return ParticipantResponse.from(participant, race, team, ageGroup);
                 })
                 .toList();
         return HttpResponse.ok(response);
@@ -69,8 +70,9 @@ public class ParticipantController {
         Optional<Participant> participant = service.findById(id);
         return participant.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
+            var team = service.findTeamForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, team, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -81,11 +83,12 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.durationMs(), request.measuredAt());
         Participant created = service.create(participant);
         var race = service.findRaceForParticipant(created).orElse(null);
+        var team = service.findTeamForParticipant(created).orElse(null);
         var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
-        return HttpResponse.created(ParticipantResponse.from(created, race, ageGroup));
+        return HttpResponse.created(ParticipantResponse.from(created, race, team, ageGroup));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -96,12 +99,13 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.association(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.durationMs(), request.measuredAt());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
+            var team = service.findTeamForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, team, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 

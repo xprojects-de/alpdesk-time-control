@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
@@ -566,6 +567,143 @@ public class PdfExportService {
         }
     }
 
+
+    public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+        String[] headers = {"Platz", "Paarung", "Ø-Zeit Paar", "Ø-Zeit Gesamt", "Abweichung"};
+        return generateGaudiPdf(title, headers, entries, race, true);
+    }
+
+    public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+        String[] headers = {"Platz", "Mannschaft", "Gesamtzeit"};
+        return generateGaudiPdf(title, headers, entries, race, false);
+    }
+
+    private byte[] generateGaudiPdf(String title, String[] headers, List<GaudiRankingEntryResponse> entries,
+                                     Race race, boolean withDiff) throws IOException {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDPageContentStream contentStream = new PDPageContentStream(document, page);
+
+            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+
+            yPosition -= 10;
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 14);
+            contentStream.beginText();
+            contentStream.newLineAtOffset(50, yPosition);
+            contentStream.showText(title);
+            contentStream.endText();
+
+            yPosition -= 30;
+            float margin = 50;
+            float colPlatz = margin;
+            float colLabel = margin + 40;
+            float colValue = margin + 280;
+            float colRef = margin + 380;
+            float colDiff = margin + 470;
+
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colPlatz, yPosition);
+            contentStream.showText(headers[0]);
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colLabel, yPosition);
+            contentStream.showText(headers[1]);
+            contentStream.endText();
+
+            contentStream.beginText();
+            contentStream.newLineAtOffset(colValue, yPosition);
+            contentStream.showText(headers[2]);
+            contentStream.endText();
+
+            if (withDiff) {
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colRef, yPosition);
+                contentStream.showText(headers[3]);
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colDiff, yPosition);
+                contentStream.showText(headers[4]);
+                contentStream.endText();
+            }
+
+            yPosition -= 12;
+            contentStream.moveTo(margin, yPosition);
+            contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
+            contentStream.stroke();
+
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+            yPosition -= 14;
+
+            for (GaudiRankingEntryResponse entry : entries) {
+                if (yPosition < 50) {
+                    contentStream.close();
+                    page = new PDPage(PDRectangle.A4);
+                    document.addPage(page);
+                    contentStream = new PDPageContentStream(document, page);
+
+                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                    yPosition -= 10;
+                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
+                }
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colPlatz, yPosition);
+                contentStream.showText(String.valueOf(entry.place()));
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colLabel, yPosition);
+                contentStream.showText(truncate(entry.label(), 45));
+                contentStream.endText();
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(colValue, yPosition);
+                contentStream.showText(formatTime(entry.valueMs()));
+                contentStream.endText();
+
+                if (withDiff) {
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colRef, yPosition);
+                    contentStream.showText(formatTime(entry.referenceMs()));
+                    contentStream.endText();
+
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(colDiff, yPosition);
+                    contentStream.showText(formatTime(entry.diffMs()));
+                    contentStream.endText();
+                }
+
+                yPosition -= 12;
+            }
+
+            yPosition -= 10;
+            if (yPosition < 50) {
+                contentStream.close();
+                page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+                contentStream = new PDPageContentStream(document, page);
+
+                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                yPosition -= 10;
+            }
+
+            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
+            contentStream.beginText();
+            contentStream.newLineAtOffset(margin, yPosition);
+            contentStream.showText("Gesamt: " + entries.size() + (withDiff ? " Paare" : " Mannschaften"));
+            contentStream.endText();
+
+            contentStream.close();
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            document.save(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
 
     private String truncate(String str, int maxLength) {
         if (str == null) return "";

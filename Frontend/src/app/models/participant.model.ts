@@ -1,6 +1,7 @@
 import {Gender} from './gender.model';
 import {AgeGroup} from './age-group.model';
 import {Race} from './race.model';
+import {Team} from './team.model';
 
 export interface Participant {
     id: number;
@@ -10,7 +11,7 @@ export interface Participant {
     birthDate: string;
     gender: Gender;
     raceNumber: number;
-    association?: string;
+    team?: Team;
     ageGroup?: AgeGroup;
     durationMs?: number;
     measuredAt?: string;
@@ -23,6 +24,6 @@ export interface ParticipantRequest {
     birthDate: string;
     gender: Gender;
     raceNumber: number;
-    association?: string;
+    teamId?: number;
 }
 

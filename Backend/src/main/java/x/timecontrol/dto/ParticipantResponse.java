@@ -35,8 +35,8 @@ public record ParticipantResponse(
         Integer raceNumber,
 
         @Nullable
-        @Schema(description = "Association of the participant", example = "Marathon Club")
-        String association,
+        @Schema(description = "Team the participant belongs to", nullable = true)
+        TeamResponse team,
 
         @Nullable
         @Schema(description = "Age group of the participant based on birth date", nullable = true)
@@ -59,14 +59,14 @@ public record ParticipantResponse(
                 participant.birthDate(),
                 participant.gender(),
                 participant.raceNumber(),
-                participant.association(),
+                null,
                 null,
                 participant.durationMs(),
                 participant.measuredAt()
         );
     }
 
-    public static ParticipantResponse from(Participant participant, RaceResponse race, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, RaceResponse race, TeamResponse team, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),
                 race,
@@ -75,7 +75,7 @@ public record ParticipantResponse(
                 participant.birthDate(),
                 participant.gender(),
                 participant.raceNumber(),
-                participant.association(),
+                team,
                 ageGroup,
                 participant.durationMs(),
                 participant.measuredAt()

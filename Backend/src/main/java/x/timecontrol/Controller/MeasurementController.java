@@ -328,7 +328,7 @@ public class MeasurementController {
                             participant.birthDate(),
                             participant.gender(),
                             participant.raceNumber(),
-                            participant.association(),
+                            participant.teamId(),
                             measurement.durationMs(),
                             measurement.measuredAt()
                         );

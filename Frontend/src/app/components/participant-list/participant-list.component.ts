@@ -208,11 +208,11 @@ import {takeUntil, take} from "rxjs/operators";
                         </td>
                     </ng-container>
 
-                    <!-- Association Column -->
-                    <ng-container matColumnDef="association">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Verein</th>
+                    <!-- Team Column -->
+                    <ng-container matColumnDef="team">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Team</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.association || "-" }}
+                            {{ participant.team?.name || "-" }}
                         </td>
                     </ng-container>
 
@@ -354,7 +354,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "birthDate",
         "gender",
         "raceNumber",
-        "association",
+        "team",
         "ageGroup",
         "race",
         "durationMs",

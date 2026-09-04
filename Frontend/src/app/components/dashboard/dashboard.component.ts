@@ -12,6 +12,8 @@ import {RaceListComponent} from "../race-list/race-list.component";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
 import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
+import {TeamListComponent} from "../team-list/team-list.component";
+import {GaudiModusComponent} from "../gaudi-modus/gaudi-modus.component";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -32,6 +34,8 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
         ParticipantListComponent,
         MeasurementListComponent,
         AgeGroupListComponent,
+        TeamListComponent,
+        GaudiModusComponent,
     ],
     template: `
         <mat-toolbar color="primary">
@@ -86,8 +90,14 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
                 <mat-tab label="Teilnehmer">
                     <app-participant-list/>
                 </mat-tab>
+                <mat-tab label="Teams">
+                    <app-team-list/>
+                </mat-tab>
                 <mat-tab label="Messungen">
                     <app-measurement-list/>
+                </mat-tab>
+                <mat-tab label="Gaudi-Modus">
+                    <app-gaudi-modus/>
                 </mat-tab>
             </mat-tab-group>
         </div>

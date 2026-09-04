@@ -30,8 +30,8 @@ public record ParticipantRequest(
         Integer raceNumber,
 
         @Nullable
-        @Schema(description = "Association of the participant", example = "Marathon Club", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        String association,
+        @Schema(description = "ID of the team the participant belongs to", example = "1", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Long teamId,
 
         @Nullable
         @Schema(description = "Duration of the race in milliseconds", example = "125000", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
