@@ -3,6 +3,8 @@ import {
     OnChanges,
     OnDestroy,
     Input,
+    Output,
+    EventEmitter,
     inject,
     ChangeDetectionStrategy,
 } from "@angular/core";
@@ -40,14 +42,19 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
     ],
     template: `
         <mat-card class="detail-card">
-            <mat-card-header>
-                <mat-card-title>{{ gaudiMode.name }}</mat-card-title>
-                <mat-card-subtitle>
-                    {{ gaudiMode.type === gaudiModeType.LOS ? 'Los-Modus' : 'Mannschaftswertung' }}
-                    @if (gaudiMode.type === gaudiModeType.TEAM) {
-                        &ndash; {{ gaudiMode.teamSize }} Teilnehmer pro Team
-                    }
-                </mat-card-subtitle>
+            <mat-card-header class="header-row">
+                <div>
+                    <mat-card-title>{{ gaudiMode.name }}</mat-card-title>
+                    <mat-card-subtitle>
+                        {{ gaudiMode.type === gaudiModeType.LOS ? 'Los-Modus' : 'Mannschaftswertung' }}
+                        @if (gaudiMode.type === gaudiModeType.TEAM) {
+                            &ndash; {{ gaudiMode.teamSize }} Teilnehmer pro Team
+                        }
+                    </mat-card-subtitle>
+                </div>
+                <button mat-icon-button (click)="close()" matTooltip="Schließen">
+                    <mat-icon>close</mat-icon>
+                </button>
             </mat-card-header>
             <mat-card-content>
 
@@ -147,6 +154,13 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
             margin-top: 20px;
           }
 
+          .header-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            width: 100%;
+          }
+
           .section-actions {
             display: flex;
             gap: 10px;
@@ -171,6 +185,7 @@ export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
     private destroy$ = new Subject<void>();
 
     @Input({required: true}) gaudiMode!: GaudiMode;
+    @Output() closed = new EventEmitter<void>();
 
     gaudiModeType = GaudiModeType;
     pairingColumns = ["participant1", "participant2"];
@@ -193,6 +208,10 @@ export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    close(): void {
+        this.closed.emit();
     }
 
     draw(): void {

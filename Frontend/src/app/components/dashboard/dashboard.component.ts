@@ -87,11 +87,11 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
                 <mat-tab label="Rennen">
                     <app-race-list/>
                 </mat-tab>
-                <mat-tab label="Teilnehmer">
-                    <app-participant-list/>
-                </mat-tab>
                 <mat-tab label="Teams">
                     <app-team-list/>
+                </mat-tab>
+                <mat-tab label="Teilnehmer">
+                    <app-participant-list/>
                 </mat-tab>
                 <mat-tab label="Messungen">
                     <app-measurement-list/>

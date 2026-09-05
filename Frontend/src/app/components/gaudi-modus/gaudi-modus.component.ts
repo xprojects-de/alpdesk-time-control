@@ -94,10 +94,17 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                     <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                         <td mat-cell *matCellDef="let gm">
-                            <button mat-raised-button (click)="selectGaudiMode(gm)" matTooltip="Anzeigen">
-                                <mat-icon>visibility</mat-icon>
-                                Anzeigen
-                            </button>
+                            @if ((selectedGaudiModeId$ | async) === gm.id) {
+                                <button mat-raised-button (click)="closeDetail()" matTooltip="Ausblenden">
+                                    <mat-icon>visibility_off</mat-icon>
+                                    Ausblenden
+                                </button>
+                            } @else {
+                                <button mat-raised-button (click)="selectGaudiMode(gm)" matTooltip="Anzeigen">
+                                    <mat-icon>visibility</mat-icon>
+                                    Anzeigen
+                                </button>
+                            }
                             <button mat-icon-button color="warn" (click)="deleteGaudiMode(gm)" matTooltip="Löschen">
                                 <mat-icon>delete</mat-icon>
                             </button>
@@ -109,7 +116,7 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                 </table>
 
                 @if (selectedGaudiMode$ | async; as selected) {
-                    <app-gaudi-mode-detail [gaudiMode]="selected"/>
+                    <app-gaudi-mode-detail [gaudiMode]="selected" (closed)="closeDetail()"/>
                 }
             </mat-card-content>
         </mat-card>
@@ -155,6 +162,7 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     filteredGaudiModes$: Observable<GaudiMode[]>;
     selectedGaudiMode$: Observable<GaudiMode | null>;
+    selectedGaudiModeId$: Observable<number | null>;
     loading$: Observable<boolean>;
 
     displayedColumns = ["name", "type", "teamSize", "actions"];
@@ -164,6 +172,7 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(GaudiModeSelectors.selectGaudiModeLoading);
         this.selectedGaudiMode$ = this.store.select(GaudiModeSelectors.selectSelectedGaudiMode);
+        this.selectedGaudiModeId$ = this.store.select(GaudiModeSelectors.selectSelectedGaudiModeId);
         this.filteredGaudiModes$ = this.store.select(
             GaudiModeSelectors.selectGaudiModesByRace(null)
         );
@@ -216,6 +225,10 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
 
     selectGaudiMode(gaudiMode: GaudiMode): void {
         this.store.dispatch(GaudiModeActions.selectGaudiMode({id: gaudiMode.id}));
+    }
+
+    closeDetail(): void {
+        this.store.dispatch(GaudiModeActions.selectGaudiMode({id: null}));
     }
 
     deleteGaudiMode(gaudiMode: GaudiMode): void {
