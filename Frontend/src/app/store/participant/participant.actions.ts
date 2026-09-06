@@ -1,5 +1,6 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
+import {ParticipantImportResponse} from '../../models/participant-import.model';
 
 // Load all participants
 export const loadParticipants = createAction('[Participant] Load Participants');
@@ -99,6 +100,20 @@ export const assignRaceNumbersSuccess = createAction(
 );
 export const assignRaceNumbersFailure = createAction(
     '[Participant] Assign Race Numbers Failure',
+    props<{ error: string }>()
+);
+
+// Import participants from CSV
+export const importParticipantsCsv = createAction(
+    '[Participant] Import Participants CSV',
+    props<{ raceId: number; file: File }>()
+);
+export const importParticipantsCsvSuccess = createAction(
+    '[Participant] Import Participants CSV Success',
+    props<{ result: ParticipantImportResponse }>()
+);
+export const importParticipantsCsvFailure = createAction(
+    '[Participant] Import Participants CSV Failure',
     props<{ error: string }>()
 );
 

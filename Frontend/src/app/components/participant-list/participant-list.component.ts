@@ -119,6 +119,27 @@ import {takeUntil, take} from "rxjs/operators";
                             <mat-icon>picture_as_pdf</mat-icon>
                             Startliste (PDF)
                         </button>
+
+                        <button
+                                mat-raised-button
+                                (click)="fileInput.click()"
+                                [disabled]="importLoading$ | async"
+                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender)"
+                        >
+                            @if (importLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>upload_file</mat-icon>
+                            }
+                            CSV Import
+                        </button>
+                        <input
+                                #fileInput
+                                type="file"
+                                accept=".csv,text/csv"
+                                hidden
+                                (change)="onCsvFileSelected($event)"
+                        />
                     }
 
                     <button
@@ -396,6 +417,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
+    importLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
         "firstName",
@@ -428,6 +450,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.pdfExportLoading$ = this.store.select(
             ParticipantSelectors.selectPdfExportLoading,
         );
+        this.importLoading$ = this.store.select(
+            ParticipantSelectors.selectImportLoading,
+        );
 
         // Setup sort when signal changes
         effect(() => {
@@ -458,6 +483,25 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe((participants) => {
                 this.dataSource.data = participants;
+            });
+
+        this.store.select(ParticipantSelectors.selectImportResult)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (!result) {
+                    return;
+                }
+                this.snackBar.open(
+                    `CSV Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                    'OK',
+                    {duration: 5000},
+                );
+                if (result.errors.length > 0) {
+                    const details = result.errors
+                        .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
+                        .join('\n');
+                    alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+                }
             });
     }
 
@@ -578,6 +622,30 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                         duration: 3000,
                     });
                 }
+            });
+    }
+
+    onCsvFileSelected(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+
+        if (!file) {
+            return;
+        }
+
+        this.selectedRaceId$
+            .pipe(take(1))
+            .subscribe((raceId) => {
+                if (!raceId) {
+                    this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                        duration: 5000,
+                        panelClass: ['error-snackbar'],
+                    });
+                    return;
+                }
+                this.store.dispatch(ParticipantActions.importParticipantsCsv({raceId, file}));
+                this.snackBar.open('CSV Import gestartet...', 'OK', {duration: 2000});
             });
     }
 

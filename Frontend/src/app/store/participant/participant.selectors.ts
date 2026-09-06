@@ -19,6 +19,16 @@ export const selectPdfExportLoading = createSelector(
     state => state.pdfExportLoading
 );
 
+export const selectImportLoading = createSelector(
+    selectParticipantState,
+    state => state.importLoading
+);
+
+export const selectImportResult = createSelector(
+    selectParticipantState,
+    state => state.importResult
+);
+
 export const selectParticipantError = createSelector(
     selectParticipantState,
     state => state.error

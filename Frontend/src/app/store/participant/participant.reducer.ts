@@ -1,5 +1,6 @@
 import {createReducer, on} from '@ngrx/store';
 import {Participant} from '../../models/participant.model';
+import {ParticipantImportResponse} from '../../models/participant-import.model';
 import * as ParticipantActions from './participant.actions';
 
 export interface ParticipantState {
@@ -7,6 +8,8 @@ export interface ParticipantState {
     selectedParticipantId: number | null;
     loading: boolean;
     pdfExportLoading: boolean;
+    importLoading: boolean;
+    importResult: ParticipantImportResponse | null;
     error: string | null;
 }
 
@@ -15,6 +18,8 @@ export const initialState: ParticipantState = {
     selectedParticipantId: null,
     loading: false,
     pdfExportLoading: false,
+    importLoading: false,
+    importResult: null,
     error: null
 };
 
@@ -146,6 +151,25 @@ export const participantReducer = createReducer(
     on(ParticipantActions.assignRaceNumbersFailure, (state, {error}) => ({
         ...state,
         loading: false,
+        error
+    })),
+
+    // Import participants from CSV
+    on(ParticipantActions.importParticipantsCsv, state => ({
+        ...state,
+        importLoading: true,
+        importResult: null,
+        error: null
+    })),
+    on(ParticipantActions.importParticipantsCsvSuccess, (state, {result}) => ({
+        ...state,
+        participants: [...state.participants, ...result.imported],
+        importLoading: false,
+        importResult: result
+    })),
+    on(ParticipantActions.importParticipantsCsvFailure, (state, {error}) => ({
+        ...state,
+        importLoading: false,
         error
     })),
 

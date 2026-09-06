@@ -2,6 +2,7 @@ import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Participant, ParticipantRequest} from '../models/participant.model';
+import {ParticipantImportResponse} from '../models/participant-import.model';
 import {environment} from '../../environments/environment';
 
 @Injectable({
@@ -38,6 +39,12 @@ export class ParticipantService {
 
     assignRaceNumbers(raceId: number): Observable<Participant[]> {
         return this.http.post<Participant[]>(`${this.apiUrl}/race/${raceId}/assign-race-numbers`, {});
+    }
+
+    importCsv(raceId: number, file: File): Observable<ParticipantImportResponse> {
+        const formData = new FormData();
+        formData.append('file', file);
+        return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, formData);
     }
 
     exportStartListToPdf(raceId: number): Observable<Blob> {

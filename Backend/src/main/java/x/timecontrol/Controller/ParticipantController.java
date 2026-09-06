@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.ParticipantImportResponse;
 import x.timecontrol.dto.ParticipantRequest;
 import x.timecontrol.dto.ParticipantResponse;
 import x.timecontrol.entities.Participant;
@@ -10,6 +11,7 @@ import x.timecontrol.services.RaceService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.http.multipart.CompletedFileUpload;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
@@ -152,6 +158,43 @@ public class ParticipantController {
                 })
                 .toList();
         return HttpResponse.ok(response);
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import/{raceId}")
+    @Operation(summary = "Import participants from CSV for a race",
+            description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender. " +
+                    "The header row is ignored. Teams are looked up case-insensitively and created (uppercased) if they " +
+                    "don't exist yet. Rows with a missing/invalid gender (only MALE or FEMALE are accepted) or an invalid " +
+                    "birthdate (expected yyyy-MM-dd) are skipped and reported in the response.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantImportResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "Import failed")
+    public HttpResponse<ParticipantImportResponse> importCsv(@PathVariable Long raceId, @Part("file") CompletedFileUpload file) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            ParticipantService.ParticipantImportResult result = service.importFromCsv(raceId, reader);
+
+            List<ParticipantResponse> imported = result.imported().stream()
+                    .map(p -> {
+                        var r = service.findRaceForParticipant(p).orElse(null);
+                        var team = service.findTeamForParticipant(p).orElse(null);
+                        var category = service.findCategoryForParticipant(p).orElse(null);
+                        var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
+                        return ParticipantResponse.from(p, r, team, category, ageGroup);
+                    })
+                    .toList();
+
+            return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
+        } catch (IOException e) {
+            return HttpResponse.serverError();
+        }
     }
 
     @Produces("application/pdf")

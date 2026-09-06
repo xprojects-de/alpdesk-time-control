@@ -2,6 +2,7 @@ package x.timecontrol.services;
 
 import x.timecontrol.dto.AgeGroupResponse;
 import x.timecontrol.dto.CategoryResponse;
+import x.timecontrol.dto.ParticipantImportRowError;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
@@ -9,7 +10,13 @@ import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.ParticipantRepository;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -22,6 +29,9 @@ import java.util.stream.StreamSupport;
 
 @Singleton
 public class ParticipantService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ParticipantService.class);
+    private static final int CSV_COLUMN_COUNT = 5;
 
     private final ParticipantRepository repository;
     private final AgeGroupService ageGroupService;
@@ -176,5 +186,89 @@ public class ParticipantService {
             result.add(repository.update(updated));
         }
         return result;
+    }
+
+    /**
+     * Imports participants for a race from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender.
+     * The header row is ignored. Teams are resolved case-insensitively and created (uppercased) if they don't
+     * exist yet. Rows with a missing or invalid gender (only MALE/FEMALE are accepted) or birthdate are skipped.
+     */
+    public ParticipantImportResult importFromCsv(Long raceId, BufferedReader reader) throws IOException {
+        List<Participant> imported = new ArrayList<>();
+        List<ParticipantImportRowError> errors = new ArrayList<>();
+
+        String line;
+        int lineNumber = 0;
+
+        while ((line = reader.readLine()) != null) {
+            lineNumber++;
+
+            if (lineNumber == 1) {
+                continue;
+            }
+
+            String trimmedLine = line.trim();
+            if (trimmedLine.isEmpty()) {
+                continue;
+            }
+
+            String[] parts = trimmedLine.split(",", -1);
+            if (parts.length < CSV_COLUMN_COUNT) {
+                errors.add(new ParticipantImportRowError(lineNumber, line,
+                        "Expected " + CSV_COLUMN_COUNT + " columns (Lastname,Firstname,Birthdate,Team,Gender)"));
+                continue;
+            }
+
+            String lastName = parts[0].trim();
+            String firstName = parts[1].trim();
+            String birthDateRaw = parts[2].trim();
+            String teamName = parts[3].trim();
+            String genderRaw = parts[4].trim();
+
+            if (lastName.isEmpty() || firstName.isEmpty()) {
+                errors.add(new ParticipantImportRowError(lineNumber, line, "Lastname and Firstname are required"));
+                continue;
+            }
+
+            Gender gender = parseGender(genderRaw);
+            if (gender == null) {
+                errors.add(new ParticipantImportRowError(lineNumber, line,
+                        "Missing or invalid gender (expected MALE or FEMALE), row skipped"));
+                continue;
+            }
+
+            LocalDate birthDate;
+            try {
+                birthDate = LocalDate.parse(birthDateRaw);
+            } catch (DateTimeParseException e) {
+                errors.add(new ParticipantImportRowError(lineNumber, line, "Invalid birthdate format (expected yyyy-MM-dd)"));
+                continue;
+            }
+
+            Long teamId = teamName.isEmpty() ? null : teamService.findOrCreateByName(teamName).id();
+
+            Participant participant = new Participant(null, raceId, firstName, lastName, birthDate, gender,
+                    null, teamId, null, null, null);
+            imported.add(repository.save(participant));
+        }
+
+        LOG.info("CSV import for race {} finished: {} imported, {} skipped", raceId, imported.size(), errors.size());
+
+        return new ParticipantImportResult(imported, errors);
+    }
+
+    private Gender parseGender(String rawGender) {
+        if (rawGender.isEmpty()) {
+            return null;
+        }
+        try {
+            Gender gender = Gender.valueOf(rawGender.toUpperCase());
+            return gender == Gender.MALE || gender == Gender.FEMALE ? gender : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public record ParticipantImportResult(List<Participant> imported, List<ParticipantImportRowError> errors) {
     }
 }

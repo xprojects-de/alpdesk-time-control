@@ -48,4 +48,13 @@ public class TeamService {
     public Team createFromRequest(TeamRequest request) {
         return new Team(null, request.name());
     }
+
+    /**
+     * Finds a team by name (case-insensitive), creating it with an uppercased name if it does not exist yet.
+     */
+    public Team findOrCreateByName(String name) {
+        String normalized = name.trim().toUpperCase();
+        return repository.findByNameIgnoreCase(normalized)
+                .orElseGet(() -> repository.save(new Team(null, normalized)));
+    }
 }

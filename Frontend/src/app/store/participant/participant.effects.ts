@@ -108,6 +108,20 @@ export class ParticipantEffects {
         )
     );
 
+    importParticipantsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsCsv),
+            mergeMap(({raceId, file}) =>
+                this.participantService.importCsv(raceId, file).pipe(
+                    map(result => ParticipantActions.importParticipantsCsvSuccess({result})),
+                    catchError(error => of(ParticipantActions.importParticipantsCsvFailure({
+                        error: error.message || 'Failed to import participants'
+                    })))
+                )
+            )
+        )
+    );
+
     exportStartListPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.exportStartListPdf),
