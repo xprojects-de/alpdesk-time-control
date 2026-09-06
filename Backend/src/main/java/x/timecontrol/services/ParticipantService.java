@@ -1,6 +1,7 @@
 package x.timecontrol.services;
 
 import x.timecontrol.dto.AgeGroupResponse;
+import x.timecontrol.dto.CategoryResponse;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
@@ -17,12 +18,14 @@ public class ParticipantService {
     private final AgeGroupService ageGroupService;
     private final RaceService raceService;
     private final TeamService teamService;
+    private final CategoryService categoryService;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
         this.teamService = teamService;
+        this.categoryService = categoryService;
     }
 
     public Participant create(Participant participant) {
@@ -41,7 +44,7 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
-            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.teamId(), participant.durationMs(), participant.measuredAt());
+            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.teamId(), participant.categoryId(), participant.durationMs(), participant.measuredAt());
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
@@ -65,6 +68,14 @@ public class ParticipantService {
         }
         return teamService.findById(participant.teamId())
                 .map(TeamResponse::from);
+    }
+
+    public Optional<CategoryResponse> findCategoryForParticipant(Participant participant) {
+        if (participant.categoryId() == null) {
+            return Optional.empty();
+        }
+        return categoryService.findById(participant.categoryId())
+                .map(CategoryResponse::from);
     }
 
     public Optional<AgeGroupResponse> findAgeGroupForParticipant(Participant participant) {

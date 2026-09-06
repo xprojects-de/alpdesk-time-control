@@ -34,6 +34,10 @@ public record ParticipantRequest(
         Long teamId,
 
         @Nullable
+        @Schema(description = "ID of the category the participant belongs to", example = "1", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Long categoryId,
+
+        @Nullable
         @Schema(description = "Duration of the race in milliseconds", example = "125000", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         Integer durationMs,
 

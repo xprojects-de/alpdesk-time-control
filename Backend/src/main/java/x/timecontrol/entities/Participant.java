@@ -25,6 +25,8 @@ public record Participant(
         @Nullable
         Long teamId,
         @Nullable
+        Long categoryId,
+        @Nullable
         Integer durationMs,
         @Nullable
         LocalDateTime measuredAt

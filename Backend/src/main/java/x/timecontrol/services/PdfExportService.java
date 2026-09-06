@@ -10,6 +10,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
@@ -30,9 +31,11 @@ public class PdfExportService {
     private static final PDFont FONT_BOLD = new PDType1Font(FontName.HELVETICA_BOLD);
 
     private final AgeGroupService ageGroupService;
+    private final CategoryService categoryService;
 
-    public PdfExportService(AgeGroupService ageGroupService) {
+    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService) {
         this.ageGroupService = ageGroupService;
+        this.categoryService = categoryService;
     }
 
     private record RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
@@ -50,14 +53,14 @@ public class PdfExportService {
     );
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, null);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, "Gesamtwertung", entries, "Teilnehmer", true));
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null, null);
         String title = "Wertung " + genderLabel(gender);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
@@ -66,7 +69,7 @@ public class PdfExportService {
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
                                                  String ageGroup, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroup);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroup, null);
         String title = "Wertung " + ageGroup + " " + genderLabel(gender);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
@@ -83,7 +86,7 @@ public class PdfExportService {
         return renderDocument(race, false, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
-                    List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroupName);
+                    List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroupName, null);
                     if (!entries.isEmpty()) {
                         String title = "Wertung " + ageGroupName + " " + genderLabel(gender);
                         drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
@@ -91,6 +94,16 @@ public class PdfExportService {
                 }
             }
         });
+    }
+
+    public byte[] generateCategoryRanking(Iterable<Participant> participants, Long categoryId, Race race) throws IOException {
+        String categoryName = categoryService.findById(categoryId)
+                .map(Category::name)
+                .orElse("Unbekannt");
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, categoryId);
+        String title = "Wertung " + categoryName;
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
@@ -258,14 +271,15 @@ public class PdfExportService {
 
     private List<RankingEntry> createRankingEntriesFromParticipants(Iterable<Participant> participants,
                                                                      Gender filterGender,
-                                                                     String filterAgeGroup) {
+                                                                     String filterAgeGroup,
+                                                                     Long filterCategoryId) {
         // Only keep participants that have a measured duration
         List<Participant> validParticipants = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> p.durationMs() != null)
                 .toList();
 
-        // Apply gender and age group filters
-        if (filterGender != null || filterAgeGroup != null) {
+        // Apply gender, age group and category filters
+        if (filterGender != null || filterAgeGroup != null || filterCategoryId != null) {
             validParticipants = validParticipants.stream()
                     .filter(p -> {
                         if (filterGender != null && p.gender() != filterGender) {
@@ -274,7 +288,13 @@ public class PdfExportService {
 
                         if (filterAgeGroup != null) {
                             String ageGroup = calculateAgeGroup(p.birthDate());
-                            return filterAgeGroup.equalsIgnoreCase(ageGroup);
+                            if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
+                                return false;
+                            }
+                        }
+
+                        if (filterCategoryId != null && !filterCategoryId.equals(p.categoryId())) {
+                            return false;
                         }
 
                         return true;

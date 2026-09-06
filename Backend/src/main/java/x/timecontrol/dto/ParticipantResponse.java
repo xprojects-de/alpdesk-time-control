@@ -39,6 +39,10 @@ public record ParticipantResponse(
         TeamResponse team,
 
         @Nullable
+        @Schema(description = "Category the participant belongs to", nullable = true)
+        CategoryResponse category,
+
+        @Nullable
         @Schema(description = "Age group of the participant based on birth date", nullable = true)
         AgeGroupResponse ageGroup,
 
@@ -61,12 +65,13 @@ public record ParticipantResponse(
                 participant.raceNumber(),
                 null,
                 null,
+                null,
                 participant.durationMs(),
                 participant.measuredAt()
         );
     }
 
-    public static ParticipantResponse from(Participant participant, RaceResponse race, TeamResponse team, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),
                 race,
@@ -76,6 +81,7 @@ public record ParticipantResponse(
                 participant.gender(),
                 participant.raceNumber(),
                 team,
+                category,
                 ageGroup,
                 participant.durationMs(),
                 participant.measuredAt()

@@ -31,6 +31,7 @@ import {authReducer} from "./store/auth/auth.reducer";
 import {ageGroupReducer} from "./store/age-group/age-group.reducer";
 import {raceReducer} from "./store/race/race.reducer";
 import {teamReducer} from "./store/team/team.reducer";
+import {categoryReducer} from "./store/category/category.reducer";
 import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
@@ -38,6 +39,7 @@ import {AuthEffects} from "./store/auth/auth.effects";
 import {AgeGroupEffects} from "./store/age-group/age-group.effects";
 import {RaceEffects} from "./store/race/race.effects";
 import {TeamEffects} from "./store/team/team.effects";
+import {CategoryEffects} from "./store/category/category.effects";
 import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 
@@ -72,9 +74,10 @@ export const appConfig: ApplicationConfig = {
             measurement: measurementReducer,
             ageGroup: ageGroupReducer,
             team: teamReducer,
+            category: categoryReducer,
             gaudiMode: gaudiModeReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, AgeGroupEffects, TeamEffects, GaudiModeEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, GaudiModeEffects]),
         provideStoreDevtools({
             maxAge: 25,
             logOnly: !isDevMode(),

@@ -216,6 +216,14 @@ import {takeUntil, take} from "rxjs/operators";
                         </td>
                     </ng-container>
 
+                    <!-- Category Column -->
+                    <ng-container matColumnDef="category">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Kategorie</th>
+                        <td mat-cell *matCellDef="let participant">
+                            {{ participant.category?.name || "-" }}
+                        </td>
+                    </ng-container>
+
                      <!-- Age Group Column -->
                      <ng-container matColumnDef="ageGroup">
                          <th mat-header-cell *matHeaderCellDef mat-sort-header>Altersgruppe</th>
@@ -355,6 +363,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "gender",
         "raceNumber",
         "team",
+        "category",
         "ageGroup",
         "race",
         "durationMs",

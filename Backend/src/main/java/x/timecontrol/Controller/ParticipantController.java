@@ -54,8 +54,9 @@ public class ParticipantController {
                 .map(participant -> {
                     var race = service.findRaceForParticipant(participant).orElse(null);
                     var team = service.findTeamForParticipant(participant).orElse(null);
+                    var category = service.findCategoryForParticipant(participant).orElse(null);
                     var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
-                    return ParticipantResponse.from(participant, race, team, ageGroup);
+                    return ParticipantResponse.from(participant, race, team, category, ageGroup);
                 })
                 .toList();
         return HttpResponse.ok(response);
@@ -71,8 +72,9 @@ public class ParticipantController {
         return participant.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
             var team = service.findTeamForParticipant(p).orElse(null);
+            var category = service.findCategoryForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, team, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, team, category, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -83,12 +85,13 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
         Participant created = service.create(participant);
         var race = service.findRaceForParticipant(created).orElse(null);
         var team = service.findTeamForParticipant(created).orElse(null);
+        var category = service.findCategoryForParticipant(created).orElse(null);
         var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
-        return HttpResponse.created(ParticipantResponse.from(created, race, team, ageGroup));
+        return HttpResponse.created(ParticipantResponse.from(created, race, team, category, ageGroup));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -99,13 +102,14 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
             var team = service.findTeamForParticipant(p).orElse(null);
+            var category = service.findCategoryForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, team, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, race, team, category, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -231,6 +235,33 @@ public class ParticipantController {
             byte[] pdfBytes = pdfExportService.generateAllAgeGroupsRanking(participants, race.get());
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=wertung_altersklassen.pdf");
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.serverError().body(e.getMessage().getBytes());
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf/category/{categoryId}/{raceId}")
+    @Operation(summary = "Export participants by category as PDF",
+            description = "Generates a PDF with participants filtered by category, sorted by time for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportByCategoryToPdf(@PathVariable Long categoryId, @PathVariable Long raceId) {
+        try {
+            Optional<Race> race = raceService.findById(raceId);
+            if (race.isEmpty()) {
+                return HttpResponse.notFound();
+            }
+
+            Iterable<Participant> participants = service.findByRaceId(raceId);
+
+            byte[] pdfBytes = pdfExportService.generateCategoryRanking(participants, categoryId, race.get());
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=wertung_kategorie_" + categoryId + ".pdf");
         } catch (IllegalArgumentException e) {
             return HttpResponse.serverError().body(e.getMessage().getBytes());
         } catch (Exception e) {

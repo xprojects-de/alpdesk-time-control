@@ -26,10 +26,13 @@ import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
 import {selectAllTeams} from "../../store/team/team.selectors";
 import * as TeamActions from "../../store/team/team.actions";
+import {selectAllCategories} from "../../store/category/category.selectors";
+import * as CategoryActions from "../../store/category/category.actions";
 import {Observable, Subject} from "rxjs";
 import {take} from "rxjs/operators";
 import {Race} from "../../models/race.model";
 import {Team} from "../../models/team.model";
+import {Category} from "../../models/category.model";
 
 
 @Component({
@@ -135,6 +138,16 @@ import {Team} from "../../models/team.model";
                         }
                     </mat-select>
                 </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Kategorie</mat-label>
+                    <mat-select formControlName="categoryId">
+                        <mat-option [value]="null">Keine Kategorie</mat-option>
+                        @for (category of categories$ | async; track category.id) {
+                            <mat-option [value]="category.id">{{ category.name }}</mat-option>
+                        }
+                    </mat-select>
+                </mat-form-field>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -181,6 +194,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
     selectedRaceId$: Observable<number | null> = this.store.select(selectSelectedRaceId);
     teams$: Observable<Team[]> = this.store.select(selectAllTeams);
+    categories$: Observable<Category[]> = this.store.select(selectAllCategories);
 
     constructor() {
         let birthDate: Date | string = this.data?.birthDate || "";
@@ -203,11 +217,13 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             race: [this.data?.race?.id || "", Validators.required],
             raceNumber: [this.data?.raceNumber || "", Validators.required],
             teamId: [this.data?.team?.id || null],
+            categoryId: [this.data?.category?.id || null],
         });
     }
 
      ngOnInit(): void {
          this.store.dispatch(TeamActions.loadTeams());
+         this.store.dispatch(CategoryActions.loadCategories());
 
          if (!this.data) {
              this.selectedRaceId$
@@ -240,6 +256,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 gender: formValue.gender,
                 raceNumber: Number(formValue.raceNumber),
                 teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
+                categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
             };
             this.dialogRef.close(participant);
         }

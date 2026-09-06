@@ -29,6 +29,12 @@ CREATE TABLE team
     name TEXT NOT NULL UNIQUE
 );
 
+CREATE TABLE category
+(
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE participant
 (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +45,7 @@ CREATE TABLE participant
     gender      TEXT    NOT NULL,
     race_number INTEGER NOT NULL,
     team_id     INTEGER REFERENCES team (id) ON DELETE SET NULL,
+    category_id INTEGER REFERENCES category (id) ON DELETE SET NULL,
     duration_ms INTEGER,
     measured_at TIMESTAMP,
 
@@ -50,6 +57,7 @@ CREATE TABLE participant
 
 CREATE INDEX idx_participant_race_id ON participant(race_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
+CREATE INDEX idx_participant_category_id ON participant (category_id);
 
 CREATE TABLE measurement
 (
