@@ -3,6 +3,8 @@ package x.timecontrol.Controller;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +17,8 @@ import jakarta.inject.Inject;
 import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.DataImportService;
+import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
 
 import java.util.List;
@@ -28,6 +32,12 @@ public class RaceController {
 
     @Inject
     RaceService service;
+
+    @Inject
+    RaceMeasurementService raceMeasurementService;
+
+    @Inject
+    DataImportService dataImportService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -100,6 +110,41 @@ public class RaceController {
             return HttpResponse.noContent();
         }
         return HttpResponse.notFound();
+    }
+
+    @Post("/{raceId}/archive-measurements")
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    @Operation(summary = "Archive current measurements into this race and clear the measurement table",
+            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs), then clears the measurement table so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first. If device reset fails, no data is copied or deleted.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Measurements archived successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "Archive failed")
+    public HttpResponse<String> archiveMeasurements(@PathVariable Long raceId, @QueryValue(defaultValue = "true") boolean resetDevice) {
+        if (service.findById(raceId).isEmpty()) {
+            return HttpResponse.notFound();
+        }
+
+        try {
+            if (resetDevice) {
+                boolean deviceReset = dataImportService.resetDevice();
+                if (!deviceReset) {
+                    return HttpResponse.serverError()
+                            .body("Failed to reset device. Measurements were not archived.");
+                }
+            }
+
+            raceMeasurementService.archiveMeasurements(raceId);
+
+            if (resetDevice) {
+                return HttpResponse.ok("Measurements archived and device reset successfully");
+            } else {
+                return HttpResponse.ok("Measurements archived successfully");
+            }
+        } catch (Exception e) {
+            return HttpResponse.serverError()
+                    .body("Error during archive operation: " + e.getMessage());
+        }
     }
 }
 

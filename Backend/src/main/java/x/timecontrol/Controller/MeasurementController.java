@@ -2,13 +2,10 @@ package x.timecontrol.Controller;
 
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
-import x.timecontrol.dto.SyncMeasurementsResponse;
 import x.timecontrol.entities.Measurement;
-import x.timecontrol.entities.Participant;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
-import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
@@ -42,9 +39,6 @@ public class MeasurementController {
 
     @Inject
     DataImportScheduler dataImportScheduler;
-
-    @Inject
-    ParticipantService participantService;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -298,61 +292,6 @@ public class MeasurementController {
         return HttpResponse.ok(dataImportScheduler.isScheduledImportActive());
     }
 
-
-    @Produces(MediaType.APPLICATION_JSON)
-    @Post("/sync-to-participants")
-    @Operation(summary = "Sync measurements to participants",
-            description = "Transfers measurement data (duration_ms and measured_at) to participant records for all measurements that have a participant_id assigned",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Measurements synced successfully")
-    @ApiResponse(responseCode = "500", description = "Sync failed")
-    public HttpResponse<SyncMeasurementsResponse> syncMeasurementsToParticipants() {
-        try {
-            Iterable<Measurement> allMeasurements = service.findAll();
-            int syncedCount = 0;
-            int skippedCount = 0;
-
-            for (Measurement measurement : allMeasurements) {
-
-                if (measurement.participantId() != null) {
-                    Optional<Participant> participantOpt = participantService.findById(measurement.participantId());
-
-                    if (participantOpt.isPresent()) {
-                        Participant participant = participantOpt.get();
-
-                        Participant updatedParticipant = new Participant(
-                            participant.id(),
-                            participant.raceId(),
-                            participant.firstName(),
-                            participant.lastName(),
-                            participant.birthDate(),
-                            participant.gender(),
-                            participant.raceNumber(),
-                            participant.teamId(),
-                            participant.categoryId(),
-                            measurement.durationMs(),
-                            measurement.measuredAt()
-                        );
-
-                        participantService.update(participant.id(), updatedParticipant);
-                        syncedCount++;
-                    } else {
-                        skippedCount++;
-                    }
-                } else {
-                    skippedCount++;
-                }
-            }
-
-            SyncMeasurementsResponse response = SyncMeasurementsResponse.of(syncedCount, skippedCount);
-            return HttpResponse.ok(response);
-        } catch (Exception e) {
-            SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
-                    0, 0, 0, "Sync failed: " + e.getMessage()
-            );
-            return HttpResponse.serverError().body(errorResponse);
-        }
-    }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get("/export")

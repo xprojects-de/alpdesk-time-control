@@ -70,6 +70,25 @@ CREATE TABLE measurement
         REFERENCES participant (id)
 );
 
+CREATE TABLE race_measurement
+(
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id                INTEGER   NOT NULL,
+    device_measurement_id  INTEGER   NOT NULL,
+    participant_id         INTEGER,
+    duration_ms            INTEGER   NOT NULL,
+    measured_at            TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (race_id)
+        REFERENCES race (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (participant_id)
+        REFERENCES participant (id)
+);
+
+CREATE INDEX idx_race_measurement_race_id ON race_measurement (race_id);
+CREATE INDEX idx_race_measurement_participant_id ON race_measurement (participant_id);
+
 CREATE TABLE gaudi_mode
 (
     id         INTEGER   PRIMARY KEY AUTOINCREMENT,
