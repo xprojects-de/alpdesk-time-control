@@ -1,9 +1,0 @@
-ALTER TABLE race ADD COLUMN organisation TEXT;
-ALTER TABLE race ADD COLUMN referee TEXT;
-ALTER TABLE race ADD COLUMN race_director TEXT;
-ALTER TABLE race ADD COLUMN time_control TEXT;
-ALTER TABLE race ADD COLUMN route_name TEXT;
-ALTER TABLE race ADD COLUMN elevation_difference TEXT;
-ALTER TABLE race ADD COLUMN route_length TEXT;
-ALTER TABLE race ADD COLUMN course_setter TEXT;
-ALTER TABLE race ADD COLUMN weather TEXT;
