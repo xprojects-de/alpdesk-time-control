@@ -496,8 +496,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     'OK',
                     {duration: 5000},
                 );
-                if (result.errors.length > 0) {
-                    const details = result.errors
+                const errors = result.errors ?? [];
+                if (errors.length > 0) {
+                    const details = errors
                         .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
                         .join('\n');
                     alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);

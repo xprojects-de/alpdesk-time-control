@@ -9,6 +9,8 @@ export interface ParticipantImportRowError {
 export interface ParticipantImportResponse {
     importedCount: number;
     skippedCount: number;
-    imported: Participant[];
-    errors: ParticipantImportRowError[];
+    // The backend omits empty array fields from the JSON response entirely,
+    // so these can be missing when there was nothing to report.
+    imported?: Participant[];
+    errors?: ParticipantImportRowError[];
 }

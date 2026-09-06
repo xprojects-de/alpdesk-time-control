@@ -161,12 +161,18 @@ export const participantReducer = createReducer(
         importResult: null,
         error: null
     })),
-    on(ParticipantActions.importParticipantsCsvSuccess, (state, {result}) => ({
-        ...state,
-        participants: [...state.participants, ...result.imported],
-        importLoading: false,
-        importResult: result
-    })),
+    on(ParticipantActions.importParticipantsCsvSuccess, (state, {result}) => {
+        // The backend omits empty array fields from the JSON response entirely, so
+        // "imported"/"errors" can be undefined when there was nothing to report.
+        const imported = result.imported ?? [];
+        const errors = result.errors ?? [];
+        return {
+            ...state,
+            participants: [...state.participants, ...imported],
+            importLoading: false,
+            importResult: {...result, imported, errors}
+        };
+    }),
     on(ParticipantActions.importParticipantsCsvFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
