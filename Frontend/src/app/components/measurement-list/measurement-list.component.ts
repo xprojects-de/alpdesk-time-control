@@ -138,14 +138,19 @@ import {Actions, ofType} from "@ngrx/effects";
                         </button>
 
                         <mat-menu #archiveMenu="matMenu">
-                            <button mat-menu-item (click)="archiveMeasurements(false)">
+                            <button mat-menu-item (click)="archiveMeasurements(false, true)">
                                 <mat-icon>archive</mat-icon>
                                 <span>Archivieren (nur Datenbank)</span>
                             </button>
 
-                            <button mat-menu-item (click)="archiveMeasurements(true)">
+                            <button mat-menu-item (click)="archiveMeasurements(true, true)">
                                 <mat-icon>archive</mat-icon>
                                 <span>Archivieren (inkl. Gerät-Reset)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="archiveMeasurements(false, false)">
+                                <mat-icon>content_copy</mat-icon>
+                                <span>Archivieren (ohne Löschen)</span>
                             </button>
                         </mat-menu>
                     </div>
@@ -548,6 +553,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     autoRefreshEnabled = false;
     private lastResetDevice = false;
     private lastArchiveResetDevice = false;
+    private lastArchiveClearAfterArchive = true;
 
     jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
@@ -647,9 +653,11 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            const successMsg = this.lastArchiveResetDevice
-                ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
-                : 'Messungen archiviert. Bereit für das nächste Rennen.';
+            const successMsg = !this.lastArchiveClearAfterArchive
+                ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
+                : this.lastArchiveResetDevice
+                    ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
+                    : 'Messungen archiviert. Bereit für das nächste Rennen.';
             this.snackBar.open(successMsg, 'OK', {
                 duration: 3000,
             });
@@ -916,7 +924,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(MeasurementActions.setScheduledImport({enable}));
     }
 
-    archiveMeasurements(resetDevice: boolean): void {
+    archiveMeasurements(resetDevice: boolean, clearAfterArchive: boolean): void {
         this.selectedRaceId$.pipe(take(1)).subscribe(raceId => {
             if (!raceId) {
                 this.snackBar.open('Bitte zuerst ein Rennen im Filter auswählen', 'OK', {
@@ -926,13 +934,16 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 return;
             }
 
-            const message = resetDevice
-                ? 'Möchten Sie die aktuellen Messungen wirklich archivieren und das Gerät zurücksetzen? Danach kann sofort das nächste Rennen gemessen werden.'
-                : 'Möchten Sie die aktuellen Messungen wirklich archivieren (nur Datenbank)? Danach kann sofort das nächste Rennen gemessen werden.';
+            const message = !clearAfterArchive
+                ? 'Möchten Sie die aktuellen Messungen für dieses Rennen archivieren? Datenbank und Gerät werden dabei NICHT verändert, das können Sie bei Bedarf später manuell erledigen.'
+                : resetDevice
+                    ? 'Möchten Sie die aktuellen Messungen wirklich archivieren und das Gerät zurücksetzen? Danach kann sofort das nächste Rennen gemessen werden.'
+                    : 'Möchten Sie die aktuellen Messungen wirklich archivieren (nur Datenbank)? Danach kann sofort das nächste Rennen gemessen werden.';
 
             if (confirm(message)) {
                 this.lastArchiveResetDevice = resetDevice;
-                this.store.dispatch(MeasurementActions.archiveMeasurements({raceId, resetDevice}));
+                this.lastArchiveClearAfterArchive = clearAfterArchive;
+                this.store.dispatch(MeasurementActions.archiveMeasurements({raceId, resetDevice, clearAfterArchive}));
             }
         });
     }

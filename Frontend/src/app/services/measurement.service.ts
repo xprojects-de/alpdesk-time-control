@@ -45,9 +45,9 @@ export class MeasurementService {
         });
     }
 
-    archive(raceId: number, resetDevice: boolean): Observable<string> {
+    archive(raceId: number, resetDevice: boolean, clearAfterArchive: boolean): Observable<string> {
         return this.http.post(`${environment.apiUrl}/races/${raceId}/archive-measurements`, null, {
-            params: { resetDevice: resetDevice.toString() },
+            params: { resetDevice: resetDevice.toString(), clearAfterArchive: clearAfterArchive.toString() },
             responseType: 'text'
         });
     }

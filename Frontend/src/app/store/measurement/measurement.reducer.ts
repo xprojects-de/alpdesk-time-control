@@ -164,10 +164,10 @@ export const measurementReducer = createReducer(
         loading: true,
         error: null
     })),
-    on(MeasurementActions.archiveMeasurementsSuccess, state => ({
+    on(MeasurementActions.archiveMeasurementsSuccess, (state, {clearAfterArchive}) => ({
         ...state,
-        measurements: [],
-        selectedMeasurementId: null,
+        measurements: clearAfterArchive ? [] : state.measurements,
+        selectedMeasurementId: clearAfterArchive ? null : state.selectedMeasurementId,
         loading: false
     })),
     on(MeasurementActions.archiveMeasurementsFailure, (state, {error}) => ({

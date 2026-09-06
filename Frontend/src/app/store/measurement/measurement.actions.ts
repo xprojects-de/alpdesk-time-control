@@ -143,13 +143,14 @@ export const loadScheduledImportStatusFailure = createAction(
     props<{ error: string }>()
 );
 
-// Archive measurements into a race and clear the measurement table
+// Archive measurements into a race, optionally clearing the measurement table
 export const archiveMeasurements = createAction(
     '[Measurement] Archive Measurements',
-    props<{ raceId: number; resetDevice: boolean }>()
+    props<{ raceId: number; resetDevice: boolean; clearAfterArchive: boolean }>()
 );
 export const archiveMeasurementsSuccess = createAction(
-    '[Measurement] Archive Measurements Success'
+    '[Measurement] Archive Measurements Success',
+    props<{ clearAfterArchive: boolean }>()
 );
 export const archiveMeasurementsFailure = createAction(
     '[Measurement] Archive Measurements Failure',

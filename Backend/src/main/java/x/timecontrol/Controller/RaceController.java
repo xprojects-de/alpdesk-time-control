@@ -114,19 +114,21 @@ public class RaceController {
 
     @Post("/{raceId}/archive-measurements")
     @ExecuteOn(TaskExecutors.BLOCKING)
-    @Operation(summary = "Archive current measurements into this race and clear the measurement table",
-            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs), then clears the measurement table so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first. If device reset fails, no data is copied or deleted.",
+    @Operation(summary = "Archive current measurements into this race, optionally clearing the measurement table",
+            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first (if device reset fails, no data is copied or deleted). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements archived successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "Archive failed")
-    public HttpResponse<String> archiveMeasurements(@PathVariable Long raceId, @QueryValue(defaultValue = "true") boolean resetDevice) {
+    public HttpResponse<String> archiveMeasurements(@PathVariable Long raceId,
+                                                      @QueryValue(defaultValue = "true") boolean resetDevice,
+                                                      @QueryValue(defaultValue = "true") boolean clearAfterArchive) {
         if (service.findById(raceId).isEmpty()) {
             return HttpResponse.notFound();
         }
 
         try {
-            if (resetDevice) {
+            if (clearAfterArchive && resetDevice) {
                 boolean deviceReset = dataImportService.resetDevice();
                 if (!deviceReset) {
                     return HttpResponse.serverError()
@@ -134,12 +136,16 @@ public class RaceController {
                 }
             }
 
-            raceMeasurementService.archiveMeasurements(raceId);
-
-            if (resetDevice) {
-                return HttpResponse.ok("Measurements archived and device reset successfully");
+            if (clearAfterArchive) {
+                raceMeasurementService.archiveMeasurements(raceId);
+                if (resetDevice) {
+                    return HttpResponse.ok("Measurements archived and device reset successfully");
+                } else {
+                    return HttpResponse.ok("Measurements archived successfully");
+                }
             } else {
-                return HttpResponse.ok("Measurements archived successfully");
+                raceMeasurementService.copyMeasurements(raceId);
+                return HttpResponse.ok("Measurements archived successfully (database and device left unchanged)");
             }
         } catch (Exception e) {
             return HttpResponse.serverError()

@@ -162,9 +162,9 @@ export class MeasurementEffects {
     archiveMeasurements$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.archiveMeasurements),
-            mergeMap(({raceId, resetDevice}) =>
-                this.measurementService.archive(raceId, resetDevice).pipe(
-                    map(() => MeasurementActions.archiveMeasurementsSuccess()),
+            mergeMap(({raceId, resetDevice, clearAfterArchive}) =>
+                this.measurementService.archive(raceId, resetDevice, clearAfterArchive).pipe(
+                    map(() => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive})),
                     catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
                         error: error.message || 'Failed to archive measurements'
                     })))

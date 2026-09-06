@@ -20,6 +20,10 @@ public class RaceMeasurementService {
         this.measurementRepository = measurementRepository;
     }
 
+    public void copyMeasurements(Long raceId) {
+        repository.copyFromMeasurements(raceId);
+    }
+
     @Transactional
     public void archiveMeasurements(Long raceId) {
         repository.copyFromMeasurements(raceId);
