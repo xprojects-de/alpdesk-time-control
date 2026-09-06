@@ -1,11 +1,10 @@
 import {
     Component,
-    OnChanges,
     OnDestroy,
-    Input,
-    Output,
-    EventEmitter,
     inject,
+    input,
+    output,
+    effect,
     ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
@@ -44,11 +43,11 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
         <mat-card class="detail-card">
             <mat-card-header class="header-row">
                 <div>
-                    <mat-card-title>{{ gaudiMode.name }}</mat-card-title>
+                    <mat-card-title>{{ gaudiMode().name }}</mat-card-title>
                     <mat-card-subtitle>
-                        {{ gaudiMode.type === gaudiModeType.LOS ? 'Los-Modus' : 'Mannschaftswertung' }}
-                        @if (gaudiMode.type === gaudiModeType.TEAM) {
-                            &ndash; {{ gaudiMode.teamSize }} Teilnehmer pro Team
+                        {{ gaudiMode().type === gaudiModeType.LOS ? 'Los-Modus' : 'Mannschaftswertung' }}
+                        @if (gaudiMode().type === gaudiModeType.TEAM) {
+                            &ndash; {{ gaudiMode().teamSize }} Teilnehmer pro Team
                         }
                     </mat-card-subtitle>
                 </div>
@@ -58,7 +57,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
             </mat-card-header>
             <mat-card-content>
 
-                @if (gaudiMode.type === gaudiModeType.LOS) {
+                @if (gaudiMode().type === gaudiModeType.LOS) {
                     <div class="section-actions">
                         <button mat-raised-button color="primary" (click)="draw()">
                             <mat-icon>casino</mat-icon>
@@ -115,7 +114,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                         </ng-container>
                         <ng-container matColumnDef="label">
                             <th mat-header-cell *matHeaderCellDef>
-                                {{ gaudiMode.type === gaudiModeType.LOS ? 'Paarung' : 'Mannschaft' }}
+                                {{ gaudiMode().type === gaudiModeType.LOS ? 'Paarung' : 'Mannschaft' }}
                             </th>
                             <td mat-cell *matCellDef="let r">{{ r.label }}</td>
                         </ng-container>
@@ -129,7 +128,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                         </ng-container>
                         <ng-container matColumnDef="valueMs">
                             <th mat-header-cell *matHeaderCellDef>
-                                {{ gaudiMode.type === gaudiModeType.LOS ? 'Ø-Zeit Paar' : 'Gesamtzeit' }}
+                                {{ gaudiMode().type === gaudiModeType.LOS ? 'Ø-Zeit Paar' : 'Gesamtzeit' }}
                             </th>
                             <td mat-cell *matCellDef="let r">{{ formatDuration(r.valueMs) }}</td>
                         </ng-container>
@@ -183,13 +182,13 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
         `,
     ],
 })
-export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
+export class GaudiModeDetailComponent implements OnDestroy {
     private store = inject(Store);
     private snackBar = inject(MatSnackBar);
     private destroy$ = new Subject<void>();
 
-    @Input({required: true}) gaudiMode!: GaudiMode;
-    @Output() closed = new EventEmitter<void>();
+    gaudiMode = input.required<GaudiMode>();
+    closed = output<void>();
 
     gaudiModeType = GaudiModeType;
     pairingColumns = ["participant1", "participant2"];
@@ -199,14 +198,17 @@ export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
     ranking$: Observable<GaudiRankingEntry[]> = this.store.select(GaudiModeSelectors.selectRanking);
     pdfExportLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectGaudiModePdfExportLoading);
 
-    ngOnChanges(): void {
-        this.rankingColumns = this.gaudiMode.type === GaudiModeType.LOS
-            ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
-            : ["place", "label", "valueMs"];
+    constructor() {
+        effect(() => {
+            const gaudiMode = this.gaudiMode();
+            this.rankingColumns = gaudiMode.type === GaudiModeType.LOS
+                ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
+                : ["place", "label", "valueMs"];
 
-        if (this.gaudiMode.type === GaudiModeType.LOS) {
-            this.store.dispatch(GaudiModeActions.loadPairing({id: this.gaudiMode.id}));
-        }
+            if (gaudiMode.type === GaudiModeType.LOS) {
+                this.store.dispatch(GaudiModeActions.loadPairing({id: gaudiMode.id}));
+            }
+        });
     }
 
     ngOnDestroy(): void {
@@ -219,18 +221,19 @@ export class GaudiModeDetailComponent implements OnChanges, OnDestroy {
     }
 
     draw(): void {
-        this.store.dispatch(GaudiModeActions.drawPairing({id: this.gaudiMode.id}));
+        this.store.dispatch(GaudiModeActions.drawPairing({id: this.gaudiMode().id}));
         this.snackBar.open("Auslosung wird durchgeführt...", "OK", {duration: 2000});
     }
 
     loadRanking(): void {
-        this.store.dispatch(GaudiModeActions.loadRanking({id: this.gaudiMode.id}));
+        this.store.dispatch(GaudiModeActions.loadRanking({id: this.gaudiMode().id}));
     }
 
     exportPdf(): void {
+        const gaudiMode = this.gaudiMode();
         this.store.dispatch(GaudiModeActions.exportPdf({
-            id: this.gaudiMode.id,
-            filename: `gaudi_${this.gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}.pdf`
+            id: gaudiMode.id,
+            filename: `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}.pdf`
         }));
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
     }
