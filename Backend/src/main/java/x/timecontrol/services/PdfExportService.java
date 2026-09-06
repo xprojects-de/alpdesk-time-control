@@ -31,6 +31,14 @@ public class PdfExportService {
     private static final PDFont FONT_REGULAR = new PDType1Font(FontName.HELVETICA);
     private static final PDFont FONT_BOLD = new PDType1Font(FontName.HELVETICA_BOLD);
 
+    /**
+     * Pseudo category id used to group participants without an assigned category into
+     * their own "Ohne Kategorie" section in the by-category PDF exports, instead of
+     * silently dropping them.
+     */
+    private static final long NO_CATEGORY_ID = -1L;
+    private static final Category NO_CATEGORY = new Category(NO_CATEGORY_ID, "Ohne Kategorie");
+
     private final AgeGroupService ageGroupService;
     private final CategoryService categoryService;
     private final TeamService teamService;
@@ -154,7 +162,7 @@ public class PdfExportService {
     }
 
     public byte[] generateOverallByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<Category> categories = sortedCategories();
+        List<Category> categories = sortedCategoriesWithNoCategory();
 
         return renderDocument(race, false, ctx -> {
             for (Category category : categories) {
@@ -169,7 +177,7 @@ public class PdfExportService {
 
     public byte[] generateGenderByCategoryRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<Category> categories = sortedCategories();
+        List<Category> categories = sortedCategoriesWithNoCategory();
 
         return renderDocument(race, false, ctx -> {
             for (Category category : categories) {
@@ -188,7 +196,7 @@ public class PdfExportService {
                 .map(AgeGroup::name)
                 .distinct()
                 .toList();
-        List<Category> categories = sortedCategories();
+        List<Category> categories = sortedCategoriesWithNoCategory();
 
         return renderDocument(race, false, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
@@ -209,6 +217,17 @@ public class PdfExportService {
         return StreamSupport.stream(categoryService.findAll().spliterator(), false)
                 .sorted(Comparator.comparing(Category::name))
                 .toList();
+    }
+
+    /**
+     * Sorted categories plus a synthetic "Ohne Kategorie" entry for participants
+     * without an assigned category, so they get their own section instead of being
+     * silently omitted from by-category PDF exports.
+     */
+    private List<Category> sortedCategoriesWithNoCategory() {
+        List<Category> categories = new ArrayList<>(sortedCategories());
+        categories.add(NO_CATEGORY);
+        return categories;
     }
 
     public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
@@ -398,8 +417,14 @@ public class PdfExportService {
                             }
                         }
 
-                        if (filterCategoryId != null && !filterCategoryId.equals(p.categoryId())) {
-                            return false;
+                        if (filterCategoryId != null) {
+                            if (filterCategoryId == NO_CATEGORY_ID) {
+                                if (p.categoryId() != null) {
+                                    return false;
+                                }
+                            } else if (!filterCategoryId.equals(p.categoryId())) {
+                                return false;
+                            }
                         }
 
                         return true;
