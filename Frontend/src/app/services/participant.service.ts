@@ -54,5 +54,23 @@ export class ParticipantService {
             responseType: 'blob'
         });
     }
+
+    exportAllByCategoryToPdf(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/all/categories/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportByGenderByCategoryToPdf(gender: string, raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/gender/${gender}/categories/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
+    exportAllAgeGroupsByCategoryToPdf(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/agegroups/all/categories/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
 }
 

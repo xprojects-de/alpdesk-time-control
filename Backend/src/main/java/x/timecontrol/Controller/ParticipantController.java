@@ -243,6 +243,87 @@ public class ParticipantController {
     }
 
     @Produces("application/pdf")
+    @Get("/export/pdf/all/categories/{raceId}")
+    @Operation(summary = "Export overall ranking split by category as PDF",
+            description = "Generates a PDF with all participants sorted by time, split into one section per category",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportAllByCategoryToPdf(@PathVariable Long raceId) {
+        try {
+            Optional<Race> race = raceService.findById(raceId);
+            if (race.isEmpty()) {
+                return HttpResponse.notFound();
+            }
+
+            Iterable<Participant> participants = service.findByRaceId(raceId);
+
+            byte[] pdfBytes = pdfExportService.generateOverallByCategoryRanking(participants, race.get());
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=gesamtwertung_kategorien.pdf");
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.serverError().body(e.getMessage().getBytes());
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf/gender/{gender}/categories/{raceId}")
+    @Operation(summary = "Export participants by gender split by category as PDF",
+            description = "Generates a PDF with participants filtered by gender, split into one section per category",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportByGenderByCategoryToPdf(@PathVariable String gender, @PathVariable Long raceId) {
+        try {
+            Optional<Race> race = raceService.findById(raceId);
+            if (race.isEmpty()) {
+                return HttpResponse.notFound();
+            }
+
+            Iterable<Participant> participants = service.findByRaceId(raceId);
+
+            byte[] pdfBytes = pdfExportService.generateGenderByCategoryRanking(participants, gender, race.get());
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=wertung_" + gender.toLowerCase() + "_kategorien.pdf");
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.serverError().body(e.getMessage().getBytes());
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf/agegroups/all/categories/{raceId}")
+    @Operation(summary = "Export all age groups split by gender and category as PDF",
+            description = "Generates a PDF with all age groups, each split by gender and then by category",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportAllAgeGroupsByCategoryToPdf(@PathVariable Long raceId) {
+        try {
+            Optional<Race> race = raceService.findById(raceId);
+            if (race.isEmpty()) {
+                return HttpResponse.notFound();
+            }
+
+            Iterable<Participant> participants = service.findByRaceId(raceId);
+
+            byte[] pdfBytes = pdfExportService.generateAllAgeGroupsByCategoryRanking(participants, race.get());
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=wertung_altersklassen_kategorien.pdf");
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.serverError().body(e.getMessage().getBytes());
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
+    @Produces("application/pdf")
     @Get("/export/pdf/category/{categoryId}/{raceId}")
     @Operation(summary = "Export participants by category as PDF",
             description = "Generates a PDF with participants filtered by category, sorted by time for a specific race",

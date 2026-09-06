@@ -146,13 +146,67 @@ export class ParticipantEffects {
         )
     );
 
+    exportAllByCategoryPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportAllByCategoryPdf),
+            mergeMap(({raceId}) =>
+                this.participantService.exportAllByCategoryToPdf(raceId).pipe(
+                    map(blob => ParticipantActions.exportAllByCategoryPdfSuccess({
+                        blob,
+                        filename: 'gesamtwertung_kategorien.pdf'
+                    })),
+                    catchError(error => of(ParticipantActions.exportAllByCategoryPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportByGenderByCategoryPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportByGenderByCategoryPdf),
+            mergeMap(({gender, raceId}) =>
+                this.participantService.exportByGenderByCategoryToPdf(gender, raceId).pipe(
+                    map(blob => ParticipantActions.exportByGenderByCategoryPdfSuccess({
+                        blob,
+                        filename: `wertung_${gender.toLowerCase()}_kategorien.pdf`
+                    })),
+                    catchError(error => of(ParticipantActions.exportByGenderByCategoryPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportAllAgeGroupsByCategoryPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportAllAgeGroupsByCategoryPdf),
+            mergeMap(({raceId}) =>
+                this.participantService.exportAllAgeGroupsByCategoryToPdf(raceId).pipe(
+                    map(blob => ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess({
+                        blob,
+                        filename: 'wertung_altersklassen_kategorien.pdf'
+                    })),
+                    catchError(error => of(ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
     // Auto-download PDF when export is successful
     downloadPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(
                 ParticipantActions.exportAllPdfSuccess,
                 ParticipantActions.exportByGenderPdfSuccess,
-                ParticipantActions.exportAllAgeGroupsPdfSuccess
+                ParticipantActions.exportAllAgeGroupsPdfSuccess,
+                ParticipantActions.exportAllByCategoryPdfSuccess,
+                ParticipantActions.exportByGenderByCategoryPdfSuccess,
+                ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

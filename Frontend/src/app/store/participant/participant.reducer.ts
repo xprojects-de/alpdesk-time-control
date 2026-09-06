@@ -137,6 +137,9 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllPdf,
         ParticipantActions.exportByGenderPdf,
         ParticipantActions.exportAllAgeGroupsPdf,
+        ParticipantActions.exportAllByCategoryPdf,
+        ParticipantActions.exportByGenderByCategoryPdf,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdf,
         state => ({
             ...state,
             pdfExportLoading: true,
@@ -147,6 +150,9 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllPdfSuccess,
         ParticipantActions.exportByGenderPdfSuccess,
         ParticipantActions.exportAllAgeGroupsPdfSuccess,
+        ParticipantActions.exportAllByCategoryPdfSuccess,
+        ParticipantActions.exportByGenderByCategoryPdfSuccess,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
         state => ({
             ...state,
             pdfExportLoading: false
@@ -156,6 +162,9 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllPdfFailure,
         ParticipantActions.exportByGenderPdfFailure,
         ParticipantActions.exportAllAgeGroupsPdfFailure,
+        ParticipantActions.exportAllByCategoryPdfFailure,
+        ParticipantActions.exportByGenderByCategoryPdfFailure,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure,
         (state, {error}) => ({
             ...state,
             pdfExportLoading: false,

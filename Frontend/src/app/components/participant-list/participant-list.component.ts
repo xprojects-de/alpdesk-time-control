@@ -121,24 +121,44 @@ import {takeUntil, take} from "rxjs/operators";
                             <mat-icon>groups</mat-icon>
                             <span>Gesamtwertung (Alle)</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportAllByCategoryPdf()">
+                            <mat-icon>category</mat-icon>
+                            <span>Gesamtwertung (Alle) nach Kategorie</span>
+                        </button>
+
                         <mat-divider></mat-divider>
-                        
+
                         <button mat-menu-item (click)="exportByGenderPdf('MALE')">
                             <mat-icon>male</mat-icon>
                             <span>Alle Herren</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('MALE')">
+                            <mat-icon>category</mat-icon>
+                            <span>Alle Herren nach Kategorie</span>
+                        </button>
+
                         <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
                             <mat-icon>female</mat-icon>
                             <span>Alle Damen</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('FEMALE')">
+                            <mat-icon>category</mat-icon>
+                            <span>Alle Damen nach Kategorie</span>
+                        </button>
+
                         <mat-divider></mat-divider>
-                        
+
                         <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
                             <mat-icon>view_list</mat-icon>
                             <span>Nach Altersklassen aufgeteilt</span>
+                        </button>
+
+                        <button mat-menu-item (click)="exportAllAgeGroupsByCategoryPdf()">
+                            <mat-icon>category</mat-icon>
+                            <span>Nach Altersklassen aufgeteilt nach Kategorie</span>
                         </button>
                     </mat-menu>
                 </div>
@@ -590,6 +610,52 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         }
         this.store.dispatch(ParticipantActions.exportAllAgeGroupsPdf({ raceId: selectedRaceId }));
         this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportAllByCategoryPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllByCategoryPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Gesamtwertung nach Kategorie', 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportByGenderByCategoryPdf(gender: string): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportByGenderByCategoryPdf({ gender, raceId: selectedRaceId }));
+        const genderLabel = gender === 'MALE' ? 'Herren' : 'Damen';
+        this.snackBar.open(`PDF Export gestartet: Alle ${genderLabel} nach Kategorie`, 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportAllAgeGroupsByCategoryPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllAgeGroupsByCategoryPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Nach Altersklassen und Kategorie', 'OK', {
             duration: 2000,
         });
     }

@@ -106,6 +106,64 @@ public class PdfExportService {
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
     }
 
+    public byte[] generateOverallByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        List<Category> categories = sortedCategories();
+
+        return renderDocument(race, false, ctx -> {
+            for (Category category : categories) {
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, category.id());
+                if (!entries.isEmpty()) {
+                    String title = "Wertung " + category.name();
+                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                }
+            }
+        });
+    }
+
+    public byte[] generateGenderByCategoryRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<Category> categories = sortedCategories();
+
+        return renderDocument(race, false, ctx -> {
+            for (Category category : categories) {
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null, category.id());
+                if (!entries.isEmpty()) {
+                    String title = "Wertung " + category.name() + " " + genderLabel(gender);
+                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                }
+            }
+        });
+    }
+
+    public byte[] generateAllAgeGroupsByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        List<String> uniqueAgeGroupNames = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .map(AgeGroup::name)
+                .distinct()
+                .toList();
+        List<Category> categories = sortedCategories();
+
+        return renderDocument(race, false, ctx -> {
+            for (String ageGroupName : uniqueAgeGroupNames) {
+                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                    for (Category category : categories) {
+                        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroupName, category.id());
+                        if (!entries.isEmpty()) {
+                            String title = "Wertung " + ageGroupName + " " + genderLabel(gender) + " " + category.name();
+                            drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private List<Category> sortedCategories() {
+        return StreamSupport.stream(categoryService.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(Category::name))
+                .toList();
+    }
+
     public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
