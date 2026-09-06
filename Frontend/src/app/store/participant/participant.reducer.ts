@@ -132,6 +132,23 @@ export const participantReducer = createReducer(
         selectedParticipantId: id
     })),
 
+    // Assign race numbers
+    on(ParticipantActions.assignRaceNumbers, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(ParticipantActions.assignRaceNumbersSuccess, (state, {participants}) => ({
+        ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        loading: false
+    })),
+    on(ParticipantActions.assignRaceNumbersFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
     // PDF Export
     on(
         ParticipantActions.exportAllPdf,
@@ -140,6 +157,7 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllByCategoryPdf,
         ParticipantActions.exportByGenderByCategoryPdf,
         ParticipantActions.exportAllAgeGroupsByCategoryPdf,
+        ParticipantActions.exportStartListPdf,
         state => ({
             ...state,
             pdfExportLoading: true,
@@ -153,6 +171,7 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllByCategoryPdfSuccess,
         ParticipantActions.exportByGenderByCategoryPdfSuccess,
         ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
+        ParticipantActions.exportStartListPdfSuccess,
         state => ({
             ...state,
             pdfExportLoading: false
@@ -165,6 +184,7 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllByCategoryPdfFailure,
         ParticipantActions.exportByGenderByCategoryPdfFailure,
         ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure,
+        ParticipantActions.exportStartListPdfFailure,
         (state, {error}) => ({
             ...state,
             pdfExportLoading: false,

@@ -31,7 +31,8 @@ public record ParticipantResponse(
         @Schema(description = "Gender of the participant", example = "MALE")
         Gender gender,
 
-        @Schema(description = "Race number of the participant", example = "42")
+        @Nullable
+        @Schema(description = "Race number of the participant", example = "42", nullable = true)
         Integer raceNumber,
 
         @Nullable

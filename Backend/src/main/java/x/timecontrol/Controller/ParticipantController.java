@@ -134,6 +134,53 @@ public class ParticipantController {
         return HttpResponse.noContent();
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/race/{raceId}/assign-race-numbers")
+    @Operation(summary = "Randomly assign race numbers for a race",
+            description = "Assigns race numbers 1..n to all participants of a race, randomized within each age group; participants without a matching age group are assigned last, ordered by ascending age",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    public HttpResponse<List<ParticipantResponse>> assignRaceNumbers(@PathVariable Long raceId) {
+        List<Participant> updated = service.assignRaceNumbers(raceId);
+        List<ParticipantResponse> response = updated.stream()
+                .map(p -> {
+                    var race = service.findRaceForParticipant(p).orElse(null);
+                    var team = service.findTeamForParticipant(p).orElse(null);
+                    var category = service.findCategoryForParticipant(p).orElse(null);
+                    var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
+                    return ParticipantResponse.from(p, race, team, category, ageGroup);
+                })
+                .toList();
+        return HttpResponse.ok(response);
+    }
+
+    @Produces("application/pdf")
+    @Get("/export/pdf/startlist/{raceId}")
+    @Operation(summary = "Export start list as PDF",
+            description = "Generates a PDF start list sorted by race number for a specific race",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "500", description = "PDF generation failed")
+    public HttpResponse<byte[]> exportStartListToPdf(@PathVariable Long raceId) {
+        try {
+            Optional<Race> race = raceService.findById(raceId);
+            if (race.isEmpty()) {
+                return HttpResponse.notFound();
+            }
+
+            Iterable<Participant> participants = service.findByRaceId(raceId);
+
+            byte[] pdfBytes = pdfExportService.generateStartList(participants, race.get());
+            return HttpResponse.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=startliste.pdf");
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.serverError().body(e.getMessage().getBytes());
+        } catch (Exception e) {
+            return HttpResponse.serverError();
+        }
+    }
+
     @Produces("application/pdf")
     @Get("/export/pdf/all/{raceId}")
     @Operation(summary = "Export all participants as PDF",

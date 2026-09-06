@@ -94,6 +94,37 @@ export class ParticipantEffects {
         )
     );
 
+    assignRaceNumbers$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.assignRaceNumbers),
+            mergeMap(({raceId}) =>
+                this.participantService.assignRaceNumbers(raceId).pipe(
+                    map(participants => ParticipantActions.assignRaceNumbersSuccess({participants})),
+                    catchError(error => of(ParticipantActions.assignRaceNumbersFailure({
+                        error: error.message || 'Failed to assign race numbers'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportStartListPdf$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportStartListPdf),
+            mergeMap(({raceId}) =>
+                this.participantService.exportStartListToPdf(raceId).pipe(
+                    map(blob => ParticipantActions.exportStartListPdfSuccess({
+                        blob,
+                        filename: 'startliste.pdf'
+                    })),
+                    catchError(error => of(ParticipantActions.exportStartListPdfFailure({
+                        error: error.message || 'Failed to export PDF'
+                    })))
+                )
+            )
+        )
+    );
+
     // PDF Export Effects
     exportAllPdf$ = createEffect(() =>
         this.actions$.pipe(
@@ -206,7 +237,8 @@ export class ParticipantEffects {
                 ParticipantActions.exportAllAgeGroupsPdfSuccess,
                 ParticipantActions.exportAllByCategoryPdfSuccess,
                 ParticipantActions.exportByGenderByCategoryPdfSuccess,
-                ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess
+                ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
+                ParticipantActions.exportStartListPdfSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

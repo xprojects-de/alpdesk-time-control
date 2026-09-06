@@ -36,6 +36,16 @@ export class ParticipantService {
         return this.http.delete<void>(`${this.apiUrl}/race/${raceId}`);
     }
 
+    assignRaceNumbers(raceId: number): Observable<Participant[]> {
+        return this.http.post<Participant[]>(`${this.apiUrl}/race/${raceId}/assign-race-numbers`, {});
+    }
+
+    exportStartListToPdf(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/pdf/startlist/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
     // PDF Exports
     exportAllToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/all/${raceId}`, {

@@ -88,6 +88,34 @@ export const selectParticipant = createAction(
     props<{ id: number | null }>()
 );
 
+// Assign race numbers
+export const assignRaceNumbers = createAction(
+    '[Participant] Assign Race Numbers',
+    props<{ raceId: number }>()
+);
+export const assignRaceNumbersSuccess = createAction(
+    '[Participant] Assign Race Numbers Success',
+    props<{ participants: Participant[] }>()
+);
+export const assignRaceNumbersFailure = createAction(
+    '[Participant] Assign Race Numbers Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - Start list (Startliste)
+export const exportStartListPdf = createAction(
+    '[Participant] Export Start List PDF',
+    props<{ raceId: number }>()
+);
+export const exportStartListPdfSuccess = createAction(
+    '[Participant] Export Start List PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportStartListPdfFailure = createAction(
+    '[Participant] Export Start List PDF Failure',
+    props<{ error: string }>()
+);
+
 // PDF Export - All (Gesamtwertung)
 export const exportAllPdf = createAction(
     '[Participant] Export All PDF',

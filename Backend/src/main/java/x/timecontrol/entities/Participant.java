@@ -21,6 +21,7 @@ public record Participant(
         String lastName,
         LocalDate birthDate,
         Gender gender,
+        @Nullable
         Integer raceNumber,
         @Nullable
         Long teamId,

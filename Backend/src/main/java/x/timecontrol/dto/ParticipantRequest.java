@@ -26,7 +26,8 @@ public record ParticipantRequest(
         @Schema(description = "Gender of the participant", example = "MALE", requiredMode = Schema.RequiredMode.REQUIRED)
         Gender gender,
 
-        @Schema(description = "Race number of the participant", example = "42", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Nullable
+        @Schema(description = "Race number of the participant", example = "42", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         Integer raceNumber,
 
         @Nullable

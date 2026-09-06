@@ -43,7 +43,7 @@ CREATE TABLE participant
     last_name   TEXT    NOT NULL,
     birth_date  DATE    NOT NULL,
     gender      TEXT    NOT NULL,
-    race_number INTEGER NOT NULL,
+    race_number INTEGER,
     team_id     INTEGER REFERENCES team (id) ON DELETE SET NULL,
     category_id INTEGER REFERENCES category (id) ON DELETE SET NULL,
     duration_ms INTEGER,

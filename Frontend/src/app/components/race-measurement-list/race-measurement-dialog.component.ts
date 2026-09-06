@@ -290,7 +290,7 @@ export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy 
         return participants.filter((participant) => {
             const fullName =
                 `${participant.firstName} ${participant.lastName}`.toLowerCase();
-            const raceNumber = participant.raceNumber.toString();
+            const raceNumber = participant.raceNumber?.toString() ?? "";
             return (
                 fullName.includes(lowerSearchTerm) ||
                 raceNumber.includes(lowerSearchTerm)

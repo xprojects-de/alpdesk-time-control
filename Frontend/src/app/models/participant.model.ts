@@ -11,7 +11,7 @@ export interface Participant {
     lastName: string;
     birthDate: string;
     gender: Gender;
-    raceNumber: number;
+    raceNumber?: number;
     team?: Team;
     category?: Category;
     ageGroup?: AgeGroup;
@@ -25,7 +25,7 @@ export interface ParticipantRequest {
     lastName: string;
     birthDate: string;
     gender: Gender;
-    raceNumber: number;
+    raceNumber?: number;
     teamId?: number;
     categoryId?: number;
 }

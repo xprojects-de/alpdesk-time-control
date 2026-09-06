@@ -14,6 +14,7 @@ import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.Team;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -32,13 +33,19 @@ public class PdfExportService {
 
     private final AgeGroupService ageGroupService;
     private final CategoryService categoryService;
+    private final TeamService teamService;
 
-    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService) {
+    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService) {
         this.ageGroupService = ageGroupService;
         this.categoryService = categoryService;
+        this.teamService = teamService;
     }
 
     private record RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
+    }
+
+    private record StartListEntry(String raceNumber, String name, String birthYear, String gender,
+                                   String ageGroup, String team, String category) {
     }
 
     private record PdfColumn<T>(String header, float weight, Function<T, String> valueFn) {
@@ -51,6 +58,46 @@ public class PdfExportService {
             new PdfColumn<>("Absolutzeit", 1.3f, e -> formatTime(e.timeMs())),
             new PdfColumn<>("Diffzeit", 1.1f, e -> e.diffMs() != null ? ("+" + formatTime(e.diffMs())) : "-")
     );
+
+    private static final List<PdfColumn<StartListEntry>> START_LIST_COLUMNS = List.of(
+            new PdfColumn<>("StNr.", 0.5f, StartListEntry::raceNumber),
+            new PdfColumn<>("Name Vorname", 2.2f, e -> truncate(e.name(), 35)),
+            new PdfColumn<>("Jg.", 0.5f, StartListEntry::birthYear),
+            new PdfColumn<>("Geschl.", 0.7f, StartListEntry::gender),
+            new PdfColumn<>("Altersgruppe", 1.5f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
+            new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20))
+    );
+
+    public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
+        List<StartListEntry> entries = createStartListEntries(participants);
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, START_LIST_COLUMNS, "Startliste", entries, "Teilnehmer", true));
+    }
+
+    private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
+        List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
+                .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        List<StartListEntry> entries = new ArrayList<>();
+        for (Participant p : sorted) {
+            String raceNumber = p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+            String name = formatName(p);
+            String birthYear = p.birthDate() != null ? String.valueOf(p.birthDate().getYear()) : "-";
+            String gender = genderLabel(p.gender());
+            String ageGroup = calculateAgeGroup(p.birthDate());
+            String team = p.teamId() != null
+                    ? teamService.findById(p.teamId()).map(Team::name).orElse("-")
+                    : "-";
+            String category = p.categoryId() != null
+                    ? categoryService.findById(p.categoryId()).map(Category::name).orElse("-")
+                    : "-";
+
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category));
+        }
+        return entries;
+    }
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, null);

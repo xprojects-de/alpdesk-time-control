@@ -99,9 +99,30 @@ import {takeUntil, take} from "rxjs/operators";
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
-                    
-                    <button 
-                            mat-raised-button 
+
+                    @if ((selectedRaceId$ | async) !== null) {
+                        <button
+                                mat-raised-button
+                                (click)="assignRaceNumbers()"
+                                matTooltip="Startnummern innerhalb der Altersklassen zufällig zuweisen"
+                        >
+                            <mat-icon>shuffle</mat-icon>
+                            Startnummern zuweisen
+                        </button>
+
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                (click)="exportStartListPdf()"
+                                matTooltip="Startliste als PDF exportieren"
+                        >
+                            <mat-icon>picture_as_pdf</mat-icon>
+                            Startliste (PDF)
+                        </button>
+                    }
+
+                    <button
+                            mat-raised-button
                             color="accent"
                             [matMenuTriggerFor]="exportMenu"
                             [disabled]="pdfExportLoading$ | async"
@@ -563,6 +584,43 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     refreshData(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.snackBar.open("Daten werden aktualisiert...", "OK", {
+            duration: 2000,
+        });
+    }
+
+    async assignRaceNumbers(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+
+        if (
+            confirm(
+                'Möchten Sie die Startnummern für dieses Rennen wirklich neu zuweisen? Bereits vergebene Startnummern werden überschrieben.',
+            )
+        ) {
+            this.store.dispatch(ParticipantActions.assignRaceNumbers({raceId}));
+            this.snackBar.open('Startnummern werden zugewiesen...', 'OK', {
+                duration: 2000,
+            });
+        }
+    }
+
+    async exportStartListPdf(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportStartListPdf({raceId}));
+        this.snackBar.open('PDF Export gestartet: Startliste', 'OK', {
             duration: 2000,
         });
     }

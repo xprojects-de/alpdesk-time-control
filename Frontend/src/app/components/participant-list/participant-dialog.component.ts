@@ -122,11 +122,7 @@ import {Category} from "../../models/category.model";
 
                 <mat-form-field appearance="outline">
                     <mat-label>Startnummer</mat-label>
-                    <input matInput type="number" formControlName="raceNumber" required/>
-                    @if (form.get("raceNumber")?.hasError("required") &&
-                    form.get("raceNumber")?.touched) {
-                        <mat-error>Startnummer ist erforderlich</mat-error>
-                    }
+                    <input matInput type="number" formControlName="raceNumber"/>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
@@ -215,7 +211,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             birthDate: [birthDate, Validators.required],
             gender: [this.data?.gender || "", Validators.required],
             race: [this.data?.race?.id || "", Validators.required],
-            raceNumber: [this.data?.raceNumber || "", Validators.required],
+            raceNumber: [this.data?.raceNumber ?? ""],
             teamId: [this.data?.team?.id || null],
             categoryId: [this.data?.category?.id || null],
         });
@@ -254,7 +250,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 lastName: formValue.lastName,
                 birthDate: this.formatDate(formValue.birthDate),
                 gender: formValue.gender,
-                raceNumber: Number(formValue.raceNumber),
+                raceNumber: formValue.raceNumber !== "" && formValue.raceNumber !== null ? Number(formValue.raceNumber) : undefined,
                 teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
                 categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
             };
