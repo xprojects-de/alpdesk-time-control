@@ -286,6 +286,7 @@ public class PdfExportService {
 
         void newPage() throws IOException {
             if (stream != null) {
+                drawPageFooter(stream, page.getMediaBox().getWidth());
                 stream.close();
             }
             page = new PDPage(pageSize);
@@ -315,6 +316,7 @@ public class PdfExportService {
         }
 
         void close() throws IOException {
+            drawPageFooter(stream, page.getMediaBox().getWidth());
             stream.close();
         }
     }
@@ -576,6 +578,18 @@ public class PdfExportService {
         contentStream.stroke();
 
         return y - 12;
+    }
+
+    private static final String FOOTER_TEXT = "powered by Alpdesk TimeControl";
+
+    /**
+     * Draws the small marketing footer centered at the bottom of the page.
+     */
+    private void drawPageFooter(PDPageContentStream contentStream, float pageWidth) throws IOException {
+        float fontSize = 7;
+        float textWidth = FONT_REGULAR.getStringWidth(FOOTER_TEXT) / 1000 * fontSize;
+        float x = (pageWidth - textWidth) / 2;
+        drawText(contentStream, FONT_REGULAR, fontSize, x, 20, FOOTER_TEXT);
     }
 
     /**
