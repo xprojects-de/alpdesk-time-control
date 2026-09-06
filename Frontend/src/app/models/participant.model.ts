@@ -28,5 +28,7 @@ export interface ParticipantRequest {
     raceNumber?: number;
     teamId?: number;
     categoryId?: number;
+    durationMs?: number;
+    measuredAt?: string;
 }
 

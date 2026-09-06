@@ -144,6 +144,35 @@ import {Category} from "../../models/category.model";
                         }
                     </mat-select>
                 </mat-form-field>
+
+                <h3 class="time-section-title">Zeit</h3>
+                <div class="time-input-group">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Minuten</mat-label>
+                        <input matInput type="number" formControlName="minutes" min="0"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Sekunden</mat-label>
+                        <input matInput type="number" formControlName="seconds" min="0" max="59"/>
+                        @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
+                            <mat-error>Sekunden: 0-59</mat-error>
+                        }
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Millisekunden</mat-label>
+                        <input matInput type="number" formControlName="milliseconds" min="0" max="999"/>
+                        @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
+                            <mat-error>Millisekunden: 0-999</mat-error>
+                        }
+                    </mat-form-field>
+                </div>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Gemessen am</mat-label>
+                    <input matInput type="datetime-local" formControlName="measuredAt"/>
+                </mat-form-field>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -171,6 +200,23 @@ import {Category} from "../../models/category.model";
 
           mat-form-field {
             width: 100%;
+          }
+
+          .time-section-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.6);
+          }
+
+          .time-input-group {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+          }
+
+          .time-input-group mat-form-field {
+            flex: 1;
           }
         `,
     ],
@@ -205,6 +251,8 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             }
         }
 
+        const timeComponents = this.splitMilliseconds(this.data?.durationMs);
+
         this.form = this.fb.group({
             firstName: [this.data?.firstName || "", Validators.required],
             lastName: [this.data?.lastName || "", Validators.required],
@@ -214,6 +262,10 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             raceNumber: [this.data?.raceNumber ?? ""],
             teamId: [this.data?.team?.id || null],
             categoryId: [this.data?.category?.id || null],
+            minutes: [timeComponents.minutes, [Validators.min(0)]],
+            seconds: [timeComponents.seconds, [Validators.min(0), Validators.max(59)]],
+            milliseconds: [timeComponents.milliseconds, [Validators.min(0), Validators.max(999)]],
+            measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
         });
     }
 
@@ -244,6 +296,10 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     onSave(): void {
         if (this.form.valid) {
             const formValue = this.form.value;
+            const timeEntered = formValue.minutes !== "" && formValue.minutes !== null ||
+                formValue.seconds !== "" && formValue.seconds !== null ||
+                formValue.milliseconds !== "" && formValue.milliseconds !== null;
+
             const participant: ParticipantRequest = {
                 raceId: Number(formValue.race),
                 firstName: formValue.firstName,
@@ -253,6 +309,12 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 raceNumber: formValue.raceNumber !== "" && formValue.raceNumber !== null ? Number(formValue.raceNumber) : undefined,
                 teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
                 categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
+                durationMs: timeEntered ? this.convertToMilliseconds(
+                    Number(formValue.minutes || 0),
+                    Number(formValue.seconds || 0),
+                    Number(formValue.milliseconds || 0),
+                ) : undefined,
+                measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
             };
             this.dialogRef.close(participant);
         }
@@ -278,5 +340,47 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             return `${day}.${month}.${year}`;
         }
         return dateString;
+    }
+
+    private convertToMilliseconds(minutes: number, seconds: number, milliseconds: number): number {
+        return (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
+    }
+
+    private splitMilliseconds(totalMs: number | null | undefined): { minutes: number | string; seconds: number | string; milliseconds: number | string } {
+        if (totalMs === null || totalMs === undefined) {
+            return {minutes: "", seconds: "", milliseconds: ""};
+        }
+        const minutes = Math.floor(totalMs / (60 * 1000));
+        const remainingAfterMinutes = totalMs % (60 * 1000);
+        const seconds = Math.floor(remainingAfterMinutes / 1000);
+        const milliseconds = remainingAfterMinutes % 1000;
+        return {minutes, seconds, milliseconds};
+    }
+
+    private formatDateTimeForInput(dateTime?: string): string {
+        if (!dateTime) {
+            return "";
+        }
+        return this.toLocalISOString(new Date(dateTime));
+    }
+
+    private toLocalISOString(date: Date): string {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    private formatDateTimeForBackend(dateTime: string): string {
+        const date = dateTime ? new Date(dateTime) : new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
     }
 }

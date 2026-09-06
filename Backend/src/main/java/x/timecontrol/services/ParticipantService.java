@@ -63,7 +63,11 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
-            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.teamId(), participant.categoryId(), participant.durationMs(), participant.measuredAt());
+            // durationMs/measuredAt are omitted by most update flows (e.g. editing name/team) and must not
+            // wipe out a time that was already assigned via the measurement sync; only overwrite when provided.
+            Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
+            var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
+            Participant updated = new Participant(id, participant.raceId(), participant.firstName(), participant.lastName(), participant.birthDate(), participant.gender(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, measuredAt);
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
