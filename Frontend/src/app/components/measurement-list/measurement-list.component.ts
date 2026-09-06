@@ -277,6 +277,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     </div>
                 }
 
+                <div class="table-container">
                 <table
                         mat-table
                         [dataSource]="(measurements$ | async) || []"
@@ -330,6 +331,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
+                </div>
 
                 <div class="count-info">
                     Anzahl der Messungen: {{ ((measurements$ | async) || []).length }}

@@ -71,6 +71,7 @@ import {takeUntil} from "rxjs/operators";
                     </div>
                 }
 
+                <div class="table-container">
                 <table
                         mat-table
                         [dataSource]="dataSource"
@@ -114,6 +115,7 @@ import {takeUntil} from "rxjs/operators";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
+                </div>
             </mat-card-content>
         </mat-card>
     `,

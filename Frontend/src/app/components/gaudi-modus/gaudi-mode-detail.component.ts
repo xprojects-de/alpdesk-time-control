@@ -67,6 +67,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                     </div>
 
                     @if ((pairing$ | async)?.length) {
+                        <div class="table-container">
                         <table mat-table [dataSource]="(pairing$ | async) || []" class="detail-table">
                             <ng-container matColumnDef="participant1">
                                 <th mat-header-cell *matHeaderCellDef>Teilnehmer 1</th>
@@ -79,6 +80,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                             <tr mat-header-row *matHeaderRowDef="pairingColumns"></tr>
                             <tr mat-row *matRowDef="let row; columns: pairingColumns"></tr>
                         </table>
+                        </div>
                     } @else {
                         <p class="hint">Noch keine Zulosung vorhanden.</p>
                     }
@@ -105,6 +107,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                 </div>
 
                 @if ((ranking$ | async)?.length) {
+                    <div class="table-container">
                     <table mat-table [dataSource]="(ranking$ | async) || []" class="detail-table">
                         <ng-container matColumnDef="place">
                             <th mat-header-cell *matHeaderCellDef>Platz</th>
@@ -141,6 +144,7 @@ import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors
                         <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
                         <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
                     </table>
+                    </div>
                 } @else {
                     <p class="hint">Noch keine Wertung berechnet.</p>
                 }

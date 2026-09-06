@@ -102,6 +102,7 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                         </div>
                     }
 
+                    <div class="table-container">
                     <table
                             mat-table
                             [dataSource]="(raceMeasurementsWithParticipants$ | async) || []"
@@ -157,6 +158,7 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                         <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                     </table>
+                    </div>
 
                     <div class="count-info">
                         Anzahl der archivierten Messungen: {{ ((raceMeasurementsWithParticipants$ | async) || []).length }}

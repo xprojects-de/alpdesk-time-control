@@ -75,6 +75,7 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                     </div>
                 }
 
+                <div class="table-container">
                 <table mat-table [dataSource]="(filteredGaudiModes$ | async) || []" class="gaudi-mode-table">
                     <ng-container matColumnDef="name">
                         <th mat-header-cell *matHeaderCellDef>Name</th>
@@ -114,6 +115,7 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
+                </div>
 
                 @if (selectedGaudiMode$ | async; as selected) {
                     <app-gaudi-mode-detail [gaudiMode]="selected" (closed)="closeDetail()"/>

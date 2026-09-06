@@ -211,6 +211,7 @@ import {takeUntil, take} from "rxjs/operators";
                     </div>
                 }
 
+                <div class="table-container">
                 <table
                         mat-table
                         [dataSource]="dataSource"
@@ -343,7 +344,8 @@ import {takeUntil, take} from "rxjs/operators";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
-                
+                </div>
+
                 <div class="count-info" [class.hidden]="loading$ | async">
                     Anzahl der Teilnehmer: {{ dataSource.data.length }}
                 </div>
