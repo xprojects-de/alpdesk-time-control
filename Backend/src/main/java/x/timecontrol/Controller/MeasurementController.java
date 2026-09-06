@@ -28,6 +28,7 @@ import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/measurements")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Measurement")
 public class MeasurementController {
 
@@ -126,7 +127,6 @@ public class MeasurementController {
     }
 
     @Delete("/reset")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Delete all measurements and optionally reset device",
             description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -158,7 +158,6 @@ public class MeasurementController {
     }
 
     @Put("/continuous-mode")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Enable or disable continuous mode on device",
             description = "Enables or disables continuous mode on the SKitiming Controller device. When enabled, the device will continuously measure. When disabled, manual triggering is required.",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -184,7 +183,6 @@ public class MeasurementController {
     }
 
     @Get("/device-status")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Get device status",
             description = "Returns the current mode of the SKitiming Controller device ('continuous' or 'normal')",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -205,7 +203,6 @@ public class MeasurementController {
     }
 
     @Get("/device-connection")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Check device connection",
             description = "Checks if the SKitiming Controller device is reachable and returns the connection status via HTTP status code",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -226,7 +223,6 @@ public class MeasurementController {
     }
 
     @Post("/discard")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Discard oldest start from device queue",
             description = "Discards the oldest start from the device's internal queue. Only works in normal mode (not in continuous mode)",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -249,7 +245,6 @@ public class MeasurementController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Import measurements from external device",
             description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
             security = @SecurityRequirement(name = "BearerAuth"))

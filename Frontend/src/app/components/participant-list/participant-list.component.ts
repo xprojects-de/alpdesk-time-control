@@ -32,6 +32,7 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-participant-list",
@@ -412,6 +413,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
@@ -455,6 +457,58 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.importLoading$ = this.store.select(
             ParticipantSelectors.selectImportLoading,
         );
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.createParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.createParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.updateParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.updateParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantsByRaceIdSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Alle Teilnehmer des Rennens erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantsByRaceIdFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der Teilnehmer: ${error}`, "OK", {duration: 5000});
+        });
 
         // Setup sort when signal changes
         effect(() => {
@@ -561,9 +615,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         ParticipantActions.createParticipant({participant: result}),
                     );
-                    this.snackBar.open("Teilnehmer erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -584,9 +635,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                             participant: result,
                         }),
                     );
-                    this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -600,9 +648,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.store.dispatch(
                 ParticipantActions.deleteParticipant({id: participant.id}),
             );
-            this.snackBar.open("Teilnehmer erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 
@@ -621,9 +666,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         ParticipantActions.deleteParticipantsByRaceId({raceId}),
                     );
-                    this.snackBar.open("Alle Teilnehmer des Rennens erfolgreich gelöscht", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }

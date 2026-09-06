@@ -24,6 +24,7 @@ import * as CategoryActions from "../../store/category/category.actions";
 import * as CategorySelectors from "../../store/category/category.selectors";
 import {CategoryDialogComponent} from "./category-dialog.component";
 import {takeUntil} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-category-list",
@@ -157,6 +158,7 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     categories$: Observable<Category[]>;
@@ -170,6 +172,45 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
     constructor() {
         this.categories$ = this.store.select(CategorySelectors.selectAllCategories);
         this.loading$ = this.store.select(CategorySelectors.selectCategoryLoading);
+
+        this.actions$.pipe(
+            ofType(CategoryActions.createCategorySuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Kategorie erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(CategoryActions.createCategoryFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen der Kategorie: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(CategoryActions.updateCategorySuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Kategorie erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(CategoryActions.updateCategoryFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren der Kategorie: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(CategoryActions.deleteCategorySuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Kategorie erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(CategoryActions.deleteCategoryFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der Kategorie: ${error}`, "OK", {duration: 5000});
+        });
 
         effect(() => {
             const sortInstance = this.sort();
@@ -207,9 +248,6 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
             .subscribe((result) => {
                 if (result) {
                     this.store.dispatch(CategoryActions.createCategory({category: result}));
-                    this.snackBar.open("Kategorie erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -227,9 +265,6 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         CategoryActions.updateCategory({id: category.id, category: result}),
                     );
-                    this.snackBar.open("Kategorie erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -237,9 +272,6 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
     deleteCategory(category: Category): void {
         if (confirm(`Möchten Sie die Kategorie "${category.name}" wirklich löschen?`)) {
             this.store.dispatch(CategoryActions.deleteCategory({id: category.id}));
-            this.snackBar.open("Kategorie erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 

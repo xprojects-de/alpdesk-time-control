@@ -24,6 +24,7 @@ import {GaudiMode, GaudiModeType, GaudiModeTypeLabels} from "../../models/gaudi-
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import * as GaudiModeActions from "../../store/gaudi-mode/gaudi-mode.actions";
+import {Actions, ofType} from "@ngrx/effects";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
 import {GaudiModeDialogComponent} from "./gaudi-mode-dialog.component";
 import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
@@ -158,6 +159,7 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     races$: Observable<Race[]>;
@@ -186,6 +188,32 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
                     GaudiModeSelectors.selectGaudiModesByRace(raceId)
                 );
             });
+
+        this.actions$.pipe(
+            ofType(GaudiModeActions.createGaudiModeSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Gaudi-Modus erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.createGaudiModeFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(GaudiModeActions.deleteGaudiModeSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Gaudi-Modus erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.deleteGaudiModeFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+        });
     }
 
     ngAfterViewInit(): void {
@@ -219,7 +247,6 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
                 .subscribe((result) => {
                     if (result) {
                         this.store.dispatch(GaudiModeActions.createGaudiMode({gaudiMode: result}));
-                        this.snackBar.open("Gaudi-Modus erfolgreich erstellt", "OK", {duration: 3000});
                     }
                 });
         });
@@ -236,7 +263,6 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
     deleteGaudiMode(gaudiMode: GaudiMode): void {
         if (confirm(`Möchten Sie den Gaudi-Modus "${gaudiMode.name}" wirklich löschen?`)) {
             this.store.dispatch(GaudiModeActions.deleteGaudiMode({id: gaudiMode.id}));
-            this.snackBar.open("Gaudi-Modus erfolgreich gelöscht", "OK", {duration: 3000});
         }
     }
 }

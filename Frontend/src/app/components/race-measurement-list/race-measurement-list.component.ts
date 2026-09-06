@@ -354,6 +354,27 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
                 panelClass: "error-snackbar"
             });
         });
+
+        // Listen for successful delete
+        this.actions$.pipe(
+            ofType(RaceMeasurementActions.deleteRaceMeasurementSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open("Messung erfolgreich gelöscht", "OK", {
+                duration: 3000,
+            });
+        });
+
+        // Listen for failed delete
+        this.actions$.pipe(
+            ofType(RaceMeasurementActions.deleteRaceMeasurementFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open("FEHLER beim Löschen der Messung", "OK", {
+                duration: 10000,
+                panelClass: "error-snackbar"
+            });
+        });
     }
 
     ngAfterViewInit(): void {
@@ -440,9 +461,6 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
             this.store.dispatch(
                 RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}),
             );
-            this.snackBar.open("Messung erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 

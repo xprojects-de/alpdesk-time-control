@@ -10,6 +10,8 @@ import x.timecontrol.services.RaceMeasurementService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +27,7 @@ import java.util.Optional;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/race-measurements")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "RaceMeasurement")
 public class RaceMeasurementController {
 

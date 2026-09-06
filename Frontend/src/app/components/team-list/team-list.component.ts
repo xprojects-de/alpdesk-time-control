@@ -24,6 +24,7 @@ import * as TeamActions from "../../store/team/team.actions";
 import * as TeamSelectors from "../../store/team/team.selectors";
 import {TeamDialogComponent} from "./team-dialog.component";
 import {takeUntil} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-team-list",
@@ -157,6 +158,7 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     teams$: Observable<Team[]>;
@@ -170,6 +172,45 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     constructor() {
         this.teams$ = this.store.select(TeamSelectors.selectAllTeams);
         this.loading$ = this.store.select(TeamSelectors.selectTeamLoading);
+
+        this.actions$.pipe(
+            ofType(TeamActions.createTeamSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Team erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(TeamActions.createTeamFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Teams: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(TeamActions.updateTeamSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Team erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(TeamActions.updateTeamFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Teams: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(TeamActions.deleteTeamSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Team erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(TeamActions.deleteTeamFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Teams: ${error}`, "OK", {duration: 5000});
+        });
 
         effect(() => {
             const sortInstance = this.sort();
@@ -207,9 +248,6 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
             .subscribe((result) => {
                 if (result) {
                     this.store.dispatch(TeamActions.createTeam({team: result}));
-                    this.snackBar.open("Team erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -227,9 +265,6 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         TeamActions.updateTeam({id: team.id, team: result}),
                     );
-                    this.snackBar.open("Team erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -237,9 +272,6 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     deleteTeam(team: Team): void {
         if (confirm(`Möchten Sie das Team "${team.name}" wirklich löschen?`)) {
             this.store.dispatch(TeamActions.deleteTeam({id: team.id}));
-            this.snackBar.open("Team erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 

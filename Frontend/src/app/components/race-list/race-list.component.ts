@@ -24,6 +24,7 @@ import * as RaceActions from '../../store/race/race.actions';
 import * as RaceSelectors from '../../store/race/race.selectors';
 import {RaceDialogComponent} from './race-dialog.component';
 import {takeUntil} from 'rxjs/operators';
+import {Actions, ofType} from '@ngrx/effects';
 
 @Component({
     selector: 'app-race-list',
@@ -166,6 +167,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     races$: Observable<Race[]>;
@@ -179,6 +181,45 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     constructor() {
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.loading$ = this.store.select(RaceSelectors.selectRaceLoading);
+
+        this.actions$.pipe(
+            ofType(RaceActions.createRaceSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open('Rennen erfolgreich erstellt', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(RaceActions.createRaceFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Rennens: ${error}`, 'OK', {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(RaceActions.updateRaceSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open('Rennen erfolgreich aktualisiert', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(RaceActions.updateRaceFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Rennens: ${error}`, 'OK', {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(RaceActions.deleteRaceSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open('Rennen erfolgreich gelöscht', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(RaceActions.deleteRaceFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Rennens: ${error}`, 'OK', {duration: 5000});
+        });
 
         // Setup sort when signal changes
         effect(() => {
@@ -229,9 +270,6 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         RaceActions.createRace({race: result})
                     );
-                    this.snackBar.open('Rennen erfolgreich erstellt', 'OK', {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -252,9 +290,6 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
                             race: result,
                         })
                     );
-                    this.snackBar.open('Rennen erfolgreich aktualisiert', 'OK', {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -268,9 +303,6 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
             this.store.dispatch(
                 RaceActions.deleteRace({id: race.id})
             );
-            this.snackBar.open('Rennen erfolgreich gelöscht', 'OK', {
-                duration: 3000,
-            });
         }
     }
 

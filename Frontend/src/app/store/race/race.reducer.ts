@@ -6,7 +6,7 @@ export interface RaceState {
     races: Race[];
     selectedRaceId: number | null;
     loading: boolean;
-    error: any;
+    error: string | null;
 }
 
 export const initialState: RaceState = {

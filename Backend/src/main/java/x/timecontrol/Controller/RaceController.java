@@ -27,6 +27,7 @@ import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/races")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Race")
 public class RaceController {
 
@@ -113,7 +114,6 @@ public class RaceController {
     }
 
     @Post("/{raceId}/archive-measurements")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Archive current measurements into this race, optionally clearing the measurement table",
             description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first (if device reset fails, no data is copied or deleted). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
             security = @SecurityRequirement(name = "BearerAuth"))

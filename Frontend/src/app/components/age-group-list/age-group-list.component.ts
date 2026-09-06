@@ -25,6 +25,7 @@ import * as AgeGroupActions from "../../store/age-group/age-group.actions";
 import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {AgeGroupDialogComponent} from "./age-group-dialog.component";
 import {takeUntil} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-age-group-list",
@@ -191,6 +192,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     ageGroups$: Observable<AgeGroup[]>;
@@ -215,6 +217,45 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         this.loading$ = this.store.select(
             AgeGroupSelectors.selectAgeGroupLoading,
         );
+
+        this.actions$.pipe(
+            ofType(AgeGroupActions.createAgeGroupSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Altersgruppe erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(AgeGroupActions.createAgeGroupFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen der Altersgruppe: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(AgeGroupActions.updateAgeGroupSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Altersgruppe erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(AgeGroupActions.updateAgeGroupFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren der Altersgruppe: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(AgeGroupActions.deleteAgeGroupSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Altersgruppe erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(AgeGroupActions.deleteAgeGroupFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der Altersgruppe: ${error}`, "OK", {duration: 5000});
+        });
 
         // Setup sort when signal changes
         effect(() => {
@@ -269,9 +310,6 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         AgeGroupActions.createAgeGroup({ageGroup: result}),
                     );
-                    this.snackBar.open("Altersgruppe erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -292,9 +330,6 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                             ageGroup: result,
                         }),
                     );
-                    this.snackBar.open("Altersgruppe erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -308,9 +343,6 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             this.store.dispatch(
                 AgeGroupActions.deleteAgeGroup({id: ageGroup.id}),
             );
-            this.snackBar.open("Altersgruppe erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 

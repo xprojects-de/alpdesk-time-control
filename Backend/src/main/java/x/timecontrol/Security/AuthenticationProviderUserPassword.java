@@ -10,6 +10,8 @@ import io.micronaut.security.authentication.AuthenticationResponse;
 import io.micronaut.security.authentication.provider.HttpRequestAuthenticationProvider;
 import jakarta.inject.Singleton;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 @Singleton
@@ -30,11 +32,18 @@ class AuthenticationProviderUserPassword<B> implements HttpRequestAuthentication
         String username = authenticationRequest.getIdentity();
         String password = authenticationRequest.getSecret();
 
-        if (username.equals(expectedUsername) && password.equals(expectedPassword)) {
+        if (constantTimeEquals(username, expectedUsername) && constantTimeEquals(password, expectedPassword)) {
             return AuthenticationResponse.success(authenticationRequest.getIdentity(), List.of("ROLE_USER"));
         }
 
         return AuthenticationResponse.failure(AuthenticationFailureReason.CREDENTIALS_DO_NOT_MATCH);
 
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 }
