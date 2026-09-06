@@ -45,6 +45,13 @@ export class MeasurementService {
         });
     }
 
+    archive(raceId: number, resetDevice: boolean): Observable<string> {
+        return this.http.post(`${environment.apiUrl}/races/${raceId}/archive-measurements`, null, {
+            params: { resetDevice: resetDevice.toString() },
+            responseType: 'text'
+        });
+    }
+
     setContinuousMode(enable: boolean): Observable<string> {
         return this.http.put(`${this.apiUrl}/continuous-mode`, null, {
             params: { enable: enable.toString() },
@@ -61,12 +68,6 @@ export class MeasurementService {
 
     getScheduledImportStatus(): Observable<boolean> {
         return this.http.get<boolean>(`${this.apiUrl}/scheduled-import/status`);
-    }
-
-    syncMeasurementsToParticipants(): Observable<string> {
-        return this.http.post(`${this.apiUrl}/sync-to-participants`, null, {
-            responseType: 'text'
-        });
     }
 
     getDeviceStatus(): Observable<string> {

@@ -158,6 +158,24 @@ export const measurementReducer = createReducer(
         error
     })),
 
+    // Archive measurements
+    on(MeasurementActions.archiveMeasurements, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.archiveMeasurementsSuccess, state => ({
+        ...state,
+        measurements: [],
+        selectedMeasurementId: null,
+        loading: false
+    })),
+    on(MeasurementActions.archiveMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
     // Continuous mode
     on(MeasurementActions.setContinuousMode, state => ({
         ...state,

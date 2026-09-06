@@ -10,12 +10,11 @@ import {
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
+import {Observable, interval, Subject, EMPTY} from "rxjs";
 import {
-    map,
+    take,
     takeUntil,
     switchMap,
-    distinctUntilChanged,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -32,20 +31,13 @@ import {MatDividerModule} from "@angular/material/divider";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {Measurement} from "../../models/measurement.model";
-import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
-import * as ParticipantActions from "../../store/participant/participant.actions";
-import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
-
-interface MeasurementWithParticipant extends Measurement {
-    participantName?: string;
-}
 
 @Component({
     selector: "app-measurement-list",
@@ -132,17 +124,30 @@ interface MeasurementWithParticipant extends Measurement {
                         </button>
                     </div>
 
-                    <!-- Gruppe 2: Sync zu Teilnehmern -->
+                    <!-- Gruppe 2: Archivieren -->
                     <div class="button-group">
                         <button
                                 mat-raised-button
                                 color="accent"
-                                (click)="syncMeasurementsToParticipants()"
-                                matTooltip="Messungen mit Teilnehmern synchronisieren"
+                                [matMenuTriggerFor]="archiveMenu"
+                                matTooltip="Aktuelle Messungen für das gewählte Rennen archivieren und Messtabelle leeren"
                         >
-                            <mat-icon>sync</mat-icon>
-                            Sync zu Teilnehmern
+                            <mat-icon>archive</mat-icon>
+                            Archivieren
+                            <mat-icon>arrow_drop_down</mat-icon>
                         </button>
+
+                        <mat-menu #archiveMenu="matMenu">
+                            <button mat-menu-item (click)="archiveMeasurements(false)">
+                                <mat-icon>archive</mat-icon>
+                                <span>Archivieren (nur Datenbank)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="archiveMeasurements(true)">
+                                <mat-icon>archive</mat-icon>
+                                <span>Archivieren (inkl. Gerät-Reset)</span>
+                            </button>
+                        </mat-menu>
                     </div>
 
                     <!-- Gruppe 3: Export & Import -->
@@ -269,7 +274,7 @@ interface MeasurementWithParticipant extends Measurement {
 
                 <table
                         mat-table
-                        [dataSource]="(measurementsWithParticipants$ | async) || []"
+                        [dataSource]="(measurements$ | async) || []"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                 >
@@ -277,14 +282,6 @@ interface MeasurementWithParticipant extends Measurement {
                     <ng-container matColumnDef="id">
                         <th mat-header-cell *matHeaderCellDef>ID</th>
                         <td mat-cell *matCellDef="let measurement">{{ measurement.id }}</td>
-                    </ng-container>
-
-                    <!-- Participant Column -->
-                    <ng-container matColumnDef="participant">
-                        <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
-                        <td mat-cell *matCellDef="let measurement">
-                            {{ measurement.participantName || "-" }}
-                        </td>
                     </ng-container>
 
                     <!-- Duration Column -->
@@ -330,7 +327,7 @@ interface MeasurementWithParticipant extends Measurement {
                 </table>
 
                 <div class="count-info">
-                    Anzahl der Messungen: {{ ((measurementsWithParticipants$ | async) || []).length }}
+                    Anzahl der Messungen: {{ ((measurements$ | async) || []).length }}
                 </div>
             </mat-card-content>
         </mat-card>
@@ -540,27 +537,23 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private autoRefresh$ = new Subject<boolean>();
 
     measurements$: Observable<Measurement[]>;
-    participants$: Observable<Participant[]>;
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
-    measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
-    displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
+    displayedColumns = ["id", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
     private lastResetDevice = false;
+    private lastArchiveResetDevice = false;
 
     jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
     constructor() {
         this.measurements$ = this.store.select(
             MeasurementSelectors.selectAllMeasurements,
-        );
-        this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
@@ -575,23 +568,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.deviceStatus$ = this.store.select(
             MeasurementSelectors.selectDeviceStatus,
-        );
-
-        this.measurementsWithParticipants$ = combineLatest([
-            this.measurements$,
-            this.participants$,
-        ]).pipe(
-            map(([measurements, participants]) =>
-                measurements.map((m) => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
-            ),
-            distinctUntilChanged(
-                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
-            ),
         );
 
         // Listen for successful reset and show success message
@@ -666,23 +642,25 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful sync to participants
+        // Listen for successful archive and show success message
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipantsSuccess),
+            ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('Messungen erfolgreich mit Teilnehmern synchronisiert', 'OK', {
+            const successMsg = this.lastArchiveResetDevice
+                ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
+                : 'Messungen archiviert. Bereit für das nächste Rennen.';
+            this.snackBar.open(successMsg, 'OK', {
                 duration: 3000,
             });
-            this.loadData();
         });
 
-        // Listen for failed sync to participants
+        // Listen for failed archive and show error message
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipantsFailure),
+            ofType(MeasurementActions.archiveMeasurementsFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Synchronisieren der Messungen', 'OK', {
+            this.snackBar.open('FEHLER beim Archivieren der Messungen', 'OK', {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
@@ -822,7 +800,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
-        this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(RaceActions.loadRaces());
         this.updateLastUpdateTime();
     }
@@ -830,16 +807,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private updateLastUpdateTime(): void {
         const now = new Date();
         this.lastUpdate = now.toLocaleTimeString("de-DE");
-    }
-
-    getParticipantName(
-        participantId: number,
-        participants: Participant[],
-    ): string {
-        const participant = participants.find((p) => p.id === participantId);
-        return participant
-            ? `${participant.firstName} ${participant.lastName}`
-            : "-";
     }
 
     formatDuration(ms: number): string {
@@ -949,10 +916,24 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(MeasurementActions.setScheduledImport({enable}));
     }
 
-    syncMeasurementsToParticipants(): void {
-        this.store.dispatch(MeasurementActions.syncMeasurementsToParticipants());
-        this.snackBar.open('Synchronisierung gestartet...', 'OK', {
-            duration: 2000,
+    archiveMeasurements(resetDevice: boolean): void {
+        this.selectedRaceId$.pipe(take(1)).subscribe(raceId => {
+            if (!raceId) {
+                this.snackBar.open('Bitte zuerst ein Rennen im Filter auswählen', 'OK', {
+                    duration: 4000,
+                    panelClass: 'error-snackbar'
+                });
+                return;
+            }
+
+            const message = resetDevice
+                ? 'Möchten Sie die aktuellen Messungen wirklich archivieren und das Gerät zurücksetzen? Danach kann sofort das nächste Rennen gemessen werden.'
+                : 'Möchten Sie die aktuellen Messungen wirklich archivieren (nur Datenbank)? Danach kann sofort das nächste Rennen gemessen werden.';
+
+            if (confirm(message)) {
+                this.lastArchiveResetDevice = resetDevice;
+                this.store.dispatch(MeasurementActions.archiveMeasurements({raceId, resetDevice}));
+            }
         });
     }
 

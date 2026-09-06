@@ -159,17 +159,25 @@ export class MeasurementEffects {
         )
     );
 
-    syncMeasurementsToParticipants$ = createEffect(() =>
+    archiveMeasurements$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipants),
-            mergeMap(() =>
-                this.measurementService.syncMeasurementsToParticipants().pipe(
-                    map(message => MeasurementActions.syncMeasurementsToParticipantsSuccess({message})),
-                    catchError(error => of(MeasurementActions.syncMeasurementsToParticipantsFailure({
-                        error: error.message || 'Failed to sync measurements to participants'
+            ofType(MeasurementActions.archiveMeasurements),
+            mergeMap(({raceId, resetDevice}) =>
+                this.measurementService.archive(raceId, resetDevice).pipe(
+                    map(() => MeasurementActions.archiveMeasurementsSuccess()),
+                    catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
+                        error: error.message || 'Failed to archive measurements'
                     })))
                 )
             )
+        )
+    );
+
+    // Reload measurements after successful archive
+    reloadAfterArchive$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.archiveMeasurementsSuccess),
+            map(() => MeasurementActions.loadMeasurements())
         )
     );
 

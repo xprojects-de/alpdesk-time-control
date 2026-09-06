@@ -11,6 +11,7 @@ import {MatTooltipModule} from "@angular/material/tooltip";
 import {RaceListComponent} from "../race-list/race-list.component";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
+import {RaceMeasurementListComponent} from "../race-measurement-list/race-measurement-list.component";
 import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
 import {TeamListComponent} from "../team-list/team-list.component";
 import {CategoryListComponent} from "../category-list/category-list.component";
@@ -34,6 +35,7 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
         RaceListComponent,
         ParticipantListComponent,
         MeasurementListComponent,
+        RaceMeasurementListComponent,
         AgeGroupListComponent,
         TeamListComponent,
         CategoryListComponent,
@@ -100,6 +102,9 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
                 </mat-tab>
                 <mat-tab label="Messungen">
                     <app-measurement-list/>
+                </mat-tab>
+                <mat-tab label="Zuordnung &amp; Sync">
+                    <app-race-measurement-list/>
                 </mat-tab>
                 <mat-tab label="Gaudi-Modus">
                     <app-gaudi-modus/>
