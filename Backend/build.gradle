@@ -46,6 +46,7 @@ java {
     targetCompatibility = JavaVersion.toVersion("25")
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
+        // @TODO comment in for graal
         // vendor = JvmVendorSpec.GRAAL_VM
     }
 }
