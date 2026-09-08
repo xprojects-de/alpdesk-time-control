@@ -43,7 +43,7 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
     ],
     template: `
         <mat-toolbar color="primary">
-            <span>TimeControl - Zeitnahme System</span>
+            <span>Alpdesk TimeControl - Zeitnahme System</span>
             <span class="spacer"></span>
 
             <!-- Device Connection Status -->

@@ -13,10 +13,17 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
 
     List<RaceMeasurement> findByRaceId(Long raceId);
 
-    // OR IGNORE relies on the unique (race_id, device_measurement_id) index in the schema so that
-    // archiving the same race twice (e.g. a double click on "Archivieren ohne Löschen") skips rows
-    // already archived instead of duplicating them.
-    @Query(value = "INSERT OR IGNORE INTO race_measurement (race_id, device_measurement_id, participant_id, duration_ms, measured_at) " +
-            "SELECT :raceId, id, participant_id, duration_ms, measured_at FROM measurement", nativeQuery = true)
+    // Upserts on the unique (race_id, device_measurement_id) index so that copying/archiving the
+    // same race again is safe: it neither duplicates already-copied rows nor discards a re-measured
+    // value, it overwrites the existing row with the current measurement data instead.
+    // The "WHERE true" is required: SQLite's grammar otherwise parses the ON in "ON CONFLICT" as a
+    // join condition on the FROM clause rather than the start of the upsert clause (a documented
+    // SQLite ambiguity - see the "Parsing Ambiguity" note in the UPSERT documentation).
+    @Query(value = "INSERT INTO race_measurement (race_id, device_measurement_id, participant_id, duration_ms, measured_at) " +
+            "SELECT :raceId, id, participant_id, duration_ms, measured_at FROM measurement WHERE true " +
+            "ON CONFLICT (race_id, device_measurement_id) DO UPDATE SET " +
+            "participant_id = excluded.participant_id, " +
+            "duration_ms = excluded.duration_ms, " +
+            "measured_at = excluded.measured_at", nativeQuery = true)
     void copyFromMeasurements(Long raceId);
 }
