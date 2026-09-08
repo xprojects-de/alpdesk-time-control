@@ -7,7 +7,7 @@ import {Person} from './person.model';
 export interface Participant {
     id: number;
     race?: Race;
-    person: Person;
+    person: Person | null;
     raceNumber?: number;
     team?: Team;
     category?: Category;

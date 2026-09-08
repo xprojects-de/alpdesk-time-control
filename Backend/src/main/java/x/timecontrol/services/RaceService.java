@@ -7,7 +7,11 @@ import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.repositories.RaceRepository;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Singleton
 public class RaceService {
@@ -28,6 +32,21 @@ public class RaceService {
 
     public Optional<Race> findById(Long id) {
         return repository.findById(id);
+    }
+
+    /**
+     * Batch-loads races by id in a single query, e.g. for building a list response without
+     * issuing one lookup per row.
+     */
+    public Map<Long, Race> findByIds(Set<Long> ids) {
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Race> result = new HashMap<>();
+        for (Race race : repository.findByIdIn(ids)) {
+            result.put(race.id(), race);
+        }
+        return result;
     }
 
     public Optional<Race> findByName(String name) {

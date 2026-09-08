@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {interval, of} from 'rxjs';
 import {catchError, map, mergeMap, switchMap, takeUntil} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class MeasurementEffects {
                 this.measurementService.getAll().pipe(
                     map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements})),
                     catchError(error => of(MeasurementActions.loadMeasurementsFailure({
-                        error: error.message || 'Failed to load measurements'
+                        error: extractErrorMessage(error, 'Failed to load measurements')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class MeasurementEffects {
                 this.measurementService.getByParticipant(participantId).pipe(
                     map(measurements => MeasurementActions.loadMeasurementsByParticipantSuccess({measurements})),
                     catchError(error => of(MeasurementActions.loadMeasurementsByParticipantFailure({
-                        error: error.message || 'Failed to load measurements by participant'
+                        error: extractErrorMessage(error, 'Failed to load measurements by participant')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class MeasurementEffects {
                 this.measurementService.getById(id).pipe(
                     map(measurement => MeasurementActions.loadMeasurementSuccess({measurement})),
                     catchError(error => of(MeasurementActions.loadMeasurementFailure({
-                        error: error.message || 'Failed to load measurement'
+                        error: extractErrorMessage(error, 'Failed to load measurement')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class MeasurementEffects {
                 this.measurementService.create(measurement).pipe(
                     map(created => MeasurementActions.createMeasurementSuccess({measurement: created})),
                     catchError(error => of(MeasurementActions.createMeasurementFailure({
-                        error: error.message || 'Failed to create measurement'
+                        error: extractErrorMessage(error, 'Failed to create measurement')
                     })))
                 )
             )
@@ -73,7 +74,7 @@ export class MeasurementEffects {
                 this.measurementService.update(id, measurement).pipe(
                     map(updated => MeasurementActions.updateMeasurementSuccess({measurement: updated})),
                     catchError(error => of(MeasurementActions.updateMeasurementFailure({
-                        error: error.message || 'Failed to update measurement'
+                        error: extractErrorMessage(error, 'Failed to update measurement')
                     })))
                 )
             )
@@ -87,7 +88,7 @@ export class MeasurementEffects {
                 this.measurementService.delete(id).pipe(
                     map(() => MeasurementActions.deleteMeasurementSuccess({id})),
                     catchError(error => of(MeasurementActions.deleteMeasurementFailure({
-                        error: error.message || 'Failed to delete measurement'
+                        error: extractErrorMessage(error, 'Failed to delete measurement')
                     })))
                 )
             )
@@ -102,7 +103,7 @@ export class MeasurementEffects {
                 this.measurementService.reset(resetDevice).pipe(
                     map(() => MeasurementActions.resetMeasurementsSuccess()),
                     catchError(error => of(MeasurementActions.resetMeasurementsFailure({
-                        error: error.message || 'Failed to reset measurements'
+                        error: extractErrorMessage(error, 'Failed to reset measurements')
                     })))
                 )
             )
@@ -124,7 +125,7 @@ export class MeasurementEffects {
                 this.measurementService.setContinuousMode(enable).pipe(
                     map(() => MeasurementActions.setContinuousModeSuccess({enabled: enable})),
                     catchError(error => of(MeasurementActions.setContinuousModeFailure({
-                        error: error.message || 'Failed to set continuous mode'
+                        error: extractErrorMessage(error, 'Failed to set continuous mode')
                     })))
                 )
             )
@@ -138,7 +139,7 @@ export class MeasurementEffects {
                 this.measurementService.setScheduledImport(enable).pipe(
                     map(() => MeasurementActions.setScheduledImportSuccess({enabled: enable})),
                     catchError(error => of(MeasurementActions.setScheduledImportFailure({
-                        error: error.message || 'Failed to set scheduled import'
+                        error: extractErrorMessage(error, 'Failed to set scheduled import')
                     })))
                 )
             )
@@ -152,7 +153,7 @@ export class MeasurementEffects {
                 this.measurementService.getScheduledImportStatus().pipe(
                     map(enabled => MeasurementActions.loadScheduledImportStatusSuccess({enabled})),
                     catchError(error => of(MeasurementActions.loadScheduledImportStatusFailure({
-                        error: error.message || 'Failed to load scheduled import status'
+                        error: extractErrorMessage(error, 'Failed to load scheduled import status')
                     })))
                 )
             )
@@ -166,7 +167,7 @@ export class MeasurementEffects {
                 this.measurementService.archive(raceId, resetDevice, clearAfterArchive).pipe(
                     map(() => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive})),
                     catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
-                        error: error.message || 'Failed to archive measurements'
+                        error: extractErrorMessage(error, 'Failed to archive measurements')
                     })))
                 )
             )
@@ -188,7 +189,7 @@ export class MeasurementEffects {
                 this.measurementService.getDeviceStatus().pipe(
                     map(status => MeasurementActions.loadDeviceStatusSuccess({status})),
                     catchError(error => of(MeasurementActions.loadDeviceStatusFailure({
-                        error: error.message || 'Failed to load device status'
+                        error: extractErrorMessage(error, 'Failed to load device status')
                     })))
                 )
             )
@@ -202,7 +203,7 @@ export class MeasurementEffects {
                 this.measurementService.discardOldestStart().pipe(
                     map(message => MeasurementActions.discardOldestStartSuccess({message})),
                     catchError(error => of(MeasurementActions.discardOldestStartFailure({
-                        error: error.message || 'Failed to discard oldest start'
+                        error: extractErrorMessage(error, 'Failed to discard oldest start')
                     })))
                 )
             )
@@ -224,7 +225,7 @@ export class MeasurementEffects {
                         return MeasurementActions.exportMeasurementsSuccess();
                     }),
                     catchError(error => of(MeasurementActions.exportMeasurementsFailure({
-                        error: error.message || 'Export fehlgeschlagen'
+                        error: extractErrorMessage(error, 'Export fehlgeschlagen')
                     })))
                 )
             )
@@ -238,7 +239,7 @@ export class MeasurementEffects {
                 this.measurementService.importMeasurementsFromJson(measurements).pipe(
                     map(created => MeasurementActions.importMeasurementsFromJsonSuccess({count: created.length})),
                     catchError(error => of(MeasurementActions.importMeasurementsFromJsonFailure({
-                        error: error.message || 'Import fehlgeschlagen'
+                        error: extractErrorMessage(error, 'Import fehlgeschlagen')
                     })))
                 )
             )
@@ -265,7 +266,7 @@ export class MeasurementEffects {
                 this.measurementService.checkDeviceConnection().pipe(
                     map(connected => MeasurementActions.checkDeviceConnectionSuccess({connected})),
                     catchError(error => of(MeasurementActions.checkDeviceConnectionFailure({
-                        error: error.message || 'Failed to check device connection'
+                        error: extractErrorMessage(error, 'Failed to check device connection')
                     })))
                 )
             )

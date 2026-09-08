@@ -17,6 +17,7 @@ import jakarta.inject.Inject;
 import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
@@ -39,6 +40,9 @@ public class RaceController {
 
     @Inject
     DataImportService dataImportService;
+
+    @Inject
+    DataImportScheduler dataImportScheduler;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -127,6 +131,13 @@ public class RaceController {
             return HttpResponse.notFound();
         }
 
+        // Pausing the scheduled device import for the duration of a clearing archive closes most of
+        // the window where a scheduled fetch, already in flight when the device is reset, would
+        // otherwise write stale pre-reset data into the measurement table right after it was cleared.
+        boolean pauseScheduledImport = clearAfterArchive && dataImportScheduler.isScheduledImportActive();
+        if (pauseScheduledImport) {
+            dataImportScheduler.setScheduledImportActive(false);
+        }
         try {
             if (clearAfterArchive && resetDevice) {
                 boolean deviceReset = dataImportService.resetDevice();
@@ -150,6 +161,10 @@ public class RaceController {
         } catch (Exception e) {
             return HttpResponse.serverError()
                     .body("Error during archive operation: " + e.getMessage());
+        } finally {
+            if (pauseScheduledImport) {
+                dataImportScheduler.setScheduledImportActive(true);
+            }
         }
     }
 }

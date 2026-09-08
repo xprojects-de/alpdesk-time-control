@@ -54,6 +54,7 @@ public class GaudiModeService {
     }
 
     public GaudiMode create(GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
+        validate(gaudiMode.type(), gaudiMode.teamSize(), races);
         GaudiMode created = repository.save(gaudiMode);
         saveRaces(created.id(), races);
         return created;
@@ -85,6 +86,7 @@ public class GaudiModeService {
     public Optional<GaudiMode> update(Long id, GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
         Optional<GaudiMode> existing = repository.findById(id);
         if (existing.isPresent()) {
+            validate(gaudiMode.type(), gaudiMode.teamSize(), races);
             GaudiMode updated = new GaudiMode(
                     id,
                     gaudiMode.type(),
@@ -108,6 +110,51 @@ public class GaudiModeService {
 
     public GaudiMode createFromRequest(GaudiModeRequest request) {
         return new GaudiMode(null, request.type(), request.name(), request.teamSize(), request.pointsScaleId(), LocalDateTime.now());
+    }
+
+    /**
+     * Enforces the business rules documented on {@link GaudiModeRequest}: LOS/TEAM combine exactly
+     * one race, TIME_COMBINATION/POINTS_COMBINATION combine two or more, race weights must not be
+     * negative, and TEAM mode requires a positive team size (a missing/non-positive size would
+     * either crash the ranking calculation or produce a meaningless all-zero result).
+     *
+     * @throws IllegalArgumentException if any rule is violated
+     */
+    private void validate(GaudiModeType type, Integer teamSize, List<GaudiModeRaceEntry> races) {
+        if (races == null || races.isEmpty()) {
+            throw new IllegalArgumentException("At least one race must be selected");
+        }
+        for (GaudiModeRaceEntry entry : races) {
+            if (entry.weight() != null && entry.weight() < 0) {
+                throw new IllegalArgumentException("Race weight must not be negative");
+            }
+        }
+        switch (type) {
+            case LOS, TEAM -> {
+                if (races.size() != 1) {
+                    throw new IllegalArgumentException(type + " requires exactly one race");
+                }
+            }
+            case TIME_COMBINATION, POINTS_COMBINATION -> {
+                if (races.size() < 2) {
+                    throw new IllegalArgumentException(type + " requires at least two races");
+                }
+            }
+        }
+        if (type == GaudiModeType.TIME_COMBINATION) {
+            // Summing raw values across races only makes sense if they share the same result unit
+            // (e.g. all TIME); mixing TIME and POINTS races would sum incompatible quantities.
+            Set<x.timecontrol.entities.ResultUnit> units = new LinkedHashSet<>();
+            for (GaudiModeRaceEntry entry : races) {
+                raceService.findById(entry.raceId()).ifPresent(race -> units.add(race.resultUnit()));
+            }
+            if (units.size() > 1) {
+                throw new IllegalArgumentException("All races combined in a TIME_COMBINATION must use the same result unit");
+            }
+        }
+        if (type == GaudiModeType.TEAM && (teamSize == null || teamSize < 1)) {
+            throw new IllegalArgumentException("teamSize must be at least 1 for TEAM mode");
+        }
     }
 
     private void saveRaces(Long gaudiModeId, List<GaudiModeRaceEntry> races) {

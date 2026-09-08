@@ -264,16 +264,6 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
                     this.sortInitialized = true;
-
-                    sortInstance.sortChange
-                        .pipe(takeUntil(this.destroy$))
-                        .subscribe(() => {
-                            console.log(
-                                "Sort changed:",
-                                sortInstance.active,
-                                sortInstance.direction,
-                            );
-                        });
                 }, 100);
             }
         });

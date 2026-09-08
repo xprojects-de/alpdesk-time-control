@@ -72,6 +72,7 @@ CREATE INDEX idx_participant_race_id ON participant(race_id);
 CREATE INDEX idx_participant_person_id ON participant (person_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
 CREATE INDEX idx_participant_category_id ON participant (category_id);
+CREATE UNIQUE INDEX idx_participant_race_race_number_unique ON participant (race_id, race_number);
 
 CREATE TABLE measurement
 (

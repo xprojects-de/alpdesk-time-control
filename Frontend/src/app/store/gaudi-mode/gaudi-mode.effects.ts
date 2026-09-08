@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
 import {catchError, map, mergeMap, tap} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.getAll(raceId).pipe(
                     map(gaudiModes => GaudiModeActions.loadGaudiModesSuccess({gaudiModes})),
                     catchError(error => of(GaudiModeActions.loadGaudiModesFailure({
-                        error: error.message || 'Failed to load Gaudi-Modus instances'
+                        error: extractErrorMessage(error, 'Failed to load Gaudi-Modus instances')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.create(gaudiMode).pipe(
                     map(created => GaudiModeActions.createGaudiModeSuccess({gaudiMode: created})),
                     catchError(error => of(GaudiModeActions.createGaudiModeFailure({
-                        error: error.message || 'Failed to create Gaudi-Modus instance'
+                        error: extractErrorMessage(error, 'Failed to create Gaudi-Modus instance')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.update(id, gaudiMode).pipe(
                     map(updated => GaudiModeActions.updateGaudiModeSuccess({gaudiMode: updated})),
                     catchError(error => of(GaudiModeActions.updateGaudiModeFailure({
-                        error: error.message || 'Failed to update Gaudi-Modus instance'
+                        error: extractErrorMessage(error, 'Failed to update Gaudi-Modus instance')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.delete(id).pipe(
                     map(() => GaudiModeActions.deleteGaudiModeSuccess({id})),
                     catchError(error => of(GaudiModeActions.deleteGaudiModeFailure({
-                        error: error.message || 'Failed to delete Gaudi-Modus instance'
+                        error: extractErrorMessage(error, 'Failed to delete Gaudi-Modus instance')
                     })))
                 )
             )
@@ -73,7 +74,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.draw(id).pipe(
                     map(pairing => GaudiModeActions.pairingSuccess({pairing})),
                     catchError(error => of(GaudiModeActions.pairingFailure({
-                        error: error.message || 'Failed to draw pairing'
+                        error: extractErrorMessage(error, 'Failed to draw pairing')
                     })))
                 )
             )
@@ -87,7 +88,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.getPairing(id).pipe(
                     map(pairing => GaudiModeActions.pairingSuccess({pairing})),
                     catchError(error => of(GaudiModeActions.pairingFailure({
-                        error: error.message || 'Failed to load pairing'
+                        error: extractErrorMessage(error, 'Failed to load pairing')
                     })))
                 )
             )
@@ -101,7 +102,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.getRanking(id).pipe(
                     map(ranking => GaudiModeActions.loadRankingSuccess({ranking})),
                     catchError(error => of(GaudiModeActions.loadRankingFailure({
-                        error: error.message || 'Failed to load ranking'
+                        error: extractErrorMessage(error, 'Failed to load ranking')
                     })))
                 )
             )
@@ -115,7 +116,7 @@ export class GaudiModeEffects {
                 this.gaudiModeService.exportPdf(id).pipe(
                     map(blob => GaudiModeActions.exportPdfSuccess({blob, filename})),
                     catchError(error => of(GaudiModeActions.exportPdfFailure({
-                        error: error.message || 'Failed to export PDF'
+                        error: extractErrorMessage(error, 'Failed to export PDF')
                     })))
                 )
             )

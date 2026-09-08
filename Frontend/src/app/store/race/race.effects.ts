@@ -1,4 +1,5 @@
 import {Injectable, inject} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
 import {map, catchError, switchMap} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class RaceEffects {
                 this.raceService.getAll().pipe(
                     map(races => RaceActions.loadRacesSuccess({races})),
                     catchError(error => of(RaceActions.loadRacesFailure({
-                        error: error.message || 'Failed to load races'
+                        error: extractErrorMessage(error, 'Failed to load races')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class RaceEffects {
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceSuccess({race})),
                     catchError(error => of(RaceActions.createRaceFailure({
-                        error: error.message || 'Failed to create race'
+                        error: extractErrorMessage(error, 'Failed to create race')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class RaceEffects {
                 this.raceService.update(id, race).pipe(
                     map(race => RaceActions.updateRaceSuccess({race})),
                     catchError(error => of(RaceActions.updateRaceFailure({
-                        error: error.message || 'Failed to update race'
+                        error: extractErrorMessage(error, 'Failed to update race')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class RaceEffects {
                 this.raceService.delete(id).pipe(
                     map(() => RaceActions.deleteRaceSuccess({id})),
                     catchError(error => of(RaceActions.deleteRaceFailure({
-                        error: error.message || 'Failed to delete race'
+                        error: extractErrorMessage(error, 'Failed to delete race')
                     })))
                 )
             )

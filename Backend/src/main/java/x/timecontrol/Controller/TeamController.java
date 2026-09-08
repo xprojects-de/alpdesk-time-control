@@ -61,13 +61,18 @@ public class TeamController {
     @Operation(summary = "Create a new team", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Team created", content = @Content(schema = @Schema(implementation = TeamResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<TeamResponse> add(@Body TeamRequest request) {
+    @ApiResponse(responseCode = "409", description = "A team with this name already exists")
+    public HttpResponse<?> add(@Body TeamRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         Team team = service.createFromRequest(request);
-        Team created = service.create(team);
-        return HttpResponse.created(TeamResponse.from(created));
+        try {
+            Team created = service.create(team);
+            return HttpResponse.created(TeamResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -77,13 +82,19 @@ public class TeamController {
     @ApiResponse(responseCode = "200", description = "Team updated", content = @Content(schema = @Schema(implementation = TeamResponse.class)))
     @ApiResponse(responseCode = "404", description = "Team not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<TeamResponse> update(@PathVariable Long id, @Body TeamRequest request) {
+    @ApiResponse(responseCode = "409", description = "A team with this name already exists")
+    public HttpResponse<?> update(@PathVariable Long id, @Body TeamRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         Team team = service.createFromRequest(request);
-        Optional<Team> updated = service.update(id, team);
-        return updated.map(t -> HttpResponse.ok(TeamResponse.from(t)))
+        Optional<Team> updated;
+        try {
+            updated = service.update(id, team);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(t -> HttpResponse.ok((Object) TeamResponse.from(t)))
                 .orElse(HttpResponse.notFound());
     }
 

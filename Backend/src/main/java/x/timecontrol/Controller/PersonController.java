@@ -111,12 +111,17 @@ public class PersonController {
     @Operation(summary = "Delete a person", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Person deleted")
     @ApiResponse(responseCode = "404", description = "Person not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Person is still assigned as a participant")
+    public HttpResponse<?> delete(@PathVariable Long id) {
         Optional<Person> person = service.findById(id);
-        if (person.isPresent()) {
-            service.delete(id);
-            return HttpResponse.noContent();
+        if (person.isEmpty()) {
+            return HttpResponse.notFound();
         }
-        return HttpResponse.notFound();
+        try {
+            service.delete(id);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.noContent();
     }
 }

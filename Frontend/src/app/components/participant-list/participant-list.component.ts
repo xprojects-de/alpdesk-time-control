@@ -245,7 +245,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <ng-container matColumnDef="firstName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.person.firstName }}
+                            {{ participant.person?.firstName || "—" }}
                         </td>
                     </ng-container>
 
@@ -253,7 +253,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <ng-container matColumnDef="lastName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.person.lastName }}
+                            {{ participant.person?.lastName || "—" }}
                         </td>
                     </ng-container>
 
@@ -263,7 +263,7 @@ import {Actions, ofType} from "@ngrx/effects";
                             Geburtsdatum
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.person.birthDate | date: "dd.MM.yyyy" }}
+                            {{ participant.person?.birthDate ? (participant.person.birthDate | date: "dd.MM.yyyy") : "—" }}
                         </td>
                     </ng-container>
 
@@ -273,7 +273,7 @@ import {Actions, ofType} from "@ngrx/effects";
                             Geschlecht
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ getGenderLabel(participant.person.gender) }}
+                            {{ getGenderLabel(participant.person?.gender) }}
                         </td>
                     </ng-container>
 
@@ -562,16 +562,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
                     this.sortInitialized = true;
-
-                    sortInstance.sortChange
-                        .pipe(takeUntil(this.destroy$))
-                        .subscribe(() => {
-                            console.log(
-                                "Sort changed:",
-                                sortInstance.active,
-                                sortInstance.direction,
-                            );
-                        });
                 }, 100);
             }
         });
@@ -626,7 +616,10 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.destroy$.complete();
     }
 
-    getGenderLabel(gender: Gender): string {
+    getGenderLabel(gender: Gender | null | undefined): string {
+        if (!gender) {
+            return "—";
+        }
         return GenderLabels[gender] || gender;
     }
 
@@ -710,9 +703,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteParticipant(participant: Participant): void {
+        const name = participant.person
+            ? `${participant.person.firstName} ${participant.person.lastName}`
+            : `#${participant.id}`;
         if (
             confirm(
-                `Möchten Sie den Teilnehmer "${participant.person.firstName} ${participant.person.lastName}" wirklich löschen?`,
+                `Möchten Sie den Teilnehmer "${name}" wirklich löschen?`,
             )
         ) {
             this.store.dispatch(

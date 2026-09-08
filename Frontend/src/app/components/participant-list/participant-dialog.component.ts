@@ -366,6 +366,19 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             }),
         );
 
+        // A selection sets personSearch's value to the full Person object (see [value]="person"
+        // on the mat-option below); any further edit to the search text turns the value back into
+        // a plain string. That means the previously selected person no longer matches what's shown,
+        // so the stale personId must be cleared - otherwise a user who picks Person A, then edits
+        // the text without picking a new suggestion, would silently save Person A anyway.
+        this.form.get("personSearch")!.valueChanges
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((value) => {
+                if (typeof value === "string") {
+                    this.form.get("personId")!.setValue(null);
+                }
+            });
+
         // Track the currently selected race's resultUnit/resultUnitLabel so the Zeit/Wert
         // section can switch between the time inputs and a generic decimal-value input.
         // If the user actually changes the race to one with a different resultUnit, the

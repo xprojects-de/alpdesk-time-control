@@ -97,19 +97,20 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalMs));
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         Integer leaderMs = results.isEmpty() ? null : results.get(0).totalMs();
         for (int i = 0; i < results.size(); i++) {
             PersonResult r = results.get(i);
             entries.add(new GaudiRankingEntryResponse(
-                    i + 1,
+                    places.get(i),
                     r.label(),
                     null,
                     null,
                     r.totalMs(),
                     leaderMs,
-                    i == 0 ? null : r.totalMs() - leaderMs,
+                    r.totalMs() == leaderMs ? null : r.totalMs() - leaderMs,
                     null,
                     r.legs()
             ));

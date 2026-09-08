@@ -80,11 +80,15 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             Long personId = entry.getKey();
             Map<Long, Participant> byRace = entry.getValue();
 
-            boolean completeAllLegs = races.stream().allMatch(race -> {
-                Participant p = byRace.get(race.raceId());
-                return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
-            });
-            if (!completeAllLegs) {
+            // A race weighted 0 is meant to be ignored, not to disqualify a person who has no
+            // result there - only races that actually count towards the total require completeness.
+            boolean completeRequiredLegs = races.stream()
+                    .filter(race -> race.weight() != 0)
+                    .allMatch(race -> {
+                        Participant p = byRace.get(race.raceId());
+                        return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
+                    });
+            if (!completeRequiredLegs) {
                 continue;
             }
 
@@ -92,15 +96,15 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             int totalPoints = 0;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
-                Integer place = placesByRace.get(race.raceId()).get(p.id());
-                Integer adjusted = rankingService.adjustedValue(race.race(), p);
-                int points = (int) Math.round(pointsScaleService.pointsForPlace(scale, place) * race.weight());
+                Integer place = p != null ? placesByRace.get(race.raceId()).get(p.id()) : null;
+                Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
+                int points = place != null ? (int) Math.round(pointsScaleService.pointsForPlace(scale, place) * race.weight()) : 0;
                 totalPoints += points;
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
                         race.race().name(),
-                        p.durationMs(),
-                        p.penalty(),
+                        p != null ? p.durationMs() : null,
+                        p != null ? p.penalty() : null,
                         adjusted,
                         place,
                         points
@@ -112,12 +116,13 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalPoints).reversed());
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalPoints()).toList());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
             PersonResult r = results.get(i);
             entries.add(new GaudiRankingEntryResponse(
-                    i + 1,
+                    places.get(i),
                     r.label(),
                     null,
                     null,

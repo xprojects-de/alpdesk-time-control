@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
 import {catchError, map, mergeMap} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class TeamEffects {
                 this.teamService.getAll().pipe(
                     map(teams => TeamActions.loadTeamsSuccess({teams})),
                     catchError(error => of(TeamActions.loadTeamsFailure({
-                        error: error.message || 'Failed to load teams'
+                        error: extractErrorMessage(error, 'Failed to load teams')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class TeamEffects {
                 this.teamService.create(team).pipe(
                     map(created => TeamActions.createTeamSuccess({team: created})),
                     catchError(error => of(TeamActions.createTeamFailure({
-                        error: error.message || 'Failed to create team'
+                        error: extractErrorMessage(error, 'Failed to create team')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class TeamEffects {
                 this.teamService.update(id, team).pipe(
                     map(updated => TeamActions.updateTeamSuccess({team: updated})),
                     catchError(error => of(TeamActions.updateTeamFailure({
-                        error: error.message || 'Failed to update team'
+                        error: extractErrorMessage(error, 'Failed to update team')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class TeamEffects {
                 this.teamService.delete(id).pipe(
                     map(() => TeamActions.deleteTeamSuccess({id})),
                     catchError(error => of(TeamActions.deleteTeamFailure({
-                        error: error.message || 'Failed to delete team'
+                        error: extractErrorMessage(error, 'Failed to delete team')
                     })))
                 )
             )

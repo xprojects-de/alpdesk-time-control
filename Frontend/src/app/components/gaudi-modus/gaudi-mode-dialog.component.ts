@@ -226,7 +226,7 @@ export class GaudiModeDialogComponent implements OnInit {
     form: FormGroup = this.fb.group({
         type: [GaudiModeType.LOS, Validators.required],
         name: ["", Validators.required],
-        teamSize: [5],
+        teamSize: [5, Validators.min(1)],
         pointsScaleId: [null],
     });
 

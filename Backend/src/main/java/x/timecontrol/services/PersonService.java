@@ -3,18 +3,25 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.PersonRequest;
 import x.timecontrol.entities.Person;
+import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.PersonRepository;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Singleton
 public class PersonService {
 
     private final PersonRepository repository;
+    private final ParticipantRepository participantRepository;
 
-    public PersonService(PersonRepository repository) {
+    public PersonService(PersonRepository repository, ParticipantRepository participantRepository) {
         this.repository = repository;
+        this.participantRepository = participantRepository;
     }
 
     public Person create(Person person) {
@@ -27,6 +34,21 @@ public class PersonService {
 
     public Optional<Person> findById(Long id) {
         return repository.findById(id);
+    }
+
+    /**
+     * Batch-loads persons by id in a single query, e.g. for building a list response without
+     * issuing one lookup per row.
+     */
+    public Map<Long, Person> findByIds(Set<Long> ids) {
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Person> result = new HashMap<>();
+        for (Person person : repository.findByIdIn(ids)) {
+            result.put(person.id(), person);
+        }
+        return result;
     }
 
     public Optional<Person> findByExternalId(String externalId) {
@@ -46,7 +68,13 @@ public class PersonService {
         return Optional.empty();
     }
 
+    /**
+     * @throws IllegalStateException if the person is still referenced by at least one participant
+     */
     public void delete(Long id) {
+        if (participantRepository.existsByPersonId(id)) {
+            throw new IllegalStateException("Person is still assigned as a participant and cannot be deleted");
+        }
         repository.deleteById(id);
     }
 

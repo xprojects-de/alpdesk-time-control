@@ -578,6 +578,53 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             MeasurementSelectors.selectDeviceStatus,
         );
 
+        // Listen for successful/failed create, update and delete of a single measurement
+        this.actions$.pipe(
+            ofType(MeasurementActions.createMeasurementSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Messung erfolgreich erstellt', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(MeasurementActions.createMeasurementFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen der Messung: ${error}`, 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+        this.actions$.pipe(
+            ofType(MeasurementActions.updateMeasurementSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Messung erfolgreich aktualisiert', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(MeasurementActions.updateMeasurementFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren der Messung: ${error}`, 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+        this.actions$.pipe(
+            ofType(MeasurementActions.deleteMeasurementSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Messung erfolgreich gelöscht', 'OK', {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(MeasurementActions.deleteMeasurementFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der Messung: ${error}`, 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
         // Listen for successful reset and show success message
         this.actions$.pipe(
             ofType(MeasurementActions.resetMeasurementsSuccess),
@@ -674,21 +721,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
-        });
-
-        // Listen for successful device status load
-        this.actions$.pipe(
-            ofType(MeasurementActions.loadDeviceStatusSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({status}) => {
-            console.log('Device status loaded:', status);
-        });
-
-        // Listen for failed device status load
-        this.actions$.pipe(
-            ofType(MeasurementActions.loadDeviceStatusFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
         });
 
         // Load device status when device connection is successful
@@ -847,9 +879,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         MeasurementActions.createMeasurement({measurement: result}),
                     );
-                    this.snackBar.open("Messung erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -871,9 +900,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                             measurement: result,
                         }),
                     );
-                    this.snackBar.open("Messung erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -885,9 +911,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             this.store.dispatch(
                 MeasurementActions.deleteMeasurement({id: measurement.id}),
             );
-            this.snackBar.open("Messung erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 

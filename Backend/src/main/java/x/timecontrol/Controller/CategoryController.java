@@ -61,13 +61,18 @@ public class CategoryController {
     @Operation(summary = "Create a new category", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Category created", content = @Content(schema = @Schema(implementation = CategoryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<CategoryResponse> add(@Body CategoryRequest request) {
+    @ApiResponse(responseCode = "409", description = "A category with this name already exists")
+    public HttpResponse<?> add(@Body CategoryRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         Category category = service.createFromRequest(request);
-        Category created = service.create(category);
-        return HttpResponse.created(CategoryResponse.from(created));
+        try {
+            Category created = service.create(category);
+            return HttpResponse.created(CategoryResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -77,13 +82,19 @@ public class CategoryController {
     @ApiResponse(responseCode = "200", description = "Category updated", content = @Content(schema = @Schema(implementation = CategoryResponse.class)))
     @ApiResponse(responseCode = "404", description = "Category not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<CategoryResponse> update(@PathVariable Long id, @Body CategoryRequest request) {
+    @ApiResponse(responseCode = "409", description = "A category with this name already exists")
+    public HttpResponse<?> update(@PathVariable Long id, @Body CategoryRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         Category category = service.createFromRequest(request);
-        Optional<Category> updated = service.update(id, category);
-        return updated.map(c -> HttpResponse.ok(CategoryResponse.from(c)))
+        Optional<Category> updated;
+        try {
+            updated = service.update(id, category);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(c -> HttpResponse.ok((Object) CategoryResponse.from(c)))
                 .orElse(HttpResponse.notFound());
     }
 

@@ -12,20 +12,6 @@ export const loadAgeGroupsFailure = createAction(
     props<{ error: string }>()
 );
 
-// Load single age group
-export const loadAgeGroup = createAction(
-    '[AgeGroup] Load AgeGroup',
-    props<{ id: number }>()
-);
-export const loadAgeGroupSuccess = createAction(
-    '[AgeGroup] Load AgeGroup Success',
-    props<{ ageGroup: AgeGroup }>()
-);
-export const loadAgeGroupFailure = createAction(
-    '[AgeGroup] Load AgeGroup Failure',
-    props<{ error: string }>()
-);
-
 // Create age group
 export const createAgeGroup = createAction(
     '[AgeGroup] Create AgeGroup',
@@ -66,11 +52,5 @@ export const deleteAgeGroupSuccess = createAction(
 export const deleteAgeGroupFailure = createAction(
     '[AgeGroup] Delete AgeGroup Failure',
     props<{ error: string }>()
-);
-
-// Select age group
-export const selectAgeGroup = createAction(
-    '[AgeGroup] Select AgeGroup',
-    props<{ id: number | null }>()
 );
 

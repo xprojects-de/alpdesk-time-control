@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Router} from '@angular/router';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
@@ -23,7 +24,7 @@ export class AuthEffects {
                         return AuthActions.loginSuccess({response: enhancedResponse});
                     }),
                     catchError(error => of(AuthActions.loginFailure({
-                        error: error.error?.message || error.message || 'Login fehlgeschlagen'
+                        error: error.error?.message || extractErrorMessage(error, 'Login fehlgeschlagen')
                     })))
                 )
             )

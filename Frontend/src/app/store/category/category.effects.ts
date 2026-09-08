@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
 import {catchError, map, mergeMap} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class CategoryEffects {
                 this.categoryService.getAll().pipe(
                     map(categories => CategoryActions.loadCategoriesSuccess({categories})),
                     catchError(error => of(CategoryActions.loadCategoriesFailure({
-                        error: error.message || 'Failed to load categories'
+                        error: extractErrorMessage(error, 'Failed to load categories')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class CategoryEffects {
                 this.categoryService.create(category).pipe(
                     map(created => CategoryActions.createCategorySuccess({category: created})),
                     catchError(error => of(CategoryActions.createCategoryFailure({
-                        error: error.message || 'Failed to create category'
+                        error: extractErrorMessage(error, 'Failed to create category')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class CategoryEffects {
                 this.categoryService.update(id, category).pipe(
                     map(updated => CategoryActions.updateCategorySuccess({category: updated})),
                     catchError(error => of(CategoryActions.updateCategoryFailure({
-                        error: error.message || 'Failed to update category'
+                        error: extractErrorMessage(error, 'Failed to update category')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class CategoryEffects {
                 this.categoryService.delete(id).pipe(
                     map(() => CategoryActions.deleteCategorySuccess({id})),
                     catchError(error => of(CategoryActions.deleteCategoryFailure({
-                        error: error.message || 'Failed to delete category'
+                        error: extractErrorMessage(error, 'Failed to delete category')
                     })))
                 )
             )

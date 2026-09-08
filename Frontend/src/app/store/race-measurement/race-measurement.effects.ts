@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
 import {catchError, map, mergeMap} from 'rxjs/operators';
@@ -17,7 +18,7 @@ export class RaceMeasurementEffects {
                 this.raceMeasurementService.getByRace(raceId).pipe(
                     map(raceMeasurements => RaceMeasurementActions.loadRaceMeasurementsSuccess({raceMeasurements})),
                     catchError(error => of(RaceMeasurementActions.loadRaceMeasurementsFailure({
-                        error: error.message || 'Failed to load race measurements'
+                        error: extractErrorMessage(error, 'Failed to load race measurements')
                     })))
                 )
             )
@@ -31,7 +32,7 @@ export class RaceMeasurementEffects {
                 this.raceMeasurementService.update(id, raceMeasurement).pipe(
                     map(updated => RaceMeasurementActions.updateRaceMeasurementSuccess({raceMeasurement: updated})),
                     catchError(error => of(RaceMeasurementActions.updateRaceMeasurementFailure({
-                        error: error.message || 'Failed to update race measurement'
+                        error: extractErrorMessage(error, 'Failed to update race measurement')
                     })))
                 )
             )
@@ -45,7 +46,7 @@ export class RaceMeasurementEffects {
                 this.raceMeasurementService.delete(id).pipe(
                     map(() => RaceMeasurementActions.deleteRaceMeasurementSuccess({id})),
                     catchError(error => of(RaceMeasurementActions.deleteRaceMeasurementFailure({
-                        error: error.message || 'Failed to delete race measurement'
+                        error: extractErrorMessage(error, 'Failed to delete race measurement')
                     })))
                 )
             )
@@ -59,7 +60,7 @@ export class RaceMeasurementEffects {
                 this.raceMeasurementService.syncToParticipants(raceId).pipe(
                     map(message => RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess({message})),
                     catchError(error => of(RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure({
-                        error: error.message || 'Failed to sync race measurements to participants'
+                        error: extractErrorMessage(error, 'Failed to sync race measurements to participants')
                     })))
                 )
             )

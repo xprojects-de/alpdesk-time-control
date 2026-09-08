@@ -85,8 +85,14 @@ public class GaudiModeController {
     @Post
     @Operation(summary = "Create a new Gaudi-Modus instance", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Gaudi-Modus instance created", content = @Content(schema = @Schema(implementation = GaudiModeResponse.class)))
-    public HttpResponse<GaudiModeResponse> add(@Body GaudiModeRequest request) {
-        GaudiMode created = service.create(service.createFromRequest(request), request.races());
+    @ApiResponse(responseCode = "400", description = "Invalid input")
+    public HttpResponse<?> add(@Body GaudiModeRequest request) {
+        GaudiMode created;
+        try {
+            created = service.create(service.createFromRequest(request), request.races());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
         return HttpResponse.created(GaudiModeResponse.from(created, buildRaceResponses(created.id())));
     }
 
@@ -96,10 +102,16 @@ public class GaudiModeController {
     @Operation(summary = "Update an existing Gaudi-Modus instance", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Gaudi-Modus instance updated", content = @Content(schema = @Schema(implementation = GaudiModeResponse.class)))
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
-    public HttpResponse<GaudiModeResponse> update(@PathVariable Long id, @Body GaudiModeRequest request) {
+    @ApiResponse(responseCode = "400", description = "Invalid input")
+    public HttpResponse<?> update(@PathVariable Long id, @Body GaudiModeRequest request) {
         GaudiMode gaudiMode = service.createFromRequest(request);
-        return service.update(id, gaudiMode, request.races())
-                .map(gm -> HttpResponse.ok(GaudiModeResponse.from(gm, buildRaceResponses(gm.id()))))
+        Optional<GaudiMode> updated;
+        try {
+            updated = service.update(id, gaudiMode, request.races());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(gm -> HttpResponse.ok((Object) GaudiModeResponse.from(gm, buildRaceResponses(gm.id()))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -155,10 +167,17 @@ public class GaudiModeController {
     @Operation(summary = "Get the computed ranking of a Gaudi-Modus instance", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Computed ranking", content = @Content(schema = @Schema(implementation = GaudiRankingEntryResponse.class)))
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
-    public HttpResponse<List<GaudiRankingEntryResponse>> getRanking(@PathVariable Long id) {
-        return service.findById(id)
-                .map(gm -> HttpResponse.ok(service.computeRanking(gm)))
-                .orElse(HttpResponse.notFound());
+    @ApiResponse(responseCode = "500", description = "Ranking could not be computed")
+    public HttpResponse<?> getRanking(@PathVariable Long id) {
+        Optional<GaudiMode> gaudiMode = service.findById(id);
+        if (gaudiMode.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        try {
+            return HttpResponse.ok(service.computeRanking(gaudiMode.get()));
+        } catch (Exception e) {
+            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to compute ranking: " + e.getMessage()));
+        }
     }
 
     @Produces("application/pdf")

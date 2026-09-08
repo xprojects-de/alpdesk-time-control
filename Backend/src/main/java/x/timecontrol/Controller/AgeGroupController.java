@@ -72,13 +72,18 @@ public class AgeGroupController {
     @Operation(summary = "Create a new age group", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Age group created", content = @Content(schema = @Schema(implementation = AgeGroupResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<AgeGroupResponse> add(@Body AgeGroupRequest request) {
+    @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
+    public HttpResponse<?> add(@Body AgeGroupRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         AgeGroup ageGroup = service.createFromRequest(request);
-        AgeGroup created = service.create(ageGroup);
-        return HttpResponse.created(AgeGroupResponse.from(created));
+        try {
+            AgeGroup created = service.create(ageGroup);
+            return HttpResponse.created(AgeGroupResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -88,13 +93,19 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "200", description = "Age group updated", content = @Content(schema = @Schema(implementation = AgeGroupResponse.class)))
     @ApiResponse(responseCode = "404", description = "Age group not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<AgeGroupResponse> update(@PathVariable Long id, @Body AgeGroupRequest request) {
+    @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
+    public HttpResponse<?> update(@PathVariable Long id, @Body AgeGroupRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest();
         }
         AgeGroup ageGroup = service.createFromRequest(request);
-        Optional<AgeGroup> updated = service.update(id, ageGroup);
-        return updated.map(ag -> HttpResponse.ok(AgeGroupResponse.from(ag)))
+        Optional<AgeGroup> updated;
+        try {
+            updated = service.update(id, ageGroup);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(ag -> HttpResponse.ok((Object) AgeGroupResponse.from(ag)))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -107,6 +118,7 @@ public class AgeGroupController {
         return request.name() != null && !request.name().isBlank()
                 && request.birthYearFrom() != null
                 && request.birthYearTo() != null
+                && request.birthYearFrom() <= request.birthYearTo()
                 && request.gender() != null;
     }
 

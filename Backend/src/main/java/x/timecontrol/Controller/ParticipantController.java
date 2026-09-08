@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.ParticipantCopyRequest;
 import x.timecontrol.dto.ParticipantCopyResponse;
 import x.timecontrol.dto.ParticipantImportResponse;
@@ -60,18 +61,9 @@ public class ParticipantController {
         } else {
             participants = service.findAll();
         }
-        
-        List<ParticipantResponse> response = StreamSupport.stream(participants.spliterator(), false)
-                .map(participant -> {
-                    var race = service.findRaceForParticipant(participant).orElse(null);
-                    var person = service.findPersonForParticipant(participant).orElse(null);
-                    var team = service.findTeamForParticipant(participant).orElse(null);
-                    var category = service.findCategoryForParticipant(participant).orElse(null);
-                    var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
-                    return ParticipantResponse.from(participant, person, race, team, category, ageGroup);
-                })
-                .toList();
-        return HttpResponse.ok(response);
+
+        List<Participant> participantList = StreamSupport.stream(participants.spliterator(), false).toList();
+        return HttpResponse.ok(service.toResponses(participantList));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -81,14 +73,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     public HttpResponse<ParticipantResponse> getById(@PathVariable Long id) {
         Optional<Participant> participant = service.findById(id);
-        return participant.map(p -> {
-            var race = service.findRaceForParticipant(p).orElse(null);
-            var person = service.findPersonForParticipant(p).orElse(null);
-            var team = service.findTeamForParticipant(p).orElse(null);
-            var category = service.findCategoryForParticipant(p).orElse(null);
-            var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, person, race, team, category, ageGroup));
-        }).orElse(HttpResponse.notFound());
+        return participant.map(p -> HttpResponse.ok(service.toResponses(List.of(p)).get(0)))
+                .orElse(HttpResponse.notFound());
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -97,15 +83,18 @@ public class ParticipantController {
     @Operation(summary = "Create a new participant", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
+    @ApiResponse(responseCode = "409", description = "Race number already assigned in this race")
+    public HttpResponse<?> add(@Body ParticipantRequest request) {
         Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt());
-        Participant created = service.create(participant);
-        var race = service.findRaceForParticipant(created).orElse(null);
-        var person = service.findPersonForParticipant(created).orElse(null);
-        var team = service.findTeamForParticipant(created).orElse(null);
-        var category = service.findCategoryForParticipant(created).orElse(null);
-        var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
-        return HttpResponse.created(ParticipantResponse.from(created, person, race, team, category, ageGroup));
+        Participant created;
+        try {
+            created = service.create(participant);
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.created(service.toResponses(List.of(created)).get(0));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -115,17 +104,19 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "Participant updated", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
+    @ApiResponse(responseCode = "409", description = "Race number already assigned in this race")
+    public HttpResponse<?> update(@PathVariable Long id, @Body ParticipantRequest request) {
         Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt());
-        Optional<Participant> updated = service.update(id, participant);
-        return updated.map(p -> {
-            var race = service.findRaceForParticipant(p).orElse(null);
-            var person = service.findPersonForParticipant(p).orElse(null);
-            var team = service.findTeamForParticipant(p).orElse(null);
-            var category = service.findCategoryForParticipant(p).orElse(null);
-            var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, person, race, team, category, ageGroup));
-        }).orElse(HttpResponse.notFound());
+        Optional<Participant> updated;
+        try {
+            updated = service.update(id, participant);
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+        return updated.map(p -> HttpResponse.ok((Object) service.toResponses(List.of(p)).get(0)))
+                .orElse(HttpResponse.notFound());
     }
 
     @Delete("/{id}")
@@ -168,17 +159,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     public HttpResponse<List<ParticipantResponse>> assignRaceNumbers(@PathVariable Long raceId) {
         List<Participant> updated = service.assignRaceNumbers(raceId);
-        List<ParticipantResponse> response = updated.stream()
-                .map(p -> {
-                    var race = service.findRaceForParticipant(p).orElse(null);
-                    var person = service.findPersonForParticipant(p).orElse(null);
-                    var team = service.findTeamForParticipant(p).orElse(null);
-                    var category = service.findCategoryForParticipant(p).orElse(null);
-                    var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-                    return ParticipantResponse.from(p, person, race, team, category, ageGroup);
-                })
-                .toList();
-        return HttpResponse.ok(response);
+        return HttpResponse.ok(service.toResponses(updated));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -205,16 +186,7 @@ public class ParticipantController {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             ParticipantService.ParticipantImportResult result = service.importFromCsv(raceId, reader);
 
-            List<ParticipantResponse> imported = result.imported().stream()
-                    .map(p -> {
-                        var r = service.findRaceForParticipant(p).orElse(null);
-                        var person = service.findPersonForParticipant(p).orElse(null);
-                        var team = service.findTeamForParticipant(p).orElse(null);
-                        var category = service.findCategoryForParticipant(p).orElse(null);
-                        var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-                        return ParticipantResponse.from(p, person, r, team, category, ageGroup);
-                    })
-                    .toList();
+            List<ParticipantResponse> imported = service.toResponses(result.imported());
 
             return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
         } catch (IOException e) {

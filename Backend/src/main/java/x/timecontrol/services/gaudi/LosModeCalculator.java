@@ -8,6 +8,7 @@ import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.services.PersonService;
+import x.timecontrol.services.RankingService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,10 +27,12 @@ public class LosModeCalculator implements GaudiModeCalculator {
 
     private final GaudiLosPairingRepository pairingRepository;
     private final PersonService personService;
+    private final RankingService rankingService;
 
-    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService) {
+    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService, RankingService rankingService) {
         this.pairingRepository = pairingRepository;
         this.personService = personService;
+        this.rankingService = rankingService;
     }
 
     @Override
@@ -98,12 +101,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         results.sort(Comparator.comparingDouble(PairResult::diff));
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(PairResult::diff).toList());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
             PairResult r = results.get(i);
             entries.add(new GaudiRankingEntryResponse(
-                    i + 1,
+                    places.get(i),
                     r.label(),
                     r.time1Ms(),
                     r.time2Ms(),

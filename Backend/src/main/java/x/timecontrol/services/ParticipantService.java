@@ -4,28 +4,36 @@ import x.timecontrol.dto.AgeGroupResponse;
 import x.timecontrol.dto.CategoryResponse;
 import x.timecontrol.dto.ParticipantCopyResponse;
 import x.timecontrol.dto.ParticipantImportRowError;
+import x.timecontrol.dto.ParticipantResponse;
 import x.timecontrol.dto.PersonResponse;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
+import x.timecontrol.entities.Race;
+import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.ParticipantRepository;
+import io.micronaut.transaction.TransactionOperations;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -44,18 +52,20 @@ public class ParticipantService {
     private final TeamService teamService;
     private final CategoryService categoryService;
     private final PersonService personService;
+    private final TransactionOperations<Connection> transactionOperations;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
         this.teamService = teamService;
         this.categoryService = categoryService;
         this.personService = personService;
+        this.transactionOperations = transactionOperations;
     }
 
     public Participant create(Participant participant) {
-
+        validate(participant, null);
         return repository.save(participant);
     }
 
@@ -70,6 +80,7 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
+            validate(participant, id);
             // durationMs/penalty/measuredAt are omitted by most update flows (e.g. editing name/team) and must not
             // wipe out a time that was already assigned via the measurement sync; only overwrite when provided.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
@@ -81,59 +92,47 @@ public class ParticipantService {
         return Optional.empty();
     }
 
+    /**
+     * @throws IllegalArgumentException if a required field is missing or references a non-existent entity
+     * @throws IllegalStateException    if the race number is already assigned to another participant of the same race
+     */
+    private void validate(Participant participant, Long excludeParticipantId) {
+        if (participant.raceId() == null) {
+            throw new IllegalArgumentException("raceId is required");
+        }
+        if (participant.personId() == null) {
+            throw new IllegalArgumentException("personId is required");
+        }
+        if (raceService.findById(participant.raceId()).isEmpty()) {
+            throw new IllegalArgumentException("Race with id " + participant.raceId() + " does not exist");
+        }
+        if (personService.findById(participant.personId()).isEmpty()) {
+            throw new IllegalArgumentException("Person with id " + participant.personId() + " does not exist");
+        }
+        if (participant.raceNumber() != null) {
+            Optional<Participant> conflict = repository.findByRaceIdAndRaceNumber(participant.raceId(), participant.raceNumber());
+            if (conflict.isPresent() && !conflict.get().id().equals(excludeParticipantId)) {
+                throw new IllegalStateException("Race number " + participant.raceNumber() + " is already assigned in this race");
+            }
+        }
+    }
+
     public void delete(Long id) {
         repository.deleteById(id);
     }
 
-    public Optional<RaceResponse> findRaceForParticipant(Participant participant) {
-        if (participant.raceId() == null) {
-            return Optional.empty();
-        }
-        return raceService.findById(participant.raceId())
-                .map(RaceResponse::from);
+    private List<AgeGroup> allAgeGroups() {
+        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
     }
 
-    public Optional<PersonResponse> findPersonForParticipant(Participant participant) {
-        if (participant.personId() == null) {
-            return Optional.empty();
-        }
-        return personService.findById(participant.personId())
-                .map(PersonResponse::from);
-    }
-
-    public Optional<TeamResponse> findTeamForParticipant(Participant participant) {
-        if (participant.teamId() == null) {
-            return Optional.empty();
-        }
-        return teamService.findById(participant.teamId())
-                .map(TeamResponse::from);
-    }
-
-    public Optional<CategoryResponse> findCategoryForParticipant(Participant participant) {
-        if (participant.categoryId() == null) {
-            return Optional.empty();
-        }
-        return categoryService.findById(participant.categoryId())
-                .map(CategoryResponse::from);
-    }
-
-    public Optional<AgeGroupResponse> findAgeGroupForParticipant(Participant participant) {
-        return findMatchingAgeGroup(participant).map(AgeGroupResponse::from);
-    }
-
-    private Optional<AgeGroup> findMatchingAgeGroup(Participant participant) {
-        Optional<Person> person = participant.personId() != null ? personService.findById(participant.personId()) : Optional.empty();
-        return person.flatMap(this::findMatchingAgeGroup);
-    }
-
-    private Optional<AgeGroup> findMatchingAgeGroup(Person person) {
+    private Optional<AgeGroup> findMatchingAgeGroup(Person person, List<AgeGroup> ageGroups) {
         if (person.birthDate() == null) {
             return Optional.empty();
         }
 
         int birthYear = person.birthDate().getYear();
 
-        for (AgeGroup ageGroup : ageGroupService.findAll()) {
+        for (AgeGroup ageGroup : ageGroups) {
             boolean yearMatches = ageGroupService.isYearInAgeGroup(ageGroup, birthYear);
             boolean genderMatches = ageGroup.gender() == person.gender() ||
                                    ageGroup.gender() == Gender.BOTH;
@@ -144,6 +143,49 @@ public class ParticipantService {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Builds response DTOs for a batch of participants, batch-loading each referenced
+     * race/person/team/category once instead of issuing one lookup per participant per
+     * relation (the previous per-participant approach did 5+ queries per row).
+     */
+    public List<ParticipantResponse> toResponses(List<Participant> participants) {
+        Set<Long> raceIds = new HashSet<>();
+        Set<Long> personIds = new HashSet<>();
+        Set<Long> teamIds = new HashSet<>();
+        Set<Long> categoryIds = new HashSet<>();
+        for (Participant p : participants) {
+            if (p.raceId() != null) raceIds.add(p.raceId());
+            if (p.personId() != null) personIds.add(p.personId());
+            if (p.teamId() != null) teamIds.add(p.teamId());
+            if (p.categoryId() != null) categoryIds.add(p.categoryId());
+        }
+
+        Map<Long, Race> racesById = raceService.findByIds(raceIds);
+        Map<Long, Person> personsById = personService.findByIds(personIds);
+        Map<Long, Team> teamsById = teamService.findByIds(teamIds);
+        Map<Long, Category> categoriesById = categoryService.findByIds(categoryIds);
+        List<AgeGroup> ageGroups = allAgeGroups();
+
+        List<ParticipantResponse> result = new ArrayList<>();
+        for (Participant p : participants) {
+            Race race = p.raceId() != null ? racesById.get(p.raceId()) : null;
+            Person person = p.personId() != null ? personsById.get(p.personId()) : null;
+            Team team = p.teamId() != null ? teamsById.get(p.teamId()) : null;
+            Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
+            AgeGroup ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups).orElse(null) : null;
+
+            result.add(ParticipantResponse.from(
+                    p,
+                    person != null ? PersonResponse.from(person) : null,
+                    race != null ? RaceResponse.from(race) : null,
+                    team != null ? TeamResponse.from(team) : null,
+                    category != null ? CategoryResponse.from(category) : null,
+                    ageGroup != null ? AgeGroupResponse.from(ageGroup) : null
+            ));
+        }
+        return result;
     }
 
     public Iterable<Participant> findByRaceId(Long raceId) {
@@ -196,6 +238,9 @@ public class ParticipantService {
     public List<Participant> assignRaceNumbers(Long raceId) {
         List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
 
+        Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Person> personsById = personService.findByIds(personIds);
+
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
                 .toList();
@@ -207,7 +252,8 @@ public class ParticipantService {
         List<Participant> withoutAgeGroup = new ArrayList<>();
 
         for (Participant participant : participants) {
-            Optional<AgeGroup> ageGroup = findMatchingAgeGroup(participant);
+            Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
+            Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
             if (ageGroup.isPresent()) {
                 byAgeGroup.get(ageGroup.get().id()).add(participant);
             } else {
@@ -224,27 +270,35 @@ public class ParticipantService {
         }
 
         withoutAgeGroup.sort(Comparator.comparing(
-                (Participant p) -> personService.findById(p.personId()).map(Person::birthDate).orElse(null),
+                (Participant p) -> {
+                    Person person = personsById.get(p.personId());
+                    return person != null ? person.birthDate() : null;
+                },
                 Comparator.nullsLast(Comparator.reverseOrder())));
         ordered.addAll(withoutAgeGroup);
 
-        List<Participant> result = new ArrayList<>();
-        int raceNumber = 1;
-        for (Participant participant : ordered) {
-            Participant updated = new Participant(
-                    participant.id(),
-                    participant.raceId(),
-                    participant.personId(),
-                    raceNumber++,
-                    participant.teamId(),
-                    participant.categoryId(),
-                    participant.durationMs(),
-                    participant.penalty(),
-                    participant.measuredAt()
-            );
-            result.add(repository.update(updated));
-        }
-        return result;
+        // Assigning race numbers touches every participant of the race; if a write fails partway
+        // through, the whole batch must roll back rather than leaving some participants renumbered
+        // and others not (which risks duplicate/missing race numbers right before a start list is printed).
+        return transactionOperations.executeWrite(status -> {
+            List<Participant> result = new ArrayList<>();
+            int raceNumber = 1;
+            for (Participant participant : ordered) {
+                Participant updated = new Participant(
+                        participant.id(),
+                        participant.raceId(),
+                        participant.personId(),
+                        raceNumber++,
+                        participant.teamId(),
+                        participant.categoryId(),
+                        participant.durationMs(),
+                        participant.penalty(),
+                        participant.measuredAt()
+                );
+                result.add(repository.update(updated));
+            }
+            return result;
+        });
     }
 
     /**
@@ -312,18 +366,30 @@ public class ParticipantService {
                 continue;
             }
 
-            Long teamId = teamName.isEmpty() ? null : teamService.findOrCreateByName(teamName).id();
+            // Each row is its own transaction: a failure saving the participant rolls back a
+            // just-created person for that row too (no orphan Person left behind), and does not
+            // abort rows that were already imported successfully or rows still to come.
+            try {
+                Participant saved = transactionOperations.executeWrite(status -> {
+                    Long teamId = teamName.isEmpty() ? null : teamService.findOrCreateByName(teamName).id();
 
-            Person person;
-            if (!externalId.isEmpty()) {
-                person = personService.findByExternalId(externalId)
-                        .orElseGet(() -> personService.create(new Person(null, firstName, lastName, birthDate, gender, externalId)));
-            } else {
-                person = personService.create(new Person(null, firstName, lastName, birthDate, gender, null));
+                    Person person;
+                    if (!externalId.isEmpty()) {
+                        person = personService.findByExternalId(externalId)
+                                .orElseGet(() -> personService.create(new Person(null, firstName, lastName, birthDate, gender, externalId)));
+                    } else {
+                        person = personService.create(new Person(null, firstName, lastName, birthDate, gender, null));
+                    }
+
+                    Participant participant = new Participant(null, raceId, person.id(), null, teamId, null, null, null, null);
+                    return repository.save(participant);
+                });
+                imported.add(saved);
+            } catch (Exception e) {
+                String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                LOG.warn("Failed to import row {} for race {}: {}", lineNumber, raceId, reason);
+                errors.add(new ParticipantImportRowError(lineNumber, line, "Failed to save row: " + reason));
             }
-
-            Participant participant = new Participant(null, raceId, person.id(), null, teamId, null, null, null, null);
-            imported.add(repository.save(participant));
         }
 
         LOG.info("CSV import for race {} finished: {} imported, {} skipped", raceId, imported.size(), errors.size());

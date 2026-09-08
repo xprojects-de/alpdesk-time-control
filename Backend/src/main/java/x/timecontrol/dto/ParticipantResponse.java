@@ -49,21 +49,6 @@ public record ParticipantResponse(
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
         LocalDateTime measuredAt
 ) {
-    public static ParticipantResponse from(Participant participant, PersonResponse person) {
-        return new ParticipantResponse(
-                participant.id(),
-                null,
-                person,
-                participant.raceNumber(),
-                null,
-                null,
-                null,
-                participant.durationMs(),
-                participant.penalty(),
-                participant.measuredAt()
-        );
-    }
-
     public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),

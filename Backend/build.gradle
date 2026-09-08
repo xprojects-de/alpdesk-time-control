@@ -23,6 +23,10 @@ dependencies {
     implementation("org.slf4j:slf4j-api")
     runtimeOnly("ch.qos.logback:logback-classic")
     testImplementation("io.micronaut:micronaut-http-client")
+    // Needed for Spock's Mock() to mock concrete classes (e.g. the service classes under test),
+    // not just interfaces - Spock's built-in java-proxy mocker only handles interfaces.
+    testImplementation("net.bytebuddy:byte-buddy:1.17.5")
+    testImplementation("org.objenesis:objenesis:3.4")
     annotationProcessor("io.micronaut.security:micronaut-security-processor")
     annotationProcessor("io.micronaut.security:micronaut-security-annotations")
     implementation("io.micronaut.security:micronaut-security")

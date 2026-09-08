@@ -65,4 +65,25 @@ public class RankingService {
         }
         return places;
     }
+
+    /**
+     * Standard competition ranking (1, 2, 2, 4, ...) for values already sorted best-to-worst:
+     * equal values share a place and the next distinct value's place is skipped accordingly.
+     * Shared by the Gaudi-Modus calculators, each of which ranks a different metric (pair-average
+     * deviation, team total, combined time/points) but must all break ties the same way.
+     */
+    public List<Integer> assignStandardPlaces(List<Double> valuesBestToWorst) {
+        List<Integer> places = new ArrayList<>(valuesBestToWorst.size());
+        Double previousValue = null;
+        int place = 0;
+        for (int i = 0; i < valuesBestToWorst.size(); i++) {
+            Double value = valuesBestToWorst.get(i);
+            if (previousValue == null || !value.equals(previousValue)) {
+                place = i + 1;
+            }
+            places.add(place);
+            previousValue = value;
+        }
+        return places;
+    }
 }

@@ -133,6 +133,13 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
     public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
+        // Pausing the scheduled device import for the duration of the reset closes most of the
+        // window where a scheduled fetch, already in flight when the device is reset, would
+        // otherwise write stale pre-reset data into the measurement table right after it was cleared.
+        boolean pauseScheduledImport = dataImportScheduler.isScheduledImportActive();
+        if (pauseScheduledImport) {
+            dataImportScheduler.setScheduledImportActive(false);
+        }
         try {
             // If device reset is requested, do it first before deleting database
             if (resetDevice) {
@@ -154,6 +161,10 @@ public class MeasurementController {
         } catch (Exception e) {
             return HttpResponse.serverError()
                     .body("Error during reset operation: " + e.getMessage());
+        } finally {
+            if (pauseScheduledImport) {
+                dataImportScheduler.setScheduledImportActive(true);
+            }
         }
     }
 

@@ -245,11 +245,11 @@ public class PdfExportService {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Paarung", 2.5f, e -> truncate(e.label(), 40)),
-                new PdfColumn<>("Zeit 1", 1f, e -> formatTime(e.time1Ms())),
-                new PdfColumn<>("Zeit 2", 1f, e -> formatTime(e.time2Ms())),
-                new PdfColumn<>("Ø-Zeit Paar", 1f, e -> formatTime(e.valueMs())),
-                new PdfColumn<>("Ø-Zeit Gesamt", 1f, e -> formatTime(e.referenceMs())),
-                new PdfColumn<>("Abweichung", 1f, e -> formatTime(e.diffMs()))
+                new PdfColumn<>("Wert 1", 1f, e -> formatValue(race, e.time1Ms())),
+                new PdfColumn<>("Wert 2", 1f, e -> formatValue(race, e.time2Ms())),
+                new PdfColumn<>("Ø-Wert Paar", 1f, e -> formatValue(race, e.valueMs())),
+                new PdfColumn<>("Ø-Wert Gesamt", 1f, e -> formatValue(race, e.referenceMs())),
+                new PdfColumn<>("Abweichung", 1f, e -> formatValue(race, e.diffMs()))
         );
         return renderDocument(race, true,
                 ctx -> drawSection(ctx, columns, title, entries, "Paare", true));
@@ -259,7 +259,7 @@ public class PdfExportService {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Mannschaft", 2.5f, e -> truncate(e.label(), 40)),
-                new PdfColumn<>("Gesamtzeit", 1f, e -> formatTime(e.valueMs()))
+                new PdfColumn<>("Gesamtwert", 1f, e -> formatValue(race, e.valueMs()))
         );
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, columns, title, entries, "Mannschaften", true));
@@ -390,6 +390,23 @@ public class PdfExportService {
         void close() throws IOException {
             drawPageFooter(stream, page.getMediaBox().getWidth());
             stream.close();
+            stream = null;
+        }
+
+        /**
+         * Releases the current content stream without drawing a footer - used to avoid leaking an
+         * open {@link PDPageContentStream} when {@code body.write(ctx)} throws partway through
+         * rendering (PDFBox does not close it on document.close() by itself). A no-op once
+         * {@link #close()} already ran normally.
+         */
+        void closeQuietly() {
+            if (stream != null) {
+                try {
+                    stream.close();
+                } catch (IOException ignored) {
+                }
+                stream = null;
+            }
         }
     }
 
@@ -400,8 +417,12 @@ public class PdfExportService {
 
         try (PDDocument document = new PDDocument()) {
             PdfContext ctx = new PdfContext(document, race, pageSize);
-            body.write(ctx);
-            ctx.close();
+            try {
+                body.write(ctx);
+                ctx.close();
+            } finally {
+                ctx.closeQuietly();
+            }
 
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             document.save(outputStream);

@@ -14,6 +14,8 @@ public interface PersonRepository extends CrudRepository<Person, Long> {
 
     Optional<Person> findByExternalId(String externalId);
 
+    List<Person> findByIdIn(Iterable<Long> ids);
+
     @Query(value = "SELECT * FROM person " +
             "WHERE LOWER(first_name || ' ' || last_name) LIKE LOWER(:pattern) " +
             "OR LOWER(last_name || ' ' || first_name) LIKE LOWER(:pattern) " +
