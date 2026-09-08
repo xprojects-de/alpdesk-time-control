@@ -236,6 +236,15 @@ export class GaudiModeDialogComponent implements OnInit {
         }
         this.races$.pipe(take(1)).subscribe(races => (this.allRaces = races));
         this.loadPointsScales();
+
+        // Switching from a combination type (multi-race) back to LOS/TEAM (single-race) must
+        // not leave more than one race selected behind - the single-race select only ever shows
+        // and replaces selectedRaceIds[0], so a stale second entry would silently be saved too.
+        this.form.get("type")!.valueChanges.subscribe(() => {
+            if (!this.isCombination() && this.selectedRaceIds.length > 1) {
+                this.selectedRaceIds = this.selectedRaceIds.slice(0, 1);
+            }
+        });
     }
 
     isCombination(): boolean {
