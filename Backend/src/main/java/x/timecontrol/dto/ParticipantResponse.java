@@ -1,12 +1,10 @@
 package x.timecontrol.dto;
 
 import io.micronaut.core.annotation.Nullable;
-import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Serdeable
@@ -19,17 +17,9 @@ public record ParticipantResponse(
         @Schema(description = "Race information", nullable = true)
         RaceResponse race,
 
-        @Schema(description = "First name of the participant", example = "John")
-        String firstName,
-
-        @Schema(description = "Last name of the participant", example = "Doe")
-        String lastName,
-
-        @Schema(description = "Birth date of the participant", example = "1990-01-15")
-        LocalDate birthDate,
-
-        @Schema(description = "Gender of the participant", example = "MALE")
-        Gender gender,
+        @Nullable
+        @Schema(description = "Person taking part", nullable = true)
+        PersonResponse person,
 
         @Nullable
         @Schema(description = "Race number of the participant", example = "42", nullable = true)
@@ -55,14 +45,11 @@ public record ParticipantResponse(
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
         LocalDateTime measuredAt
 ) {
-    public static ParticipantResponse from(Participant participant) {
+    public static ParticipantResponse from(Participant participant, PersonResponse person) {
         return new ParticipantResponse(
                 participant.id(),
                 null,
-                participant.firstName(),
-                participant.lastName(),
-                participant.birthDate(),
-                participant.gender(),
+                person,
                 participant.raceNumber(),
                 null,
                 null,
@@ -72,14 +59,11 @@ public record ParticipantResponse(
         );
     }
 
-    public static ParticipantResponse from(Participant participant, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),
                 race,
-                participant.firstName(),
-                participant.lastName(),
-                participant.birthDate(),
-                participant.gender(),
+                person,
                 participant.raceNumber(),
                 team,
                 category,
@@ -89,4 +73,3 @@ public record ParticipantResponse(
         );
     }
 }
-

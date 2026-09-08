@@ -402,7 +402,7 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     ): string {
         const participant = participants.find((p) => p.id === participantId);
         return participant
-            ? `${participant.firstName} ${participant.lastName}`
+            ? `${participant.person.firstName} ${participant.person.lastName}`
             : "-";
     }
 

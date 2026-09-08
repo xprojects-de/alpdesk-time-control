@@ -7,6 +7,7 @@ import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
+import x.timecontrol.services.PersonService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,9 +25,11 @@ import java.util.stream.StreamSupport;
 public class LosModeCalculator implements GaudiModeCalculator {
 
     private final GaudiLosPairingRepository pairingRepository;
+    private final PersonService personService;
 
-    public LosModeCalculator(GaudiLosPairingRepository pairingRepository) {
+    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService) {
         this.pairingRepository = pairingRepository;
+        this.personService = personService;
     }
 
     @Override
@@ -109,6 +112,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
     }
 
     private String formatName(Participant p) {
-        return (p.lastName() + " " + p.firstName()).trim();
+        return personService.findById(p.personId())
+                .map(personService::displayName)
+                .orElse("Unbekannt");
     }
 }

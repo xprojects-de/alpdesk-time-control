@@ -26,6 +26,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.services.GaudiModeService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
+import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RaceService;
 
 import java.util.List;
@@ -49,6 +50,9 @@ public class GaudiModeController {
 
     @Inject
     PdfExportService pdfExportService;
+
+    @Inject
+    PersonService personService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -196,15 +200,17 @@ public class GaudiModeController {
                     return new GaudiLosPairingResponse(
                             p.id(),
                             p.participant1Id(),
-                            p1.map(this::formatName).orElse("Unbekannt"),
+                            formatName(p1).orElse("Unbekannt"),
                             p.participant2Id(),
-                            p2.map(this::formatName).orElse(null)
+                            formatName(p2).orElse(null)
                     );
                 })
                 .toList();
     }
 
-    private String formatName(Participant p) {
-        return (p.lastName() + " " + p.firstName()).trim();
+    private Optional<String> formatName(Optional<Participant> participant) {
+        return participant
+                .flatMap(p -> personService.findById(p.personId()))
+                .map(personService::displayName);
     }
 }

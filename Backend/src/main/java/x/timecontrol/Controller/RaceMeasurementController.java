@@ -117,10 +117,7 @@ public class RaceMeasurementController {
                         Participant updatedParticipant = new Participant(
                                 participant.id(),
                                 participant.raceId(),
-                                participant.firstName(),
-                                participant.lastName(),
-                                participant.birthDate(),
-                                participant.gender(),
+                                participant.personId(),
                                 participant.raceNumber(),
                                 participant.teamId(),
                                 participant.categoryId(),

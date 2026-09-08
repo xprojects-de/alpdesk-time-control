@@ -13,6 +13,7 @@ import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.Team;
 
@@ -42,11 +43,13 @@ public class PdfExportService {
     private final AgeGroupService ageGroupService;
     private final CategoryService categoryService;
     private final TeamService teamService;
+    private final PersonService personService;
 
-    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService) {
+    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService) {
         this.ageGroupService = ageGroupService;
         this.categoryService = categoryService;
         this.teamService = teamService;
+        this.personService = personService;
     }
 
     private record RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
@@ -90,11 +93,12 @@ public class PdfExportService {
 
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
+            Person person = personService.findById(p.personId()).orElse(null);
             String raceNumber = p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
-            String name = formatName(p);
-            String birthYear = p.birthDate() != null ? String.valueOf(p.birthDate().getYear()) : "-";
-            String gender = genderLabel(p.gender());
-            String ageGroup = calculateAgeGroup(p.birthDate());
+            String name = formatName(person);
+            String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
+            String gender = person != null ? genderLabel(person.gender()) : "-";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
             String team = p.teamId() != null
                     ? teamService.findById(p.teamId()).map(Team::name).orElse("-")
                     : "-";
@@ -395,25 +399,32 @@ public class PdfExportService {
         }
     }
 
+    private record ParticipantWithPerson(Participant participant, Person person) {
+    }
+
     private List<RankingEntry> createRankingEntriesFromParticipants(Iterable<Participant> participants,
                                                                      Gender filterGender,
                                                                      String filterAgeGroup,
                                                                      Long filterCategoryId) {
-        // Only keep participants that have a measured duration
-        List<Participant> validParticipants = StreamSupport.stream(participants.spliterator(), false)
+        // Only keep participants that have a measured duration, resolving each one's Person once
+        List<ParticipantWithPerson> validParticipants = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> p.durationMs() != null)
+                .map(p -> new ParticipantWithPerson(p, personService.findById(p.personId()).orElse(null)))
                 .toList();
 
         // Apply gender, age group and category filters
         if (filterGender != null || filterAgeGroup != null || filterCategoryId != null) {
             validParticipants = validParticipants.stream()
-                    .filter(p -> {
-                        if (filterGender != null && p.gender() != filterGender) {
+                    .filter(pwp -> {
+                        Participant p = pwp.participant();
+                        Person person = pwp.person();
+
+                        if (filterGender != null && (person == null || person.gender() != filterGender)) {
                             return false;
                         }
 
                         if (filterAgeGroup != null) {
-                            String ageGroup = calculateAgeGroup(p.birthDate());
+                            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
                             if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
                                 return false;
                             }
@@ -435,19 +446,20 @@ public class PdfExportService {
         }
 
         // Sort by time ascending (fastest first)
-        List<Participant> sortedParticipants = validParticipants.stream()
-                .sorted(Comparator.comparing(Participant::durationMs))
+        List<ParticipantWithPerson> sortedParticipants = validParticipants.stream()
+                .sorted(Comparator.comparing(pwp -> pwp.participant().durationMs()))
                 .toList();
 
         // Create ranking entries with place and time difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
-        Integer leaderTimeMs = sortedParticipants.isEmpty() ? null : sortedParticipants.get(0).durationMs();
+        Integer leaderTimeMs = sortedParticipants.isEmpty() ? null : sortedParticipants.get(0).participant().durationMs();
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
-            Participant p = sortedParticipants.get(i);
+            Participant p = sortedParticipants.get(i).participant();
+            Person person = sortedParticipants.get(i).person();
 
-            String name = formatName(p);
-            String ageGroup = calculateAgeGroup(p.birthDate());
+            String name = formatName(person);
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
             Integer timeMs = p.durationMs();
             Integer diffMs = (i > 0) ? timeMs - leaderTimeMs : null;
 
@@ -457,10 +469,11 @@ public class PdfExportService {
         return entries;
     }
 
-    private String formatName(Participant p) {
-        String firstName = p.firstName() != null ? p.firstName() : "";
-        String lastName = p.lastName() != null ? p.lastName() : "";
-        return (lastName + " " + firstName).trim();
+    private String formatName(Person person) {
+        if (person == null) {
+            return "Unbekannt";
+        }
+        return personService.displayName(person);
     }
 
     private String calculateAgeGroup(LocalDate birthDate) {
