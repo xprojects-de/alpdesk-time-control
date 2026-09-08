@@ -31,6 +31,17 @@
               }
             ],
             "styles": [
+              "material-icons/iconfont/material-icons.css",
+              "@fontsource/roboto/300.css",
+              "@fontsource/roboto/300-italic.css",
+              "@fontsource/roboto/400.css",
+              "@fontsource/roboto/400-italic.css",
+              "@fontsource/roboto/500.css",
+              "@fontsource/roboto/500-italic.css",
+              "@fontsource/roboto/700.css",
+              "@fontsource/roboto/700-italic.css",
+              "@fontsource/roboto/900.css",
+              "@fontsource/roboto/900-italic.css",
               "src/styles.scss"
             ]
           },
