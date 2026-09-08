@@ -9,13 +9,29 @@ import io.micronaut.security.authentication.AuthenticationRequest;
 import io.micronaut.security.authentication.AuthenticationResponse;
 import io.micronaut.security.authentication.provider.HttpRequestAuthenticationProvider;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Singleton
 class AuthenticationProviderUserPassword<B> implements HttpRequestAuthenticationProvider<B> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AuthenticationProviderUserPassword.class);
+
+    // There is only ever one account, so a simple in-memory, JVM-wide lockout (rather than
+    // per-IP/per-user tracking) is enough to stop unthrottled brute-forcing of it.
+    private static final int MAX_CONSECUTIVE_FAILURES = 5;
+    private static final Duration LOCKOUT_DURATION = Duration.ofMinutes(1);
+
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    private final AtomicReference<Instant> lockedUntil = new AtomicReference<>(Instant.MIN);
 
     @Value("${app.username}")
     private String expectedUsername;
@@ -29,11 +45,23 @@ class AuthenticationProviderUserPassword<B> implements HttpRequestAuthentication
             @NonNull AuthenticationRequest<String, String> authenticationRequest
     ) {
 
+        Instant now = Instant.now();
+        if (now.isBefore(lockedUntil.get())) {
+            return AuthenticationResponse.failure(AuthenticationFailureReason.CREDENTIALS_DO_NOT_MATCH);
+        }
+
         String username = authenticationRequest.getIdentity();
         String password = authenticationRequest.getSecret();
 
         if (constantTimeEquals(username, expectedUsername) && constantTimeEquals(password, expectedPassword)) {
+            consecutiveFailures.set(0);
             return AuthenticationResponse.success(authenticationRequest.getIdentity(), List.of("ROLE_USER"));
+        }
+
+        if (consecutiveFailures.incrementAndGet() >= MAX_CONSECUTIVE_FAILURES) {
+            lockedUntil.set(now.plus(LOCKOUT_DURATION));
+            consecutiveFailures.set(0);
+            LOG.warn("Too many failed login attempts, locking out login for {}", LOCKOUT_DURATION);
         }
 
         return AuthenticationResponse.failure(AuthenticationFailureReason.CREDENTIALS_DO_NOT_MATCH);

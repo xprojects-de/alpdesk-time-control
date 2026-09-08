@@ -74,9 +74,9 @@ public class PersonController {
     @Operation(summary = "Create a new person", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Person created", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<PersonResponse> add(@Body PersonRequest request) {
+    public HttpResponse<?> add(@Body PersonRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
         }
         Person person = service.createFromRequest(request);
         Person created = service.create(person);
@@ -90,13 +90,13 @@ public class PersonController {
     @ApiResponse(responseCode = "200", description = "Person updated", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<PersonResponse> update(@PathVariable Long id, @Body PersonRequest request) {
+    public HttpResponse<?> update(@PathVariable Long id, @Body PersonRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
         }
         Person person = service.createFromRequest(request);
         Optional<Person> updated = service.update(id, person);
-        return updated.map(p -> HttpResponse.ok(PersonResponse.from(p)))
+        return updated.map(p -> HttpResponse.ok((Object) PersonResponse.from(p)))
                 .orElse(HttpResponse.notFound());
     }
 

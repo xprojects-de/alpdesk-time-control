@@ -75,7 +75,8 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
     public HttpResponse<?> add(@Body AgeGroupRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
+                    "Name, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
         }
         AgeGroup ageGroup = service.createFromRequest(request);
         try {
@@ -96,7 +97,8 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
     public HttpResponse<?> update(@PathVariable Long id, @Body AgeGroupRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
+                    "Name, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
         }
         AgeGroup ageGroup = service.createFromRequest(request);
         Optional<AgeGroup> updated;

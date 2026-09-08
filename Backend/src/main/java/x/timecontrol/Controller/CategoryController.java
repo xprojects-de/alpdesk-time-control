@@ -64,7 +64,7 @@ public class CategoryController {
     @ApiResponse(responseCode = "409", description = "A category with this name already exists")
     public HttpResponse<?> add(@Body CategoryRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Category name is required"));
         }
         Category category = service.createFromRequest(request);
         try {
@@ -85,7 +85,7 @@ public class CategoryController {
     @ApiResponse(responseCode = "409", description = "A category with this name already exists")
     public HttpResponse<?> update(@PathVariable Long id, @Body CategoryRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Category name is required"));
         }
         Category category = service.createFromRequest(request);
         Optional<Category> updated;

@@ -13,5 +13,6 @@ public interface ParticipantRepository
     Iterable<Participant> findByRaceId(Long raceId);
     void deleteByRaceId(Long raceId);
     Optional<Participant> findByRaceIdAndRaceNumber(Long raceId, Integer raceNumber);
+    Optional<Participant> findByRaceIdAndPersonId(Long raceId, Long personId);
     boolean existsByPersonId(Long personId);
 }

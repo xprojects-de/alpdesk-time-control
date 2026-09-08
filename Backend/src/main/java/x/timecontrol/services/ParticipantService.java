@@ -115,6 +115,13 @@ public class ParticipantService {
                 throw new IllegalStateException("Race number " + participant.raceNumber() + " is already assigned in this race");
             }
         }
+        // Mirrors the dedupe rule copyParticipants() already enforces: a person may only take part
+        // in a race once. Without this, the add/edit dialog could silently create a second entry
+        // for the same person in the same race.
+        Optional<Participant> personConflict = repository.findByRaceIdAndPersonId(participant.raceId(), participant.personId());
+        if (personConflict.isPresent() && !personConflict.get().id().equals(excludeParticipantId)) {
+            throw new IllegalStateException("This person is already a participant of this race");
+        }
     }
 
     public void delete(Long id) {

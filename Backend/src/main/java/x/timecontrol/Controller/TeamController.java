@@ -64,7 +64,7 @@ public class TeamController {
     @ApiResponse(responseCode = "409", description = "A team with this name already exists")
     public HttpResponse<?> add(@Body TeamRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Team name is required"));
         }
         Team team = service.createFromRequest(request);
         try {
@@ -85,7 +85,7 @@ public class TeamController {
     @ApiResponse(responseCode = "409", description = "A team with this name already exists")
     public HttpResponse<?> update(@PathVariable Long id, @Body TeamRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Team name is required"));
         }
         Team team = service.createFromRequest(request);
         Optional<Team> updated;

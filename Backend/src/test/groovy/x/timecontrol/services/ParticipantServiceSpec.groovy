@@ -108,11 +108,27 @@ class ParticipantServiceSpec extends Specification {
         0 * repository.save(_)
     }
 
+    def "create rejects a person who is already a participant of the same race"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        personService.findById(1L) >> Optional.of(person())
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(new Participant(99L, 1L, 1L, null, null, null, null, null, null))
+        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null)
+
+        when:
+        service.create(participant)
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.save(_)
+    }
+
     def "create succeeds and saves the participant when everything is valid"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.empty()
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.empty()
         def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null)
         def saved = new Participant(10L, 1L, 1L, 5, null, null, null, null, null)
 
@@ -130,8 +146,9 @@ class ParticipantServiceSpec extends Specification {
         personService.findById(1L) >> Optional.of(person())
         def existing = new Participant(10L, 1L, 1L, 5, null, null, null, null, null)
         repository.findById(10L) >> Optional.of(existing)
-        // the only participant with race number 5 is the one being updated itself
+        // the only participant with race number 5, and the only one for person 1, is the one being updated itself
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(existing)
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(existing)
         def request = new Participant(null, 1L, 1L, 5, null, null, null, null, null)
 
         when:
