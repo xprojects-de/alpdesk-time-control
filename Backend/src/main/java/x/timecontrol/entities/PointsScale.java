@@ -1,28 +1,22 @@
 package x.timecontrol.entities;
 
-import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
 
-import java.time.LocalDateTime;
-
+/**
+ * A place-to-points lookup table for Punkte-Mischwertung, stored as a comma-separated list
+ * ("100,80,60,...") where index 0 is the points for 1st place. Places beyond the list length
+ * score 0 points.
+ */
 @MappedEntity
-public record GaudiMode(
+public record PointsScale(
 
         @Id
         @GeneratedValue
         Long id,
 
-        GaudiModeType type,
         String name,
-
-        @Nullable
-        Integer teamSize,
-
-        @Nullable
-        Long pointsScaleId,
-
-        LocalDateTime createdAt
+        String pointsCsv
 ) {
 }

@@ -2,8 +2,9 @@ package x.timecontrol.services.gaudi;
 
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiMode;
-import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Race;
+import x.timecontrol.entities.GaudiModeType;
 
 import java.util.List;
 
@@ -16,5 +17,12 @@ public interface GaudiModeCalculator {
 
     GaudiModeType getType();
 
-    List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<Participant> raceParticipants);
+    /**
+     * One referenced race of a Gaudi-Modus instance, in configured order, with its participants
+     * and (for Punkte-Mischwertung) the weight its points count with.
+     */
+    record RaceParticipants(Long raceId, Race race, double weight, List<Participant> participants) {
+    }
+
+    List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<RaceParticipants> races);
 }

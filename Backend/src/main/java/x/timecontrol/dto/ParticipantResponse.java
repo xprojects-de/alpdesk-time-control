@@ -42,6 +42,10 @@ public record ParticipantResponse(
         Integer durationMs,
 
         @Nullable
+        @Schema(description = "Penalty added to the raw result, makes the result worse", example = "2000", nullable = true)
+        Integer penalty,
+
+        @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
         LocalDateTime measuredAt
 ) {
@@ -55,6 +59,7 @@ public record ParticipantResponse(
                 null,
                 null,
                 participant.durationMs(),
+                participant.penalty(),
                 participant.measuredAt()
         );
     }
@@ -69,6 +74,7 @@ public record ParticipantResponse(
                 category,
                 ageGroup,
                 participant.durationMs(),
+                participant.penalty(),
                 participant.measuredAt()
         );
     }

@@ -1,6 +1,7 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
 import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
 
 // Load all participants
 export const loadParticipants = createAction('[Participant] Load Participants');
@@ -114,6 +115,20 @@ export const importParticipantsCsvSuccess = createAction(
 );
 export const importParticipantsCsvFailure = createAction(
     '[Participant] Import Participants CSV Failure',
+    props<{ error: string }>()
+);
+
+// Copy participants into other races
+export const copyParticipants = createAction(
+    '[Participant] Copy Participants',
+    props<{ request: ParticipantCopyRequest }>()
+);
+export const copyParticipantsSuccess = createAction(
+    '[Participant] Copy Participants Success',
+    props<{ result: ParticipantCopyResponse }>()
+);
+export const copyParticipantsFailure = createAction(
+    '[Participant] Copy Participants Failure',
     props<{ error: string }>()
 );
 

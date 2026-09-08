@@ -224,6 +224,12 @@ import {PersonService} from "../../services/person.service";
                 </div>
 
                 <mat-form-field appearance="outline">
+                    <mat-label>Strafe (Sekunden)</mat-label>
+                    <input matInput type="number" formControlName="penaltySeconds" min="0" step="0.01"/>
+                    <mat-hint>Wird zur Zeit addiert; leer lassen, wenn keine Strafe</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
                     <mat-label>Gemessen am</mat-label>
                     <input matInput type="datetime-local" formControlName="measuredAt" step="1"/>
                 </mat-form-field>
@@ -317,6 +323,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             minutes: [timeComponents.minutes, [Validators.min(0)]],
             seconds: [timeComponents.seconds, [Validators.min(0), Validators.max(59)]],
             milliseconds: [timeComponents.milliseconds, [Validators.min(0), Validators.max(999)]],
+            penaltySeconds: [this.data?.penalty !== undefined && this.data?.penalty !== null ? this.data.penalty / 1000 : "", [Validators.min(0)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
         });
 
@@ -407,6 +414,9 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 Number(formValue.seconds || 0),
                 Number(formValue.milliseconds || 0),
             ) : undefined,
+            penalty: timeEntered && formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
+                ? Math.round(Number(formValue.penaltySeconds) * 1000)
+                : undefined,
             measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
         });
 

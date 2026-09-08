@@ -37,7 +37,7 @@ export const selectSelectedGaudiMode = createSelector(
 
 export const selectGaudiModesByRace = (raceId: number | null) => createSelector(
     selectAllGaudiModes,
-    gaudiModes => raceId ? gaudiModes.filter(g => g.raceId === raceId) : gaudiModes
+    gaudiModes => raceId ? gaudiModes.filter(g => g.races.some(r => r.raceId === raceId)) : gaudiModes
 );
 
 export const selectPairing = createSelector(

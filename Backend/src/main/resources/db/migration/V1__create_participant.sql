@@ -20,7 +20,10 @@ CREATE TABLE race
     elevation_difference  TEXT,
     route_length          TEXT,
     course_setter         TEXT,
-    weather               TEXT
+    weather               TEXT,
+    result_unit           TEXT NOT NULL DEFAULT 'TIME' CHECK (result_unit IN ('TIME', 'POINTS')),
+    result_unit_label     TEXT,
+    sort_direction        TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC'))
 );
 
 CREATE TABLE team
@@ -56,6 +59,7 @@ CREATE TABLE participant
     team_id     INTEGER REFERENCES team (id) ON DELETE SET NULL,
     category_id INTEGER REFERENCES category (id) ON DELETE SET NULL,
     duration_ms INTEGER,
+    penalty     INTEGER,
     measured_at TIMESTAMP,
 
     FOREIGN KEY (race_id)
@@ -99,21 +103,45 @@ CREATE TABLE race_measurement
 CREATE INDEX idx_race_measurement_race_id ON race_measurement (race_id);
 CREATE INDEX idx_race_measurement_participant_id ON race_measurement (participant_id);
 
+CREATE TABLE points_scale
+(
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL UNIQUE,
+    points_csv TEXT    NOT NULL
+);
+
+INSERT INTO points_scale (name, points_csv)
+VALUES ('FIS-Schema',
+        '100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0');
+
 CREATE TABLE gaudi_mode
 (
-    id         INTEGER   PRIMARY KEY AUTOINCREMENT,
-    race_id    INTEGER   NOT NULL,
-    type       TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM')),
-    name       TEXT      NOT NULL,
-    team_size  INTEGER,
-    created_at TIMESTAMP NOT NULL,
+    id              INTEGER   PRIMARY KEY AUTOINCREMENT,
+    type            TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
+    name            TEXT      NOT NULL,
+    team_size       INTEGER,
+    points_scale_id INTEGER REFERENCES points_scale (id) ON DELETE SET NULL,
+    created_at      TIMESTAMP NOT NULL
+);
 
+CREATE TABLE gaudi_mode_race
+(
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    gaudi_mode_id INTEGER NOT NULL,
+    race_id       INTEGER NOT NULL,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    weight        REAL    NOT NULL DEFAULT 1.0,
+
+    FOREIGN KEY (gaudi_mode_id)
+        REFERENCES gaudi_mode (id)
+        ON DELETE CASCADE,
     FOREIGN KEY (race_id)
         REFERENCES race (id)
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_gaudi_mode_race_id ON gaudi_mode (race_id);
+CREATE INDEX idx_gaudi_mode_race_gaudi_mode_id ON gaudi_mode_race (gaudi_mode_id);
+CREATE INDEX idx_gaudi_mode_race_race_id ON gaudi_mode_race (race_id);
 
 CREATE TABLE gaudi_los_pairing
 (

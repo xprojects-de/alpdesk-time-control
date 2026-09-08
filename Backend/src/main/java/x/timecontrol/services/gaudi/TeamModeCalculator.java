@@ -33,7 +33,8 @@ public class TeamModeCalculator implements GaudiModeCalculator {
     }
 
     @Override
-    public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<Participant> raceParticipants) {
+    public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        List<Participant> raceParticipants = races.get(0).participants();
         int teamSize = gaudiMode.teamSize() != null ? gaudiMode.teamSize() : 1;
 
         Map<Long, List<Participant>> membersByTeam = raceParticipants.stream()
@@ -76,6 +77,8 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                     null,
                     null,
                     (int) r.totalMs(),
+                    null,
+                    null,
                     null,
                     null
             ));

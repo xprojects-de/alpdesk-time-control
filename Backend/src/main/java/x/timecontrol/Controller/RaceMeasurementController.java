@@ -122,6 +122,7 @@ public class RaceMeasurementController {
                                 participant.teamId(),
                                 participant.categoryId(),
                                 raceMeasurement.durationMs(),
+                                participant.penalty(),
                                 raceMeasurement.measuredAt()
                         );
 

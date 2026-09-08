@@ -1,5 +1,7 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.ParticipantCopyRequest;
+import x.timecontrol.dto.ParticipantCopyResponse;
 import x.timecontrol.dto.ParticipantImportResponse;
 import x.timecontrol.dto.ParticipantRequest;
 import x.timecontrol.dto.ParticipantResponse;
@@ -96,7 +98,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt());
         Participant created = service.create(participant);
         var race = service.findRaceForParticipant(created).orElse(null);
         var person = service.findPersonForParticipant(created).orElse(null);
@@ -114,7 +116,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
@@ -145,6 +147,17 @@ public class ParticipantController {
     public HttpResponse<Void> deleteByRaceId(@PathVariable Long raceId) {
         service.deleteByRaceId(raceId);
         return HttpResponse.noContent();
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/copy")
+    @Operation(summary = "Copy participants into other races",
+            description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, raceNumber/durationMs/penalty/measuredAt left empty). A person already present in a target race is skipped rather than duplicated.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Participants copied", content = @Content(schema = @Schema(implementation = ParticipantCopyResponse.class)))
+    public HttpResponse<ParticipantCopyResponse> copyParticipants(@Body ParticipantCopyRequest request) {
+        return HttpResponse.ok(service.copyParticipants(request.sourceRaceId(), request.targetRaceIds()));
     }
 
     @Produces(MediaType.APPLICATION_JSON)

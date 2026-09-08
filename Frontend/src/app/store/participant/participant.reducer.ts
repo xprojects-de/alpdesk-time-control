@@ -1,6 +1,7 @@
 import {createReducer, on} from '@ngrx/store';
 import {Participant} from '../../models/participant.model';
 import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantCopyResponse} from '../../models/participant-copy.model';
 import * as ParticipantActions from './participant.actions';
 
 export interface ParticipantState {
@@ -10,6 +11,8 @@ export interface ParticipantState {
     pdfExportLoading: boolean;
     importLoading: boolean;
     importResult: ParticipantImportResponse | null;
+    copyLoading: boolean;
+    copyResult: ParticipantCopyResponse | null;
     error: string | null;
 }
 
@@ -20,6 +23,8 @@ export const initialState: ParticipantState = {
     pdfExportLoading: false,
     importLoading: false,
     importResult: null,
+    copyLoading: false,
+    copyResult: null,
     error: null
 };
 
@@ -176,6 +181,24 @@ export const participantReducer = createReducer(
     on(ParticipantActions.importParticipantsCsvFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
+        error
+    })),
+
+    // Copy participants into other races
+    on(ParticipantActions.copyParticipants, state => ({
+        ...state,
+        copyLoading: true,
+        copyResult: null,
+        error: null
+    })),
+    on(ParticipantActions.copyParticipantsSuccess, (state, {result}) => ({
+        ...state,
+        copyLoading: false,
+        copyResult: result
+    })),
+    on(ParticipantActions.copyParticipantsFailure, (state, {error}) => ({
+        ...state,
+        copyLoading: false,
         error
     })),
 

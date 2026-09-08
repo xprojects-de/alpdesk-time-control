@@ -3,6 +3,8 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.SortDirection;
 import x.timecontrol.repositories.RaceRepository;
 
 import java.util.Optional;
@@ -47,7 +49,10 @@ public class RaceService {
                     race.elevationDifference(),
                     race.routeLength(),
                     race.courseSetter(),
-                    race.weather()
+                    race.weather(),
+                    race.resultUnit() != null ? race.resultUnit() : ResultUnit.TIME,
+                    race.resultUnitLabel(),
+                    race.sortDirection() != null ? race.sortDirection() : SortDirection.ASC
             );
             return Optional.of(repository.update(updated));
         }
@@ -71,7 +76,10 @@ public class RaceService {
                 request.elevationDifference(),
                 request.routeLength(),
                 request.courseSetter(),
-                request.weather()
+                request.weather(),
+                request.resultUnit() != null ? request.resultUnit() : ResultUnit.TIME,
+                request.resultUnitLabel(),
+                request.sortDirection() != null ? request.sortDirection() : SortDirection.ASC
         );
     }
 }

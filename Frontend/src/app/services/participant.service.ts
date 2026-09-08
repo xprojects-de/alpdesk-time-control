@@ -3,6 +3,7 @@ import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {Participant, ParticipantRequest} from '../models/participant.model';
 import {ParticipantImportResponse} from '../models/participant-import.model';
+import {ParticipantCopyRequest, ParticipantCopyResponse} from '../models/participant-copy.model';
 import {environment} from '../../environments/environment';
 
 @Injectable({
@@ -45,6 +46,10 @@ export class ParticipantService {
         const formData = new FormData();
         formData.append('file', file);
         return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, formData);
+    }
+
+    copyParticipants(request: ParticipantCopyRequest): Observable<ParticipantCopyResponse> {
+        return this.http.post<ParticipantCopyResponse>(`${this.apiUrl}/copy`, request);
     }
 
     exportStartListToPdf(raceId: number): Observable<Blob> {

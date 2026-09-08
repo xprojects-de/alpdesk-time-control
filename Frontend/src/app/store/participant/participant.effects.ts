@@ -122,6 +122,20 @@ export class ParticipantEffects {
         )
     );
 
+    copyParticipants$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyParticipants),
+            mergeMap(({request}) =>
+                this.participantService.copyParticipants(request).pipe(
+                    map(result => ParticipantActions.copyParticipantsSuccess({result})),
+                    catchError(error => of(ParticipantActions.copyParticipantsFailure({
+                        error: error.message || 'Failed to copy participants'
+                    })))
+                )
+            )
+        )
+    );
+
     exportStartListPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.exportStartListPdf),

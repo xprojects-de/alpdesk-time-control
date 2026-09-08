@@ -31,6 +31,7 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
+import {ParticipantCopyDialogComponent} from "./participant-copy-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -141,6 +142,20 @@ import {Actions, ofType} from "@ngrx/effects";
                                 hidden
                                 (change)="onCsvFileSelected($event)"
                         />
+
+                        <button
+                                mat-raised-button
+                                (click)="openCopyDialog()"
+                                [disabled]="copyLoading$ | async"
+                                matTooltip="Alle Teilnehmer dieses Rennens in andere Rennen kopieren"
+                        >
+                            @if (copyLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>content_copy</mat-icon>
+                            }
+                            In andere Rennen kopieren
+                        </button>
                     }
 
                     <button
@@ -422,6 +437,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
     importLoading$: Observable<boolean>;
+    copyLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
         "firstName",
@@ -471,6 +487,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         );
         this.importLoading$ = this.store.select(
             ParticipantSelectors.selectImportLoading,
+        );
+        this.copyLoading$ = this.store.select(
+            ParticipantSelectors.selectCopyLoading,
         );
 
         this.actions$.pipe(
@@ -574,6 +593,20 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                         .join('\n');
                     alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
                 }
+            });
+
+        this.store.select(ParticipantSelectors.selectCopyResult)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (!result) {
+                    return;
+                }
+                this.snackBar.open(
+                    `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen (bereits vorhanden)`,
+                    'OK',
+                    {duration: 5000},
+                );
+                this.store.dispatch(ParticipantActions.loadParticipants());
             });
     }
 
@@ -706,6 +739,34 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 }
                 this.store.dispatch(ParticipantActions.importParticipantsCsv({raceId, file}));
                 this.snackBar.open('CSV Import gestartet...', 'OK', {duration: 2000});
+            });
+    }
+
+    async openCopyDialog(): Promise<void> {
+        const sourceRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!sourceRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+
+        const dialogRef = this.dialog.open(ParticipantCopyDialogComponent, {
+            width: '450px',
+            data: {sourceRaceId, races},
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((targetRaceIds: number[] | undefined) => {
+                if (targetRaceIds && targetRaceIds.length > 0) {
+                    this.store.dispatch(ParticipantActions.copyParticipants({
+                        request: {sourceRaceId, targetRaceIds},
+                    }));
+                }
             });
     }
 
