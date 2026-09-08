@@ -280,25 +280,39 @@ public class ParticipantService {
         // Assigning race numbers touches every participant of the race; if a write fails partway
         // through, the whole batch must roll back rather than leaving some participants renumbered
         // and others not (which risks duplicate/missing race numbers right before a start list is printed).
+        //
+        // Re-shuffling an already-numbered race (the normal case) reassigns numbers that are
+        // currently held by OTHER participants in this same race. Since race_number is now
+        // constrained UNIQUE per race, writing the new numbers directly would collide with a
+        // not-yet-updated participant still holding that number. Clearing every number to NULL
+        // first (SQLite treats each NULL as distinct, so this never collides) avoids that.
         return transactionOperations.executeWrite(status -> {
+            for (Participant participant : ordered) {
+                if (participant.raceNumber() != null) {
+                    repository.update(withRaceNumber(participant, null));
+                }
+            }
             List<Participant> result = new ArrayList<>();
             int raceNumber = 1;
             for (Participant participant : ordered) {
-                Participant updated = new Participant(
-                        participant.id(),
-                        participant.raceId(),
-                        participant.personId(),
-                        raceNumber++,
-                        participant.teamId(),
-                        participant.categoryId(),
-                        participant.durationMs(),
-                        participant.penalty(),
-                        participant.measuredAt()
-                );
-                result.add(repository.update(updated));
+                result.add(repository.update(withRaceNumber(participant, raceNumber++)));
             }
             return result;
         });
+    }
+
+    private static Participant withRaceNumber(Participant participant, Integer raceNumber) {
+        return new Participant(
+                participant.id(),
+                participant.raceId(),
+                participant.personId(),
+                raceNumber,
+                participant.teamId(),
+                participant.categoryId(),
+                participant.durationMs(),
+                participant.penalty(),
+                participant.measuredAt()
+        );
     }
 
     /**
