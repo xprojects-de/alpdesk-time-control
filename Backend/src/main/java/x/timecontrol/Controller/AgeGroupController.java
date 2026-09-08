@@ -73,6 +73,9 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "201", description = "Age group created", content = @Content(schema = @Schema(implementation = AgeGroupResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<AgeGroupResponse> add(@Body AgeGroupRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         AgeGroup ageGroup = service.createFromRequest(request);
         AgeGroup created = service.create(ageGroup);
         return HttpResponse.created(AgeGroupResponse.from(created));
@@ -86,10 +89,25 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "404", description = "Age group not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<AgeGroupResponse> update(@PathVariable Long id, @Body AgeGroupRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         AgeGroup ageGroup = service.createFromRequest(request);
         Optional<AgeGroup> updated = service.update(id, ageGroup);
         return updated.map(ag -> HttpResponse.ok(AgeGroupResponse.from(ag)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    /**
+     * Manual validation (no bean-validation framework is wired up in this codebase): missing
+     * required fields would otherwise persist as null and NPE later, e.g. when
+     * ParticipantService.findMatchingAgeGroup unboxes birthYearFrom/birthYearTo.
+     */
+    private boolean isValid(AgeGroupRequest request) {
+        return request.name() != null && !request.name().isBlank()
+                && request.birthYearFrom() != null
+                && request.birthYearTo() != null
+                && request.gender() != null;
     }
 
     @Delete("/{id}")

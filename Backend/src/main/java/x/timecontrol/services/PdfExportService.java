@@ -519,6 +519,11 @@ public class PdfExportService {
                 .sorted(Comparator.comparing(pwp -> pwp.participant(), rankingService.comparator(race)))
                 .toList();
 
+        // Standard competition ranking (1224): tied participants share a place and the next
+        // distinct value's place is skipped accordingly, matching the app's other rankings.
+        Map<Long, Integer> places = rankingService.computePlaces(race,
+                validParticipants.stream().map(ParticipantWithPerson::participant).toList());
+
         // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
         Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.get(0).participant());
@@ -533,7 +538,7 @@ public class PdfExportService {
             Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
 
             entries.add(new RankingEntry(
-                    i + 1,
+                    places.get(p.id()),
                     name,
                     ageGroup,
                     formatValue(race, p.durationMs()),

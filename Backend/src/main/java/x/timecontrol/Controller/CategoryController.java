@@ -62,6 +62,9 @@ public class CategoryController {
     @ApiResponse(responseCode = "201", description = "Category created", content = @Content(schema = @Schema(implementation = CategoryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<CategoryResponse> add(@Body CategoryRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Category category = service.createFromRequest(request);
         Category created = service.create(category);
         return HttpResponse.created(CategoryResponse.from(created));
@@ -75,10 +78,17 @@ public class CategoryController {
     @ApiResponse(responseCode = "404", description = "Category not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<CategoryResponse> update(@PathVariable Long id, @Body CategoryRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Category category = service.createFromRequest(request);
         Optional<Category> updated = service.update(id, category);
         return updated.map(c -> HttpResponse.ok(CategoryResponse.from(c)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    private boolean isValid(CategoryRequest request) {
+        return request.name() != null && !request.name().isBlank();
     }
 
     @Delete("/{id}")

@@ -13,7 +13,10 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
 
     List<RaceMeasurement> findByRaceId(Long raceId);
 
-    @Query(value = "INSERT INTO race_measurement (race_id, device_measurement_id, participant_id, duration_ms, measured_at) " +
+    // OR IGNORE relies on the unique (race_id, device_measurement_id) index in the schema so that
+    // archiving the same race twice (e.g. a double click on "Archivieren ohne Löschen") skips rows
+    // already archived instead of duplicating them.
+    @Query(value = "INSERT OR IGNORE INTO race_measurement (race_id, device_measurement_id, participant_id, duration_ms, measured_at) " +
             "SELECT :raceId, id, participant_id, duration_ms, measured_at FROM measurement", nativeQuery = true)
     void copyFromMeasurements(Long raceId);
 }

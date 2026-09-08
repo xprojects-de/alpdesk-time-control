@@ -62,6 +62,9 @@ public class PointsScaleController {
     @ApiResponse(responseCode = "201", description = "Points scale created", content = @Content(schema = @Schema(implementation = PointsScaleResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<PointsScaleResponse> add(@Body PointsScaleRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         PointsScale pointsScale = service.createFromRequest(request);
         PointsScale created = service.create(pointsScale);
         return HttpResponse.created(PointsScaleResponse.from(created));
@@ -75,10 +78,22 @@ public class PointsScaleController {
     @ApiResponse(responseCode = "404", description = "Points scale not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<PointsScaleResponse> update(@PathVariable Long id, @Body PointsScaleRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         PointsScale pointsScale = service.createFromRequest(request);
         Optional<PointsScale> updated = service.update(id, pointsScale);
         return updated.map(p -> HttpResponse.ok(PointsScaleResponse.from(p)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    /**
+     * An empty/missing points list would otherwise crash later: toCsv([]) persists an empty
+     * string, and re-parsing "" via split(",") yields [""], which throws NumberFormatException.
+     */
+    private boolean isValid(PointsScaleRequest request) {
+        return request.name() != null && !request.name().isBlank()
+                && request.points() != null && !request.points().isEmpty();
     }
 
     @Delete("/{id}")

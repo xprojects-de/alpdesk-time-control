@@ -48,6 +48,9 @@ public class DataImportService {
     @Inject
     MeasurementService measurementService;
 
+    @Inject
+    MeasurementTableLock measurementTableLock;
+
     public List<Measurement> importDataFromDevice() {
         List<Measurement> createdMeasurements = new ArrayList<>();
 
@@ -65,43 +68,48 @@ public class DataImportService {
             String[] lines = response.split("\\r?\\n");
             LocalDateTime now = LocalDateTime.now();
 
-            for (String line : lines) {
+            // Locked so a concurrent archive/reset can't observe or clear the measurement table
+            // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
+            // device can't block archive/reset operations.
+            measurementTableLock.run(() -> {
+                for (String line : lines) {
 
-                line = line.trim();
-                if (line.isEmpty()) {
-                    continue;
-                }
-
-                try {
-
-                    String[] parts = line.split(",");
-                    if (parts.length != 2) {
-                        LOG.warn("Invalid line format (expected ID,time): {}", line);
+                    String trimmedLine = line.trim();
+                    if (trimmedLine.isEmpty()) {
                         continue;
                     }
 
-                    long id = Long.parseLong(parts[0].trim());
-                    double timeValue = Double.parseDouble(parts[1].trim());
-                    int durationMs = (int) Math.round(timeValue);
+                    try {
 
-                    var existingMeasurement = measurementService.findById(id);
-                    Long existingParticipantId = existingMeasurement
-                            .map(Measurement::participantId)
-                            .orElse(null);
-                    LocalDateTime timestamp = existingMeasurement
-                            .map(Measurement::measuredAt)
-                            .orElse(now);
+                        String[] parts = trimmedLine.split(",");
+                        if (parts.length != 2) {
+                            LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
+                            continue;
+                        }
 
-                    Measurement saved = measurementService.upsertWithId(id, existingParticipantId, durationMs, timestamp);
-                    createdMeasurements.add(saved);
-                    LOG.debug("Upserted measurement ID {}: {} ms", id, durationMs);
+                        long id = Long.parseLong(parts[0].trim());
+                        double timeValue = Double.parseDouble(parts[1].trim());
+                        int durationMs = (int) Math.round(timeValue);
 
-                } catch (NumberFormatException e) {
-                    LOG.warn("Could not parse line: {}", line);
-                } catch (Exception e) {
-                    LOG.warn("Error processing line '{}': {}", line, e.getMessage());
+                        var existingMeasurement = measurementService.findById(id);
+                        Long existingParticipantId = existingMeasurement
+                                .map(Measurement::participantId)
+                                .orElse(null);
+                        LocalDateTime timestamp = existingMeasurement
+                                .map(Measurement::measuredAt)
+                                .orElse(now);
+
+                        Measurement saved = measurementService.upsertWithId(id, existingParticipantId, durationMs, timestamp);
+                        createdMeasurements.add(saved);
+                        LOG.debug("Upserted measurement ID {}: {} ms", id, durationMs);
+
+                    } catch (NumberFormatException e) {
+                        LOG.warn("Could not parse line: {}", trimmedLine);
+                    } catch (Exception e) {
+                        LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+                    }
                 }
-            }
+            });
 
             LOG.info("Successfully imported {} measurements", createdMeasurements.size());
 

@@ -5,6 +5,8 @@ import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,12 +27,33 @@ import java.util.Base64;
 )
 public class Application {
 
+    private static final Logger LOG = LoggerFactory.getLogger(Application.class);
     private static final String JWT_SECRET_ENV_KEY = "JWT_GENERATOR_SIGNATURE_SECRET";
     private static final Path JWT_SECRET_FILE = Path.of("database", "jwt-secret.txt");
 
     static void main(String[] args) {
         ensureJwtSecret();
+        warnIfDefaultCredentials();
         Micronaut.run(Application.class, args);
+    }
+
+    /**
+     * Warns loudly at startup if the login still uses the example credentials from
+     * application.properties (time-control/time-control) - anyone who can reach this server
+     * on the network could otherwise log in with them.
+     */
+    private static void warnIfDefaultCredentials() {
+        boolean usingDefaultUsername = isUnset("APP_USERNAME");
+        boolean usingDefaultPassword = isUnset("APP_PASSWORD");
+        if (usingDefaultUsername && usingDefaultPassword) {
+            LOG.warn("APP_USERNAME/APP_PASSWORD are not set - login is using the default credentials " +
+                    "'time-control'/'time-control' from application.properties. Set both environment " +
+                    "variables before exposing this server beyond localhost.");
+        }
+    }
+
+    private static boolean isUnset(String envKey) {
+        return System.getenv(envKey) == null && System.getProperty(envKey) == null;
     }
 
     /**

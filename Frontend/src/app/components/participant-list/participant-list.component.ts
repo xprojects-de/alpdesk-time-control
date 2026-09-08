@@ -25,7 +25,7 @@ import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
 import {Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
-import {Race, ResultUnit} from "../../models/race.model";
+import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as RaceActions from "../../store/race/race.actions";
@@ -469,6 +469,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return participant.person?.birthDate ?? "";
                 case "gender":
                     return participant.person?.gender ?? "";
+                case "durationMs": {
+                    if (participant.durationMs === undefined || participant.durationMs === null) {
+                        return "";
+                    }
+                    const penalty = participant.penalty ?? 0;
+                    const isDesc = participant.race?.sortDirection === SortDirection.DESC;
+                    const adjusted = isDesc ? participant.durationMs - penalty : participant.durationMs + penalty;
+                    // Negate DESC (higher-is-better) races so ascending sort still means
+                    // "best first" consistently with ASC races, matching RankingService.
+                    return isDesc ? -adjusted : adjusted;
+                }
                 default:
                     return (participant as any)[columnId];
             }

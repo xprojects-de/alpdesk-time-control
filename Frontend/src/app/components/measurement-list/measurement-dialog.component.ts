@@ -166,6 +166,7 @@ export class MeasurementDialogComponent {
             );
 
             const measurement: MeasurementRequest = {
+                participantId: this.data?.participantId ?? null,
                 durationMs: durationMs,
                 measuredAt: this.formatDateTimeForBackend(formValue.measuredAt),
             };

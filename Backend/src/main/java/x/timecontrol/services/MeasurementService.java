@@ -11,9 +11,11 @@ import java.util.Optional;
 public class MeasurementService {
 
     private final MeasurementRepository repository;
+    private final MeasurementTableLock measurementTableLock;
 
-    public MeasurementService(MeasurementRepository repository) {
+    public MeasurementService(MeasurementRepository repository, MeasurementTableLock measurementTableLock) {
         this.repository = repository;
+        this.measurementTableLock = measurementTableLock;
     }
 
     public Measurement create(Measurement measurement) {
@@ -39,7 +41,7 @@ public class MeasurementService {
                     id,
                     measurement.participantId(),
                     measurement.durationMs(),
-                    existing.get().measuredAt()  // Keep the original measuredAt timestamp
+                    measurement.measuredAt()
             );
             return Optional.of(repository.update(updated));
         }
@@ -51,8 +53,10 @@ public class MeasurementService {
     }
 
     public void deleteAll() {
-        repository.deleteAll();
-        repository.resetSequence();
+        measurementTableLock.run(() -> {
+            repository.deleteAll();
+            repository.resetSequence();
+        });
     }
 
     public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {

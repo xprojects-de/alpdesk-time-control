@@ -368,12 +368,23 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
 
         // Track the currently selected race's resultUnit/resultUnitLabel so the Zeit/Wert
         // section can switch between the time inputs and a generic decimal-value input.
+        // If the user actually changes the race to one with a different resultUnit, the
+        // now-hidden field set is cleared - otherwise a value entered/pre-filled under the
+        // old unit would silently be reinterpreted and submitted under the new one.
+        let previousResultUnit: ResultUnit | null = null;
         combineLatest([
             this.races$,
             this.form.get("race")!.valueChanges.pipe(startWith(this.form.value.race)),
         ]).pipe(takeUntil(this.destroy$)).subscribe(([races, raceId]) => {
             const found = races.find(r => r.id === Number(raceId));
             if (found) {
+                if (previousResultUnit !== null && previousResultUnit !== found.resultUnit) {
+                    this.form.patchValue({
+                        minutes: "", seconds: "", milliseconds: "", penaltySeconds: "",
+                        pointsValue: "", penaltyPointsValue: "",
+                    }, {emitEvent: false});
+                }
+                previousResultUnit = found.resultUnit;
                 this.selectedRace = found;
                 this.cdr.markForCheck();
             }

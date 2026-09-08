@@ -14,21 +14,25 @@ public class RaceMeasurementService {
 
     private final RaceMeasurementRepository repository;
     private final MeasurementRepository measurementRepository;
+    private final MeasurementTableLock measurementTableLock;
 
-    public RaceMeasurementService(RaceMeasurementRepository repository, MeasurementRepository measurementRepository) {
+    public RaceMeasurementService(RaceMeasurementRepository repository, MeasurementRepository measurementRepository, MeasurementTableLock measurementTableLock) {
         this.repository = repository;
         this.measurementRepository = measurementRepository;
+        this.measurementTableLock = measurementTableLock;
     }
 
     public void copyMeasurements(Long raceId) {
-        repository.copyFromMeasurements(raceId);
+        measurementTableLock.run(() -> repository.copyFromMeasurements(raceId));
     }
 
     @Transactional
     public void archiveMeasurements(Long raceId) {
-        repository.copyFromMeasurements(raceId);
-        measurementRepository.deleteAll();
-        measurementRepository.resetSequence();
+        measurementTableLock.run(() -> {
+            repository.copyFromMeasurements(raceId);
+            measurementRepository.deleteAll();
+            measurementRepository.resetSequence();
+        });
     }
 
     public List<RaceMeasurement> findByRaceId(Long raceId) {

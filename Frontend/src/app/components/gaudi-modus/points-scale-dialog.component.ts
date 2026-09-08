@@ -40,6 +40,9 @@ import {PointsScale, PointsScaleRequest} from "../../models/points-scale.model";
                     @if (form.get("pointsCsv")?.hasError("invalid")) {
                         <mat-error>Bitte nur kommagetrennte Zahlen eingeben</mat-error>
                     }
+                    @if (form.get("pointsCsv")?.hasError("empty")) {
+                        <mat-error>Mindestens ein Punktewert ist erforderlich</mat-error>
+                    }
                 </mat-form-field>
             </form>
         </mat-dialog-content>
@@ -88,6 +91,11 @@ export class PointsScaleDialogComponent {
             .map((p: string) => p.trim())
             .filter((p: string) => p.length > 0)
             .map((p: string) => Number(p));
+
+        if (points.length === 0) {
+            this.form.get("pointsCsv")?.setErrors({empty: true});
+            return;
+        }
 
         if (points.some((p: number) => Number.isNaN(p))) {
             this.form.get("pointsCsv")?.setErrors({invalid: true});

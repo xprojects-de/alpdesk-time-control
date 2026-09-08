@@ -75,6 +75,9 @@ public class PersonController {
     @ApiResponse(responseCode = "201", description = "Person created", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<PersonResponse> add(@Body PersonRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Person person = service.createFromRequest(request);
         Person created = service.create(person);
         return HttpResponse.created(PersonResponse.from(created));
@@ -88,10 +91,20 @@ public class PersonController {
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<PersonResponse> update(@PathVariable Long id, @Body PersonRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Person person = service.createFromRequest(request);
         Optional<Person> updated = service.update(id, person);
         return updated.map(p -> HttpResponse.ok(PersonResponse.from(p)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    private boolean isValid(PersonRequest request) {
+        return request.firstName() != null && !request.firstName().isBlank()
+                && request.lastName() != null && !request.lastName().isBlank()
+                && request.birthDate() != null
+                && request.gender() != null;
     }
 
     @Delete("/{id}")

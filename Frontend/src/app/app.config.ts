@@ -81,12 +81,14 @@ export const appConfig: ApplicationConfig = {
             gaudiMode: gaudiModeReducer,
         }),
         provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, GaudiModeEffects]),
-        provideStoreDevtools({
+        // Only connect the DevTools extension in dev mode - the JWT and login credentials that
+        // flow through the store must not be inspectable via the browser extension in production.
+        ...(isDevMode() ? [provideStoreDevtools({
             maxAge: 25,
-            logOnly: !isDevMode(),
+            logOnly: false,
             autoPause: true,
             trace: false,
             traceLimit: 75,
-        }),
+        })] : []),
     ],
 };

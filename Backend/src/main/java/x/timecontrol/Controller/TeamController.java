@@ -62,6 +62,9 @@ public class TeamController {
     @ApiResponse(responseCode = "201", description = "Team created", content = @Content(schema = @Schema(implementation = TeamResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<TeamResponse> add(@Body TeamRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Team team = service.createFromRequest(request);
         Team created = service.create(team);
         return HttpResponse.created(TeamResponse.from(created));
@@ -75,10 +78,17 @@ public class TeamController {
     @ApiResponse(responseCode = "404", description = "Team not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<TeamResponse> update(@PathVariable Long id, @Body TeamRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest();
+        }
         Team team = service.createFromRequest(request);
         Optional<Team> updated = service.update(id, team);
         return updated.map(t -> HttpResponse.ok(TeamResponse.from(t)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    private boolean isValid(TeamRequest request) {
+        return request.name() != null && !request.name().isBlank();
     }
 
     @Delete("/{id}")

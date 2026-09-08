@@ -102,6 +102,7 @@ CREATE TABLE race_measurement
 
 CREATE INDEX idx_race_measurement_race_id ON race_measurement (race_id);
 CREATE INDEX idx_race_measurement_participant_id ON race_measurement (participant_id);
+CREATE UNIQUE INDEX idx_race_measurement_race_device_unique ON race_measurement (race_id, device_measurement_id);
 
 CREATE TABLE points_scale
 (
