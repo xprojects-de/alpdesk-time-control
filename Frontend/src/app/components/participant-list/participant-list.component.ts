@@ -125,7 +125,7 @@ import {Actions, ofType} from "@ngrx/effects";
                                 mat-raised-button
                                 (click)="fileInput.click()"
                                 [disabled]="importLoading$ | async"
-                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender)"
+                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender, optional: ExternalId)"
                         >
                             @if (importLoading$ | async) {
                                 <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
@@ -230,7 +230,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <ng-container matColumnDef="firstName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.firstName }}
+                            {{ participant.person.firstName }}
                         </td>
                     </ng-container>
 
@@ -238,7 +238,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <ng-container matColumnDef="lastName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.lastName }}
+                            {{ participant.person.lastName }}
                         </td>
                     </ng-container>
 
@@ -248,7 +248,7 @@ import {Actions, ofType} from "@ngrx/effects";
                             Geburtsdatum
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.birthDate | date: "dd.MM.yyyy" }}
+                            {{ participant.person.birthDate | date: "dd.MM.yyyy" }}
                         </td>
                     </ng-container>
 
@@ -258,7 +258,7 @@ import {Actions, ofType} from "@ngrx/effects";
                             Geschlecht
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ getGenderLabel(participant.gender) }}
+                            {{ getGenderLabel(participant.person.gender) }}
                         </td>
                     </ng-container>
 
@@ -443,6 +443,21 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     sort = viewChild.required(MatSort);
 
     constructor() {
+        this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
+            switch (columnId) {
+                case "firstName":
+                    return participant.person?.firstName ?? "";
+                case "lastName":
+                    return participant.person?.lastName ?? "";
+                case "birthDate":
+                    return participant.person?.birthDate ?? "";
+                case "gender":
+                    return participant.person?.gender ?? "";
+                default:
+                    return (participant as any)[columnId];
+            }
+        };
+
         this.participants$ = this.store.select(
             ParticipantSelectors.selectFilteredParticipants,
         );
@@ -642,7 +657,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     deleteParticipant(participant: Participant): void {
         if (
             confirm(
-                `Möchten Sie den Teilnehmer "${participant.firstName} ${participant.lastName}" wirklich löschen?`,
+                `Möchten Sie den Teilnehmer "${participant.person.firstName} ${participant.person.lastName}" wirklich löschen?`,
             )
         ) {
             this.store.dispatch(

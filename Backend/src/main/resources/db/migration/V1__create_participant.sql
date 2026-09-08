@@ -35,14 +35,23 @@ CREATE TABLE category
     name TEXT NOT NULL UNIQUE
 );
 
+CREATE TABLE person
+(
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name  TEXT NOT NULL,
+    last_name   TEXT NOT NULL,
+    birth_date  DATE NOT NULL,
+    gender      TEXT NOT NULL,
+    external_id TEXT UNIQUE
+);
+
+CREATE INDEX idx_person_external_id ON person (external_id);
+
 CREATE TABLE participant
 (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     race_id     INTEGER NOT NULL,
-    first_name  TEXT    NOT NULL,
-    last_name   TEXT    NOT NULL,
-    birth_date  DATE    NOT NULL,
-    gender      TEXT    NOT NULL,
+    person_id   INTEGER NOT NULL REFERENCES person (id),
     race_number INTEGER,
     team_id     INTEGER REFERENCES team (id) ON DELETE SET NULL,
     category_id INTEGER REFERENCES category (id) ON DELETE SET NULL,
@@ -56,6 +65,7 @@ CREATE TABLE participant
 );
 
 CREATE INDEX idx_participant_race_id ON participant(race_id);
+CREATE INDEX idx_participant_person_id ON participant (person_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
 CREATE INDEX idx_participant_category_id ON participant (category_id);
 

@@ -62,10 +62,11 @@ public class ParticipantController {
         List<ParticipantResponse> response = StreamSupport.stream(participants.spliterator(), false)
                 .map(participant -> {
                     var race = service.findRaceForParticipant(participant).orElse(null);
+                    var person = service.findPersonForParticipant(participant).orElse(null);
                     var team = service.findTeamForParticipant(participant).orElse(null);
                     var category = service.findCategoryForParticipant(participant).orElse(null);
                     var ageGroup = service.findAgeGroupForParticipant(participant).orElse(null);
-                    return ParticipantResponse.from(participant, race, team, category, ageGroup);
+                    return ParticipantResponse.from(participant, person, race, team, category, ageGroup);
                 })
                 .toList();
         return HttpResponse.ok(response);
@@ -80,10 +81,11 @@ public class ParticipantController {
         Optional<Participant> participant = service.findById(id);
         return participant.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
+            var person = service.findPersonForParticipant(p).orElse(null);
             var team = service.findTeamForParticipant(p).orElse(null);
             var category = service.findCategoryForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, team, category, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, person, race, team, category, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -94,13 +96,14 @@ public class ParticipantController {
     @ApiResponse(responseCode = "201", description = "Participant created", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
         Participant created = service.create(participant);
         var race = service.findRaceForParticipant(created).orElse(null);
+        var person = service.findPersonForParticipant(created).orElse(null);
         var team = service.findTeamForParticipant(created).orElse(null);
         var category = service.findCategoryForParticipant(created).orElse(null);
         var ageGroup = service.findAgeGroupForParticipant(created).orElse(null);
-        return HttpResponse.created(ParticipantResponse.from(created, race, team, category, ageGroup));
+        return HttpResponse.created(ParticipantResponse.from(created, person, race, team, category, ageGroup));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -111,14 +114,15 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<ParticipantResponse> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.measuredAt());
         Optional<Participant> updated = service.update(id, participant);
         return updated.map(p -> {
             var race = service.findRaceForParticipant(p).orElse(null);
+            var person = service.findPersonForParticipant(p).orElse(null);
             var team = service.findTeamForParticipant(p).orElse(null);
             var category = service.findCategoryForParticipant(p).orElse(null);
             var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-            return HttpResponse.ok(ParticipantResponse.from(p, race, team, category, ageGroup));
+            return HttpResponse.ok(ParticipantResponse.from(p, person, race, team, category, ageGroup));
         }).orElse(HttpResponse.notFound());
     }
 
@@ -154,10 +158,11 @@ public class ParticipantController {
         List<ParticipantResponse> response = updated.stream()
                 .map(p -> {
                     var race = service.findRaceForParticipant(p).orElse(null);
+                    var person = service.findPersonForParticipant(p).orElse(null);
                     var team = service.findTeamForParticipant(p).orElse(null);
                     var category = service.findCategoryForParticipant(p).orElse(null);
                     var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-                    return ParticipantResponse.from(p, race, team, category, ageGroup);
+                    return ParticipantResponse.from(p, person, race, team, category, ageGroup);
                 })
                 .toList();
         return HttpResponse.ok(response);
@@ -167,10 +172,13 @@ public class ParticipantController {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import/{raceId}")
     @Operation(summary = "Import participants from CSV for a race",
-            description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender. " +
-                    "The header row is ignored. Teams are looked up case-insensitively and created (uppercased) if they " +
-                    "don't exist yet. Rows with a missing/invalid gender (only MALE or FEMALE are accepted) or an invalid " +
-                    "birthdate (expected yyyy-MM-dd) are skipped and reported in the response.",
+            description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender and " +
+                    "an optional 6th ExternalId column. The header row is ignored. Teams are looked up case-insensitively " +
+                    "and created (uppercased) if they don't exist yet. Rows with a missing/invalid gender (only MALE or " +
+                    "FEMALE are accepted) or an invalid birthdate (expected yyyy-MM-dd) are skipped and reported in the " +
+                    "response. ExternalId is fully optional (omit the column entirely, or leave it empty); when given, " +
+                    "it is used to find-or-create the matching Person so the same person can be re-imported for a later " +
+                    "race/season without creating a duplicate.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantImportResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
@@ -187,10 +195,11 @@ public class ParticipantController {
             List<ParticipantResponse> imported = result.imported().stream()
                     .map(p -> {
                         var r = service.findRaceForParticipant(p).orElse(null);
+                        var person = service.findPersonForParticipant(p).orElse(null);
                         var team = service.findTeamForParticipant(p).orElse(null);
                         var category = service.findCategoryForParticipant(p).orElse(null);
                         var ageGroup = service.findAgeGroupForParticipant(p).orElse(null);
-                        return ParticipantResponse.from(p, r, team, category, ageGroup);
+                        return ParticipantResponse.from(p, person, r, team, category, ageGroup);
                     })
                     .toList();
 

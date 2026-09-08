@@ -69,7 +69,7 @@ import {take, takeUntil} from "rxjs/operators";
                         @for (participant of filteredParticipants$ | async;
                                 track participant.id) {
                             <mat-option [value]="participant">
-                                {{ participant.firstName }} {{ participant.lastName }} ({{
+                                {{ participant.person.firstName }} {{ participant.person.lastName }} ({{
                                     participant.raceNumber
                                 }})
                             </mat-option>
@@ -276,7 +276,7 @@ export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy 
         if (!participant) {
             return "";
         }
-        return `${participant.firstName} ${participant.lastName} (${participant.raceNumber})`;
+        return `${participant.person.firstName} ${participant.person.lastName} (${participant.raceNumber})`;
     }
 
     private filterParticipants(
@@ -290,7 +290,7 @@ export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy 
         const lowerSearchTerm = searchTerm.toLowerCase();
         return participants.filter((participant) => {
             const fullName =
-                `${participant.firstName} ${participant.lastName}`.toLowerCase();
+                `${participant.person.firstName} ${participant.person.lastName}`.toLowerCase();
             const raceNumber = participant.raceNumber?.toString() ?? "";
             return (
                 fullName.includes(lowerSearchTerm) ||
