@@ -38,7 +38,12 @@ public class LosModeCalculator implements GaudiModeCalculator {
     }
 
     @Override
-    public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<Participant> raceParticipants) {
+    public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        if (races.isEmpty()) {
+            return List.of();
+        }
+        List<Participant> raceParticipants = races.get(0).participants();
+
         Map<Long, Participant> participantsById = new HashMap<>();
         for (Participant p : raceParticipants) {
             participantsById.put(p.id(), p);
@@ -104,7 +109,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     r.time2Ms(),
                     (int) Math.round(r.pairAverage()),
                     (int) Math.round(overallAverage),
-                    (int) Math.round(r.diff())
+                    (int) Math.round(r.diff()),
+                    null,
+                    null
             ));
         }
 

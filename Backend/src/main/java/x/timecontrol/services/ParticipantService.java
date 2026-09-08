@@ -2,6 +2,7 @@ package x.timecontrol.services;
 
 import x.timecontrol.dto.AgeGroupResponse;
 import x.timecontrol.dto.CategoryResponse;
+import x.timecontrol.dto.ParticipantCopyResponse;
 import x.timecontrol.dto.ParticipantImportRowError;
 import x.timecontrol.dto.PersonResponse;
 import x.timecontrol.dto.RaceResponse;
@@ -27,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Singleton
@@ -67,11 +70,12 @@ public class ParticipantService {
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
-            // durationMs/measuredAt are omitted by most update flows (e.g. editing name/team) and must not
+            // durationMs/penalty/measuredAt are omitted by most update flows (e.g. editing name/team) and must not
             // wipe out a time that was already assigned via the measurement sync; only overwrite when provided.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
+            Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
-            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, measuredAt);
+            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt);
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
@@ -151,6 +155,40 @@ public class ParticipantService {
     }
 
     /**
+     * Copies every participant of {@code sourceRaceId} into each of {@code targetRaceIds}, carrying
+     * over personId/teamId/categoryId but leaving raceNumber/durationMs/penalty/measuredAt empty
+     * (each race measures its own result). A person already present in a target race is skipped
+     * rather than duplicated.
+     */
+    public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds) {
+        List<Participant> sourceParticipants = StreamSupport
+                .stream(repository.findByRaceId(sourceRaceId).spliterator(), false)
+                .toList();
+
+        int copied = 0;
+        int skipped = 0;
+        for (Long targetRaceId : targetRaceIds) {
+            Set<Long> existingPersonIds = StreamSupport
+                    .stream(repository.findByRaceId(targetRaceId).spliterator(), false)
+                    .map(Participant::personId)
+                    .collect(Collectors.toSet());
+
+            for (Participant source : sourceParticipants) {
+                if (existingPersonIds.contains(source.personId())) {
+                    skipped++;
+                    continue;
+                }
+                Participant copy = new Participant(null, targetRaceId, source.personId(), null,
+                        source.teamId(), source.categoryId(), null, null, null);
+                repository.save(copy);
+                copied++;
+            }
+        }
+
+        return new ParticipantCopyResponse(copied, skipped);
+    }
+
+    /**
      * Randomly assigns race numbers 1..n to all participants of a race, shuffled
      * within each age group; participants without a matching age group are appended
      * at the end, ordered by ascending age (youngest first).
@@ -201,6 +239,7 @@ public class ParticipantService {
                     participant.teamId(),
                     participant.categoryId(),
                     participant.durationMs(),
+                    participant.penalty(),
                     participant.measuredAt()
             );
             result.add(repository.update(updated));
@@ -283,7 +322,7 @@ public class ParticipantService {
                 person = personService.create(new Person(null, firstName, lastName, birthDate, gender, null));
             }
 
-            Participant participant = new Participant(null, raceId, person.id(), null, teamId, null, null, null);
+            Participant participant = new Participant(null, raceId, person.id(), null, teamId, null, null, null, null);
             imported.add(repository.save(participant));
         }
 

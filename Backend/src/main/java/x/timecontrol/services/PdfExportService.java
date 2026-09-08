@@ -12,9 +12,11 @@ import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
+import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.Team;
 
 import java.io.ByteArrayOutputStream;
@@ -44,15 +46,18 @@ public class PdfExportService {
     private final CategoryService categoryService;
     private final TeamService teamService;
     private final PersonService personService;
+    private final RankingService rankingService;
 
-    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService) {
+    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService) {
         this.ageGroupService = ageGroupService;
         this.categoryService = categoryService;
         this.teamService = teamService;
         this.personService = personService;
+        this.rankingService = rankingService;
     }
 
-    private record RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
+    private record RankingEntry(int place, String name, String ageGroup, String valueFormatted,
+                                 String penaltyFormatted, String totalFormatted, String diffFormatted) {
     }
 
     private record StartListEntry(String raceNumber, String name, String birthYear, String gender,
@@ -63,11 +68,13 @@ public class PdfExportService {
     }
 
     private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
-            new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
-            new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.name(), 35)),
-            new PdfColumn<>("Altersgruppe", 1.6f, e -> truncate(e.ageGroup(), 20)),
-            new PdfColumn<>("Absolutzeit", 1.3f, e -> formatTime(e.timeMs())),
-            new PdfColumn<>("Diffzeit", 1.1f, e -> e.diffMs() != null ? ("+" + formatTime(e.diffMs())) : "-")
+            new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
+            new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.name(), 35)),
+            new PdfColumn<>("Altersgruppe", 1.4f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
+            new PdfColumn<>("Strafe", 0.9f, RankingEntry::penaltyFormatted),
+            new PdfColumn<>("Gesamt", 1.1f, RankingEntry::totalFormatted),
+            new PdfColumn<>("Diff", 1.0f, RankingEntry::diffFormatted)
     );
 
     private static final List<PdfColumn<StartListEntry>> START_LIST_COLUMNS = List.of(
@@ -112,14 +119,14 @@ public class PdfExportService {
     }
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, null);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, null);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, "Gesamtwertung", entries, "Teilnehmer", true));
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null, null);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, null);
         String title = "Wertung " + genderLabel(gender);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
@@ -128,7 +135,7 @@ public class PdfExportService {
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
                                                  String ageGroup, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroup, null);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null);
         String title = "Wertung " + ageGroup + " " + genderLabel(gender);
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
@@ -145,7 +152,7 @@ public class PdfExportService {
         return renderDocument(race, false, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
-                    List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroupName, null);
+                    List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null);
                     if (!entries.isEmpty()) {
                         String title = "Wertung " + ageGroupName + " " + genderLabel(gender);
                         drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
@@ -159,7 +166,7 @@ public class PdfExportService {
         String categoryName = categoryService.findById(categoryId)
                 .map(Category::name)
                 .orElse("Unbekannt");
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, categoryId);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, categoryId);
         String title = "Wertung " + categoryName;
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
@@ -170,7 +177,7 @@ public class PdfExportService {
 
         return renderDocument(race, false, ctx -> {
             for (Category category : categories) {
-                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null, category.id());
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, category.id());
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name();
                     drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
@@ -185,7 +192,7 @@ public class PdfExportService {
 
         return renderDocument(race, false, ctx -> {
             for (Category category : categories) {
-                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null, category.id());
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, category.id());
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name() + " " + genderLabel(gender);
                     drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
@@ -206,7 +213,7 @@ public class PdfExportService {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
                     for (Category category : categories) {
-                        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroupName, category.id());
+                        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id());
                         if (!entries.isEmpty()) {
                             String title = "Wertung " + ageGroupName + " " + genderLabel(gender) + " " + category.name();
                             drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
@@ -256,6 +263,67 @@ public class PdfExportService {
         );
         return renderDocument(race, false,
                 ctx -> drawSection(ctx, columns, title, entries, "Mannschaften", true));
+    }
+
+    /**
+     * Zeit-Kombination: one Zeit/Strafe column pair per referenced race plus a Gesamt/Rückstand
+     * column, analogous to an alpine combination result sheet. {@code headerRace} only supplies
+     * the PDF's header/info block (organisation, weather, ...); the ranking itself covers all
+     * {@code legRaces}.
+     */
+    public byte[] generateTimeCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                  List<Race> legRaces, Race headerRace) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
+        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
+        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
+        for (int i = 0; i < legRaces.size(); i++) {
+            int idx = i;
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 14);
+            columns.add(new PdfColumn<>(raceLabel + " Zeit", 1.1f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
+            columns.add(new PdfColumn<>(raceLabel + " Strafe", 0.9f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::penalty))));
+        }
+        columns.add(new PdfColumn<>("Gesamt", 1.2f, e -> formatTime(e.valueMs())));
+        columns.add(new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatTime(e.diffMs()) : "-"));
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+    }
+
+    /**
+     * Punkte-Mischwertung: one Wert/Platz/Punkte column group per referenced race plus a Gesamt
+     * (Punkte) column, analogous to the Kondiwettkampf-style result sheet.
+     */
+    public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                    List<Race> legRaces, Race headerRace) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
+        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
+        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
+        for (int i = 0; i < legRaces.size(); i++) {
+            int idx = i;
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 12);
+            columns.add(new PdfColumn<>(raceLabel + " Wert", 1.0f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
+            columns.add(new PdfColumn<>(raceLabel + " Platz", 0.6f, e -> legValueString(e, idx, GaudiRankingLegResponse::place)));
+            columns.add(new PdfColumn<>(raceLabel + " Pkt.", 0.7f, e -> legValueString(e, idx, GaudiRankingLegResponse::points)));
+        }
+        columns.add(new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-"));
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+    }
+
+    private Integer legValue(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
+        if (entry.legs() == null || idx >= entry.legs().size()) {
+            return null;
+        }
+        GaudiRankingLegResponse leg = entry.legs().get(idx);
+        return leg != null ? getter.apply(leg) : null;
+    }
+
+    private String legValueString(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
+        Integer value = legValue(entry, idx, getter);
+        return value != null ? String.valueOf(value) : "-";
     }
 
     // ---------------------------------------------------------------------
@@ -403,12 +471,13 @@ public class PdfExportService {
     }
 
     private List<RankingEntry> createRankingEntriesFromParticipants(Iterable<Participant> participants,
+                                                                     Race race,
                                                                      Gender filterGender,
                                                                      String filterAgeGroup,
                                                                      Long filterCategoryId) {
-        // Only keep participants that have a measured duration, resolving each one's Person once
+        // Only keep participants that have a measured result, resolving each one's Person once
         List<ParticipantWithPerson> validParticipants = StreamSupport.stream(participants.spliterator(), false)
-                .filter(p -> p.durationMs() != null)
+                .filter(p -> rankingService.adjustedValue(race, p) != null)
                 .map(p -> new ParticipantWithPerson(p, personService.findById(p.personId()).orElse(null)))
                 .toList();
 
@@ -445,14 +514,14 @@ public class PdfExportService {
                     .toList();
         }
 
-        // Sort by time ascending (fastest first)
+        // Sort by the race's result (fastest/best first, respecting sort direction + penalty)
         List<ParticipantWithPerson> sortedParticipants = validParticipants.stream()
-                .sorted(Comparator.comparing(pwp -> pwp.participant().durationMs()))
+                .sorted(Comparator.comparing(pwp -> pwp.participant(), rankingService.comparator(race)))
                 .toList();
 
-        // Create ranking entries with place and time difference to the leader of this ranking
+        // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
-        Integer leaderTimeMs = sortedParticipants.isEmpty() ? null : sortedParticipants.get(0).participant().durationMs();
+        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.get(0).participant());
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
             Participant p = sortedParticipants.get(i).participant();
@@ -460,10 +529,18 @@ public class PdfExportService {
 
             String name = formatName(person);
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
-            Integer timeMs = p.durationMs();
-            Integer diffMs = (i > 0) ? timeMs - leaderTimeMs : null;
+            Integer adjustedValue = rankingService.adjustedValue(race, p);
+            Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
 
-            entries.add(new RankingEntry(i + 1, name, ageGroup, timeMs, diffMs));
+            entries.add(new RankingEntry(
+                    i + 1,
+                    name,
+                    ageGroup,
+                    formatValue(race, p.durationMs()),
+                    formatValue(race, p.penalty()),
+                    formatValue(race, adjustedValue),
+                    diff != null ? "+" + formatValue(race, diff) : "-"
+            ));
         }
 
         return entries;
@@ -508,6 +585,23 @@ public class PdfExportService {
         int millis = timeMs % 1000;
 
         return String.format("%d:%02d.%03d", minutes, seconds, millis);
+    }
+
+    /**
+     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SSS) or a
+     * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
+     */
+    private static String formatValue(Race race, Integer value) {
+        if (value == null) {
+            return "-";
+        }
+        if (race.resultUnit() == ResultUnit.POINTS) {
+            String label = race.resultUnitLabel() != null && !race.resultUnitLabel().isBlank()
+                    ? " " + race.resultUnitLabel()
+                    : "";
+            return String.format("%.2f%s", value / 100.0, label);
+        }
+        return formatTime(value);
     }
 
     private static String truncate(String str, int maxLength) {

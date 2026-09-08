@@ -1,7 +1,10 @@
 package x.timecontrol.dto;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
+import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.SortDirection;
 
 import java.time.LocalDate;
 
@@ -39,6 +42,18 @@ public record RaceRequest(
         String courseSetter,
 
         @Schema(description = "Weather on race day", example = "Sunny, -3°C")
-        String weather
+        String weather,
+
+        @Nullable
+        @Schema(description = "Unit of the recorded result (defaults to TIME if omitted)", example = "TIME", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        ResultUnit resultUnit,
+
+        @Nullable
+        @Schema(description = "Display label for the result unit, only relevant when resultUnit is POINTS", example = "m", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        String resultUnitLabel,
+
+        @Nullable
+        @Schema(description = "Whether a lower (ASC) or higher (DESC) result is better (defaults to ASC if omitted)", example = "ASC", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        SortDirection sortDirection
 ) {
 }

@@ -15,11 +15,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.GaudiLosPairingResponse;
+import x.timecontrol.dto.GaudiModeRaceResponse;
 import x.timecontrol.dto.GaudiModeRequest;
 import x.timecontrol.dto.GaudiModeResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
+import x.timecontrol.entities.GaudiModeRace;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
@@ -29,6 +31,7 @@ import x.timecontrol.services.PdfExportService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RaceService;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
@@ -61,7 +64,7 @@ public class GaudiModeController {
     public HttpResponse<List<GaudiModeResponse>> list(@QueryValue Optional<Long> raceId) {
         Iterable<GaudiMode> gaudiModes = raceId.isPresent() ? service.findByRaceId(raceId.get()) : service.findAll();
         List<GaudiModeResponse> response = StreamSupport.stream(gaudiModes.spliterator(), false)
-                .map(GaudiModeResponse::from)
+                .map(gm -> GaudiModeResponse.from(gm, buildRaceResponses(gm.id())))
                 .toList();
         return HttpResponse.ok(response);
     }
@@ -73,7 +76,7 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
     public HttpResponse<GaudiModeResponse> getById(@PathVariable Long id) {
         return service.findById(id)
-                .map(gm -> HttpResponse.ok(GaudiModeResponse.from(gm)))
+                .map(gm -> HttpResponse.ok(GaudiModeResponse.from(gm, buildRaceResponses(gm.id()))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -83,8 +86,8 @@ public class GaudiModeController {
     @Operation(summary = "Create a new Gaudi-Modus instance", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Gaudi-Modus instance created", content = @Content(schema = @Schema(implementation = GaudiModeResponse.class)))
     public HttpResponse<GaudiModeResponse> add(@Body GaudiModeRequest request) {
-        GaudiMode created = service.create(service.createFromRequest(request));
-        return HttpResponse.created(GaudiModeResponse.from(created));
+        GaudiMode created = service.create(service.createFromRequest(request), request.races());
+        return HttpResponse.created(GaudiModeResponse.from(created, buildRaceResponses(created.id())));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -95,8 +98,8 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
     public HttpResponse<GaudiModeResponse> update(@PathVariable Long id, @Body GaudiModeRequest request) {
         GaudiMode gaudiMode = service.createFromRequest(request);
-        return service.update(id, gaudiMode)
-                .map(gm -> HttpResponse.ok(GaudiModeResponse.from(gm)))
+        return service.update(id, gaudiMode, request.races())
+                .map(gm -> HttpResponse.ok(GaudiModeResponse.from(gm, buildRaceResponses(gm.id()))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -171,22 +174,38 @@ public class GaudiModeController {
         }
         GaudiMode gaudiMode = gaudiModeOpt.get();
 
-        Optional<Race> race = raceService.findById(gaudiMode.raceId());
-        if (race.isEmpty()) {
+        List<Race> races = service.findRacesFor(gaudiMode.id()).stream()
+                .map(gmr -> raceService.findById(gmr.raceId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
+        if (races.isEmpty()) {
             return HttpResponse.notFound();
         }
 
         try {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
-            byte[] pdfBytes = gaudiMode.type() == GaudiModeType.LOS
-                    ? pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, race.get())
-                    : pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, race.get());
+            byte[] pdfBytes = switch (gaudiMode.type()) {
+                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, races.get(0));
+                case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, races.get(0));
+                case TIME_COMBINATION -> pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.get(0));
+                case POINTS_COMBINATION -> pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.get(0));
+            };
 
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + ".pdf");
         } catch (Exception e) {
             return HttpResponse.serverError();
         }
+    }
+
+    private List<GaudiModeRaceResponse> buildRaceResponses(Long gaudiModeId) {
+        List<GaudiModeRaceResponse> result = new ArrayList<>();
+        for (GaudiModeRace gmr : service.findRacesFor(gaudiModeId)) {
+            String raceName = raceService.findById(gmr.raceId()).map(Race::name).orElse("Unbekannt");
+            result.add(new GaudiModeRaceResponse(gmr.raceId(), raceName, gmr.weight(), gmr.sortOrder()));
+        }
+        return result;
     }
 
     private List<GaudiLosPairingResponse> toPairingResponses(List<GaudiLosPairing> pairing) {

@@ -13,6 +13,7 @@ export interface Participant {
     category?: Category;
     ageGroup?: AgeGroup;
     durationMs?: number;
+    penalty?: number;
     measuredAt?: string;
 }
 
@@ -23,5 +24,6 @@ export interface ParticipantRequest {
     teamId?: number;
     categoryId?: number;
     durationMs?: number;
+    penalty?: number;
     measuredAt?: string;
 }

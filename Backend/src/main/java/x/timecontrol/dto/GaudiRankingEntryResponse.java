@@ -4,6 +4,8 @@ import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 @Serdeable
 @Schema(description = "One row of a computed Gaudi-Modus ranking. Generic across mode types: " +
         "fields not relevant for a given mode (e.g. referenceMs/diffMs for team scoring) are null.")
@@ -22,7 +24,8 @@ public record GaudiRankingEntryResponse(
         @Schema(description = "Individual time of the second participant in milliseconds (Los-Modus only, null for a self-paired leftover)", example = "130000", nullable = true)
         Integer time2Ms,
 
-        @Schema(description = "The computed metric for this entry in milliseconds (e.g. pair average time, or team total time)", example = "125000")
+        @Nullable
+        @Schema(description = "The computed metric for this entry in milliseconds (e.g. pair average time, team total time, or Zeit-Kombination total time)", example = "125000", nullable = true)
         Integer valueMs,
 
         @Nullable
@@ -31,6 +34,14 @@ public record GaudiRankingEntryResponse(
 
         @Nullable
         @Schema(description = "Absolute difference between valueMs and referenceMs in milliseconds, used for ranking where applicable", example = "5000", nullable = true)
-        Integer diffMs
+        Integer diffMs,
+
+        @Nullable
+        @Schema(description = "Total points (Punkte-Mischwertung only)", example = "360", nullable = true)
+        Integer totalPoints,
+
+        @Nullable
+        @Schema(description = "Per-race breakdown (Zeit-Kombination / Punkte-Mischwertung only)", nullable = true)
+        List<GaudiRankingLegResponse> legs
 ) {
 }

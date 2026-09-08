@@ -27,6 +27,8 @@ public record Participant(
         @Nullable
         Integer durationMs,
         @Nullable
+        Integer penalty,
+        @Nullable
         LocalDateTime measuredAt
 ) {
 }

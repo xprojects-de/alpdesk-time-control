@@ -16,7 +16,15 @@ import {MatInputModule} from '@angular/material/input';
 import {MatButtonModule} from '@angular/material/button';
 import {MatDatepickerModule} from '@angular/material/datepicker';
 import {MatNativeDateModule} from '@angular/material/core';
-import {Race, RaceRequest} from '../../models/race.model';
+import {MatSelectModule} from '@angular/material/select';
+import {
+    Race,
+    RaceRequest,
+    ResultUnit,
+    ResultUnitLabels,
+    SortDirection,
+    SortDirectionLabels,
+} from '../../models/race.model';
 
 @Component({
     selector: 'app-race-dialog',
@@ -30,6 +38,7 @@ import {Race, RaceRequest} from '../../models/race.model';
         MatButtonModule,
         MatDatepickerModule,
         MatNativeDateModule,
+        MatSelectModule,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -66,6 +75,34 @@ import {Race, RaceRequest} from '../../models/race.model';
                         <mat-error>Datum ist erforderlich</mat-error>
                     }
                 </mat-form-field>
+
+                <h3 class="section-title">Wertung</h3>
+                <div class="race-form-grid">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Einheit</mat-label>
+                        <mat-select formControlName="resultUnit">
+                            @for (unit of resultUnitOptions; track unit.value) {
+                                <mat-option [value]="unit.value">{{ unit.label }}</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Sortierung</mat-label>
+                        <mat-select formControlName="sortDirection">
+                            @for (dir of sortDirectionOptions; track dir.value) {
+                                <mat-option [value]="dir.value">{{ dir.label }}</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    @if (form.value.resultUnit === resultUnit.POINTS) {
+                        <mat-form-field appearance="outline">
+                            <mat-label>Einheiten-Bezeichnung</mat-label>
+                            <input matInput formControlName="resultUnitLabel" placeholder="z.B. m, Punkte"/>
+                        </mat-form-field>
+                    }
+                </div>
 
                 <h3 class="section-title">Zusatzinformationen (optional)</h3>
                 <div class="race-form-grid">
@@ -164,6 +201,15 @@ export class RaceDialogComponent {
     public data = inject<Race | null>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    resultUnit = ResultUnit;
+    resultUnitOptions = [
+        {value: ResultUnit.TIME, label: ResultUnitLabels[ResultUnit.TIME]},
+        {value: ResultUnit.POINTS, label: ResultUnitLabels[ResultUnit.POINTS]},
+    ];
+    sortDirectionOptions = [
+        {value: SortDirection.ASC, label: SortDirectionLabels[SortDirection.ASC]},
+        {value: SortDirection.DESC, label: SortDirectionLabels[SortDirection.DESC]},
+    ];
 
     constructor() {
         let date: Date | string = this.data?.date || '';
@@ -190,6 +236,9 @@ export class RaceDialogComponent {
             routeLength: [this.data?.routeLength || ''],
             courseSetter: [this.data?.courseSetter || ''],
             weather: [this.data?.weather || ''],
+            resultUnit: [this.data?.resultUnit || ResultUnit.TIME],
+            resultUnitLabel: [this.data?.resultUnitLabel || ''],
+            sortDirection: [this.data?.sortDirection || SortDirection.ASC],
         });
     }
 
@@ -212,6 +261,9 @@ export class RaceDialogComponent {
                 routeLength: formValue.routeLength || undefined,
                 courseSetter: formValue.courseSetter || undefined,
                 weather: formValue.weather || undefined,
+                resultUnit: formValue.resultUnit,
+                resultUnitLabel: formValue.resultUnit === ResultUnit.POINTS ? (formValue.resultUnitLabel || undefined) : undefined,
+                sortDirection: formValue.sortDirection,
             };
             this.dialogRef.close(race);
         }

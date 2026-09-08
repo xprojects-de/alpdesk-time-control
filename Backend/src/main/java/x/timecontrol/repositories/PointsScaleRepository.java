@@ -3,11 +3,11 @@ package x.timecontrol.repositories;
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.CrudRepository;
-import x.timecontrol.entities.GaudiMode;
+import x.timecontrol.entities.PointsScale;
 
-import java.util.List;
+import java.util.Optional;
 
 @JdbcRepository(dialect = Dialect.SQLITE)
-public interface GaudiModeRepository extends CrudRepository<GaudiMode, Long> {
-    List<GaudiMode> findByIdIn(Iterable<Long> ids);
+public interface PointsScaleRepository extends CrudRepository<PointsScale, Long> {
+    Optional<PointsScale> findByName(String name);
 }

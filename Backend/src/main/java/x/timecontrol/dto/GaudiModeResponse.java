@@ -7,6 +7,7 @@ import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Serdeable
 @Schema(description = "Response object containing Gaudi-Modus information")
@@ -14,8 +15,8 @@ public record GaudiModeResponse(
         @Schema(description = "Unique identifier of the Gaudi-Modus instance", example = "1")
         Long id,
 
-        @Schema(description = "ID of the race this Gaudi-Modus belongs to", example = "1")
-        Long raceId,
+        @Schema(description = "Races this Gaudi-Modus combines")
+        List<GaudiModeRaceResponse> races,
 
         @Schema(description = "Type of the Gaudi-Modus", example = "LOS")
         GaudiModeType type,
@@ -27,16 +28,21 @@ public record GaudiModeResponse(
         @Schema(description = "Number of participants counted per team (only relevant for type TEAM)", example = "5", nullable = true)
         Integer teamSize,
 
+        @Nullable
+        @Schema(description = "Points scale used (only relevant for type POINTS_COMBINATION)", example = "1", nullable = true)
+        Long pointsScaleId,
+
         @Schema(description = "Timestamp when this Gaudi-Modus instance was created")
         LocalDateTime createdAt
 ) {
-    public static GaudiModeResponse from(GaudiMode gaudiMode) {
+    public static GaudiModeResponse from(GaudiMode gaudiMode, List<GaudiModeRaceResponse> races) {
         return new GaudiModeResponse(
                 gaudiMode.id(),
-                gaudiMode.raceId(),
+                races,
                 gaudiMode.type(),
                 gaudiMode.name(),
                 gaudiMode.teamSize(),
+                gaudiMode.pointsScaleId(),
                 gaudiMode.createdAt()
         );
     }

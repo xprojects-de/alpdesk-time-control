@@ -29,6 +29,16 @@ export const selectImportResult = createSelector(
     state => state.importResult
 );
 
+export const selectCopyLoading = createSelector(
+    selectParticipantState,
+    state => state.copyLoading
+);
+
+export const selectCopyResult = createSelector(
+    selectParticipantState,
+    state => state.copyResult
+);
+
 export const selectParticipantError = createSelector(
     selectParticipantState,
     state => state.error

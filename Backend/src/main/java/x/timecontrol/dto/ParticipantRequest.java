@@ -32,6 +32,10 @@ public record ParticipantRequest(
         Integer durationMs,
 
         @Nullable
+        @Schema(description = "Penalty added to the raw result (same unit/granularity as the race's result, e.g. ms for a TIME race), makes the result worse", example = "2000", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Integer penalty,
+
+        @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         LocalDateTime measuredAt
 ) {

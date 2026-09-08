@@ -25,6 +25,10 @@ public record Race(
         @Nullable String elevationDifference,
         @Nullable String routeLength,
         @Nullable String courseSetter,
-        @Nullable String weather
+        @Nullable String weather,
+
+        ResultUnit resultUnit,
+        @Nullable String resultUnitLabel,
+        SortDirection sortDirection
 ) {
 }
