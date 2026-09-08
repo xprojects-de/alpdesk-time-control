@@ -84,7 +84,7 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
         </mat-toolbar>
 
         <div class="dashboard-container">
-            <mat-tab-group>
+            <mat-tab-group animationDuration="0ms">
                 <mat-tab label="Altersgruppen">
                     <app-age-group-list/>
                 </mat-tab>
