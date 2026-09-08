@@ -58,7 +58,7 @@ export class RaceMeasurementEffects {
             ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipants),
             mergeMap(({raceId}) =>
                 this.raceMeasurementService.syncToParticipants(raceId).pipe(
-                    map(message => RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess({message})),
+                    map(response => RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess({response})),
                     catchError(error => of(RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure({
                         error: extractErrorMessage(error, 'Failed to sync race measurements to participants')
                     })))

@@ -23,6 +23,7 @@ public class RaceService {
     }
 
     public Race create(Race race) {
+        assertNameAvailable(race.name(), null);
         return repository.save(race);
     }
 
@@ -56,6 +57,7 @@ public class RaceService {
     public Optional<Race> update(Long id, Race race) {
         Optional<Race> existing = repository.findById(id);
         if (existing.isPresent()) {
+            assertNameAvailable(race.name(), id);
             Race updated = new Race(
                     id,
                     race.name(),
@@ -85,7 +87,7 @@ public class RaceService {
     public Race createFromRequest(RaceRequest request) {
         return new Race(
                 null,
-                request.name(),
+                request.name().trim(),
                 request.date(),
                 request.organisation(),
                 request.referee(),
@@ -100,6 +102,16 @@ public class RaceService {
                 request.resultUnitLabel(),
                 request.sortDirection() != null ? request.sortDirection() : SortDirection.ASC
         );
+    }
+
+    /**
+     * @throws IllegalStateException if another race already has this name (case-insensitive)
+     */
+    private void assertNameAvailable(String name, Long excludeId) {
+        Optional<Race> conflict = repository.findByNameIgnoreCase(name);
+        if (conflict.isPresent() && !conflict.get().id().equals(excludeId)) {
+            throw new IllegalStateException("A race named \"" + name + "\" already exists");
+        }
     }
 }
 

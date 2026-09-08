@@ -198,6 +198,7 @@ class ParticipantServiceSpec extends Specification {
         given: "the second row's participant save fails (e.g. a transient DB error)"
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
 
         def csv = "Lastname,Firstname,Birthdate,Team,Gender\n" +
                 "Doe,John,1990-01-01,Team A,MALE\n" +
@@ -216,5 +217,26 @@ class ParticipantServiceSpec extends Specification {
         result.errors().size() == 1
         result.errors()[0].lineNumber() == 3
         result.errors()[0].reason().contains("db unavailable")
+    }
+
+    def "CSV import does not duplicate a person who is matched via ExternalId and already a participant of this race"() {
+        given:
+        def existingPerson = new Person(1L, "John", "Doe", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
+        personService.findByExternalId("EXT-1") >> Optional.of(existingPerson)
+        teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
+        repository.findByRaceIdAndPersonId(5L, 1L) >> Optional.of(new Participant(99L, 5L, 1L, null, null, null, null, null, null))
+
+        def csv = "Lastname,Firstname,Birthdate,Team,Gender,ExternalId\n" +
+                "Doe,John,1990-01-01,Team A,MALE,EXT-1\n"
+        def reader = new BufferedReader(new StringReader(csv))
+
+        when:
+        def result = service.importFromCsv(5L, reader)
+
+        then:
+        0 * repository.save(_)
+        result.imported().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("already a participant")
     }
 }

@@ -84,10 +84,22 @@ public class RaceController {
     @Operation(summary = "Create a new race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Race created", content = @Content(schema = @Schema(implementation = RaceResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<RaceResponse> add(@Body RaceRequest request) {
+    @ApiResponse(responseCode = "409", description = "A race with this name already exists")
+    public HttpResponse<?> add(@Body RaceRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
+        }
         Race race = service.createFromRequest(request);
-        Race created = service.create(race);
-        return HttpResponse.created(RaceResponse.from(created));
+        try {
+            Race created = service.create(race);
+            return HttpResponse.created(RaceResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+    }
+
+    private boolean isValid(RaceRequest request) {
+        return request.name() != null && !request.name().isBlank() && request.date() != null;
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -97,10 +109,19 @@ public class RaceController {
     @ApiResponse(responseCode = "200", description = "Race updated", content = @Content(schema = @Schema(implementation = RaceResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<RaceResponse> update(@PathVariable Long id, @Body RaceRequest request) {
+    @ApiResponse(responseCode = "409", description = "A race with this name already exists")
+    public HttpResponse<?> update(@PathVariable Long id, @Body RaceRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
+        }
         Race race = service.createFromRequest(request);
-        Optional<Race> updated = service.update(id, race);
-        return updated.map(r -> HttpResponse.ok(RaceResponse.from(r)))
+        Optional<Race> updated;
+        try {
+            updated = service.update(id, race);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(r -> HttpResponse.ok((Object) RaceResponse.from(r)))
                 .orElse(HttpResponse.notFound());
     }
 

@@ -323,9 +323,9 @@ public class MeasurementController {
     @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
             content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid JSON input")
-    public HttpResponse<List<MeasurementResponse>> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
+    public HttpResponse<?> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
         if (requests == null || requests.isEmpty()) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("A non-empty list of measurements is required"));
         }
         List<MeasurementResponse> created = requests.stream()
                 .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))

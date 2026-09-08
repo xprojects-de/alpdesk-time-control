@@ -61,9 +61,9 @@ public class PointsScaleController {
     @Operation(summary = "Create a new points scale", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Points scale created", content = @Content(schema = @Schema(implementation = PointsScaleResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<PointsScaleResponse> add(@Body PointsScaleRequest request) {
+    public HttpResponse<?> add(@Body PointsScaleRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and a non-empty points list are required"));
         }
         PointsScale pointsScale = service.createFromRequest(request);
         PointsScale created = service.create(pointsScale);
@@ -77,13 +77,13 @@ public class PointsScaleController {
     @ApiResponse(responseCode = "200", description = "Points scale updated", content = @Content(schema = @Schema(implementation = PointsScaleResponse.class)))
     @ApiResponse(responseCode = "404", description = "Points scale not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<PointsScaleResponse> update(@PathVariable Long id, @Body PointsScaleRequest request) {
+    public HttpResponse<?> update(@PathVariable Long id, @Body PointsScaleRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and a non-empty points list are required"));
         }
         PointsScale pointsScale = service.createFromRequest(request);
         Optional<PointsScale> updated = service.update(id, pointsScale);
-        return updated.map(p -> HttpResponse.ok(PointsScaleResponse.from(p)))
+        return updated.map(p -> HttpResponse.ok((Object) PointsScaleResponse.from(p)))
                 .orElse(HttpResponse.notFound());
     }
 

@@ -115,6 +115,12 @@ public class ParticipantService {
                 throw new IllegalStateException("Race number " + participant.raceNumber() + " is already assigned in this race");
             }
         }
+        if (participant.penalty() != null && participant.penalty() < 0) {
+            // RankingService.adjustedValue() applies the penalty directly (+/- depending on sort
+            // direction) with no floor; a negative penalty can drive the adjusted value negative,
+            // which formatTime()/formatDuration() render as garbled strings like "-1:-1.-500".
+            throw new IllegalArgumentException("penalty must not be negative");
+        }
         // Mirrors the dedupe rule copyParticipants() already enforces: a person may only take part
         // in a race once. Without this, the add/edit dialog could silently create a second entry
         // for the same person in the same race.
@@ -230,6 +236,7 @@ public class ParticipantService {
                 Participant copy = new Participant(null, targetRaceId, source.personId(), null,
                         source.teamId(), source.categoryId(), null, null, null);
                 repository.save(copy);
+                existingPersonIds.add(source.personId());
                 copied++;
             }
         }
@@ -400,6 +407,14 @@ public class ParticipantService {
                                 .orElseGet(() -> personService.create(new Person(null, firstName, lastName, birthDate, gender, externalId)));
                     } else {
                         person = personService.create(new Person(null, firstName, lastName, birthDate, gender, null));
+                    }
+
+                    // Re-importing a roster that includes someone already in this race (matched via
+                    // ExternalId) must not create a second Participant row for them - this bypasses
+                    // ParticipantService.create()/validate() entirely, so the same-person-per-race
+                    // rule has to be enforced here too.
+                    if (repository.findByRaceIdAndPersonId(raceId, person.id()).isPresent()) {
+                        throw new IllegalStateException("Person is already a participant of this race");
                     }
 
                     Participant participant = new Participant(null, raceId, person.id(), null, teamId, null, null, null, null);

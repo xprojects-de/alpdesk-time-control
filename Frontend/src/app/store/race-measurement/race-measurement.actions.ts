@@ -1,5 +1,5 @@
 import {createAction, props} from '@ngrx/store';
-import {RaceMeasurement, RaceMeasurementRequest} from '../../models/race-measurement.model';
+import {RaceMeasurement, RaceMeasurementRequest, SyncMeasurementsResponse} from '../../models/race-measurement.model';
 
 // Load race measurements for a race
 export const loadRaceMeasurements = createAction(
@@ -50,7 +50,7 @@ export const syncRaceMeasurementsToParticipants = createAction(
 );
 export const syncRaceMeasurementsToParticipantsSuccess = createAction(
     '[RaceMeasurement] Sync Race Measurements To Participants Success',
-    props<{ message: string }>()
+    props<{ response: SyncMeasurementsResponse }>()
 );
 export const syncRaceMeasurementsToParticipantsFailure = createAction(
     '[RaceMeasurement] Sync Race Measurements To Participants Failure',

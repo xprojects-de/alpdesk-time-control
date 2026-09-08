@@ -12,3 +12,10 @@ export interface RaceMeasurementRequest {
     durationMs: number;
     measuredAt: string;
 }
+
+export interface SyncMeasurementsResponse {
+    syncedCount: number;
+    skippedCount: number;
+    totalCount: number;
+    message: string;
+}

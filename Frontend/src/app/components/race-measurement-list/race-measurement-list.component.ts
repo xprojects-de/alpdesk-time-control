@@ -338,9 +338,9 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         this.actions$.pipe(
             ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("Messungen erfolgreich mit Teilnehmern synchronisiert", "OK", {
-                duration: 3000,
+        ).subscribe(({response}) => {
+            this.snackBar.open(response.message, "OK", {
+                duration: 5000,
             });
         });
 

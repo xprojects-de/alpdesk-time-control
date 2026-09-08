@@ -52,6 +52,7 @@ public class MeasurementService {
         repository.deleteById(id);
     }
 
+    @jakarta.transaction.Transactional
     public void deleteAll() {
         measurementTableLock.run(() -> {
             repository.deleteAll();

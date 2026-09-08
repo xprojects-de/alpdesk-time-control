@@ -1,7 +1,7 @@
 import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
-import {RaceMeasurement, RaceMeasurementRequest} from '../models/race-measurement.model';
+import {RaceMeasurement, RaceMeasurementRequest, SyncMeasurementsResponse} from '../models/race-measurement.model';
 import {environment} from '../../environments/environment';
 
 
@@ -29,9 +29,7 @@ export class RaceMeasurementService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 
-    syncToParticipants(raceId: number): Observable<string> {
-        return this.http.post(`${this.apiUrl}/race/${raceId}/sync-to-participants`, null, {
-            responseType: 'text'
-        });
+    syncToParticipants(raceId: number): Observable<SyncMeasurementsResponse> {
+        return this.http.post<SyncMeasurementsResponse>(`${this.apiUrl}/race/${raceId}/sync-to-participants`, null);
     }
 }

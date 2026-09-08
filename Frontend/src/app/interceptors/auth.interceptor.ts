@@ -1,5 +1,6 @@
-import {HttpInterceptorFn} from '@angular/common/http';
+import {HttpErrorResponse, HttpInterceptorFn} from '@angular/common/http';
 import {inject} from '@angular/core';
+import {throwError} from 'rxjs';
 import {AuthService} from '../services/auth.service';
 import {Router} from '@angular/router';
 
@@ -19,7 +20,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             authService.logout();
             router.navigate(['/login']).then();
 
-            return next(req);
+            // Don't forward the original request unauthenticated - it would only reach the
+            // backend and fail anyway, racing the redirect above with a stray error.
+            return throwError(() => new HttpErrorResponse({
+                status: 401,
+                statusText: 'Token expired',
+                url: req.url
+            }));
 
         }
 
