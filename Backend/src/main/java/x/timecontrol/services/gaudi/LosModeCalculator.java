@@ -39,6 +39,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
 
     @Override
     public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        if (races.isEmpty()) {
+            return List.of();
+        }
         List<Participant> raceParticipants = races.get(0).participants();
 
         Map<Long, Participant> participantsById = new HashMap<>();
