@@ -24,7 +24,7 @@ export class AuthEffects {
                         return AuthActions.loginSuccess({response: enhancedResponse});
                     }),
                     catchError(error => of(AuthActions.loginFailure({
-                        error: error.error?.message || extractErrorMessage(error, 'Login fehlgeschlagen')
+                        error: extractErrorMessage(error, 'Login fehlgeschlagen')
                     })))
                 )
             )

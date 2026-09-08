@@ -126,8 +126,14 @@ public class RaceMeasurementController {
                                 raceMeasurement.measuredAt()
                         );
 
-                        participantService.update(participant.id(), updatedParticipant);
-                        syncedCount++;
+                        // A single participant failing validation (e.g. its race/person was deleted
+                        // concurrently) must not abort the whole sync and lose every already-synced row.
+                        try {
+                            participantService.update(participant.id(), updatedParticipant);
+                            syncedCount++;
+                        } catch (IllegalArgumentException | IllegalStateException e) {
+                            skippedCount++;
+                        }
                     } else {
                         skippedCount++;
                     }
