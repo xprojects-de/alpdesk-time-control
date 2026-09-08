@@ -26,8 +26,8 @@ class LosModeCalculatorSpec extends Specification {
     Race race = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC)
 
-    private static Participant participant(Long id, Integer durationMs) {
-        new Participant(id, 1L, id, null, null, null, durationMs, null, null)
+    private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
+        new Participant(id, 1L, id, null, null, null, durationMs, penalty, null)
     }
 
     private static Person person(Long id, String firstName) {
@@ -93,5 +93,25 @@ class LosModeCalculatorSpec extends Specification {
         ranking.size() == 1
         ranking[0].valueMs() == 100000
         ranking[0].label() == "A (Einzel)"
+    }
+
+    def "a participant's penalty is included in the pair average and the overall average"() {
+        given: "participant 1 has a penalty that must count towards their value and the overall average"
+        def participants = [
+                participant(1L, 60000, 20000), // adjusted 80000
+                participant(2L, 80000),
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        personService.findById(1L) >> Optional.of(person(1L, "A"))
+        personService.findById(2L) >> Optional.of(person(2L, "B"))
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then: "pair average is (80000+80000)/2 = 80000, exactly the overall average -> diff 0"
+        ranking.size() == 1
+        ranking[0].valueMs() == 80000
+        ranking[0].diffMs() == 0
     }
 }

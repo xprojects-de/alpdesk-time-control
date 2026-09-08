@@ -555,6 +555,19 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Löschen der Teilnehmer: ${error}`, "OK", {duration: 5000});
         });
 
+        this.actions$.pipe(
+            ofType(ParticipantActions.assignRaceNumbersSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Startnummern erfolgreich vergeben", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.assignRaceNumbersFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Vergeben der Startnummern: ${error}`, "OK", {duration: 5000});
+        });
+
         // Setup sort when signal changes
         effect(() => {
             const sortInstance = this.sort();

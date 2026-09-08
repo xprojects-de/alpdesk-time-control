@@ -6,6 +6,7 @@ import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Race;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
@@ -20,7 +21,7 @@ import java.util.stream.StreamSupport;
 
 /**
  * Los-Modus: participants are drawn into random pairs before the race. The pair whose
- * average time is closest to the overall average time of the race wins.
+ * average (penalty-adjusted) result is closest to the overall average of the race wins.
  */
 @Singleton
 public class LosModeCalculator implements GaudiModeCalculator {
@@ -45,6 +46,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
         if (races.isEmpty()) {
             return List.of();
         }
+        Race race = races.get(0).race();
         List<Participant> raceParticipants = races.get(0).participants();
 
         Map<Long, Participant> participantsById = new HashMap<>();
@@ -56,18 +58,18 @@ public class LosModeCalculator implements GaudiModeCalculator {
                 .stream(pairingRepository.findByGaudiModeId(gaudiMode.id()).spliterator(), false)
                 .toList();
 
-        List<Integer> allTimes = raceParticipants.stream()
-                .map(Participant::durationMs)
+        List<Integer> allValues = raceParticipants.stream()
+                .map(p -> rankingService.adjustedValue(race, p))
                 .filter(Objects::nonNull)
                 .toList();
 
-        if (allTimes.isEmpty() || pairings.isEmpty()) {
+        if (allValues.isEmpty() || pairings.isEmpty()) {
             return List.of();
         }
 
-        double overallAverage = allTimes.stream().mapToInt(Integer::intValue).average().orElse(0);
+        double overallAverage = allValues.stream().mapToInt(Integer::intValue).average().orElse(0);
 
-        record PairResult(String label, Integer time1Ms, Integer time2Ms, double pairAverage, double diff) {
+        record PairResult(String label, Integer value1, Integer value2, double pairAverage, double diff) {
         }
 
         List<PairResult> results = new ArrayList<>();
@@ -76,25 +78,28 @@ public class LosModeCalculator implements GaudiModeCalculator {
             Participant p1 = participantsById.get(pairing.participant1Id());
             Participant p2 = pairing.participant2Id() != null ? participantsById.get(pairing.participant2Id()) : null;
 
-            if (p1 == null || p1.durationMs() == null) {
+            Integer value1 = p1 != null ? rankingService.adjustedValue(race, p1) : null;
+            Integer value2 = p2 != null ? rankingService.adjustedValue(race, p2) : null;
+
+            if (value1 == null) {
                 continue;
             }
-            if (pairing.participant2Id() != null && (p2 == null || p2.durationMs() == null)) {
+            if (pairing.participant2Id() != null && value2 == null) {
                 continue;
             }
 
-            double pairAverage = (p2 != null)
-                    ? (p1.durationMs() + p2.durationMs()) / 2.0
-                    : p1.durationMs();
+            double pairAverage = (value2 != null)
+                    ? (value1 + value2) / 2.0
+                    : value1;
 
-            String label = (p2 != null)
+            String label = (value2 != null)
                     ? formatName(p1) + " & " + formatName(p2)
                     : formatName(p1) + " (Einzel)";
 
             results.add(new PairResult(
                     label,
-                    p1.durationMs(),
-                    p2 != null ? p2.durationMs() : null,
+                    value1,
+                    value2,
                     pairAverage,
                     Math.abs(pairAverage - overallAverage)
             ));
@@ -109,8 +114,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
             entries.add(new GaudiRankingEntryResponse(
                     places.get(i),
                     r.label(),
-                    r.time1Ms(),
-                    r.time2Ms(),
+                    r.value1(),
+                    r.value2(),
                     (int) Math.round(r.pairAverage()),
                     (int) Math.round(overallAverage),
                     (int) Math.round(r.diff()),

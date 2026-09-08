@@ -283,8 +283,10 @@ public class PdfExportService {
             columns.add(new PdfColumn<>(raceLabel + " Zeit", 1.1f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
             columns.add(new PdfColumn<>(raceLabel + " Strafe", 0.9f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::penalty))));
         }
-        columns.add(new PdfColumn<>("Gesamt", 1.2f, e -> formatTime(e.valueMs())));
-        columns.add(new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatTime(e.diffMs()) : "-"));
+        // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
+        // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
+        columns.add(new PdfColumn<>("Gesamt", 1.2f, e -> formatValue(headerRace, e.valueMs())));
+        columns.add(new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-"));
 
         return renderDocument(headerRace, true,
                 ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));

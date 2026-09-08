@@ -142,6 +142,41 @@ class ParticipantServiceSpec extends Specification {
         result.isPresent()
     }
 
+    def "assignRaceNumbers re-shuffling an already-numbered race does not collide with the unique constraint"() {
+        given: "3 participants already hold numbers 2,3,1; the new assignment (by birthdate, youngest first) is 1,2,3 - a naive single-pass update would collide immediately"
+        def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null)
+        def p2 = new Participant(2L, 5L, 2L, 3, null, null, null, null, null)
+        def p3 = new Participant(3L, 5L, 3L, 1, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [p1, p2, p3]
+        personService.findByIds(_) >> [
+                1L: new Person(1L, "A", "A", LocalDate.of(2000, 1, 1), Gender.MALE, null),
+                2L: new Person(2L, "B", "B", LocalDate.of(1995, 1, 1), Gender.MALE, null),
+                3L: new Person(3L, "C", "C", LocalDate.of(1990, 1, 1), Gender.MALE, null),
+        ]
+
+        // Simulates the real DB's UNIQUE(race_id, race_number) index: a non-null race_number
+        // must not already be held by a DIFFERENT participant.
+        def heldNumberByParticipantId = [1L: 2, 2L: 3, 3L: 1]
+        repository.update(_ as Participant) >> { Participant p ->
+            if (p.raceNumber() != null) {
+                def conflict = heldNumberByParticipantId.find { id, num -> num == p.raceNumber() && id != p.id() }
+                if (conflict) {
+                    throw new RuntimeException("UNIQUE constraint failed: participant.race_id, participant.race_number")
+                }
+            }
+            heldNumberByParticipantId[p.id()] = p.raceNumber()
+            return p
+        }
+
+        when:
+        def result = service.assignRaceNumbers(5L)
+
+        then:
+        noExceptionThrown()
+        result*.id() == [1L, 2L, 3L]
+        result*.raceNumber() == [1, 2, 3]
+    }
+
     def "CSV import reports a row-level error instead of aborting the whole import"() {
         given: "the second row's participant save fails (e.g. a transient DB error)"
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")

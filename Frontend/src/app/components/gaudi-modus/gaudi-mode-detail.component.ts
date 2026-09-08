@@ -160,26 +160,26 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                                 <td mat-cell *matCellDef="let r">{{ r.label }}</td>
                             </ng-container>
                             <ng-container matColumnDef="time1Ms">
-                                <th mat-header-cell *matHeaderCellDef>Zeit 1</th>
-                                <td mat-cell *matCellDef="let r">{{ formatDuration(r.time1Ms) }}</td>
+                                <th mat-header-cell *matHeaderCellDef>Wert 1</th>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time1Ms) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="time2Ms">
-                                <th mat-header-cell *matHeaderCellDef>Zeit 2</th>
-                                <td mat-cell *matCellDef="let r">{{ formatDuration(r.time2Ms) }}</td>
+                                <th mat-header-cell *matHeaderCellDef>Wert 2</th>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time2Ms) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="valueMs">
                                 <th mat-header-cell *matHeaderCellDef>
-                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Ø-Zeit Paar' : 'Gesamtzeit' }}
+                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Ø-Wert Paar' : 'Gesamtwert' }}
                                 </th>
-                                <td mat-cell *matCellDef="let r">{{ formatDuration(r.valueMs) }}</td>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.valueMs) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="referenceMs">
-                                <th mat-header-cell *matHeaderCellDef>Ø-Zeit Gesamt</th>
-                                <td mat-cell *matCellDef="let r">{{ formatDuration(r.referenceMs) }}</td>
+                                <th mat-header-cell *matHeaderCellDef>Ø-Wert Gesamt</th>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.referenceMs) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="diffMs">
                                 <th mat-header-cell *matHeaderCellDef>Abweichung</th>
-                                <td mat-cell *matCellDef="let r">{{ formatDuration(r.diffMs) }}</td>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
                             </ng-container>
                             <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
                             <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
@@ -344,7 +344,26 @@ export class GaudiModeDetailComponent implements OnDestroy {
         if (this.gaudiMode().type === GaudiModeType.POINTS_COMBINATION) {
             return entry.totalPoints !== undefined && entry.totalPoints !== null ? String(entry.totalPoints) : "-";
         }
-        return this.formatDuration(entry.valueMs);
+        return this.singleRaceValueDisplay(entry.valueMs);
+    }
+
+    /**
+     * Formats a value from the LOS/TEAM ranking table or the TIME_COMBINATION "Gesamt" column
+     * using the mode's own race's unit (points races render as a decimal value, not a duration) -
+     * mirrors legValueDisplay()'s per-leg formatting, but for the single race these modes have
+     * (LOS/TEAM combine exactly one race; every TIME_COMBINATION leg shares the same result unit).
+     */
+    singleRaceValueDisplay(value: number | undefined | null): string {
+        if (value === undefined || value === null) {
+            return "-";
+        }
+        const raceId = this.gaudiMode().races[0]?.raceId;
+        const race = raceId !== undefined ? this.races.find(r => r.id === raceId) : undefined;
+        if (race && race.resultUnit === ResultUnit.POINTS) {
+            const label = race.resultUnitLabel ? ` ${race.resultUnitLabel}` : "";
+            return `${(value / 100).toFixed(2)}${label}`;
+        }
+        return this.formatDuration(value);
     }
 
     formatDuration(ms: number | undefined | null): string {
