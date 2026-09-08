@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -34,9 +34,9 @@ import {selectAllTeams} from "../../store/team/team.selectors";
 import * as TeamActions from "../../store/team/team.actions";
 import {selectAllCategories} from "../../store/category/category.selectors";
 import * as CategoryActions from "../../store/category/category.actions";
-import {Observable, Subject, of} from "rxjs";
-import {take, debounceTime, distinctUntilChanged, switchMap, startWith} from "rxjs/operators";
-import {Race} from "../../models/race.model";
+import {Observable, Subject, of, combineLatest} from "rxjs";
+import {take, takeUntil, debounceTime, distinctUntilChanged, switchMap, startWith} from "rxjs/operators";
+import {Race, ResultUnit} from "../../models/race.model";
 import {Team} from "../../models/team.model";
 import {Category} from "../../models/category.model";
 import {PersonService} from "../../services/person.service";
@@ -199,35 +199,48 @@ import {PersonService} from "../../services/person.service";
                     </mat-select>
                 </mat-form-field>
 
-                <h3 class="section-title">Zeit</h3>
-                <div class="time-input-group">
+                <h3 class="section-title">{{ isPointsRace() ? "Wert" : "Zeit" }}</h3>
+                @if (!isPointsRace()) {
+                    <div class="time-input-group">
+                        <mat-form-field appearance="outline">
+                            <mat-label>Minuten</mat-label>
+                            <input matInput type="number" formControlName="minutes" min="0"/>
+                        </mat-form-field>
+
+                        <mat-form-field appearance="outline">
+                            <mat-label>Sekunden</mat-label>
+                            <input matInput type="number" formControlName="seconds" min="0" max="59"/>
+                            @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
+                                <mat-error>Sekunden: 0-59</mat-error>
+                            }
+                        </mat-form-field>
+
+                        <mat-form-field appearance="outline">
+                            <mat-label>Millisekunden</mat-label>
+                            <input matInput type="number" formControlName="milliseconds" min="0" max="999"/>
+                            @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
+                                <mat-error>Millisekunden: 0-999</mat-error>
+                            }
+                        </mat-form-field>
+                    </div>
+
                     <mat-form-field appearance="outline">
-                        <mat-label>Minuten</mat-label>
-                        <input matInput type="number" formControlName="minutes" min="0"/>
+                        <mat-label>Strafe (Sekunden)</mat-label>
+                        <input matInput type="number" formControlName="penaltySeconds" min="0" step="0.01"/>
+                        <mat-hint>Wird zur Zeit addiert; leer lassen, wenn keine Strafe</mat-hint>
+                    </mat-form-field>
+                } @else {
+                    <mat-form-field appearance="outline">
+                        <mat-label>Wert{{ selectedRace?.resultUnitLabel ? " (" + selectedRace?.resultUnitLabel + ")" : "" }}</mat-label>
+                        <input matInput type="number" formControlName="pointsValue" step="0.01"/>
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
-                        <mat-label>Sekunden</mat-label>
-                        <input matInput type="number" formControlName="seconds" min="0" max="59"/>
-                        @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
-                            <mat-error>Sekunden: 0-59</mat-error>
-                        }
+                        <mat-label>Strafe{{ selectedRace?.resultUnitLabel ? " (" + selectedRace?.resultUnitLabel + ")" : "" }}</mat-label>
+                        <input matInput type="number" formControlName="penaltyPointsValue" min="0" step="0.01"/>
+                        <mat-hint>Wird zum Wert addiert; leer lassen, wenn keine Strafe</mat-hint>
                     </mat-form-field>
-
-                    <mat-form-field appearance="outline">
-                        <mat-label>Millisekunden</mat-label>
-                        <input matInput type="number" formControlName="milliseconds" min="0" max="999"/>
-                        @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
-                            <mat-error>Millisekunden: 0-999</mat-error>
-                        }
-                    </mat-form-field>
-                </div>
-
-                <mat-form-field appearance="outline">
-                    <mat-label>Strafe (Sekunden)</mat-label>
-                    <input matInput type="number" formControlName="penaltySeconds" min="0" step="0.01"/>
-                    <mat-hint>Wird zur Zeit addiert; leer lassen, wenn keine Strafe</mat-hint>
-                </mat-form-field>
+                }
 
                 <mat-form-field appearance="outline">
                     <mat-label>Gemessen am</mat-label>
@@ -291,10 +304,13 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
     private store = inject(Store);
     private personService = inject(PersonService);
+    private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
 
     form: FormGroup;
     mode: "existing" | "new" = "existing";
+    resultUnit = ResultUnit;
+    selectedRace: Race | null = null;
     genderOptions = [
         {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
         {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
@@ -307,6 +323,12 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
 
     constructor() {
         const timeComponents = this.splitMilliseconds(this.data?.durationMs);
+        const pointsValue = this.data?.durationMs !== undefined && this.data?.durationMs !== null
+            ? (this.data.durationMs / 100).toFixed(2) : "";
+        const penaltyPointsValue = this.data?.penalty !== undefined && this.data?.penalty !== null
+            ? (this.data.penalty / 100).toFixed(2) : "";
+
+        this.selectedRace = this.data?.race ?? null;
 
         this.form = this.fb.group({
             personSearch: [this.data?.person || ""],
@@ -324,6 +346,8 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             seconds: [timeComponents.seconds, [Validators.min(0), Validators.max(59)]],
             milliseconds: [timeComponents.milliseconds, [Validators.min(0), Validators.max(999)]],
             penaltySeconds: [this.data?.penalty !== undefined && this.data?.penalty !== null ? this.data.penalty / 1000 : "", [Validators.min(0)]],
+            pointsValue: [pointsValue],
+            penaltyPointsValue: [penaltyPointsValue, [Validators.min(0)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
         });
 
@@ -341,6 +365,19 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 return this.personService.search(term);
             }),
         );
+
+        // Track the currently selected race's resultUnit/resultUnitLabel so the Zeit/Wert
+        // section can switch between the time inputs and a generic decimal-value input.
+        combineLatest([
+            this.races$,
+            this.form.get("race")!.valueChanges.pipe(startWith(this.form.value.race)),
+        ]).pipe(takeUntil(this.destroy$)).subscribe(([races, raceId]) => {
+            const found = races.find(r => r.id === Number(raceId));
+            if (found) {
+                this.selectedRace = found;
+                this.cdr.markForCheck();
+            }
+        });
     }
 
     ngOnInit(): void {
@@ -356,6 +393,10 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                     }
                 });
         }
+    }
+
+    isPointsRace(): boolean {
+        return this.selectedRace?.resultUnit === ResultUnit.POINTS;
     }
 
     ngOnDestroy(): void {
@@ -399,9 +440,26 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
         }
 
         const formValue = this.form.value;
-        const timeEntered = formValue.minutes !== "" && formValue.minutes !== null ||
-            formValue.seconds !== "" && formValue.seconds !== null ||
-            formValue.milliseconds !== "" && formValue.milliseconds !== null;
+        const isPoints = this.isPointsRace();
+        const timeEntered = isPoints
+            ? (formValue.pointsValue !== "" && formValue.pointsValue !== null)
+            : (formValue.minutes !== "" && formValue.minutes !== null ||
+                formValue.seconds !== "" && formValue.seconds !== null ||
+                formValue.milliseconds !== "" && formValue.milliseconds !== null);
+
+        const durationMs = !timeEntered ? undefined : isPoints
+            ? Math.round(Number(formValue.pointsValue) * 100)
+            : this.convertToMilliseconds(
+                Number(formValue.minutes || 0),
+                Number(formValue.seconds || 0),
+                Number(formValue.milliseconds || 0),
+            );
+
+        const penalty = !timeEntered ? undefined : isPoints
+            ? (formValue.penaltyPointsValue !== "" && formValue.penaltyPointsValue !== null
+                ? Math.round(Number(formValue.penaltyPointsValue) * 100) : undefined)
+            : (formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
+                ? Math.round(Number(formValue.penaltySeconds) * 1000) : undefined);
 
         const buildRequest = (personId: number): ParticipantRequest => ({
             raceId: Number(formValue.race),
@@ -409,14 +467,8 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             raceNumber: formValue.raceNumber !== "" && formValue.raceNumber !== null ? Number(formValue.raceNumber) : undefined,
             teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
             categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
-            durationMs: timeEntered ? this.convertToMilliseconds(
-                Number(formValue.minutes || 0),
-                Number(formValue.seconds || 0),
-                Number(formValue.milliseconds || 0),
-            ) : undefined,
-            penalty: timeEntered && formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
-                ? Math.round(Number(formValue.penaltySeconds) * 1000)
-                : undefined,
+            durationMs,
+            penalty,
             measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
         });
 

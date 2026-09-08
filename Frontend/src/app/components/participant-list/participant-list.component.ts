@@ -25,7 +25,7 @@ import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
 import {Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
-import {Race} from "../../models/race.model";
+import {Race, ResultUnit} from "../../models/race.model";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as RaceActions from "../../store/race/race.actions";
@@ -319,11 +319,11 @@ import {Actions, ofType} from "@ngrx/effects";
                          </td>
                      </ng-container>
 
-                     <!-- Duration Column -->
+                     <!-- Duration/Value Column -->
                      <ng-container matColumnDef="durationMs">
-                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Zeit</th>
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Ergebnis</th>
                          <td mat-cell *matCellDef="let participant">
-                             {{ participant.durationMs !== undefined && participant.durationMs !== null ? formatDuration(participant.durationMs) : "-" }}
+                             {{ formatResultValue(participant) }}
                          </td>
                      </ng-container>
 
@@ -628,6 +628,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             return `${day}.${month}.${year}`;
         }
         return dateString;
+    }
+
+    formatResultValue(participant: Participant): string {
+        if (participant.durationMs === undefined || participant.durationMs === null) {
+            return "-";
+        }
+        if (participant.race?.resultUnit === ResultUnit.POINTS) {
+            const label = participant.race?.resultUnitLabel ? ` ${participant.race.resultUnitLabel}` : "";
+            return `${(participant.durationMs / 100).toFixed(2)}${label}`;
+        }
+        return this.formatDuration(participant.durationMs);
     }
 
     formatDuration(ms: number): string {
