@@ -5,7 +5,6 @@ import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @MappedEntity
@@ -17,15 +16,18 @@ public record Participant(
 
         Long raceId,
 
-        String firstName,
-        String lastName,
-        LocalDate birthDate,
-        Gender gender,
+        Long personId,
+
+        @Nullable
         Integer raceNumber,
         @Nullable
-        String association,
+        Long teamId,
+        @Nullable
+        Long categoryId,
         @Nullable
         Integer durationMs,
+        @Nullable
+        Integer penalty,
         @Nullable
         LocalDateTime measuredAt
 ) {

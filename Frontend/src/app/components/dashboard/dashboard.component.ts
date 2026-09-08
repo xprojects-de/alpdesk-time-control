@@ -11,7 +11,11 @@ import {MatTooltipModule} from "@angular/material/tooltip";
 import {RaceListComponent} from "../race-list/race-list.component";
 import {ParticipantListComponent} from "../participant-list/participant-list.component";
 import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
+import {RaceMeasurementListComponent} from "../race-measurement-list/race-measurement-list.component";
 import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
+import {TeamListComponent} from "../team-list/team-list.component";
+import {CategoryListComponent} from "../category-list/category-list.component";
+import {GaudiModusComponent} from "../gaudi-modus/gaudi-modus.component";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -31,7 +35,11 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
         RaceListComponent,
         ParticipantListComponent,
         MeasurementListComponent,
+        RaceMeasurementListComponent,
         AgeGroupListComponent,
+        TeamListComponent,
+        CategoryListComponent,
+        GaudiModusComponent,
     ],
     template: `
         <mat-toolbar color="primary">
@@ -83,11 +91,23 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
                 <mat-tab label="Rennen">
                     <app-race-list/>
                 </mat-tab>
+                <mat-tab label="Teams">
+                    <app-team-list/>
+                </mat-tab>
+                <mat-tab label="Kategorien">
+                    <app-category-list/>
+                </mat-tab>
                 <mat-tab label="Teilnehmer">
                     <app-participant-list/>
                 </mat-tab>
                 <mat-tab label="Messungen">
                     <app-measurement-list/>
+                </mat-tab>
+                <mat-tab label="Zuordnung &amp; Sync">
+                    <app-race-measurement-list/>
+                </mat-tab>
+                <mat-tab label="Gaudi-Modus">
+                    <app-gaudi-modus/>
                 </mat-tab>
             </mat-tab-group>
         </div>

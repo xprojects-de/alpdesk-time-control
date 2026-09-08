@@ -2,14 +2,12 @@ package x.timecontrol.Controller;
 
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
-import x.timecontrol.dto.SyncMeasurementsResponse;
 import x.timecontrol.entities.Measurement;
-import x.timecontrol.entities.Participant;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
-import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.scheduling.TaskExecutors;
@@ -30,6 +28,7 @@ import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/measurements")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Measurement")
 public class MeasurementController {
 
@@ -41,9 +40,6 @@ public class MeasurementController {
 
     @Inject
     DataImportScheduler dataImportScheduler;
-
-    @Inject
-    ParticipantService participantService;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -131,7 +127,6 @@ public class MeasurementController {
     }
 
     @Delete("/reset")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Delete all measurements and optionally reset device",
             description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -163,7 +158,6 @@ public class MeasurementController {
     }
 
     @Put("/continuous-mode")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Enable or disable continuous mode on device",
             description = "Enables or disables continuous mode on the SKitiming Controller device. When enabled, the device will continuously measure. When disabled, manual triggering is required.",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -189,7 +183,6 @@ public class MeasurementController {
     }
 
     @Get("/device-status")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Get device status",
             description = "Returns the current mode of the SKitiming Controller device ('continuous' or 'normal')",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -210,7 +203,6 @@ public class MeasurementController {
     }
 
     @Get("/device-connection")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Check device connection",
             description = "Checks if the SKitiming Controller device is reachable and returns the connection status via HTTP status code",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -231,7 +223,6 @@ public class MeasurementController {
     }
 
     @Post("/discard")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Discard oldest start from device queue",
             description = "Discards the oldest start from the device's internal queue. Only works in normal mode (not in continuous mode)",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -254,7 +245,6 @@ public class MeasurementController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Import measurements from external device",
             description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -299,57 +289,39 @@ public class MeasurementController {
 
 
     @Produces(MediaType.APPLICATION_JSON)
-    @Post("/sync-to-participants")
-    @Operation(summary = "Sync measurements to participants",
-            description = "Transfers measurement data (duration_ms and measured_at) to participant records for all measurements that have a participant_id assigned",
+    @Get("/export")
+    @Operation(summary = "Export all measurements as JSON download",
+            description = "Returns all measurements as a JSON file download (without IDs, suitable for re-import)",
             security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Measurements synced successfully")
-    @ApiResponse(responseCode = "500", description = "Sync failed")
-    public HttpResponse<SyncMeasurementsResponse> syncMeasurementsToParticipants() {
-        try {
-            Iterable<Measurement> allMeasurements = service.findAll();
-            int syncedCount = 0;
-            int skippedCount = 0;
+    @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
+    public HttpResponse<List<MeasurementRequest>> exportMeasurements() {
+        Iterable<Measurement> measurements = service.findAll();
+        List<MeasurementRequest> response = StreamSupport.stream(measurements.spliterator(), false)
+                .map(m -> new MeasurementRequest(m.participantId(), m.durationMs(), m.measuredAt()))
+                .toList();
+        return HttpResponse.ok(response)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
+    }
 
-            for (Measurement measurement : allMeasurements) {
-
-                if (measurement.participantId() != null) {
-                    Optional<Participant> participantOpt = participantService.findById(measurement.participantId());
-
-                    if (participantOpt.isPresent()) {
-                        Participant participant = participantOpt.get();
-
-                        Participant updatedParticipant = new Participant(
-                            participant.id(),
-                            participant.raceId(),
-                            participant.firstName(),
-                            participant.lastName(),
-                            participant.birthDate(),
-                            participant.gender(),
-                            participant.raceNumber(),
-                            participant.association(),
-                            measurement.durationMs(),
-                            measurement.measuredAt()
-                        );
-
-                        participantService.update(participant.id(), updatedParticipant);
-                        syncedCount++;
-                    } else {
-                        skippedCount++;
-                    }
-                } else {
-                    skippedCount++;
-                }
-            }
-
-            SyncMeasurementsResponse response = SyncMeasurementsResponse.of(syncedCount, skippedCount);
-            return HttpResponse.ok(response);
-        } catch (Exception e) {
-            SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
-                    0, 0, 0, "Sync failed: " + e.getMessage()
-            );
-            return HttpResponse.serverError().body(errorResponse);
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/import-json")
+    @Operation(summary = "Import measurements from JSON",
+            description = "Imports a list of measurements from a JSON body. Existing measurements are kept; duplicates are inserted as new entries.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
+            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid JSON input")
+    public HttpResponse<List<MeasurementResponse>> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return HttpResponse.badRequest();
         }
+        List<MeasurementResponse> created = requests.stream()
+                .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))
+                .map(service::create)
+                .map(MeasurementResponse::from)
+                .toList();
+        return HttpResponse.created(created);
     }
 
 }

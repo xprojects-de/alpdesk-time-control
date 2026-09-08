@@ -1,5 +1,7 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
+import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
 
 // Load all participants
 export const loadParticipants = createAction('[Participant] Load Participants');
@@ -88,6 +90,62 @@ export const selectParticipant = createAction(
     props<{ id: number | null }>()
 );
 
+// Assign race numbers
+export const assignRaceNumbers = createAction(
+    '[Participant] Assign Race Numbers',
+    props<{ raceId: number }>()
+);
+export const assignRaceNumbersSuccess = createAction(
+    '[Participant] Assign Race Numbers Success',
+    props<{ participants: Participant[] }>()
+);
+export const assignRaceNumbersFailure = createAction(
+    '[Participant] Assign Race Numbers Failure',
+    props<{ error: string }>()
+);
+
+// Import participants from CSV
+export const importParticipantsCsv = createAction(
+    '[Participant] Import Participants CSV',
+    props<{ raceId: number; file: File }>()
+);
+export const importParticipantsCsvSuccess = createAction(
+    '[Participant] Import Participants CSV Success',
+    props<{ result: ParticipantImportResponse }>()
+);
+export const importParticipantsCsvFailure = createAction(
+    '[Participant] Import Participants CSV Failure',
+    props<{ error: string }>()
+);
+
+// Copy participants into other races
+export const copyParticipants = createAction(
+    '[Participant] Copy Participants',
+    props<{ request: ParticipantCopyRequest }>()
+);
+export const copyParticipantsSuccess = createAction(
+    '[Participant] Copy Participants Success',
+    props<{ result: ParticipantCopyResponse }>()
+);
+export const copyParticipantsFailure = createAction(
+    '[Participant] Copy Participants Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - Start list (Startliste)
+export const exportStartListPdf = createAction(
+    '[Participant] Export Start List PDF',
+    props<{ raceId: number }>()
+);
+export const exportStartListPdfSuccess = createAction(
+    '[Participant] Export Start List PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportStartListPdfFailure = createAction(
+    '[Participant] Export Start List PDF Failure',
+    props<{ error: string }>()
+);
+
 // PDF Export - All (Gesamtwertung)
 export const exportAllPdf = createAction(
     '[Participant] Export All PDF',
@@ -127,6 +185,48 @@ export const exportAllAgeGroupsPdfSuccess = createAction(
 );
 export const exportAllAgeGroupsPdfFailure = createAction(
     '[Participant] Export All Age Groups PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - All by Category (Gesamtwertung (Alle) nach Kategorie)
+export const exportAllByCategoryPdf = createAction(
+    '[Participant] Export All By Category PDF',
+    props<{ raceId: number }>()
+);
+export const exportAllByCategoryPdfSuccess = createAction(
+    '[Participant] Export All By Category PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportAllByCategoryPdfFailure = createAction(
+    '[Participant] Export All By Category PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - By Gender and Category (Alle Herren/Damen nach Kategorie)
+export const exportByGenderByCategoryPdf = createAction(
+    '[Participant] Export By Gender By Category PDF',
+    props<{ gender: string; raceId: number }>()
+);
+export const exportByGenderByCategoryPdfSuccess = createAction(
+    '[Participant] Export By Gender By Category PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportByGenderByCategoryPdfFailure = createAction(
+    '[Participant] Export By Gender By Category PDF Failure',
+    props<{ error: string }>()
+);
+
+// PDF Export - All Age Groups by Category (Nach Altersklassen aufgeteilt nach Kategorie)
+export const exportAllAgeGroupsByCategoryPdf = createAction(
+    '[Participant] Export All Age Groups By Category PDF',
+    props<{ raceId: number }>()
+);
+export const exportAllAgeGroupsByCategoryPdfSuccess = createAction(
+    '[Participant] Export All Age Groups By Category PDF Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportAllAgeGroupsByCategoryPdfFailure = createAction(
+    '[Participant] Export All Age Groups By Category PDF Failure',
     props<{ error: string }>()
 );
 

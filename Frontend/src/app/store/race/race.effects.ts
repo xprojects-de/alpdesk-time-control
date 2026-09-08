@@ -16,7 +16,9 @@ export class RaceEffects {
             switchMap(() =>
                 this.raceService.getAll().pipe(
                     map(races => RaceActions.loadRacesSuccess({races})),
-                    catchError(error => of(RaceActions.loadRacesFailure({error})))
+                    catchError(error => of(RaceActions.loadRacesFailure({
+                        error: error.message || 'Failed to load races'
+                    })))
                 )
             )
         )
@@ -28,7 +30,9 @@ export class RaceEffects {
             switchMap(({race}) =>
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceSuccess({race})),
-                    catchError(error => of(RaceActions.createRaceFailure({error})))
+                    catchError(error => of(RaceActions.createRaceFailure({
+                        error: error.message || 'Failed to create race'
+                    })))
                 )
             )
         )
@@ -40,7 +44,9 @@ export class RaceEffects {
             switchMap(({id, race}) =>
                 this.raceService.update(id, race).pipe(
                     map(race => RaceActions.updateRaceSuccess({race})),
-                    catchError(error => of(RaceActions.updateRaceFailure({error})))
+                    catchError(error => of(RaceActions.updateRaceFailure({
+                        error: error.message || 'Failed to update race'
+                    })))
                 )
             )
         )
@@ -52,7 +58,9 @@ export class RaceEffects {
             switchMap(({id}) =>
                 this.raceService.delete(id).pipe(
                     map(() => RaceActions.deleteRaceSuccess({id})),
-                    catchError(error => of(RaceActions.deleteRaceFailure({error})))
+                    catchError(error => of(RaceActions.deleteRaceFailure({
+                        error: error.message || 'Failed to delete race'
+                    })))
                 )
             )
         )

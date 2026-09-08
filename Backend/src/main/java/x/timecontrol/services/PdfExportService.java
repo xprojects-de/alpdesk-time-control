@@ -5,363 +5,508 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
+import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.Team;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 @Singleton
 public class PdfExportService {
 
-    private final AgeGroupService ageGroupService;
+    private static final float MARGIN = 50;
+    private static final float PAGE_BREAK_THRESHOLD = 50;
+    private static final PDFont FONT_REGULAR = new PDType1Font(FontName.HELVETICA);
+    private static final PDFont FONT_BOLD = new PDType1Font(FontName.HELVETICA_BOLD);
 
-    public PdfExportService(AgeGroupService ageGroupService) {
+    /**
+     * Pseudo category id used to group participants without an assigned category into
+     * their own "Ohne Kategorie" section in the by-category PDF exports, instead of
+     * silently dropping them.
+     */
+    private static final long NO_CATEGORY_ID = -1L;
+    private static final Category NO_CATEGORY = new Category(NO_CATEGORY_ID, "Ohne Kategorie");
+
+    private final AgeGroupService ageGroupService;
+    private final CategoryService categoryService;
+    private final TeamService teamService;
+    private final PersonService personService;
+    private final RankingService rankingService;
+
+    public PdfExportService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService) {
         this.ageGroupService = ageGroupService;
+        this.categoryService = categoryService;
+        this.teamService = teamService;
+        this.personService = personService;
+        this.rankingService = rankingService;
     }
 
-    private static class RankingEntry {
-        int place;
-        String name;
-        String ageGroup;
-        Integer timeMs;
-        Integer diffMs;
+    private record RankingEntry(int place, String name, String ageGroup, String valueFormatted,
+                                 String penaltyFormatted, String totalFormatted, String diffFormatted) {
+    }
 
-        RankingEntry(int place, String name, String ageGroup, Integer timeMs, Integer diffMs) {
-            this.place = place;
-            this.name = name;
-            this.ageGroup = ageGroup;
-            this.timeMs = timeMs;
-            this.diffMs = diffMs;
+    private record StartListEntry(String raceNumber, String name, String birthYear, String gender,
+                                   String ageGroup, String team, String category) {
+    }
+
+    private record PdfColumn<T>(String header, float weight, Function<T, String> valueFn) {
+    }
+
+    private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
+            new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
+            new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.name(), 35)),
+            new PdfColumn<>("Altersgruppe", 1.4f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
+            new PdfColumn<>("Strafe", 0.9f, RankingEntry::penaltyFormatted),
+            new PdfColumn<>("Gesamt", 1.1f, RankingEntry::totalFormatted),
+            new PdfColumn<>("Diff", 1.0f, RankingEntry::diffFormatted)
+    );
+
+    private static final List<PdfColumn<StartListEntry>> START_LIST_COLUMNS = List.of(
+            new PdfColumn<>("StNr.", 0.5f, StartListEntry::raceNumber),
+            new PdfColumn<>("Name Vorname", 2.2f, e -> truncate(e.name(), 35)),
+            new PdfColumn<>("Jg.", 0.5f, StartListEntry::birthYear),
+            new PdfColumn<>("Geschl.", 0.7f, StartListEntry::gender),
+            new PdfColumn<>("Altersgruppe", 1.5f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
+            new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20))
+    );
+
+    public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
+        List<StartListEntry> entries = createStartListEntries(participants);
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, START_LIST_COLUMNS, "Startliste", entries, "Teilnehmer", true));
+    }
+
+    private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
+        List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
+                .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        List<StartListEntry> entries = new ArrayList<>();
+        for (Participant p : sorted) {
+            Person person = personService.findById(p.personId()).orElse(null);
+            String raceNumber = p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+            String name = formatName(person);
+            String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
+            String gender = person != null ? genderLabel(person.gender()) : "-";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+            String team = p.teamId() != null
+                    ? teamService.findById(p.teamId()).map(Team::name).orElse("-")
+                    : "-";
+            String category = p.categoryId() != null
+                    ? categoryService.findById(p.categoryId()).map(Category::name).orElse("-")
+                    : "-";
+
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category));
         }
+        return entries;
     }
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, null, null);
-        String title = "Gesamtwertung";
-        return generatePdf(title, entries, race);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, null);
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, RANKING_COLUMNS, "Gesamtwertung", entries, "Teilnehmer", true));
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, null);
-        String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
-        String title = "Wertung " + genderLabel;
-        return generatePdf(title, entries, race);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, null);
+        String title = "Wertung " + genderLabel(gender);
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
                                                  String ageGroup, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, gender, ageGroup);
-        String genderLabel = gender == Gender.MALE ? "Männer" : "Frauen";
-        String title = "Wertung " + ageGroup + " " + genderLabel;
-        return generatePdf(title, entries, race);
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null);
+        String title = "Wertung " + ageGroup + " " + genderLabel(gender);
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Participant> participants, Race race) throws IOException {
-
-        // Load age groups from database and sort by birthYearTo descending (youngest first)
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+        // Load age groups from the database, sorted by birthYearTo descending (youngest first)
+        List<String> uniqueAgeGroupNames = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
-                .toList();
-
-        // Get unique age group names in order
-        List<String> uniqueAgeGroupNames = ageGroups.stream()
                 .map(AgeGroup::name)
                 .distinct()
                 .toList();
 
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = null;
-            PDPageContentStream contentStream = null;
-            float yPosition = 0;
-            float margin = 50;
-
-            // Define fixed column positions for better alignment
-            float colPlatz = margin;
-            float colName = margin + 40;
-            float colAgeGroup = margin + 200;
-            float colTime = margin + 320;
-            float colDiff = margin + 420;
-
+        return renderDocument(race, false, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
-                // Male ranking for this age group
-                List<RankingEntry> maleEntries = createRankingEntriesFromParticipants(participants, Gender.MALE, ageGroupName);
-
-                if (!maleEntries.isEmpty()) {
-                    // Check if we need a new page
-                    if (page == null || yPosition < 100) {
-                        if (contentStream != null) {
-                            contentStream.close();
-                        }
-                        page = new PDPage(PDRectangle.A4);
-                        document.addPage(page);
-                        contentStream = new PDPageContentStream(document, page);
-                        
-                        // Draw header with race name and date
-                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
+                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                    List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null);
+                    if (!entries.isEmpty()) {
+                        String title = "Wertung " + ageGroupName + " " + genderLabel(gender);
+                        drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
                     }
-
-                    // Add some spacing between rankings
-                    yPosition -= 15;
-
-                    // Title without race name
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Wertung " + ageGroupName + " Männer");
-                    contentStream.endText();
-                    yPosition -= 25;
-
-                    // Table headers
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colPlatz, yPosition);
-                    contentStream.showText("Platz");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colName, yPosition);
-                    contentStream.showText("Name Vorname");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colAgeGroup, yPosition);
-                    contentStream.showText("Altersgruppe");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colTime, yPosition);
-                    contentStream.showText("Absolutzeit");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colDiff, yPosition);
-                    contentStream.showText("Diffzeit");
-                    contentStream.endText();
-
-                    // Draw header line
-                    yPosition -= 12;
-                    contentStream.moveTo(margin, yPosition);
-                    contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
-                    contentStream.stroke();
-
-                    // Table data
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-                    yPosition -= 14;
-
-                    for (RankingEntry entry : maleEntries) {
-                        if (yPosition < 50) {
-                            // Close current page and create new one
-                            contentStream.close();
-                            page = new PDPage(PDRectangle.A4);
-                            document.addPage(page);
-                            contentStream = new PDPageContentStream(document, page);
-                            
-                            // Draw header with race name and date
-                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-                            yPosition -= 10;
-                            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-                        }
-
-                        String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colPlatz, yPosition);
-                        contentStream.showText(String.valueOf(entry.place));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colName, yPosition);
-                        contentStream.showText(truncate(entry.name, 35));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colAgeGroup, yPosition);
-                        contentStream.showText(truncate(entry.ageGroup, 20));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colTime, yPosition);
-                        contentStream.showText(formatTime(entry.timeMs));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colDiff, yPosition);
-                        contentStream.showText(diffStr);
-                        contentStream.endText();
-
-                        yPosition -= 12;
-                    }
-
-                    // Summary
-                    yPosition -= 10;
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Gesamt: " + maleEntries.size() + " Teilnehmer");
-                    contentStream.endText();
-                    yPosition -= 15;
-                }
-
-                // Female ranking for this age group
-                List<RankingEntry> femaleEntries = createRankingEntriesFromParticipants(participants, Gender.FEMALE, ageGroupName);
-
-                if (!femaleEntries.isEmpty()) {
-                    // Check if we need a new page
-                    if (page == null || yPosition < 100) {
-                        if (contentStream != null) {
-                            contentStream.close();
-                        }
-                        page = new PDPage(PDRectangle.A4);
-                        document.addPage(page);
-                        contentStream = new PDPageContentStream(document, page);
-                        
-                        // Draw header with race name and date
-                        yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-                    }
-
-                    // Add some spacing between rankings
-                    yPosition -= 15;
-
-                    // Title without race name
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 11);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Wertung " + ageGroupName + " Frauen");
-                    contentStream.endText();
-                    yPosition -= 25;
-
-                    // Table headers
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colPlatz, yPosition);
-                    contentStream.showText("Platz");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colName, yPosition);
-                    contentStream.showText("Name Vorname");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colAgeGroup, yPosition);
-                    contentStream.showText("Altersgruppe");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colTime, yPosition);
-                    contentStream.showText("Absolutzeit");
-                    contentStream.endText();
-
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(colDiff, yPosition);
-                    contentStream.showText("Diffzeit");
-                    contentStream.endText();
-
-                    // Draw header line
-                    yPosition -= 12;
-                    contentStream.moveTo(margin, yPosition);
-                    contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
-                    contentStream.stroke();
-
-                    // Table data
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-                    yPosition -= 14;
-
-                    for (RankingEntry entry : femaleEntries) {
-                        if (yPosition < 50) {
-                            // Close current page and create new one
-                            contentStream.close();
-                            page = new PDPage(PDRectangle.A4);
-                            document.addPage(page);
-                            contentStream = new PDPageContentStream(document, page);
-                            
-                            // Draw header with race name and date
-                            yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-                            yPosition -= 10;
-                            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-                        }
-
-                        String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colPlatz, yPosition);
-                        contentStream.showText(String.valueOf(entry.place));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colName, yPosition);
-                        contentStream.showText(truncate(entry.name, 35));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colAgeGroup, yPosition);
-                        contentStream.showText(truncate(entry.ageGroup, 20));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colTime, yPosition);
-                        contentStream.showText(formatTime(entry.timeMs));
-                        contentStream.endText();
-
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(colDiff, yPosition);
-                        contentStream.showText(diffStr);
-                        contentStream.endText();
-
-                        yPosition -= 12;
-                    }
-
-                    // Summary
-                    yPosition -= 10;
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-                    contentStream.beginText();
-                    contentStream.newLineAtOffset(margin, yPosition);
-                    contentStream.showText("Gesamt: " + femaleEntries.size() + " Teilnehmer");
-                    contentStream.endText();
-                    yPosition -= 15;
                 }
             }
+        });
+    }
 
-            if (contentStream != null) {
-                contentStream.close();
+    public byte[] generateCategoryRanking(Iterable<Participant> participants, Long categoryId, Race race) throws IOException {
+        String categoryName = categoryService.findById(categoryId)
+                .map(Category::name)
+                .orElse("Unbekannt");
+        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, categoryId);
+        String title = "Wertung " + categoryName;
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
+    }
+
+    public byte[] generateOverallByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        List<Category> categories = sortedCategoriesWithNoCategory();
+
+        return renderDocument(race, false, ctx -> {
+            for (Category category : categories) {
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, category.id());
+                if (!entries.isEmpty()) {
+                    String title = "Wertung " + category.name();
+                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                }
             }
+        });
+    }
 
-            // Convert to byte array
+    public byte[] generateGenderByCategoryRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<Category> categories = sortedCategoriesWithNoCategory();
+
+        return renderDocument(race, false, ctx -> {
+            for (Category category : categories) {
+                List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, category.id());
+                if (!entries.isEmpty()) {
+                    String title = "Wertung " + category.name() + " " + genderLabel(gender);
+                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                }
+            }
+        });
+    }
+
+    public byte[] generateAllAgeGroupsByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        List<String> uniqueAgeGroupNames = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .map(AgeGroup::name)
+                .distinct()
+                .toList();
+        List<Category> categories = sortedCategoriesWithNoCategory();
+
+        return renderDocument(race, false, ctx -> {
+            for (String ageGroupName : uniqueAgeGroupNames) {
+                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                    for (Category category : categories) {
+                        List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id());
+                        if (!entries.isEmpty()) {
+                            String title = "Wertung " + ageGroupName + " " + genderLabel(gender) + " " + category.name();
+                            drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private List<Category> sortedCategories() {
+        return StreamSupport.stream(categoryService.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(Category::name))
+                .toList();
+    }
+
+    /**
+     * Sorted categories plus a synthetic "Ohne Kategorie" entry for participants
+     * without an assigned category, so they get their own section instead of being
+     * silently omitted from by-category PDF exports.
+     */
+    private List<Category> sortedCategoriesWithNoCategory() {
+        List<Category> categories = new ArrayList<>(sortedCategories());
+        categories.add(NO_CATEGORY);
+        return categories;
+    }
+
+    public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
+                new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
+                new PdfColumn<>("Paarung", 2.5f, e -> truncate(e.label(), 40)),
+                new PdfColumn<>("Zeit 1", 1f, e -> formatTime(e.time1Ms())),
+                new PdfColumn<>("Zeit 2", 1f, e -> formatTime(e.time2Ms())),
+                new PdfColumn<>("Ø-Zeit Paar", 1f, e -> formatTime(e.valueMs())),
+                new PdfColumn<>("Ø-Zeit Gesamt", 1f, e -> formatTime(e.referenceMs())),
+                new PdfColumn<>("Abweichung", 1f, e -> formatTime(e.diffMs()))
+        );
+        return renderDocument(race, true,
+                ctx -> drawSection(ctx, columns, title, entries, "Paare", true));
+    }
+
+    public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
+                new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
+                new PdfColumn<>("Mannschaft", 2.5f, e -> truncate(e.label(), 40)),
+                new PdfColumn<>("Gesamtzeit", 1f, e -> formatTime(e.valueMs()))
+        );
+        return renderDocument(race, false,
+                ctx -> drawSection(ctx, columns, title, entries, "Mannschaften", true));
+    }
+
+    /**
+     * Zeit-Kombination: one Zeit/Strafe column pair per referenced race plus a Gesamt/Rückstand
+     * column, analogous to an alpine combination result sheet. {@code headerRace} only supplies
+     * the PDF's header/info block (organisation, weather, ...); the ranking itself covers all
+     * {@code legRaces}.
+     */
+    public byte[] generateTimeCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                  List<Race> legRaces, Race headerRace) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
+        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
+        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
+        for (int i = 0; i < legRaces.size(); i++) {
+            int idx = i;
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 14);
+            columns.add(new PdfColumn<>(raceLabel + " Zeit", 1.1f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
+            columns.add(new PdfColumn<>(raceLabel + " Strafe", 0.9f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::penalty))));
+        }
+        columns.add(new PdfColumn<>("Gesamt", 1.2f, e -> formatTime(e.valueMs())));
+        columns.add(new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatTime(e.diffMs()) : "-"));
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+    }
+
+    /**
+     * Punkte-Mischwertung: one Wert/Platz/Punkte column group per referenced race plus a Gesamt
+     * (Punkte) column, analogous to the Kondiwettkampf-style result sheet.
+     */
+    public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                    List<Race> legRaces, Race headerRace) throws IOException {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
+        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
+        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
+        for (int i = 0; i < legRaces.size(); i++) {
+            int idx = i;
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 12);
+            columns.add(new PdfColumn<>(raceLabel + " Wert", 1.0f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
+            columns.add(new PdfColumn<>(raceLabel + " Platz", 0.6f, e -> legValueString(e, idx, GaudiRankingLegResponse::place)));
+            columns.add(new PdfColumn<>(raceLabel + " Pkt.", 0.7f, e -> legValueString(e, idx, GaudiRankingLegResponse::points)));
+        }
+        columns.add(new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-"));
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+    }
+
+    private Integer legValue(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
+        if (entry.legs() == null || idx >= entry.legs().size()) {
+            return null;
+        }
+        GaudiRankingLegResponse leg = entry.legs().get(idx);
+        return leg != null ? getter.apply(leg) : null;
+    }
+
+    private String legValueString(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
+        Integer value = legValue(entry, idx, getter);
+        return value != null ? String.valueOf(value) : "-";
+    }
+
+    // ---------------------------------------------------------------------
+    // Rendering infrastructure
+    // ---------------------------------------------------------------------
+
+    @FunctionalInterface
+    private interface PdfBody {
+        void write(PdfContext ctx) throws IOException;
+    }
+
+    /**
+     * Mutable render state for one PDF document: current page/content stream and the
+     * vertical cursor. Handles page breaks and draws the header (and, on the very
+     * first page, the race info block) whenever a new page is started.
+     */
+    private final class PdfContext {
+        private final PDDocument document;
+        private final Race race;
+        private final PDRectangle pageSize;
+        private PDPage page;
+        private PDPageContentStream stream;
+        private float y;
+        private boolean firstPage = true;
+
+        PdfContext(PDDocument document, Race race, PDRectangle pageSize) throws IOException {
+            this.document = document;
+            this.race = race;
+            this.pageSize = pageSize;
+            newPage();
+        }
+
+        void newPage() throws IOException {
+            if (stream != null) {
+                drawPageFooter(stream, page.getMediaBox().getWidth());
+                stream.close();
+            }
+            page = new PDPage(pageSize);
+            document.addPage(page);
+            stream = new PDPageContentStream(document, page);
+            y = drawPageHeader(stream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
+            if (firstPage) {
+                y = drawRaceInfoBlock(stream, race, y, page.getMediaBox().getWidth());
+                firstPage = false;
+            }
+        }
+
+        void ensureSpace(float needed) throws IOException {
+            if (y - needed < PAGE_BREAK_THRESHOLD) {
+                newPage();
+            }
+        }
+
+        void text(PDFont font, float size, float x, float y, String value) throws IOException {
+            drawText(stream, font, size, x, y, value);
+        }
+
+        void hLine(float y) throws IOException {
+            stream.moveTo(MARGIN, y);
+            stream.lineTo(page.getMediaBox().getWidth() - MARGIN, y);
+            stream.stroke();
+        }
+
+        void close() throws IOException {
+            drawPageFooter(stream, page.getMediaBox().getWidth());
+            stream.close();
+        }
+    }
+
+    private byte[] renderDocument(Race race, boolean landscape, PdfBody body) throws IOException {
+        PDRectangle pageSize = landscape
+                ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth())
+                : PDRectangle.A4;
+
+        try (PDDocument document = new PDDocument()) {
+            PdfContext ctx = new PdfContext(document, race, pageSize);
+            body.write(ctx);
+            ctx.close();
+
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             document.save(outputStream);
             return outputStream.toByteArray();
         }
     }
 
+    /**
+     * Draws a titled ranking table (title, column headers, rows and a summary line),
+     * breaking to new pages as needed. {@code mainTitle} selects the larger title
+     * style used for single-ranking PDFs vs. the smaller subtitle style used for
+     * the multi-section "all age groups" PDF.
+     */
+    private <T> void drawSection(PdfContext ctx, List<PdfColumn<T>> columns, String title,
+                                  List<T> entries, String unitLabel, boolean mainTitle) throws IOException {
+        ctx.ensureSpace(mainTitle ? 90 : 100);
+
+        ctx.y -= mainTitle ? 10 : 15;
+        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
+        ctx.y -= mainTitle ? 30 : 25;
+
+        float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
+        drawTableHeader(ctx, columns, colX);
+        drawRows(ctx, columns, colX, entries);
+
+        ctx.y -= 10;
+        ctx.ensureSpace(20);
+        ctx.text(FONT_BOLD, 8, MARGIN, ctx.y, "Gesamt: " + entries.size() + " " + unitLabel);
+        ctx.y -= 15;
+    }
+
+    private <T> float[] computeColumnX(List<PdfColumn<T>> columns, float pageWidth) {
+        float usableWidth = pageWidth - MARGIN * 2;
+        float totalWeight = (float) columns.stream().mapToDouble(PdfColumn::weight).sum();
+        float[] colX = new float[columns.size()];
+        float x = MARGIN;
+        for (int i = 0; i < columns.size(); i++) {
+            colX[i] = x;
+            x += usableWidth * columns.get(i).weight() / totalWeight;
+        }
+        return colX;
+    }
+
+    private <T> void drawTableHeader(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX) throws IOException {
+        for (int i = 0; i < columns.size(); i++) {
+            ctx.text(FONT_BOLD, 8, colX[i], ctx.y, columns.get(i).header());
+        }
+        ctx.y -= 12;
+        ctx.hLine(ctx.y);
+        ctx.y -= 14;
+    }
+
+    private <T> void drawRows(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries) throws IOException {
+        for (T entry : entries) {
+            if (ctx.y < PAGE_BREAK_THRESHOLD) {
+                ctx.newPage();
+                drawTableHeader(ctx, columns, colX);
+            }
+            for (int i = 0; i < columns.size(); i++) {
+                ctx.text(FONT_REGULAR, 8, colX[i], ctx.y, columns.get(i).valueFn().apply(entry));
+            }
+            ctx.y -= 12;
+        }
+    }
+
+    private record ParticipantWithPerson(Participant participant, Person person) {
+    }
+
     private List<RankingEntry> createRankingEntriesFromParticipants(Iterable<Participant> participants,
+                                                                     Race race,
                                                                      Gender filterGender,
-                                                                     String filterAgeGroup) {
-        // Filter participants: only those with durationMs not null
-        List<Participant> validParticipants = StreamSupport.stream(participants.spliterator(), false)
-                .filter(p -> p.durationMs() != null)
+                                                                     String filterAgeGroup,
+                                                                     Long filterCategoryId) {
+        // Only keep participants that have a measured result, resolving each one's Person once
+        List<ParticipantWithPerson> validParticipants = StreamSupport.stream(participants.spliterator(), false)
+                .filter(p -> rankingService.adjustedValue(race, p) != null)
+                .map(p -> new ParticipantWithPerson(p, personService.findById(p.personId()).orElse(null)))
                 .toList();
 
-        // Apply gender and age group filters
-        if (filterGender != null || filterAgeGroup != null) {
+        // Apply gender, age group and category filters
+        if (filterGender != null || filterAgeGroup != null || filterCategoryId != null) {
             validParticipants = validParticipants.stream()
-                    .filter(p -> {
-                        if (filterGender != null && p.gender() != filterGender) {
+                    .filter(pwp -> {
+                        Participant p = pwp.participant();
+                        Person person = pwp.person();
+
+                        if (filterGender != null && (person == null || person.gender() != filterGender)) {
                             return false;
                         }
 
                         if (filterAgeGroup != null) {
-                            String ageGroup = calculateAgeGroup(p.birthDate());
-                            return filterAgeGroup.equalsIgnoreCase(ageGroup);
+                            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+                            if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
+                                return false;
+                            }
+                        }
+
+                        if (filterCategoryId != null) {
+                            if (filterCategoryId == NO_CATEGORY_ID) {
+                                if (p.categoryId() != null) {
+                                    return false;
+                                }
+                            } else if (!filterCategoryId.equals(p.categoryId())) {
+                                return false;
+                            }
                         }
 
                         return true;
@@ -369,32 +514,43 @@ public class PdfExportService {
                     .toList();
         }
 
-        // Sort by time ascending (fastest first)
-        List<Participant> sortedParticipants = validParticipants.stream()
-                .sorted(Comparator.comparing(Participant::durationMs))
+        // Sort by the race's result (fastest/best first, respecting sort direction + penalty)
+        List<ParticipantWithPerson> sortedParticipants = validParticipants.stream()
+                .sorted(Comparator.comparing(pwp -> pwp.participant(), rankingService.comparator(race)))
                 .toList();
 
-        // Create ranking entries with place and time difference
+        // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
+        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.get(0).participant());
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
-            Participant p = sortedParticipants.get(i);
+            Participant p = sortedParticipants.get(i).participant();
+            Person person = sortedParticipants.get(i).person();
 
-            String name = formatName(p);
-            String ageGroup = calculateAgeGroup(p.birthDate());
-            Integer timeMs = p.durationMs();
-            Integer diffMs = (i > 0) ? timeMs - sortedParticipants.get(i - 1).durationMs() : null;
+            String name = formatName(person);
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+            Integer adjustedValue = rankingService.adjustedValue(race, p);
+            Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
 
-            entries.add(new RankingEntry(i + 1, name, ageGroup, timeMs, diffMs));
+            entries.add(new RankingEntry(
+                    i + 1,
+                    name,
+                    ageGroup,
+                    formatValue(race, p.durationMs()),
+                    formatValue(race, p.penalty()),
+                    formatValue(race, adjustedValue),
+                    diff != null ? "+" + formatValue(race, diff) : "-"
+            ));
         }
 
         return entries;
     }
 
-    private String formatName(Participant p) {
-        String firstName = p.firstName() != null ? p.firstName() : "";
-        String lastName = p.lastName() != null ? p.lastName() : "";
-        return (lastName + " " + firstName).trim();
+    private String formatName(Person person) {
+        if (person == null) {
+            return "Unbekannt";
+        }
+        return personService.displayName(person);
     }
 
     private String calculateAgeGroup(LocalDate birthDate) {
@@ -404,11 +560,9 @@ public class PdfExportService {
 
         int birthYear = birthDate.getYear();
 
-        // Load all age groups from database
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
                 .toList();
 
-        // Find matching age group
         for (AgeGroup ageGroup : ageGroups) {
             if (birthYear >= ageGroup.birthYearFrom() && birthYear <= ageGroup.birthYearTo()) {
                 return ageGroup.name();
@@ -418,7 +572,11 @@ public class PdfExportService {
         return "Unbekannt";
     }
 
-    private String formatTime(Integer timeMs) {
+    private String genderLabel(Gender gender) {
+        return gender == Gender.MALE ? "Männer" : "Frauen";
+    }
+
+    private static String formatTime(Integer timeMs) {
         if (timeMs == null) return "-";
 
         int totalSeconds = timeMs / 1000;
@@ -429,158 +587,43 @@ public class PdfExportService {
         return String.format("%d:%02d.%03d", minutes, seconds, millis);
     }
 
-    private byte[] generatePdf(String title, List<RankingEntry> entries, Race race) throws IOException {
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-
-            PDPageContentStream contentStream = new PDPageContentStream(document, page);
-
-            // Draw page header with race name and date
-            float yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-
-            // Title - smaller font
-            yPosition -= 10;
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 14);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(50, yPosition);
-            contentStream.showText(title);
-            contentStream.endText();
-
-            // Table headers
-            yPosition -= 30;
-            float margin = 50;
-
-            // Define fixed column positions for better alignment
-            float colPlatz = margin;
-            float colName = margin + 40;
-            float colAgeGroup = margin + 200;
-            float colTime = margin + 320;
-            float colDiff = margin + 420;
-
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colPlatz, yPosition);
-            contentStream.showText("Platz");
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colName, yPosition);
-            contentStream.showText("Name Vorname");
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colAgeGroup, yPosition);
-            contentStream.showText("Altersgruppe");
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colTime, yPosition);
-            contentStream.showText("Absolutzeit");
-            contentStream.endText();
-
-            contentStream.beginText();
-            contentStream.newLineAtOffset(colDiff, yPosition);
-            contentStream.showText("Diffzeit");
-            contentStream.endText();
-
-            // Draw header line
-            yPosition -= 12;
-            contentStream.moveTo(margin, yPosition);
-            contentStream.lineTo(page.getMediaBox().getWidth() - margin, yPosition);
-            contentStream.stroke();
-
-            // Table data - smaller font
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-            yPosition -= 14;
-
-            for (RankingEntry entry : entries) {
-                if (yPosition < 50) {
-                    // Close current page and create new one
-                    contentStream.close();
-                    page = new PDPage(PDRectangle.A4);
-                    document.addPage(page);
-                    contentStream = new PDPageContentStream(document, page);
-                    
-                    // Draw header on new page
-                    yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-                    yPosition -= 10;
-                    contentStream.setFont(new PDType1Font(FontName.HELVETICA), 8);
-                }
-
-                String diffStr = entry.diffMs != null ? ("+" + formatTime(entry.diffMs)) : "-";
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colPlatz, yPosition);
-                contentStream.showText(String.valueOf(entry.place));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colName, yPosition);
-                contentStream.showText(truncate(entry.name, 35));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colAgeGroup, yPosition);
-                contentStream.showText(truncate(entry.ageGroup, 20));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colTime, yPosition);
-                contentStream.showText(formatTime(entry.timeMs));
-                contentStream.endText();
-
-                contentStream.beginText();
-                contentStream.newLineAtOffset(colDiff, yPosition);
-                contentStream.showText(diffStr);
-                contentStream.endText();
-
-                yPosition -= 12;
-            }
-
-            // Summary at the bottom
-            yPosition -= 10;
-            if (yPosition < 50) {
-                contentStream.close();
-                page = new PDPage(PDRectangle.A4);
-                document.addPage(page);
-                contentStream = new PDPageContentStream(document, page);
-                
-                // Draw header on new page
-                yPosition = drawPageHeader(contentStream, race, page.getMediaBox().getWidth());
-                yPosition -= 10;
-            }
-
-            contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 8);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Gesamt: " + entries.size() + " Teilnehmer");
-            contentStream.endText();
-
-            contentStream.close();
-
-            // Convert to byte array
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            document.save(outputStream);
-            return outputStream.toByteArray();
+    /**
+     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SSS) or a
+     * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
+     */
+    private static String formatValue(Race race, Integer value) {
+        if (value == null) {
+            return "-";
         }
+        if (race.resultUnit() == ResultUnit.POINTS) {
+            String label = race.resultUnitLabel() != null && !race.resultUnitLabel().isBlank()
+                    ? " " + race.resultUnitLabel()
+                    : "";
+            return String.format("%.2f%s", value / 100.0, label);
+        }
+        return formatTime(value);
     }
 
-
-    private String truncate(String str, int maxLength) {
+    private static String truncate(String str, int maxLength) {
         if (str == null) return "";
         return str.length() > maxLength ? str.substring(0, maxLength - 3) + "..." : str;
     }
 
+    private static void drawText(PDPageContentStream stream, PDFont font, float size, float x, float y, String text) throws IOException {
+        stream.setFont(font, size);
+        stream.beginText();
+        stream.newLineAtOffset(x, y);
+        stream.showText(text);
+        stream.endText();
+    }
+
     /**
-     * Draws a header with the race name and date at the top of the page
+     * Draws a header with the race name and date at the top of the page.
      * @return the Y position after the header
      */
-    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth) throws IOException {
-        float margin = 50;
-        float headerY = 820;
-        
-        // Format the date as dd.MM.yyyy
+    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth, float pageHeight) throws IOException {
+        float headerY = pageHeight - 22;
+
         String formattedDate = "";
         if (race.date() != null) {
             formattedDate = String.format("%02d.%02d.%04d",
@@ -589,27 +632,94 @@ public class PdfExportService {
                 race.date().getYear());
         }
 
-        // Combine race name and date
         String headerText = race.name();
         if (!formattedDate.isEmpty()) {
             headerText += " - " + formattedDate;
         }
 
-        contentStream.setFont(new PDType1Font(FontName.HELVETICA_BOLD), 10);
-        contentStream.beginText();
-        contentStream.newLineAtOffset(margin, headerY);
-        contentStream.showText(headerText);
-        contentStream.endText();
-        
-        // Draw a line under the header
+        drawText(contentStream, FONT_BOLD, 10, MARGIN, headerY, headerText);
+
         float lineY = headerY - 5;
-        contentStream.moveTo(margin, lineY);
-        contentStream.lineTo(pageWidth - margin, lineY);
+        contentStream.moveTo(MARGIN, lineY);
+        contentStream.lineTo(pageWidth - MARGIN, lineY);
         contentStream.stroke();
-        
-        return lineY - 15; // Return position for content to start
+
+        return lineY - 15;
+    }
+
+    /**
+     * Draws the optional free-text race info fields (organisation, referee, ...) below
+     * the page header, as a two-column list. Only fields that are actually set are
+     * rendered; if none are set, nothing is drawn and the Y position is unchanged.
+     * Only called for the first page of a document, so it acts as a "cover sheet" block.
+     * @return the Y position after the block (unchanged if there was nothing to draw)
+     */
+    private float drawRaceInfoBlock(PDPageContentStream contentStream, Race race, float y, float pageWidth) throws IOException {
+        List<String[]> fields = raceInfoFields(race);
+        if (fields.isEmpty()) {
+            return y;
+        }
+
+        float fontSize = 9;
+        float lineHeight = 13;
+        float labelWidth = 90;
+        float colWidth = (pageWidth - MARGIN * 2) / 2;
+
+        y -= 8;
+        int rows = (fields.size() + 1) / 2;
+        for (int row = 0; row < rows; row++) {
+            float rowY = y - row * lineHeight;
+            for (int col = 0; col < 2; col++) {
+                int idx = row * 2 + col;
+                if (idx >= fields.size()) continue;
+                String[] field = fields.get(idx);
+                float x = MARGIN + col * colWidth;
+                drawText(contentStream, FONT_BOLD, fontSize, x, rowY, field[0] + ":");
+                drawText(contentStream, FONT_REGULAR, fontSize, x + labelWidth, rowY, truncate(field[1], 45));
+            }
+        }
+        y -= rows * lineHeight + 6;
+
+        contentStream.moveTo(MARGIN, y);
+        contentStream.lineTo(pageWidth - MARGIN, y);
+        contentStream.stroke();
+
+        return y - 12;
+    }
+
+    private static final String FOOTER_TEXT = "powered by Alpdesk TimeControl";
+
+    /**
+     * Draws the small marketing footer centered at the bottom of the page.
+     */
+    private void drawPageFooter(PDPageContentStream contentStream, float pageWidth) throws IOException {
+        float fontSize = 7;
+        float textWidth = FONT_REGULAR.getStringWidth(FOOTER_TEXT) / 1000 * fontSize;
+        float x = (pageWidth - textWidth) / 2;
+        drawText(contentStream, FONT_REGULAR, fontSize, x, 20, FOOTER_TEXT);
+    }
+
+    /**
+     * Labels are German because the generated PDFs are German-language race documents;
+     * the underlying Race fields stay in English like the rest of the codebase.
+     */
+    private List<String[]> raceInfoFields(Race race) {
+        List<String[]> fields = new ArrayList<>();
+        addIfPresent(fields, "Veranstalter", race.organisation());
+        addIfPresent(fields, "Schiedsrichter", race.referee());
+        addIfPresent(fields, "Rennleiter", race.raceDirector());
+        addIfPresent(fields, "Zeitnahme", race.timeControl());
+        addIfPresent(fields, "Streckenname", race.routeName());
+        addIfPresent(fields, "Höhendifferenz", race.elevationDifference());
+        addIfPresent(fields, "Streckenlänge", race.routeLength());
+        addIfPresent(fields, "Kurssetzer", race.courseSetter());
+        addIfPresent(fields, "Wetter", race.weather());
+        return fields;
+    }
+
+    private void addIfPresent(List<String[]> fields, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            fields.add(new String[]{label, value});
+        }
     }
 }
-
-
-

@@ -31,7 +31,9 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
+import {ParticipantCopyDialogComponent} from "./participant-copy-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-participant-list",
@@ -99,9 +101,65 @@ import {takeUntil, take} from "rxjs/operators";
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
-                    
-                    <button 
-                            mat-raised-button 
+
+                    @if ((selectedRaceId$ | async) !== null) {
+                        <button
+                                mat-raised-button
+                                (click)="assignRaceNumbers()"
+                                matTooltip="Startnummern innerhalb der Altersklassen zufällig zuweisen"
+                        >
+                            <mat-icon>shuffle</mat-icon>
+                            Startnummern zuweisen
+                        </button>
+
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                (click)="exportStartListPdf()"
+                                matTooltip="Startliste als PDF exportieren"
+                        >
+                            <mat-icon>picture_as_pdf</mat-icon>
+                            Startliste (PDF)
+                        </button>
+
+                        <button
+                                mat-raised-button
+                                (click)="fileInput.click()"
+                                [disabled]="importLoading$ | async"
+                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender, optional: ExternalId)"
+                        >
+                            @if (importLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>upload_file</mat-icon>
+                            }
+                            CSV Import
+                        </button>
+                        <input
+                                #fileInput
+                                type="file"
+                                accept=".csv,text/csv"
+                                hidden
+                                (change)="onCsvFileSelected($event)"
+                        />
+
+                        <button
+                                mat-raised-button
+                                (click)="openCopyDialog()"
+                                [disabled]="copyLoading$ | async"
+                                matTooltip="Alle Teilnehmer dieses Rennens in andere Rennen kopieren"
+                        >
+                            @if (copyLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>content_copy</mat-icon>
+                            }
+                            In andere Rennen kopieren
+                        </button>
+                    }
+
+                    <button
+                            mat-raised-button
                             color="accent"
                             [matMenuTriggerFor]="exportMenu"
                             [disabled]="pdfExportLoading$ | async"
@@ -121,24 +179,44 @@ import {takeUntil, take} from "rxjs/operators";
                             <mat-icon>groups</mat-icon>
                             <span>Gesamtwertung (Alle)</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportAllByCategoryPdf()">
+                            <mat-icon>category</mat-icon>
+                            <span>Gesamtwertung (Alle) nach Kategorie</span>
+                        </button>
+
                         <mat-divider></mat-divider>
-                        
+
                         <button mat-menu-item (click)="exportByGenderPdf('MALE')">
                             <mat-icon>male</mat-icon>
                             <span>Alle Herren</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('MALE')">
+                            <mat-icon>category</mat-icon>
+                            <span>Alle Herren nach Kategorie</span>
+                        </button>
+
                         <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
                             <mat-icon>female</mat-icon>
                             <span>Alle Damen</span>
                         </button>
-                        
+
+                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('FEMALE')">
+                            <mat-icon>category</mat-icon>
+                            <span>Alle Damen nach Kategorie</span>
+                        </button>
+
                         <mat-divider></mat-divider>
-                        
+
                         <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
                             <mat-icon>view_list</mat-icon>
                             <span>Nach Altersklassen aufgeteilt</span>
+                        </button>
+
+                        <button mat-menu-item (click)="exportAllAgeGroupsByCategoryPdf()">
+                            <mat-icon>category</mat-icon>
+                            <span>Nach Altersklassen aufgeteilt nach Kategorie</span>
                         </button>
                     </mat-menu>
                 </div>
@@ -149,6 +227,7 @@ import {takeUntil, take} from "rxjs/operators";
                     </div>
                 }
 
+                <div class="table-container">
                 <table
                         mat-table
                         [dataSource]="dataSource"
@@ -166,7 +245,7 @@ import {takeUntil, take} from "rxjs/operators";
                     <ng-container matColumnDef="firstName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.firstName }}
+                            {{ participant.person.firstName }}
                         </td>
                     </ng-container>
 
@@ -174,7 +253,7 @@ import {takeUntil, take} from "rxjs/operators";
                     <ng-container matColumnDef="lastName">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.lastName }}
+                            {{ participant.person.lastName }}
                         </td>
                     </ng-container>
 
@@ -184,7 +263,7 @@ import {takeUntil, take} from "rxjs/operators";
                             Geburtsdatum
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.birthDate | date: "dd.MM.yyyy" }}
+                            {{ participant.person.birthDate | date: "dd.MM.yyyy" }}
                         </td>
                     </ng-container>
 
@@ -194,7 +273,7 @@ import {takeUntil, take} from "rxjs/operators";
                             Geschlecht
                         </th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ getGenderLabel(participant.gender) }}
+                            {{ getGenderLabel(participant.person.gender) }}
                         </td>
                     </ng-container>
 
@@ -208,11 +287,19 @@ import {takeUntil, take} from "rxjs/operators";
                         </td>
                     </ng-container>
 
-                    <!-- Association Column -->
-                    <ng-container matColumnDef="association">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Verein</th>
+                    <!-- Team Column -->
+                    <ng-container matColumnDef="team">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Team</th>
                         <td mat-cell *matCellDef="let participant">
-                            {{ participant.association || "-" }}
+                            {{ participant.team?.name || "-" }}
+                        </td>
+                    </ng-container>
+
+                    <!-- Category Column -->
+                    <ng-container matColumnDef="category">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Kategorie</th>
+                        <td mat-cell *matCellDef="let participant">
+                            {{ participant.category?.name || "-" }}
                         </td>
                     </ng-container>
 
@@ -273,7 +360,8 @@ import {takeUntil, take} from "rxjs/operators";
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
-                
+                </div>
+
                 <div class="count-info" [class.hidden]="loading$ | async">
                     Anzahl der Teilnehmer: {{ dataSource.data.length }}
                 </div>
@@ -340,6 +428,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
@@ -347,6 +436,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
+    importLoading$: Observable<boolean>;
+    copyLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
         "firstName",
@@ -354,7 +445,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "birthDate",
         "gender",
         "raceNumber",
-        "association",
+        "team",
+        "category",
         "ageGroup",
         "race",
         "durationMs",
@@ -367,6 +459,21 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     sort = viewChild.required(MatSort);
 
     constructor() {
+        this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
+            switch (columnId) {
+                case "firstName":
+                    return participant.person?.firstName ?? "";
+                case "lastName":
+                    return participant.person?.lastName ?? "";
+                case "birthDate":
+                    return participant.person?.birthDate ?? "";
+                case "gender":
+                    return participant.person?.gender ?? "";
+                default:
+                    return (participant as any)[columnId];
+            }
+        };
+
         this.participants$ = this.store.select(
             ParticipantSelectors.selectFilteredParticipants,
         );
@@ -378,6 +485,64 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.pdfExportLoading$ = this.store.select(
             ParticipantSelectors.selectPdfExportLoading,
         );
+        this.importLoading$ = this.store.select(
+            ParticipantSelectors.selectImportLoading,
+        );
+        this.copyLoading$ = this.store.select(
+            ParticipantSelectors.selectCopyLoading,
+        );
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.createParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich erstellt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.createParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.updateParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.updateParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Teilnehmer erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantsByRaceIdSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Alle Teilnehmer des Rennens erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.deleteParticipantsByRaceIdFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der Teilnehmer: ${error}`, "OK", {duration: 5000});
+        });
 
         // Setup sort when signal changes
         effect(() => {
@@ -408,6 +573,40 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe((participants) => {
                 this.dataSource.data = participants;
+            });
+
+        this.store.select(ParticipantSelectors.selectImportResult)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (!result) {
+                    return;
+                }
+                this.snackBar.open(
+                    `CSV Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                    'OK',
+                    {duration: 5000},
+                );
+                const errors = result.errors ?? [];
+                if (errors.length > 0) {
+                    const details = errors
+                        .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
+                        .join('\n');
+                    alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+                }
+            });
+
+        this.store.select(ParticipantSelectors.selectCopyResult)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (!result) {
+                    return;
+                }
+                this.snackBar.open(
+                    `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen (bereits vorhanden)`,
+                    'OK',
+                    {duration: 5000},
+                );
+                this.store.dispatch(ParticipantActions.loadParticipants());
             });
     }
 
@@ -464,9 +663,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         ParticipantActions.createParticipant({participant: result}),
                     );
-                    this.snackBar.open("Teilnehmer erfolgreich erstellt", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -487,9 +683,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                             participant: result,
                         }),
                     );
-                    this.snackBar.open("Teilnehmer erfolgreich aktualisiert", "OK", {
-                        duration: 3000,
-                    });
                 }
             });
     }
@@ -497,15 +690,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     deleteParticipant(participant: Participant): void {
         if (
             confirm(
-                `Möchten Sie den Teilnehmer "${participant.firstName} ${participant.lastName}" wirklich löschen?`,
+                `Möchten Sie den Teilnehmer "${participant.person.firstName} ${participant.person.lastName}" wirklich löschen?`,
             )
         ) {
             this.store.dispatch(
                 ParticipantActions.deleteParticipant({id: participant.id}),
             );
-            this.snackBar.open("Teilnehmer erfolgreich gelöscht", "OK", {
-                duration: 3000,
-            });
         }
     }
 
@@ -524,9 +714,58 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(
                         ParticipantActions.deleteParticipantsByRaceId({raceId}),
                     );
-                    this.snackBar.open("Alle Teilnehmer des Rennens erfolgreich gelöscht", "OK", {
-                        duration: 3000,
+                }
+            });
+    }
+
+    onCsvFileSelected(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+
+        if (!file) {
+            return;
+        }
+
+        this.selectedRaceId$
+            .pipe(take(1))
+            .subscribe((raceId) => {
+                if (!raceId) {
+                    this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                        duration: 5000,
+                        panelClass: ['error-snackbar'],
                     });
+                    return;
+                }
+                this.store.dispatch(ParticipantActions.importParticipantsCsv({raceId, file}));
+                this.snackBar.open('CSV Import gestartet...', 'OK', {duration: 2000});
+            });
+    }
+
+    async openCopyDialog(): Promise<void> {
+        const sourceRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!sourceRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+
+        const dialogRef = this.dialog.open(ParticipantCopyDialogComponent, {
+            width: '450px',
+            data: {sourceRaceId, races},
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((targetRaceIds: number[] | undefined) => {
+                if (targetRaceIds && targetRaceIds.length > 0) {
+                    this.store.dispatch(ParticipantActions.copyParticipants({
+                        request: {sourceRaceId, targetRaceIds},
+                    }));
                 }
             });
     }
@@ -534,6 +773,43 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     refreshData(): void {
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.snackBar.open("Daten werden aktualisiert...", "OK", {
+            duration: 2000,
+        });
+    }
+
+    async assignRaceNumbers(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+
+        if (
+            confirm(
+                'Möchten Sie die Startnummern für dieses Rennen wirklich neu zuweisen? Bereits vergebene Startnummern werden überschrieben.',
+            )
+        ) {
+            this.store.dispatch(ParticipantActions.assignRaceNumbers({raceId}));
+            this.snackBar.open('Startnummern werden zugewiesen...', 'OK', {
+                duration: 2000,
+            });
+        }
+    }
+
+    async exportStartListPdf(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportStartListPdf({raceId}));
+        this.snackBar.open('PDF Export gestartet: Startliste', 'OK', {
             duration: 2000,
         });
     }
@@ -581,6 +857,52 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         }
         this.store.dispatch(ParticipantActions.exportAllAgeGroupsPdf({ raceId: selectedRaceId }));
         this.snackBar.open('PDF Export gestartet: Nach Altersklassen', 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportAllByCategoryPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllByCategoryPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Gesamtwertung nach Kategorie', 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportByGenderByCategoryPdf(gender: string): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportByGenderByCategoryPdf({ gender, raceId: selectedRaceId }));
+        const genderLabel = gender === 'MALE' ? 'Herren' : 'Damen';
+        this.snackBar.open(`PDF Export gestartet: Alle ${genderLabel} nach Kategorie`, 'OK', {
+            duration: 2000,
+        });
+    }
+
+    async exportAllAgeGroupsByCategoryPdf(): Promise<void> {
+        const selectedRaceId = await firstValueFrom(this.selectedRaceId$);
+        if (!selectedRaceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+        this.store.dispatch(ParticipantActions.exportAllAgeGroupsByCategoryPdf({ raceId: selectedRaceId }));
+        this.snackBar.open('PDF Export gestartet: Nach Altersklassen und Kategorie', 'OK', {
             duration: 2000,
         });
     }

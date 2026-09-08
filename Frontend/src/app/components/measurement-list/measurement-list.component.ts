@@ -4,16 +4,17 @@ import {
     OnDestroy,
     inject,
     ChangeDetectionStrategy,
+    viewChild,
+    ElementRef,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
+import {Observable, interval, Subject, EMPTY} from "rxjs";
 import {
-    map,
+    take,
     takeUntil,
     switchMap,
-    distinctUntilChanged,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -30,20 +31,13 @@ import {MatDividerModule} from "@angular/material/divider";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {Measurement} from "../../models/measurement.model";
-import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
-import * as ParticipantActions from "../../store/participant/participant.actions";
-import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
-
-interface MeasurementWithParticipant extends Measurement {
-    participantName?: string;
-}
 
 @Component({
     selector: "app-measurement-list",
@@ -130,20 +124,65 @@ interface MeasurementWithParticipant extends Measurement {
                         </button>
                     </div>
 
-                    <!-- Gruppe 2: Sync zu Teilnehmern -->
+                    <!-- Gruppe 2: Archivieren -->
                     <div class="button-group">
                         <button
                                 mat-raised-button
                                 color="accent"
-                                (click)="syncMeasurementsToParticipants()"
-                                matTooltip="Messungen mit Teilnehmern synchronisieren"
+                                [matMenuTriggerFor]="archiveMenu"
+                                matTooltip="Aktuelle Messungen für das gewählte Rennen archivieren und Messtabelle leeren"
                         >
-                            <mat-icon>sync</mat-icon>
-                            Sync zu Teilnehmern
+                            <mat-icon>archive</mat-icon>
+                            Archivieren
+                            <mat-icon>arrow_drop_down</mat-icon>
                         </button>
+
+                        <mat-menu #archiveMenu="matMenu">
+                            <button mat-menu-item (click)="archiveMeasurements(false, true)">
+                                <mat-icon>archive</mat-icon>
+                                <span>Archivieren (nur Datenbank)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="archiveMeasurements(true, true)">
+                                <mat-icon>archive</mat-icon>
+                                <span>Archivieren (inkl. Gerät-Reset)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="archiveMeasurements(false, false)">
+                                <mat-icon>content_copy</mat-icon>
+                                <span>Archivieren (ohne Löschen)</span>
+                            </button>
+                        </mat-menu>
                     </div>
 
-                    <!-- Gruppe 3: Kontinuierlich & Sturz -->
+                    <!-- Gruppe 3: Export & Import -->
+                    <div class="button-group">
+                        <button
+                                mat-raised-button
+                                (click)="exportMeasurements()"
+                                matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                        >
+                            <mat-icon>download</mat-icon>
+                            JSON Export
+                        </button>
+                        <button
+                                mat-raised-button
+                                (click)="triggerJsonImport()"
+                                matTooltip="Messungen aus JSON-Datei importieren"
+                        >
+                            <mat-icon>upload</mat-icon>
+                            JSON Import
+                        </button>
+                        <input
+                                #jsonImportInput
+                                type="file"
+                                accept=".json,application/json"
+                                style="display:none"
+                                (change)="onJsonFileSelected($event)"
+                        />
+                    </div>
+
+                    <!-- Gruppe 4: Kontinuierlich & Sturz -->
                     <div class="button-group">
                         @if ((deviceStatus$ | async) === 'continuous') {
                             <button
@@ -238,9 +277,10 @@ interface MeasurementWithParticipant extends Measurement {
                     </div>
                 }
 
+                <div class="table-container">
                 <table
                         mat-table
-                        [dataSource]="(measurementsWithParticipants$ | async) || []"
+                        [dataSource]="(measurements$ | async) || []"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                 >
@@ -248,14 +288,6 @@ interface MeasurementWithParticipant extends Measurement {
                     <ng-container matColumnDef="id">
                         <th mat-header-cell *matHeaderCellDef>ID</th>
                         <td mat-cell *matCellDef="let measurement">{{ measurement.id }}</td>
-                    </ng-container>
-
-                    <!-- Participant Column -->
-                    <ng-container matColumnDef="participant">
-                        <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
-                        <td mat-cell *matCellDef="let measurement">
-                            {{ measurement.participantName || "-" }}
-                        </td>
                     </ng-container>
 
                     <!-- Duration Column -->
@@ -299,9 +331,10 @@ interface MeasurementWithParticipant extends Measurement {
                     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
+                </div>
 
                 <div class="count-info">
-                    Anzahl der Messungen: {{ ((measurementsWithParticipants$ | async) || []).length }}
+                    Anzahl der Messungen: {{ ((measurements$ | async) || []).length }}
                 </div>
             </mat-card-content>
         </mat-card>
@@ -450,6 +483,55 @@ interface MeasurementWithParticipant extends Measurement {
             font-weight: 500;
             color: rgba(0, 0, 0, 0.87);
           }
+
+          @media (max-width: 768px) {
+            mat-card {
+              margin: 8px;
+            }
+
+            .title-row {
+              flex-wrap: wrap;
+              gap: 8px;
+            }
+
+            .header-actions {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 8px;
+            }
+
+            .button-group {
+              flex-wrap: wrap;
+              padding-right: 0;
+              border-right: none;
+              border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+              padding-bottom: 8px;
+            }
+
+            .button-group:last-child {
+              border-bottom: none;
+              padding-bottom: 0;
+            }
+
+            .reset-group {
+              margin-left: 0;
+            }
+
+            .button-group button {
+              flex: 1 1 auto;
+              min-width: 0;
+              font-size: 12px;
+            }
+
+            mat-form-field {
+              min-width: 100%;
+              width: 100%;
+            }
+
+            .measurement-table {
+              font-size: 12px;
+            }
+          }
         `,
     ],
 })
@@ -462,25 +544,24 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private autoRefresh$ = new Subject<boolean>();
 
     measurements$: Observable<Measurement[]>;
-    participants$: Observable<Participant[]>;
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
-    measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
-    displayedColumns = ["id", "participant", "duration", "measuredAt", "actions"];
+    displayedColumns = ["id", "duration", "measuredAt", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
     private lastResetDevice = false;
+    private lastArchiveResetDevice = false;
+    private lastArchiveClearAfterArchive = true;
+
+    jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
     constructor() {
         this.measurements$ = this.store.select(
             MeasurementSelectors.selectAllMeasurements,
-        );
-        this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
@@ -495,23 +576,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.deviceStatus$ = this.store.select(
             MeasurementSelectors.selectDeviceStatus,
-        );
-
-        this.measurementsWithParticipants$ = combineLatest([
-            this.measurements$,
-            this.participants$,
-        ]).pipe(
-            map(([measurements, participants]) =>
-                measurements.map((m) => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
-            ),
-            distinctUntilChanged(
-                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
-            ),
         );
 
         // Listen for successful reset and show success message
@@ -586,23 +650,27 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful sync to participants
+        // Listen for successful archive and show success message
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipantsSuccess),
+            ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('Messungen erfolgreich mit Teilnehmern synchronisiert', 'OK', {
+            const successMsg = !this.lastArchiveClearAfterArchive
+                ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
+                : this.lastArchiveResetDevice
+                    ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
+                    : 'Messungen archiviert. Bereit für das nächste Rennen.';
+            this.snackBar.open(successMsg, 'OK', {
                 duration: 3000,
             });
-            this.loadData();
         });
 
-        // Listen for failed sync to participants
+        // Listen for failed archive and show error message
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipantsFailure),
+            ofType(MeasurementActions.archiveMeasurementsFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Synchronisieren der Messungen', 'OK', {
+            this.snackBar.open('FEHLER beim Archivieren der Messungen', 'OK', {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
@@ -661,6 +729,45 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(() => {
             this.store.dispatch(MeasurementActions.loadDeviceStatus());
         });
+
+        // Listen for successful export
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurementsSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('Messungen erfolgreich exportiert', 'OK', {duration: 3000});
+        });
+
+        // Listen for failed export
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurementsFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Exportieren der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
+
+        // Listen for successful JSON import
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJsonSuccess),
+            takeUntil(this.destroy$)
+        ).subscribe(({count}) => {
+            this.snackBar.open(`${count} Messung(en) erfolgreich importiert`, 'OK', {duration: 3000});
+            this.loadData();
+        });
+
+        // Listen for failed JSON import
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJsonFailure),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.snackBar.open('FEHLER beim Importieren der Messungen', 'OK', {
+                duration: 10000,
+                panelClass: 'error-snackbar'
+            });
+        });
     }
 
     ngAfterViewInit(): void {
@@ -703,7 +810,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
-        this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(RaceActions.loadRaces());
         this.updateLastUpdateTime();
     }
@@ -711,16 +817,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private updateLastUpdateTime(): void {
         const now = new Date();
         this.lastUpdate = now.toLocaleTimeString("de-DE");
-    }
-
-    getParticipantName(
-        participantId: number,
-        participants: Participant[],
-    ): string {
-        const participant = participants.find((p) => p.id === participantId);
-        return participant
-            ? `${participant.firstName} ${participant.lastName}`
-            : "-";
     }
 
     formatDuration(ms: number): string {
@@ -830,10 +926,27 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(MeasurementActions.setScheduledImport({enable}));
     }
 
-    syncMeasurementsToParticipants(): void {
-        this.store.dispatch(MeasurementActions.syncMeasurementsToParticipants());
-        this.snackBar.open('Synchronisierung gestartet...', 'OK', {
-            duration: 2000,
+    archiveMeasurements(resetDevice: boolean, clearAfterArchive: boolean): void {
+        this.selectedRaceId$.pipe(take(1)).subscribe(raceId => {
+            if (!raceId) {
+                this.snackBar.open('Bitte zuerst ein Rennen im Filter auswählen', 'OK', {
+                    duration: 4000,
+                    panelClass: 'error-snackbar'
+                });
+                return;
+            }
+
+            const message = !clearAfterArchive
+                ? 'Möchten Sie die aktuellen Messungen für dieses Rennen archivieren? Datenbank und Gerät werden dabei NICHT verändert, das können Sie bei Bedarf später manuell erledigen.'
+                : resetDevice
+                    ? 'Möchten Sie die aktuellen Messungen wirklich archivieren und das Gerät zurücksetzen? Danach kann sofort das nächste Rennen gemessen werden.'
+                    : 'Möchten Sie die aktuellen Messungen wirklich archivieren (nur Datenbank)? Danach kann sofort das nächste Rennen gemessen werden.';
+
+            if (confirm(message)) {
+                this.lastArchiveResetDevice = resetDevice;
+                this.lastArchiveClearAfterArchive = clearAfterArchive;
+                this.store.dispatch(MeasurementActions.archiveMeasurements({raceId, resetDevice, clearAfterArchive}));
+            }
         });
     }
 
@@ -841,5 +954,36 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         if (confirm('Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.')) {
             this.store.dispatch(MeasurementActions.discardOldestStart());
         }
+    }
+
+    exportMeasurements(): void {
+        this.store.dispatch(MeasurementActions.exportMeasurements());
+    }
+
+    triggerJsonImport(): void {
+        this.jsonImportInput().nativeElement.value = '';
+        this.jsonImportInput().nativeElement.click();
+    }
+
+    onJsonFileSelected(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const content = e.target?.result as string;
+                const measurements = JSON.parse(content);
+                if (!Array.isArray(measurements)) {
+                    this.snackBar.open('Ungültiges JSON-Format: Array erwartet', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
+                    return;
+                }
+                this.store.dispatch(MeasurementActions.importMeasurementsFromJson({measurements}));
+            } catch {
+                this.snackBar.open('Fehler beim Lesen der JSON-Datei', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
+            }
+        };
+        reader.readAsText(file);
     }
 }

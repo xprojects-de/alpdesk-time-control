@@ -12,7 +12,7 @@ export const loadRacesSuccess = createAction(
 
 export const loadRacesFailure = createAction(
     '[Race] Load Races Failure',
-    props<{ error: any }>()
+    props<{ error: string }>()
 );
 
 export const createRace = createAction(
@@ -27,7 +27,7 @@ export const createRaceSuccess = createAction(
 
 export const createRaceFailure = createAction(
     '[Race] Create Race Failure',
-    props<{ error: any }>()
+    props<{ error: string }>()
 );
 
 export const updateRace = createAction(
@@ -42,7 +42,7 @@ export const updateRaceSuccess = createAction(
 
 export const updateRaceFailure = createAction(
     '[Race] Update Race Failure',
-    props<{ error: any }>()
+    props<{ error: string }>()
 );
 
 export const deleteRace = createAction(
@@ -57,7 +57,7 @@ export const deleteRaceSuccess = createAction(
 
 export const deleteRaceFailure = createAction(
     '[Race] Delete Race Failure',
-    props<{ error: any }>()
+    props<{ error: string }>()
 );
 
 export const selectRace = createAction(

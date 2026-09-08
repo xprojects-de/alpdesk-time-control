@@ -158,6 +158,24 @@ export const measurementReducer = createReducer(
         error
     })),
 
+    // Archive measurements
+    on(MeasurementActions.archiveMeasurements, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.archiveMeasurementsSuccess, (state, {clearAfterArchive}) => ({
+        ...state,
+        measurements: clearAfterArchive ? [] : state.measurements,
+        selectedMeasurementId: clearAfterArchive ? null : state.selectedMeasurementId,
+        loading: false
+    })),
+    on(MeasurementActions.archiveMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
     // Continuous mode
     on(MeasurementActions.setContinuousMode, state => ({
         ...state,
@@ -238,6 +256,38 @@ export const measurementReducer = createReducer(
         loading: false
     })),
     on(MeasurementActions.discardOldestStartFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Export measurements
+    on(MeasurementActions.exportMeasurements, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.exportMeasurementsSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(MeasurementActions.exportMeasurementsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Import measurements from JSON
+    on(MeasurementActions.importMeasurementsFromJson, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(MeasurementActions.importMeasurementsFromJsonSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(MeasurementActions.importMeasurementsFromJsonFailure, (state, {error}) => ({
         ...state,
         loading: false,
         error

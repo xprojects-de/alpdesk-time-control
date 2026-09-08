@@ -143,16 +143,17 @@ export const loadScheduledImportStatusFailure = createAction(
     props<{ error: string }>()
 );
 
-// Sync measurements to participants
-export const syncMeasurementsToParticipants = createAction(
-    '[Measurement] Sync Measurements To Participants'
+// Archive measurements into a race, optionally clearing the measurement table
+export const archiveMeasurements = createAction(
+    '[Measurement] Archive Measurements',
+    props<{ raceId: number; resetDevice: boolean; clearAfterArchive: boolean }>()
 );
-export const syncMeasurementsToParticipantsSuccess = createAction(
-    '[Measurement] Sync Measurements To Participants Success',
-    props<{ message: string }>()
+export const archiveMeasurementsSuccess = createAction(
+    '[Measurement] Archive Measurements Success',
+    props<{ clearAfterArchive: boolean }>()
 );
-export const syncMeasurementsToParticipantsFailure = createAction(
-    '[Measurement] Sync Measurements To Participants Failure',
+export const archiveMeasurementsFailure = createAction(
+    '[Measurement] Archive Measurements Failure',
     props<{ error: string }>()
 );
 
@@ -179,6 +180,32 @@ export const discardOldestStartSuccess = createAction(
 );
 export const discardOldestStartFailure = createAction(
     '[Measurement] Discard Oldest Start Failure',
+    props<{ error: string }>()
+);
+
+// Export measurements as JSON
+export const exportMeasurements = createAction(
+    '[Measurement] Export Measurements'
+);
+export const exportMeasurementsSuccess = createAction(
+    '[Measurement] Export Measurements Success'
+);
+export const exportMeasurementsFailure = createAction(
+    '[Measurement] Export Measurements Failure',
+    props<{ error: string }>()
+);
+
+// Import measurements from JSON
+export const importMeasurementsFromJson = createAction(
+    '[Measurement] Import Measurements From Json',
+    props<{ measurements: { participantId: number | null; durationMs: number; measuredAt: string }[] }>()
+);
+export const importMeasurementsFromJsonSuccess = createAction(
+    '[Measurement] Import Measurements From Json Success',
+    props<{ count: number }>()
+);
+export const importMeasurementsFromJsonFailure = createAction(
+    '[Measurement] Import Measurements From Json Failure',
     props<{ error: string }>()
 );
 

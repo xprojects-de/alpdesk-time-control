@@ -39,6 +39,12 @@ body {
 
 /* You can add global styles to this file, and also import other style files */
 
+/* Responsive scroll wrapper for wide tables (mat-table etc.) */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
 /* Error Snackbar Styling */
 .error-snackbar {
   --mdc-snackbar-container-color: #f44336 !important;

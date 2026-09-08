@@ -1,8 +1,11 @@
 package x.timecontrol.dto;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.SortDirection;
 
 import java.time.LocalDate;
 
@@ -16,14 +19,62 @@ public record RaceResponse(
         String name,
 
         @Schema(description = "Date of the race", example = "2026-01-15")
-        LocalDate date
+        LocalDate date,
+
+        @Schema(description = "Organisation hosting the race", example = "Skiclub Musterhausen")
+        String organisation,
+
+        @Schema(description = "Referee of the race", example = "Max Mustermann")
+        String referee,
+
+        @Schema(description = "Race director", example = "Erika Musterfrau")
+        String raceDirector,
+
+        @Schema(description = "Timing provider/company", example = "TimeControl GmbH")
+        String timeControl,
+
+        @Schema(description = "Name of the race route", example = "Talabfahrt")
+        String routeName,
+
+        @Schema(description = "Elevation difference of the route", example = "350 m")
+        String elevationDifference,
+
+        @Schema(description = "Length of the route", example = "1200 m")
+        String routeLength,
+
+        @Schema(description = "Course setter", example = "Hans Kurssetzer")
+        String courseSetter,
+
+        @Schema(description = "Weather on race day", example = "Sunny, -3°C")
+        String weather,
+
+        @Schema(description = "Unit of the recorded result", example = "TIME")
+        ResultUnit resultUnit,
+
+        @Nullable
+        @Schema(description = "Display label for the result unit, only relevant when resultUnit is POINTS", example = "m", nullable = true)
+        String resultUnitLabel,
+
+        @Schema(description = "Whether a lower (ASC) or higher (DESC) result is better", example = "ASC")
+        SortDirection sortDirection
 ) {
     public static RaceResponse from(Race race) {
         return new RaceResponse(
                 race.id(),
                 race.name(),
-                race.date()
+                race.date(),
+                race.organisation(),
+                race.referee(),
+                race.raceDirector(),
+                race.timeControl(),
+                race.routeName(),
+                race.elevationDifference(),
+                race.routeLength(),
+                race.courseSetter(),
+                race.weather(),
+                race.resultUnit(),
+                race.resultUnitLabel(),
+                race.sortDirection()
         );
     }
 }
-

@@ -159,17 +159,25 @@ export class MeasurementEffects {
         )
     );
 
-    syncMeasurementsToParticipants$ = createEffect(() =>
+    archiveMeasurements$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(MeasurementActions.syncMeasurementsToParticipants),
-            mergeMap(() =>
-                this.measurementService.syncMeasurementsToParticipants().pipe(
-                    map(message => MeasurementActions.syncMeasurementsToParticipantsSuccess({message})),
-                    catchError(error => of(MeasurementActions.syncMeasurementsToParticipantsFailure({
-                        error: error.message || 'Failed to sync measurements to participants'
+            ofType(MeasurementActions.archiveMeasurements),
+            mergeMap(({raceId, resetDevice, clearAfterArchive}) =>
+                this.measurementService.archive(raceId, resetDevice, clearAfterArchive).pipe(
+                    map(() => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive})),
+                    catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
+                        error: error.message || 'Failed to archive measurements'
                     })))
                 )
             )
+        )
+    );
+
+    // Reload measurements after successful archive
+    reloadAfterArchive$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.archiveMeasurementsSuccess),
+            map(() => MeasurementActions.loadMeasurements())
         )
     );
 
@@ -195,6 +203,42 @@ export class MeasurementEffects {
                     map(message => MeasurementActions.discardOldestStartSuccess({message})),
                     catchError(error => of(MeasurementActions.discardOldestStartFailure({
                         error: error.message || 'Failed to discard oldest start'
+                    })))
+                )
+            )
+        )
+    );
+
+    exportMeasurements$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurements),
+            mergeMap(() =>
+                this.measurementService.exportMeasurements().pipe(
+                    map(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'measurements.json';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        return MeasurementActions.exportMeasurementsSuccess();
+                    }),
+                    catchError(error => of(MeasurementActions.exportMeasurementsFailure({
+                        error: error.message || 'Export fehlgeschlagen'
+                    })))
+                )
+            )
+        )
+    );
+
+    importMeasurementsFromJson$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.importMeasurementsFromJson),
+            mergeMap(({measurements}) =>
+                this.measurementService.importMeasurementsFromJson(measurements).pipe(
+                    map(created => MeasurementActions.importMeasurementsFromJsonSuccess({count: created.length})),
+                    catchError(error => of(MeasurementActions.importMeasurementsFromJsonFailure({
+                        error: error.message || 'Import fehlgeschlagen'
                     })))
                 )
             )

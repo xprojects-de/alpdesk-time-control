@@ -52,6 +52,7 @@ public class MeasurementService {
 
     public void deleteAll() {
         repository.deleteAll();
+        repository.resetSequence();
     }
 
     public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {

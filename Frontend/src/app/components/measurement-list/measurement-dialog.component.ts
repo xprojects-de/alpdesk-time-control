@@ -1,8 +1,6 @@
 import {
     Component,
-    AfterViewInit,
     inject,
-    OnDestroy,
     ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
@@ -20,21 +18,10 @@ import {
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
-import {MatSelectModule} from "@angular/material/select";
-import {
-    MatAutocompleteModule,
-    MatAutocompleteSelectedEvent,
-} from "@angular/material/autocomplete";
-import {Store} from "@ngrx/store";
-import {Observable, map, startWith, combineLatest, Subject} from "rxjs";
 import {
     Measurement,
     MeasurementRequest,
 } from "../../models/measurement.model";
-import {Participant} from "../../models/participant.model";
-import * as ParticipantSelectors from "../../store/participant/participant.selectors";
-import * as ParticipantActions from "../../store/participant/participant.actions";
-import {take, takeUntil} from "rxjs/operators";
 
 @Component({
     selector: "app-measurement-dialog",
@@ -46,39 +33,11 @@ import {take, takeUntil} from "rxjs/operators";
         MatFormFieldModule,
         MatInputModule,
         MatButtonModule,
-        MatSelectModule,
-        MatAutocompleteModule,
     ],
     template: `
         <h2 mat-dialog-title>{{ data ? "Messung bearbeiten" : "Neue Messung" }}</h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="measurement-form">
-                <mat-form-field appearance="outline">
-                    <mat-label>Teilnehmer</mat-label>
-                    <input
-                            type="text"
-                            matInput
-                            formControlName="participantSearch"
-                            [matAutocomplete]="auto"
-                            placeholder="Suche nach Name oder Startnummer"
-                    />
-                    <mat-autocomplete
-                            #auto="matAutocomplete"
-                            [displayWith]="displayParticipant.bind(this)"
-                            (optionSelected)="onParticipantSelected($event)"
-                    >
-                        <mat-option [value]="null">Kein Teilnehmer</mat-option>
-                        @for (participant of filteredParticipants$ | async;
-                                track participant.id) {
-                            <mat-option [value]="participant">
-                                {{ participant.firstName }} {{ participant.lastName }} ({{
-                                    participant.raceNumber
-                                }})
-                            </mat-option>
-                        }
-                    </mat-autocomplete>
-                </mat-form-field>
-
                 <div class="time-input-group">
                     <mat-form-field appearance="outline">
                         <mat-label>Minuten</mat-label>
@@ -123,6 +82,7 @@ import {take, takeUntil} from "rxjs/operators";
                             matInput
                             type="datetime-local"
                             formControlName="measuredAt"
+                            step="1"
                             required
                     />
                     @if (form.get("measuredAt")?.hasError("required") &&
@@ -171,45 +131,17 @@ import {take, takeUntil} from "rxjs/operators";
          `,
      ],
 })
-export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
+export class MeasurementDialogComponent {
     private fb = inject(FormBuilder);
-    private store = inject(Store);
     private dialogRef = inject(MatDialogRef<MeasurementDialogComponent>);
     public data = inject<Measurement | null>(MAT_DIALOG_DATA);
-    private destroy$ = new Subject<void>();
 
     form: FormGroup;
-    participants$: Observable<Participant[]>;
-    filteredParticipants$: Observable<Participant[]>;
-    selectedParticipant: Participant | null = null;
 
     constructor() {
-        this.participants$ = this.store.select(
-            ParticipantSelectors.selectFilteredParticipants,
-        );
-
-        if (this.data?.participantId) {
-            setTimeout(() => {
-                this.participants$.pipe(
-                    take(1),
-                    takeUntil(this.destroy$)
-                ).subscribe((participants) => {
-                    this.selectedParticipant =
-                        participants.find((p) => p.id === this.data!.participantId) || null;
-                    if (this.selectedParticipant) {
-                        this.form.patchValue({
-                            participantSearch: this.selectedParticipant,
-                        }, { emitEvent: false });
-                    }
-                });
-            }, 0);
-        }
-
         const timeComponents = this.splitMilliseconds(this.data?.durationMs || 0);
 
         this.form = this.fb.group({
-            participantId: [this.data?.participantId || null],
-            participantSearch: [""],
             minutes: [timeComponents.minutes, [Validators.required, Validators.min(0)]],
             seconds: [timeComponents.seconds, [Validators.required, Validators.min(0), Validators.max(59)]],
             milliseconds: [timeComponents.milliseconds, [Validators.required, Validators.min(0), Validators.max(999)]],
@@ -218,29 +150,6 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
                 Validators.required,
             ],
         });
-
-        this.filteredParticipants$ = combineLatest([
-            this.participants$,
-            this.form
-                .get("participantSearch")!
-                .valueChanges.pipe(startWith("")),
-        ]).pipe(
-            map(([participants, searchValue]) => {
-                const searchTerm = typeof searchValue === "string" ? searchValue : "";
-                return this.filterParticipants(participants, searchTerm);
-            }),
-        );
-    }
-
-    ngAfterViewInit(): void {
-        setTimeout(() => {
-            this.store.dispatch(ParticipantActions.loadParticipants());
-        }, 0);
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     onCancel(): void {
@@ -257,47 +166,11 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
             );
 
             const measurement: MeasurementRequest = {
-                participantId: formValue.participantId || undefined,
                 durationMs: durationMs,
                 measuredAt: this.formatDateTimeForBackend(formValue.measuredAt),
             };
             this.dialogRef.close(measurement);
         }
-    }
-
-    onParticipantSelected(event: MatAutocompleteSelectedEvent): void {
-        const participant = event.option.value;
-        this.selectedParticipant = participant;
-        this.form.patchValue({
-            participantId: participant ? participant.id : null,
-        });
-    }
-
-    displayParticipant(participant: Participant | null): string {
-        if (!participant) {
-            return "";
-        }
-        return `${participant.firstName} ${participant.lastName} (${participant.raceNumber})`;
-    }
-
-    private filterParticipants(
-        participants: Participant[],
-        searchTerm: string,
-    ): Participant[] {
-        if (!searchTerm || searchTerm.trim() === "") {
-            return participants;
-        }
-
-        const lowerSearchTerm = searchTerm.toLowerCase();
-        return participants.filter((participant) => {
-            const fullName =
-                `${participant.firstName} ${participant.lastName}`.toLowerCase();
-            const raceNumber = participant.raceNumber.toString();
-            return (
-                fullName.includes(lowerSearchTerm) ||
-                raceNumber.includes(lowerSearchTerm)
-            );
-        });
     }
 
     private formatDateTimeForInput(dateTime?: string): string {
@@ -315,7 +188,8 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
         const day = String(date.getDate()).padStart(2, "0");
         const hours = String(date.getHours()).padStart(2, "0");
         const minutes = String(date.getMinutes()).padStart(2, "0");
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
     }
 
     private formatDateTimeForBackend(dateTime: string): string {
@@ -338,7 +212,7 @@ export class MeasurementDialogComponent implements AfterViewInit, OnDestroy {
         const remainingAfterMinutes = totalMs % (60 * 1000);
         const seconds = Math.floor(remainingAfterMinutes / 1000);
         const milliseconds = remainingAfterMinutes % 1000;
-        
+
         return { minutes, seconds, milliseconds };
     }
 }

@@ -45,6 +45,13 @@ export class MeasurementService {
         });
     }
 
+    archive(raceId: number, resetDevice: boolean, clearAfterArchive: boolean): Observable<string> {
+        return this.http.post(`${environment.apiUrl}/races/${raceId}/archive-measurements`, null, {
+            params: { resetDevice: resetDevice.toString(), clearAfterArchive: clearAfterArchive.toString() },
+            responseType: 'text'
+        });
+    }
+
     setContinuousMode(enable: boolean): Observable<string> {
         return this.http.put(`${this.apiUrl}/continuous-mode`, null, {
             params: { enable: enable.toString() },
@@ -63,12 +70,6 @@ export class MeasurementService {
         return this.http.get<boolean>(`${this.apiUrl}/scheduled-import/status`);
     }
 
-    syncMeasurementsToParticipants(): Observable<string> {
-        return this.http.post(`${this.apiUrl}/sync-to-participants`, null, {
-            responseType: 'text'
-        });
-    }
-
     getDeviceStatus(): Observable<string> {
         return this.http.get(`${this.apiUrl}/device-status`, {
             responseType: 'text'
@@ -79,6 +80,14 @@ export class MeasurementService {
         return this.http.post(`${this.apiUrl}/discard`, null, {
             responseType: 'text'
         });
+    }
+
+    exportMeasurements(): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export`, {responseType: 'blob'});
+    }
+
+    importMeasurementsFromJson(measurements: { participantId: number | null; durationMs: number; measuredAt: string }[]): Observable<Measurement[]> {
+        return this.http.post<Measurement[]>(`${this.apiUrl}/import-json`, measurements);
     }
 
     checkDeviceConnection(): Observable<boolean> {
