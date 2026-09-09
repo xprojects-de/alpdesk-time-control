@@ -6,8 +6,10 @@ import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Team;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
+import x.timecontrol.services.TeamService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,10 +26,12 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
 
     private final RankingService rankingService;
     private final PersonService personService;
+    private final TeamService teamService;
 
-    public TimeCombinationModeCalculator(RankingService rankingService, PersonService personService) {
+    public TimeCombinationModeCalculator(RankingService rankingService, PersonService personService, TeamService teamService) {
         this.rankingService = rankingService;
         this.personService = personService;
+        this.teamService = teamService;
     }
 
     @Override
@@ -44,7 +48,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
 
-        record PersonResult(String label, int totalMs, List<GaudiRankingLegResponse> legs) {
+        record PersonResult(String label, int totalMs, List<GaudiRankingLegResponse> legs, String team) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -79,7 +83,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             }
 
             String label = personService.findById(personId).map(personService::displayName).orElse("Unbekannt");
-            results.add(new PersonResult(label, total, legs));
+            String team = teamOf(races, byRace);
+            results.add(new PersonResult(label, total, legs, team));
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalMs));
@@ -98,10 +103,29 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     leaderMs,
                     r.totalMs() == leaderMs ? null : r.totalMs() - leaderMs,
                     null,
-                    r.legs()
+                    r.legs(),
+                    r.team()
             ));
         }
 
         return entries;
+    }
+
+    /**
+     * A person's team is expected to stay the same across the referenced races; picks the first
+     * race (in the given order) where the person has a resolvable team, rather than requiring it
+     * to be repeated identically on every leg.
+     */
+    private String teamOf(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+        for (RaceParticipants race : races) {
+            Participant p = byRace.get(race.raceId());
+            if (p != null && p.teamId() != null) {
+                String name = teamService.findById(p.teamId()).map(Team::name).orElse(null);
+                if (name != null) {
+                    return name;
+                }
+            }
+        }
+        return null;
     }
 }

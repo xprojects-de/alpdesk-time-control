@@ -217,11 +217,12 @@ public class ParticipantService {
 
     /**
      * Copies every participant of {@code sourceRaceId} into each of {@code targetRaceIds}, carrying
-     * over personId/teamId/categoryId but leaving raceNumber/durationMs/penalty/measuredAt empty
-     * (each race measures its own result). A person already present in a target race is skipped
-     * rather than duplicated.
+     * over personId/teamId/categoryId but leaving durationMs/penalty/measuredAt empty (each race
+     * measures its own result). raceNumber is carried over only if {@code carryStartNumber} is true
+     * and the number isn't already taken in the target race (to avoid duplicate start numbers); it is
+     * left empty otherwise. A person already present in a target race is skipped rather than duplicated.
      */
-    public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds) {
+    public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds, boolean carryStartNumber) {
         // Now that PRAGMA foreign_keys=ON is enabled, saving a participant for a race that doesn't
         // exist would otherwise throw a raw FK-constraint exception straight out of repository.save()
         // instead of a clean, caught error.
@@ -241,9 +242,15 @@ public class ParticipantService {
         int copied = 0;
         int skipped = 0;
         for (Long targetRaceId : targetRaceIds) {
-            Set<Long> existingPersonIds = StreamSupport
+            List<Participant> targetParticipants = StreamSupport
                     .stream(repository.findByRaceId(targetRaceId).spliterator(), false)
+                    .toList();
+            Set<Long> existingPersonIds = targetParticipants.stream()
                     .map(Participant::personId)
+                    .collect(Collectors.toSet());
+            Set<Integer> existingRaceNumbers = targetParticipants.stream()
+                    .map(Participant::raceNumber)
+                    .filter(java.util.Objects::nonNull)
                     .collect(Collectors.toSet());
 
             for (Participant source : sourceParticipants) {
@@ -251,7 +258,12 @@ public class ParticipantService {
                     skipped++;
                     continue;
                 }
-                Participant copy = new Participant(null, targetRaceId, source.personId(), null,
+                Integer raceNumber = null;
+                if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
+                    raceNumber = source.raceNumber();
+                    existingRaceNumbers.add(raceNumber);
+                }
+                Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
                         source.teamId(), source.categoryId(), null, null, null);
                 repository.save(copy);
                 existingPersonIds.add(source.personId());

@@ -56,7 +56,7 @@ public class PdfExportService {
         this.rankingService = rankingService;
     }
 
-    private record RankingEntry(int place, String name, String ageGroup, String valueFormatted,
+    private record RankingEntry(int place, String name, String ageGroup, String team, String valueFormatted,
                                  String penaltyFormatted, String totalFormatted, String diffFormatted) {
     }
 
@@ -69,8 +69,9 @@ public class PdfExportService {
 
     private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
-            new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.name(), 35)),
-            new PdfColumn<>("Altersgruppe", 1.4f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
+            new PdfColumn<>("Altersgruppe", 1.2f, e -> truncate(e.ageGroup(), 16)),
+            new PdfColumn<>("Team", 1.3f, e -> truncate(e.team(), 18)),
             new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
             new PdfColumn<>("Strafe", 0.9f, RankingEntry::penaltyFormatted),
             new PdfColumn<>("Gesamt", 1.1f, RankingEntry::totalFormatted),
@@ -245,7 +246,8 @@ public class PdfExportService {
     public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Paarung", 2.5f, e -> truncate(e.label(), 40)),
+                new PdfColumn<>("Paarung", 2.2f, e -> truncate(e.label(), 40)),
+                new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
                 new PdfColumn<>("Wert 1", 1f, e -> formatValue(race, e.time1Ms())),
                 new PdfColumn<>("Wert 2", 1f, e -> formatValue(race, e.time2Ms())),
                 new PdfColumn<>("Ø-Wert Paar", 1f, e -> formatValue(race, e.valueMs())),
@@ -267,53 +269,72 @@ public class PdfExportService {
     }
 
     /**
-     * Zeit-Kombination: one Zeit/Strafe column pair per referenced race plus a Gesamt/Rückstand
-     * column, analogous to an alpine combination result sheet. {@code headerRace} only supplies
-     * the PDF's header/info block (organisation, weather, ...); the ranking itself covers all
-     * {@code legRaces}.
+     * Zeit-Kombination: a fixed summary row (Platz, Name, Team, Gesamt, Rückstand) per participant,
+     * with the per-race Zeit/Strafe breakdown drawn as wrapped detail line(s) below it instead of
+     * one column pair per race - with many referenced races, ever-growing side-by-side columns
+     * become unreadably narrow, so the breakdown grows vertically instead. {@code headerRace} only
+     * supplies the PDF's header/info block (organisation, weather, ...); the ranking itself covers
+     * all {@code legRaces}.
      */
     public byte[] generateTimeCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                   List<Race> legRaces, Race headerRace) throws IOException {
-        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
-        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
-        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
-        for (int i = 0; i < legRaces.size(); i++) {
-            int idx = i;
-            Race legRace = legRaces.get(i);
-            String raceLabel = truncate(legRace.name(), 14);
-            columns.add(new PdfColumn<>(raceLabel + " Zeit", 1.1f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
-            columns.add(new PdfColumn<>(raceLabel + " Strafe", 0.9f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::penalty))));
-        }
-        // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
-        // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
-        columns.add(new PdfColumn<>("Gesamt", 1.2f, e -> formatValue(headerRace, e.valueMs())));
-        columns.add(new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-"));
+        List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = List.of(
+                new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
+                new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.label(), 32)),
+                new PdfColumn<>("Team", 1.6f, e -> truncate(e.team(), 20)),
+                // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
+                // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
+                new PdfColumn<>("Gesamt", 1.2f, e -> formatValue(headerRace, e.valueMs())),
+                new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-")
+        );
 
         return renderDocument(headerRace, true,
-                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+                ctx -> drawSectionWithDetails(ctx, summaryColumns, title, entries, "Teilnehmer", true,
+                        e -> timeCombinationDetailBlocks(e, legRaces)));
+    }
+
+    private List<String> timeCombinationDetailBlocks(GaudiRankingEntryResponse entry, List<Race> legRaces) {
+        List<String> blocks = new ArrayList<>();
+        for (int i = 0; i < legRaces.size(); i++) {
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 16);
+            String zeit = formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+            String strafe = formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
+            blocks.add(raceLabel + ": Zeit " + zeit + ", Strafe " + strafe);
+        }
+        return blocks;
     }
 
     /**
-     * Punkte-Mischwertung: one Wert/Platz/Punkte column group per referenced race plus a Gesamt
-     * (Punkte) column, analogous to the Kondiwettkampf-style result sheet.
+     * Punkte-Mischwertung: a fixed summary row (Platz, Name, Team, Gesamt) per participant, with the
+     * per-race Wert/Platz/Pkt. breakdown drawn as wrapped detail line(s) below it instead of one
+     * column group per race - see {@link #generateTimeCombinationRanking} for why.
      */
     public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace) throws IOException {
-        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>();
-        columns.add(new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())));
-        columns.add(new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.label(), 30)));
-        for (int i = 0; i < legRaces.size(); i++) {
-            int idx = i;
-            Race legRace = legRaces.get(i);
-            String raceLabel = truncate(legRace.name(), 12);
-            columns.add(new PdfColumn<>(raceLabel + " Wert", 1.0f, e -> formatValue(legRace, legValue(e, idx, GaudiRankingLegResponse::rawValue))));
-            columns.add(new PdfColumn<>(raceLabel + " Platz", 0.6f, e -> legValueString(e, idx, GaudiRankingLegResponse::place)));
-            columns.add(new PdfColumn<>(raceLabel + " Pkt.", 0.7f, e -> legValueString(e, idx, GaudiRankingLegResponse::points)));
-        }
-        columns.add(new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-"));
+        List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = List.of(
+                new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
+                new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35)),
+                new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)),
+                new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-")
+        );
 
         return renderDocument(headerRace, true,
-                ctx -> drawSection(ctx, columns, title, entries, "Teilnehmer", true));
+                ctx -> drawSectionWithDetails(ctx, summaryColumns, title, entries, "Teilnehmer", true,
+                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+    }
+
+    private List<String> pointsCombinationDetailBlocks(GaudiRankingEntryResponse entry, List<Race> legRaces) {
+        List<String> blocks = new ArrayList<>();
+        for (int i = 0; i < legRaces.size(); i++) {
+            Race legRace = legRaces.get(i);
+            String raceLabel = truncate(legRace.name(), 16);
+            String wert = formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+            String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
+            String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);
+            blocks.add(raceLabel + ": Wert " + wert + ", Platz " + platz + ", Pkt. " + pkt);
+        }
+        return blocks;
     }
 
     private Integer legValue(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
@@ -491,6 +512,85 @@ public class PdfExportService {
         }
     }
 
+    /**
+     * Like {@link #drawSection}, but for tables where entries additionally carry a variable-length
+     * breakdown (e.g. a per-race Wert/Platz/Punkte summary for a multi-race Gaudimodus ranking) that
+     * doesn't fit as fixed side-by-side columns without becoming unreadably narrow once there are more
+     * than a few races. {@code detailBlocksFn} returns that breakdown as one string per logical block
+     * (e.g. one per race); blocks are drawn as wrapped, indented line(s) below the fixed summary
+     * row, growing the row's height instead of shrinking column widths.
+     */
+    private <T> void drawSectionWithDetails(PdfContext ctx, List<PdfColumn<T>> columns, String title,
+                                             List<T> entries, String unitLabel, boolean mainTitle,
+                                             Function<T, List<String>> detailBlocksFn) throws IOException {
+        ctx.ensureSpace(mainTitle ? 90 : 100);
+
+        ctx.y -= mainTitle ? 10 : 15;
+        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
+        ctx.y -= mainTitle ? 30 : 25;
+
+        float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
+        drawTableHeader(ctx, columns, colX);
+        drawRowsWithDetails(ctx, columns, colX, entries, detailBlocksFn);
+
+        ctx.y -= 10;
+        ctx.ensureSpace(20);
+        ctx.text(FONT_BOLD, 8, MARGIN, ctx.y, "Gesamt: " + entries.size() + " " + unitLabel);
+        ctx.y -= 15;
+    }
+
+    private static final float DETAIL_INDENT = 15;
+    private static final float DETAIL_LINE_HEIGHT = 10;
+    private static final float DETAIL_ROW_GAP = 6;
+
+    private <T> void drawRowsWithDetails(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries,
+                                          Function<T, List<String>> detailBlocksFn) throws IOException {
+        float maxDetailWidth = ctx.page.getMediaBox().getWidth() - MARGIN * 2 - DETAIL_INDENT;
+        for (T entry : entries) {
+            List<String> detailLines = wrapBlocks(detailBlocksFn.apply(entry), FONT_REGULAR, 7, maxDetailWidth);
+            float needed = 12 + detailLines.size() * DETAIL_LINE_HEIGHT + DETAIL_ROW_GAP;
+
+            if (ctx.y - needed < PAGE_BREAK_THRESHOLD) {
+                ctx.newPage();
+                drawTableHeader(ctx, columns, colX);
+            }
+
+            for (int i = 0; i < columns.size(); i++) {
+                ctx.text(FONT_REGULAR, 8, colX[i], ctx.y, columns.get(i).valueFn().apply(entry));
+            }
+            ctx.y -= 12;
+
+            for (String line : detailLines) {
+                ctx.text(FONT_REGULAR, 7, MARGIN + DETAIL_INDENT, ctx.y, line);
+                ctx.y -= DETAIL_LINE_HEIGHT;
+            }
+            ctx.y -= DETAIL_ROW_GAP;
+        }
+    }
+
+    /**
+     * Wraps a sequence of logical blocks (each kept intact on one line whenever possible) into
+     * lines no wider than {@code maxWidth}, joining blocks that share a line with a separator.
+     */
+    private static List<String> wrapBlocks(List<String> blocks, PDFont font, float fontSize, float maxWidth) throws IOException {
+        List<String> lines = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String block : blocks) {
+            String candidate = current.isEmpty() ? block : current + "   |   " + block;
+            float width = font.getStringWidth(candidate) / 1000 * fontSize;
+            if (width > maxWidth && !current.isEmpty()) {
+                lines.add(current.toString());
+                current = new StringBuilder(block);
+            } else {
+                current = new StringBuilder(candidate);
+            }
+        }
+        if (!current.isEmpty()) {
+            lines.add(current.toString());
+        }
+        return lines;
+    }
+
     private record ParticipantWithPerson(Participant participant, Person person) {
     }
 
@@ -560,6 +660,9 @@ public class PdfExportService {
 
             String name = formatName(person);
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+            String team = p.teamId() != null
+                    ? teamService.findById(p.teamId()).map(Team::name).orElse("-")
+                    : "-";
             Integer adjustedValue = rankingService.adjustedValue(race, p);
             Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
 
@@ -567,6 +670,7 @@ public class PdfExportService {
                     places.get(p.id()),
                     name,
                     ageGroup,
+                    team,
                     formatValue(race, p.durationMs()),
                     formatValue(race, p.penalty()),
                     formatValue(race, adjustedValue),

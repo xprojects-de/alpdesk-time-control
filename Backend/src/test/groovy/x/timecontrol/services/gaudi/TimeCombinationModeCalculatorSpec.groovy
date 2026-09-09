@@ -11,6 +11,7 @@ import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -18,7 +19,8 @@ import java.time.LocalDateTime
 class TimeCombinationModeCalculatorSpec extends Specification {
 
     PersonService personService = Mock()
-    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(), personService)
+    TeamService teamService = Mock()
+    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(), personService, teamService)
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,

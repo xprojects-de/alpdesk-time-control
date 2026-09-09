@@ -42,6 +42,10 @@ public record GaudiRankingEntryResponse(
 
         @Nullable
         @Schema(description = "Per-race breakdown (Zeit-Kombination / Punkte-Mischwertung only)", nullable = true)
-        List<GaudiRankingLegResponse> legs
+        List<GaudiRankingLegResponse> legs,
+
+        @Nullable
+        @Schema(description = "Team name (not set for Mannschaftswertung, where label already is the team name)", example = "SC Musterhausen", nullable = true)
+        String team
 ) {
 }

@@ -31,7 +31,7 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
-import {ParticipantCopyDialogComponent} from "./participant-copy-dialog.component";
+import {ParticipantCopyDialogComponent, ParticipantCopyDialogResult} from "./participant-copy-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -792,10 +792,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((targetRaceIds: number[] | undefined) => {
-                if (targetRaceIds && targetRaceIds.length > 0) {
+            .subscribe((result: ParticipantCopyDialogResult | undefined) => {
+                if (result && result.targetRaceIds.length > 0) {
                     this.store.dispatch(ParticipantActions.copyParticipants({
-                        request: {sourceRaceId, targetRaceIds},
+                        request: {
+                            sourceRaceId,
+                            targetRaceIds: result.targetRaceIds,
+                            carryStartNumber: result.carryStartNumber,
+                        },
                     }));
                 }
             });

@@ -5,11 +5,17 @@ import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
+import {MatCheckboxModule} from "@angular/material/checkbox";
 import {Race} from "../../models/race.model";
 
 export interface ParticipantCopyDialogData {
     sourceRaceId: number;
     races: Race[];
+}
+
+export interface ParticipantCopyDialogResult {
+    targetRaceIds: number[];
+    carryStartNumber: boolean;
 }
 
 @Component({
@@ -22,13 +28,14 @@ export interface ParticipantCopyDialogData {
         MatFormFieldModule,
         MatButtonModule,
         MatSelectModule,
+        MatCheckboxModule,
     ],
     template: `
         <h2 mat-dialog-title>Teilnehmer in andere Rennen kopieren</h2>
         <mat-dialog-content>
             <p>
                 Alle Teilnehmer von "{{ sourceRaceName() }}" werden in die ausgewählten Rennen übernommen
-                (Name, Team, Kategorie). Zeiten, Startnummern und Strafen werden nicht übernommen. Personen,
+                (Name, Team, Kategorie). Zeiten und Strafen werden nicht übernommen. Personen,
                 die im Zielrennen bereits Teilnehmer sind, werden übersprungen.
             </p>
             <form [formGroup]="form">
@@ -40,6 +47,12 @@ export interface ParticipantCopyDialogData {
                         }
                     </mat-select>
                 </mat-form-field>
+                <mat-checkbox formControlName="carryStartNumber">
+                    Startnummern übernehmen
+                </mat-checkbox>
+                <p class="hint">
+                    Bereits im Zielrennen vergebene Startnummern werden dabei übersprungen (leer gelassen).
+                </p>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -54,6 +67,12 @@ export interface ParticipantCopyDialogData {
             width: 100%;
             min-width: 350px;
           }
+
+          .hint {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.6);
+            margin-top: 4px;
+          }
         `,
     ],
 })
@@ -64,6 +83,7 @@ export class ParticipantCopyDialogComponent {
 
     form: FormGroup = this.fb.group({
         targetRaceIds: [[], Validators.required],
+        carryStartNumber: [false],
     });
 
     sourceRaceName(): string {
@@ -80,7 +100,11 @@ export class ParticipantCopyDialogComponent {
 
     onSave(): void {
         if (this.form.valid) {
-            this.dialogRef.close(this.form.value.targetRaceIds as number[]);
+            const result: ParticipantCopyDialogResult = {
+                targetRaceIds: this.form.value.targetRaceIds as number[],
+                carryStartNumber: this.form.value.carryStartNumber as boolean,
+            };
+            this.dialogRef.close(result);
         }
     }
 }

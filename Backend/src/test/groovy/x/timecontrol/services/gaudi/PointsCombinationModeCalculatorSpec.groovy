@@ -13,6 +13,7 @@ import x.timecontrol.entities.SortDirection
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.PointsScaleService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -21,8 +22,9 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     PersonService personService = Mock()
     PointsScaleService pointsScaleService = Mock()
+    TeamService teamService = Mock()
     PointsCombinationModeCalculator calculator =
-            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService)
+            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService)
 
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60")
 

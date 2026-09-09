@@ -12,6 +12,9 @@ public record ParticipantCopyRequest(
         Long sourceRaceId,
 
         @Schema(description = "Races to copy the participants into", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<Long> targetRaceIds
+        List<Long> targetRaceIds,
+
+        @Schema(description = "Whether to carry over the start number (raceNumber) instead of leaving it empty", example = "false")
+        boolean carryStartNumber
 ) {
 }

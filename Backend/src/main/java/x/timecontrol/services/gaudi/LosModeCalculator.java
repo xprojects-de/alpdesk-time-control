@@ -7,9 +7,11 @@ import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
+import x.timecontrol.services.TeamService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,11 +31,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
     private final GaudiLosPairingRepository pairingRepository;
     private final PersonService personService;
     private final RankingService rankingService;
+    private final TeamService teamService;
 
-    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService, RankingService rankingService) {
+    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService, RankingService rankingService, TeamService teamService) {
         this.pairingRepository = pairingRepository;
         this.personService = personService;
         this.rankingService = rankingService;
+        this.teamService = teamService;
     }
 
     @Override
@@ -69,7 +73,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
 
         double overallAverage = allValues.stream().mapToInt(Integer::intValue).average().orElse(0);
 
-        record PairResult(String label, Integer value1, Integer value2, double pairAverage, double diff) {
+        record PairResult(String label, Integer value1, Integer value2, double pairAverage, double diff, String team) {
         }
 
         List<PairResult> results = new ArrayList<>();
@@ -101,7 +105,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     value1,
                     value2,
                     pairAverage,
-                    Math.abs(pairAverage - overallAverage)
+                    Math.abs(pairAverage - overallAverage),
+                    formatTeam(p1, p2)
             ));
         }
 
@@ -120,7 +125,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     (int) Math.round(overallAverage),
                     (int) Math.round(r.diff()),
                     null,
-                    null
+                    null,
+                    r.team()
             ));
         }
 
@@ -131,5 +137,28 @@ public class LosModeCalculator implements GaudiModeCalculator {
         return personService.findById(p.personId())
                 .map(personService::displayName)
                 .orElse("Unbekannt");
+    }
+
+    /**
+     * Combines both pairing members' teams into one label; when they share a team (or the second
+     * member doesn't exist, e.g. a self-paired leftover), that single team name is used instead.
+     */
+    private String formatTeam(Participant p1, Participant p2) {
+        String team1 = teamNameOf(p1);
+        String team2 = p2 != null ? teamNameOf(p2) : null;
+        if (p2 == null || Objects.equals(p1.teamId(), p2.teamId())) {
+            return team1;
+        }
+        if (team1 == null) {
+            return team2;
+        }
+        if (team2 == null) {
+            return team1;
+        }
+        return team1 + " / " + team2;
+    }
+
+    private String teamNameOf(Participant p) {
+        return p.teamId() != null ? teamService.findById(p.teamId()).map(Team::name).orElse(null) : null;
     }
 }
