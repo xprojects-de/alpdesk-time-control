@@ -13,6 +13,8 @@ import {Observable, Subject} from "rxjs";
 import {takeUntil} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
+import {MatMenuModule} from "@angular/material/menu";
+import {MatDividerModule} from "@angular/material/divider";
 import {MatIconModule} from "@angular/material/icon";
 import {MatCardModule} from "@angular/material/card";
 import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
@@ -37,6 +39,8 @@ import {selectAllRaces} from "../../store/race/race.selectors";
         CommonModule,
         MatTableModule,
         MatButtonModule,
+        MatMenuModule,
+        MatDividerModule,
         MatIconModule,
         MatCardModule,
         MatProgressSpinnerModule,
@@ -97,19 +101,63 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                         <mat-icon>leaderboard</mat-icon>
                         Wertung anzeigen
                     </button>
-                    <button
-                            mat-raised-button
-                            color="accent"
-                            (click)="exportPdf()"
-                            [disabled]="pdfExportLoading$ | async"
-                    >
-                        @if (pdfExportLoading$ | async) {
-                            <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
-                        } @else {
-                            <mat-icon>picture_as_pdf</mat-icon>
-                        }
-                        PDF Export
-                    </button>
+                    @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                [matMenuTriggerFor]="exportMenu"
+                                [disabled]="pdfExportLoading$ | async"
+                                matTooltip="PDF Export Optionen"
+                        >
+                            @if (pdfExportLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>picture_as_pdf</mat-icon>
+                            }
+                            PDF Export
+                            <mat-icon>arrow_drop_down</mat-icon>
+                        </button>
+
+                        <mat-menu #exportMenu="matMenu">
+                            <button mat-menu-item (click)="exportPdf()">
+                                <mat-icon>leaderboard</mat-icon>
+                                <span>Gesamtwertung</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportByGenderPdf('MALE')">
+                                <mat-icon>male</mat-icon>
+                                <span>Alle Herren</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
+                                <mat-icon>female</mat-icon>
+                                <span>Alle Damen</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
+                                <mat-icon>view_list</mat-icon>
+                                <span>Nach Altersklassen aufgeteilt</span>
+                            </button>
+                        </mat-menu>
+                    } @else {
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                (click)="exportPdf()"
+                                [disabled]="pdfExportLoading$ | async"
+                        >
+                            @if (pdfExportLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>picture_as_pdf</mat-icon>
+                            }
+                            PDF Export
+                        </button>
+                    }
                 </div>
 
                 @if ((ranking$ | async)?.length) {
@@ -181,6 +229,12 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                                 <th mat-header-cell *matHeaderCellDef>Abweichung</th>
                                 <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
                             </ng-container>
+                            @if (gaudiMode().type === gaudiModeType.TEAM) {
+                                <ng-container matColumnDef="members">
+                                    <th mat-header-cell *matHeaderCellDef>Mitglieder</th>
+                                    <td mat-cell *matCellDef="let r">{{ memberSummary(r) }}</td>
+                                </ng-container>
+                            }
                             <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
                             <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
                         </table>
@@ -253,7 +307,9 @@ export class GaudiModeDetailComponent implements OnDestroy {
             const gaudiMode = this.gaudiMode();
             this.rankingColumns = gaudiMode.type === GaudiModeType.LOS
                 ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
-                : ["place", "label", "valueMs"];
+                : gaudiMode.type === GaudiModeType.TEAM
+                    ? ["place", "label", "valueMs", "members"]
+                    : ["place", "label", "valueMs"];
 
             this.legColumns = gaudiMode.races.map(r => ({raceId: r.raceId, raceName: r.raceName}));
             const cols = ["place", "label"];
@@ -294,9 +350,42 @@ export class GaudiModeDetailComponent implements OnDestroy {
         const gaudiMode = this.gaudiMode();
         this.store.dispatch(GaudiModeActions.exportPdf({
             id: gaudiMode.id,
-            filename: `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}.pdf`
+            filename: this.buildFilename(gaudiMode, "")
         }));
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
+    }
+
+    exportByGenderPdf(gender: string): void {
+        const gaudiMode = this.gaudiMode();
+        this.store.dispatch(GaudiModeActions.exportPdfByGender({
+            id: gaudiMode.id,
+            gender,
+            filename: this.buildFilename(gaudiMode, gender.toLowerCase())
+        }));
+        this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
+    }
+
+    exportAllAgeGroupsPdf(): void {
+        const gaudiMode = this.gaudiMode();
+        this.store.dispatch(GaudiModeActions.exportPdfAllAgeGroups({
+            id: gaudiMode.id,
+            filename: this.buildFilename(gaudiMode, "altersklassen")
+        }));
+        this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
+    }
+
+    private buildFilename(gaudiMode: GaudiMode, suffix: string): string {
+        const base = `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}`;
+        return suffix ? `${base}_${suffix}.pdf` : `${base}.pdf`;
+    }
+
+    memberSummary(entry: GaudiRankingEntry): string {
+        if (!entry.members?.length) {
+            return "-";
+        }
+        return entry.members
+            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)}${m.counted ? '' : ', nicht gewertet'})`)
+            .join(', ');
     }
 
     typeLabel(): string {

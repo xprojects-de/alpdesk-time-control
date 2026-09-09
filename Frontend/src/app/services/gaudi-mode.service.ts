@@ -54,4 +54,18 @@ export class GaudiModeService {
             responseType: 'blob'
         });
     }
+
+    // Punkte-Mischwertung only
+    exportPdfByGender(id: number, gender: string): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/${id}/export/pdf/gender/${gender}`, {
+            responseType: 'blob'
+        });
+    }
+
+    // Punkte-Mischwertung only
+    exportPdfAllAgeGroups(id: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/${id}/export/pdf/agegroups/all`, {
+            responseType: 'blob'
+        });
+    }
 }

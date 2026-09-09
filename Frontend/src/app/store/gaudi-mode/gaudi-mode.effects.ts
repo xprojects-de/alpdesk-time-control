@@ -123,9 +123,41 @@ export class GaudiModeEffects {
         )
     );
 
+    exportPdfByGender$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(GaudiModeActions.exportPdfByGender),
+            mergeMap(({id, gender, filename}) =>
+                this.gaudiModeService.exportPdfByGender(id, gender).pipe(
+                    map(blob => GaudiModeActions.exportPdfByGenderSuccess({blob, filename})),
+                    catchError(error => of(GaudiModeActions.exportPdfByGenderFailure({
+                        error: extractErrorMessage(error, 'Failed to export PDF')
+                    })))
+                )
+            )
+        )
+    );
+
+    exportPdfAllAgeGroups$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(GaudiModeActions.exportPdfAllAgeGroups),
+            mergeMap(({id, filename}) =>
+                this.gaudiModeService.exportPdfAllAgeGroups(id).pipe(
+                    map(blob => GaudiModeActions.exportPdfAllAgeGroupsSuccess({blob, filename})),
+                    catchError(error => of(GaudiModeActions.exportPdfAllAgeGroupsFailure({
+                        error: extractErrorMessage(error, 'Failed to export PDF')
+                    })))
+                )
+            )
+        )
+    );
+
     downloadPdf$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(GaudiModeActions.exportPdfSuccess),
+            ofType(
+                GaudiModeActions.exportPdfSuccess,
+                GaudiModeActions.exportPdfByGenderSuccess,
+                GaudiModeActions.exportPdfAllAgeGroupsSuccess
+            ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');

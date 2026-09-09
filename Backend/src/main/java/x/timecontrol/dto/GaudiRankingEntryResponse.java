@@ -46,6 +46,14 @@ public record GaudiRankingEntryResponse(
 
         @Nullable
         @Schema(description = "Team name (not set for Mannschaftswertung, where label already is the team name)", example = "SC Musterhausen", nullable = true)
-        String team
+        String team,
+
+        @Nullable
+        @Schema(description = "Individual member breakdown (Mannschaftswertung only)", nullable = true)
+        java.util.List<GaudiTeamMemberResponse> members,
+
+        @Nullable
+        @Schema(description = "The person this entry represents (Punkte-Mischwertung only), used to filter/group the ranking by gender or age group", example = "42", nullable = true)
+        Long personId
 ) {
 }

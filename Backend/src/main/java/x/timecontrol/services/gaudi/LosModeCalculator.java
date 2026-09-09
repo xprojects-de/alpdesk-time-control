@@ -126,7 +126,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     (int) Math.round(r.diff()),
                     null,
                     null,
-                    r.team()
+                    r.team(),
+                    null,
+                    null
             ));
         }
 

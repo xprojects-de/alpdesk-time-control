@@ -104,7 +104,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     r.totalMs() == leaderMs ? null : r.totalMs() - leaderMs,
                     null,
                     r.legs(),
-                    r.team()
+                    r.team(),
+                    null,
+                    null
             ));
         }
 

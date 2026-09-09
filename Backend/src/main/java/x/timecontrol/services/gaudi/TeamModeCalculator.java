@@ -2,6 +2,7 @@ package x.timecontrol.services.gaudi;
 
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
+import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
@@ -9,6 +10,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.TeamRepository;
+import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
 
 import java.util.ArrayList;
@@ -27,10 +29,12 @@ public class TeamModeCalculator implements GaudiModeCalculator {
 
     private final TeamRepository teamRepository;
     private final RankingService rankingService;
+    private final PersonService personService;
 
-    public TeamModeCalculator(TeamRepository teamRepository, RankingService rankingService) {
+    public TeamModeCalculator(TeamRepository teamRepository, RankingService rankingService, PersonService personService) {
         this.teamRepository = teamRepository;
         this.rankingService = rankingService;
+        this.personService = personService;
     }
 
     @Override
@@ -51,7 +55,7 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                 .filter(p -> p.teamId() != null && rankingService.adjustedValue(race, p) != null)
                 .collect(Collectors.groupingBy(Participant::teamId));
 
-        record TeamResult(String label, long totalValue) {
+        record TeamResult(String label, long totalValue, List<GaudiTeamMemberResponse> members) {
         }
 
         Comparator<Participant> byBestFirst = rankingService.comparator(race);
@@ -64,17 +68,27 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                 continue;
             }
 
-            long totalValue = members.stream()
-                    .sorted(byBestFirst)
+            List<Participant> sortedMembers = members.stream().sorted(byBestFirst).toList();
+            long totalValue = sortedMembers.stream()
                     .limit(teamSize)
                     .mapToLong(p -> rankingService.adjustedValue(race, p))
                     .sum();
+
+            List<GaudiTeamMemberResponse> memberResponses = new ArrayList<>();
+            for (int i = 0; i < sortedMembers.size(); i++) {
+                Participant p = sortedMembers.get(i);
+                memberResponses.add(new GaudiTeamMemberResponse(
+                        formatName(p),
+                        rankingService.adjustedValue(race, p),
+                        i < teamSize
+                ));
+            }
 
             String teamName = teamRepository.findById(entry.getKey())
                     .map(Team::name)
                     .orElse("Team " + entry.getKey());
 
-            results.add(new TeamResult(teamName, totalValue));
+            results.add(new TeamResult(teamName, totalValue, memberResponses));
         }
 
         Comparator<TeamResult> byTotalAscending = Comparator.comparingLong(TeamResult::totalValue);
@@ -94,10 +108,18 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                     null,
                     null,
                     null,
+                    null,
+                    r.members(),
                     null
             ));
         }
 
         return ranking;
+    }
+
+    private String formatName(Participant p) {
+        return personService.findById(p.personId())
+                .map(personService::displayName)
+                .orElse("Unbekannt");
     }
 }

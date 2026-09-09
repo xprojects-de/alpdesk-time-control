@@ -9,6 +9,7 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
+import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
@@ -258,6 +259,12 @@ public class PdfExportService {
                 ctx -> drawSection(ctx, columns, title, entries, "Paare", true));
     }
 
+    /**
+     * Mannschaftswertung: a fixed summary row (Platz, Mannschaft, Gesamtwert) per team, with each
+     * team's individual members and their adjusted times drawn as wrapped detail line(s) below it
+     * so it's visible who is on the team - a member beyond the counted teamSize best results is
+     * marked "nicht gewertet" rather than omitted.
+     */
     public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
@@ -265,7 +272,21 @@ public class PdfExportService {
                 new PdfColumn<>("Gesamtwert", 1f, e -> formatValue(race, e.valueMs()))
         );
         return renderDocument(race, false,
-                ctx -> drawSection(ctx, columns, title, entries, "Mannschaften", true));
+                ctx -> drawSectionWithDetails(ctx, columns, title, entries, "Mannschaften", true,
+                        e -> teamMemberDetailBlocks(e, race)));
+    }
+
+    private List<String> teamMemberDetailBlocks(GaudiRankingEntryResponse entry, Race race) {
+        if (entry.members() == null) {
+            return List.of();
+        }
+        List<String> blocks = new ArrayList<>();
+        for (GaudiTeamMemberResponse member : entry.members()) {
+            String value = formatValue(race, member.valueMs());
+            String suffix = member.counted() ? "" : " (nicht gewertet)";
+            blocks.add(truncate(member.label(), 25) + ": " + value + suffix);
+        }
+        return blocks;
     }
 
     /**
@@ -312,16 +333,119 @@ public class PdfExportService {
      */
     public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace) throws IOException {
-        List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = List.of(
+        return renderDocument(headerRace, true,
+                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), title, entries, "Teilnehmer", true,
+                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+    }
+
+    /**
+     * Punkte-Mischwertung gefiltert nach Geschlecht, analogous to {@link #generateGenderRanking}
+     * for normal participant rankings. Places are recomputed within the filtered subset so "Platz"
+     * reflects the position within that gender rather than the overall ranking.
+     */
+    public byte[] generatePointsCombinationGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                          List<Race> legRaces, Race headerRace, String genderStr) throws IOException {
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(entries, gender, null, loadAgeGroups());
+        String fullTitle = title + " - " + genderLabel(gender);
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, filtered, "Teilnehmer", true,
+                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+    }
+
+    /**
+     * Punkte-Mischwertung gefiltert nach Altersklasse und Geschlecht, analogous to
+     * {@link #generateAgeGroupGenderRanking} for normal participant rankings.
+     */
+    public byte[] generatePointsCombinationAgeGroupGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                                  List<Race> legRaces, Race headerRace,
+                                                                  String ageGroup, String genderStr) throws IOException {
+        Gender gender = Gender.valueOf(genderStr.toUpperCase());
+        List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(entries, gender, ageGroup, loadAgeGroups());
+        String fullTitle = title + " - " + ageGroup + " " + genderLabel(gender);
+
+        return renderDocument(headerRace, true,
+                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, filtered, "Teilnehmer", true,
+                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+    }
+
+    /**
+     * Punkte-Mischwertung split into one section per age group x gender, youngest first, analogous
+     * to {@link #generateAllAgeGroupsRanking} for normal participant rankings.
+     */
+    public byte[] generatePointsCombinationAllAgeGroupsRanking(String title, List<GaudiRankingEntryResponse> entries,
+                                                                List<Race> legRaces, Race headerRace) throws IOException {
+        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<String> uniqueAgeGroupNames = ageGroups.stream()
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .map(AgeGroup::name)
+                .distinct()
+                .toList();
+
+        return renderDocument(headerRace, true, ctx -> {
+            for (String ageGroupName : uniqueAgeGroupNames) {
+                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                    List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(entries, gender, ageGroupName, ageGroups);
+                    if (!filtered.isEmpty()) {
+                        String sectionTitle = title + " - " + ageGroupName + " " + genderLabel(gender);
+                        drawSectionWithDetails(ctx, pointsCombinationColumns(), sectionTitle, filtered, "Teilnehmer", false,
+                                e -> pointsCombinationDetailBlocks(e, legRaces));
+                    }
+                }
+            }
+        });
+    }
+
+    private static List<PdfColumn<GaudiRankingEntryResponse>> pointsCombinationColumns() {
+        return List.of(
                 new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35)),
                 new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)),
                 new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-")
         );
+    }
 
-        return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, summaryColumns, title, entries, "Teilnehmer", true,
-                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+    /**
+     * Filters a Punkte-Mischwertung ranking by gender and/or age group (resolved per entry via its
+     * {@code personId}) and recomputes "Platz" within the filtered subset, mirroring how
+     * {@link #createRankingEntriesFromParticipants} filters and re-places normal participant
+     * rankings. Entries without a resolvable personId (only possible for non-Punkte-Mischwertung
+     * modes, which never call this) are dropped.
+     */
+    private List<GaudiRankingEntryResponse> filterAndRePlacePointsCombinationEntries(
+            List<GaudiRankingEntryResponse> entries, Gender filterGender, String filterAgeGroup, List<AgeGroup> ageGroups) {
+        List<GaudiRankingEntryResponse> filtered = entries.stream()
+                .filter(e -> e.personId() != null)
+                .filter(e -> {
+                    Person person = personService.findById(e.personId()).orElse(null);
+                    if (filterGender != null && (person == null || person.gender() != filterGender)) {
+                        return false;
+                    }
+                    if (filterAgeGroup != null) {
+                        String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+                        if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .sorted(Comparator.comparingInt((GaudiRankingEntryResponse e) -> e.totalPoints() != null ? e.totalPoints() : Integer.MIN_VALUE).reversed())
+                .toList();
+
+        List<Integer> places = rankingService.assignStandardPlaces(
+                filtered.stream().map(e -> e.totalPoints() != null ? (double) e.totalPoints() : Double.NEGATIVE_INFINITY).toList());
+
+        List<GaudiRankingEntryResponse> result = new ArrayList<>();
+        for (int i = 0; i < filtered.size(); i++) {
+            result.add(withPlace(filtered.get(i), places.get(i)));
+        }
+        return result;
+    }
+
+    private static GaudiRankingEntryResponse withPlace(GaudiRankingEntryResponse e, int place) {
+        return new GaudiRankingEntryResponse(place, e.label(), e.time1Ms(), e.time2Ms(), e.valueMs(),
+                e.referenceMs(), e.diffMs(), e.totalPoints(), e.legs(), e.team(), e.members(), e.personId());
     }
 
     private List<String> pointsCombinationDetailBlocks(GaudiRankingEntryResponse entry, List<Race> legRaces) {

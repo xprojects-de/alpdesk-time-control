@@ -141,5 +141,33 @@ export const gaudiModeReducer = createReducer(
         ...state,
         pdfExportLoading: false,
         error
+    })),
+
+    on(GaudiModeActions.exportPdfByGender, state => ({
+        ...state,
+        pdfExportLoading: true
+    })),
+    on(GaudiModeActions.exportPdfByGenderSuccess, state => ({
+        ...state,
+        pdfExportLoading: false
+    })),
+    on(GaudiModeActions.exportPdfByGenderFailure, (state, {error}) => ({
+        ...state,
+        pdfExportLoading: false,
+        error
+    })),
+
+    on(GaudiModeActions.exportPdfAllAgeGroups, state => ({
+        ...state,
+        pdfExportLoading: true
+    })),
+    on(GaudiModeActions.exportPdfAllAgeGroupsSuccess, state => ({
+        ...state,
+        pdfExportLoading: false
+    })),
+    on(GaudiModeActions.exportPdfAllAgeGroupsFailure, (state, {error}) => ({
+        ...state,
+        pdfExportLoading: false,
+        error
     }))
 );

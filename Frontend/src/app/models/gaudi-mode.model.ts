@@ -60,6 +60,12 @@ export interface GaudiRankingLeg {
     points?: number;
 }
 
+export interface GaudiTeamMember {
+    label: string;
+    valueMs?: number;
+    counted: boolean;
+}
+
 export interface GaudiRankingEntry {
     place: number;
     label: string;
@@ -70,4 +76,7 @@ export interface GaudiRankingEntry {
     diffMs?: number;
     totalPoints?: number;
     legs?: GaudiRankingLeg[];
+    team?: string;
+    members?: GaudiTeamMember[];
+    personId?: number;
 }

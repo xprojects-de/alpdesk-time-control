@@ -64,7 +64,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         // Parsed once here rather than inside pointsForPlace() on every call below (person x race).
         List<Integer> scalePoints = pointsScaleService.parsePoints(scale);
 
-        record PersonResult(String label, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
+        record PersonResult(Long personId, String label, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -106,7 +106,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
 
             String label = personService.findById(personId).map(personService::displayName).orElse("Unbekannt");
             String team = teamOf(races, byRace);
-            results.add(new PersonResult(label, totalPoints, legs, team));
+            results.add(new PersonResult(personId, label, totalPoints, legs, team));
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalPoints).reversed());
@@ -125,7 +125,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                     null,
                     r.totalPoints(),
                     r.legs(),
-                    r.team()
+                    r.team(),
+                    null,
+                    r.personId()
             ));
         }
 
