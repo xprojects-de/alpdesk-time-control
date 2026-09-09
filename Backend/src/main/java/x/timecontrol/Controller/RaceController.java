@@ -152,41 +152,38 @@ public class RaceController {
             return HttpResponse.notFound();
         }
 
-        // Pausing the scheduled device import for the duration of a clearing archive closes most of
-        // the window where a scheduled fetch, already in flight when the device is reset, would
-        // otherwise write stale pre-reset data into the measurement table right after it was cleared.
-        boolean pauseScheduledImport = clearAfterArchive && dataImportScheduler.isScheduledImportActive();
-        if (pauseScheduledImport) {
-            dataImportScheduler.setScheduledImportActive(false);
-        }
-        try {
-            if (clearAfterArchive && resetDevice) {
-                boolean deviceReset = dataImportService.resetDevice();
-                if (!deviceReset) {
-                    return HttpResponse.serverError()
-                            .body("Failed to reset device. Measurements were not archived.");
-                }
+        // Only a clearing archive resets the device, so only that case needs the pause; skip the
+        // no-op pause/resume for a non-clearing archive.
+        if (!clearAfterArchive) {
+            try {
+                raceMeasurementService.copyMeasurements(raceId);
+                return HttpResponse.ok("Measurements archived successfully (database and device left unchanged)");
+            } catch (Exception e) {
+                return HttpResponse.serverError().body("Error during archive operation: " + e.getMessage());
             }
+        }
 
-            if (clearAfterArchive) {
+        return dataImportScheduler.pauseDuring(() -> {
+            try {
+                if (resetDevice) {
+                    boolean deviceReset = dataImportService.resetDevice();
+                    if (!deviceReset) {
+                        return HttpResponse.serverError()
+                                .body("Failed to reset device. Measurements were not archived.");
+                    }
+                }
+
                 raceMeasurementService.archiveMeasurements(raceId);
                 if (resetDevice) {
                     return HttpResponse.ok("Measurements archived and device reset successfully");
                 } else {
                     return HttpResponse.ok("Measurements archived successfully");
                 }
-            } else {
-                raceMeasurementService.copyMeasurements(raceId);
-                return HttpResponse.ok("Measurements archived successfully (database and device left unchanged)");
+            } catch (Exception e) {
+                return HttpResponse.serverError()
+                        .body("Error during archive operation: " + e.getMessage());
             }
-        } catch (Exception e) {
-            return HttpResponse.serverError()
-                    .body("Error during archive operation: " + e.getMessage());
-        } finally {
-            if (pauseScheduledImport) {
-                dataImportScheduler.setScheduledImportActive(true);
-            }
-        }
+        });
     }
 }
 

@@ -109,6 +109,12 @@ public class ParticipantService {
         if (personService.findById(participant.personId()).isEmpty()) {
             throw new IllegalArgumentException("Person with id " + participant.personId() + " does not exist");
         }
+        if (participant.teamId() != null && teamService.findById(participant.teamId()).isEmpty()) {
+            throw new IllegalArgumentException("Team with id " + participant.teamId() + " does not exist");
+        }
+        if (participant.categoryId() != null && categoryService.findById(participant.categoryId()).isEmpty()) {
+            throw new IllegalArgumentException("Category with id " + participant.categoryId() + " does not exist");
+        }
         if (participant.raceNumber() != null) {
             Optional<Participant> conflict = repository.findByRaceIdAndRaceNumber(participant.raceId(), participant.raceNumber());
             if (conflict.isPresent() && !conflict.get().id().equals(excludeParticipantId)) {

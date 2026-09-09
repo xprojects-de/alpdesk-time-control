@@ -37,15 +37,9 @@ export class AuthEffects {
         )
     );
 
-    loginSuccess$ = createEffect(() =>
-            this.actions$.pipe(
-                ofType(AuthActions.loginSuccess),
-                tap(() => {
-                    this.router.navigate(['/dashboard']).then();
-                })
-            ),
-        {dispatch: false}
-    );
+    // No loginSuccess$ navigation effect: LoginComponent already redirects to /dashboard whenever
+    // selectIsAuthenticated becomes true (which a successful login causes), and a second navigate
+    // call here duplicated that on every login.
 
     logout$ = createEffect(() =>
         this.actions$.pipe(

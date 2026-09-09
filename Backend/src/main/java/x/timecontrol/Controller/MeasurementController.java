@@ -88,8 +88,9 @@ public class MeasurementController {
     @ApiResponse(responseCode = "201", description = "Measurement created", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<?> add(@Body MeasurementRequest request) {
-        if (request.participantId() != null && participantService.findById(request.participantId()).isEmpty()) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+        HttpResponse<?> validationError = validateParticipantId(request.participantId());
+        if (validationError != null) {
+            return validationError;
         }
         Measurement measurement = new Measurement(
                 null,
@@ -109,8 +110,12 @@ public class MeasurementController {
     @ApiResponse(responseCode = "404", description = "Measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<?> update(@PathVariable Long id, @Body MeasurementRequest request) {
-        if (request.participantId() != null && participantService.findById(request.participantId()).isEmpty()) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+        if (service.findById(id).isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        HttpResponse<?> validationError = validateParticipantId(request.participantId());
+        if (validationError != null) {
+            return validationError;
         }
         Measurement measurement = new Measurement(
                 null,
@@ -121,6 +126,17 @@ public class MeasurementController {
         Optional<Measurement> updated = service.update(id, measurement);
         return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    /**
+     * @return a 400 HttpResponse if participantId is set but doesn't reference an existing
+     * participant, otherwise null (shared by add() and update(), which both accept participantId).
+     */
+    private HttpResponse<?> validateParticipantId(Long participantId) {
+        if (participantId != null && participantService.findById(participantId).isEmpty()) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + participantId + " does not exist"));
+        }
+        return null;
     }
 
     @Delete("/{id}")
@@ -143,39 +159,30 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
     public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
-        // Pausing the scheduled device import for the duration of the reset closes most of the
-        // window where a scheduled fetch, already in flight when the device is reset, would
-        // otherwise write stale pre-reset data into the measurement table right after it was cleared.
-        boolean pauseScheduledImport = dataImportScheduler.isScheduledImportActive();
-        if (pauseScheduledImport) {
-            dataImportScheduler.setScheduledImportActive(false);
-        }
-        try {
-            // If device reset is requested, do it first before deleting database
-            if (resetDevice) {
-                boolean deviceReset = dataImportService.resetDevice();
-                if (!deviceReset) {
-                    return HttpResponse.serverError()
-                            .body("Failed to reset device. Database was not modified.");
+        return dataImportScheduler.pauseDuring(() -> {
+            try {
+                // If device reset is requested, do it first before deleting database
+                if (resetDevice) {
+                    boolean deviceReset = dataImportService.resetDevice();
+                    if (!deviceReset) {
+                        return HttpResponse.serverError()
+                                .body("Failed to reset device. Database was not modified.");
+                    }
                 }
-            }
 
-            // Only delete database if device reset was successful (or not requested)
-            service.deleteAll();
+                // Only delete database if device reset was successful (or not requested)
+                service.deleteAll();
 
-            if (resetDevice) {
-                return HttpResponse.ok("Device reset and all measurements deleted successfully");
-            } else {
-                return HttpResponse.ok("All measurements deleted successfully");
+                if (resetDevice) {
+                    return HttpResponse.ok("Device reset and all measurements deleted successfully");
+                } else {
+                    return HttpResponse.ok("All measurements deleted successfully");
+                }
+            } catch (Exception e) {
+                return HttpResponse.serverError()
+                        .body("Error during reset operation: " + e.getMessage());
             }
-        } catch (Exception e) {
-            return HttpResponse.serverError()
-                    .body("Error during reset operation: " + e.getMessage());
-        } finally {
-            if (pauseScheduledImport) {
-                dataImportScheduler.setScheduledImportActive(true);
-            }
-        }
+        });
     }
 
     @Put("/continuous-mode")

@@ -44,6 +44,7 @@ class RankingServiceSpec extends Specification {
         raceAsc  | 60000    | 2000    || 62000
         raceDesc | 60000    | null    || 60000
         raceDesc | 60000    | 2000    || 58000
+        raceDesc | 100      | 150     || 0 // floored: a penalty larger than the result must not go negative
     }
 
     def "comparator sorts ascending for ASC races (fastest time first)"() {

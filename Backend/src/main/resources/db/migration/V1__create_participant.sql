@@ -48,8 +48,6 @@ CREATE TABLE person
     external_id TEXT UNIQUE
 );
 
-CREATE INDEX idx_person_external_id ON person (external_id);
-
 CREATE TABLE participant
 (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
