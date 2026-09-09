@@ -211,6 +211,14 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen des Teams: ${error}`, "OK", {duration: 5000});
         });
+        this.actions$.pipe(
+            ofType(TeamActions.deleteTeamConflict),
+            takeUntil(this.destroy$),
+        ).subscribe(({id, message}) => {
+            if (confirm(message)) {
+                this.store.dispatch(TeamActions.deleteTeam({id, force: true}));
+            }
+        });
 
         effect(() => {
             const sortInstance = this.sort();

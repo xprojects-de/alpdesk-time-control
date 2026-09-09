@@ -106,12 +106,17 @@ public class CategoryController {
     @Operation(summary = "Delete a category", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Category deleted")
     @ApiResponse(responseCode = "404", description = "Category not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Category still has participants assigned; retry with force=true to proceed")
+    public HttpResponse<?> delete(@PathVariable Long id, @QueryValue(defaultValue = "false") boolean force) {
         Optional<Category> category = service.findById(id);
-        if (category.isPresent()) {
-            service.delete(id);
-            return HttpResponse.noContent();
+        if (category.isEmpty()) {
+            return HttpResponse.notFound();
         }
-        return HttpResponse.notFound();
+        try {
+            service.delete(id, force);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.noContent();
     }
 }

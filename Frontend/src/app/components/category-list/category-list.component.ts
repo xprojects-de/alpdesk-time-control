@@ -211,6 +211,14 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen der Kategorie: ${error}`, "OK", {duration: 5000});
         });
+        this.actions$.pipe(
+            ofType(CategoryActions.deleteCategoryConflict),
+            takeUntil(this.destroy$),
+        ).subscribe(({id, message}) => {
+            if (confirm(message)) {
+                this.store.dispatch(CategoryActions.deleteCategory({id, force: true}));
+            }
+        });
 
         effect(() => {
             const sortInstance = this.sort();

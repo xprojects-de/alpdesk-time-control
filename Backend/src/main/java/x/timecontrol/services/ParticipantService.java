@@ -128,6 +128,12 @@ public class ParticipantService {
             // which formatTime()/formatDuration() render as garbled strings like "-1:-1.-500".
             throw new IllegalArgumentException("penalty must not be negative");
         }
+        if (participant.durationMs() != null && participant.durationMs() < 0) {
+            // adjustedValue() floors the *adjusted* value at 0, but a negative raw duration would
+            // still floor to 0 and rank that participant first/best - a garbled or malicious input
+            // must be rejected here rather than silently winning the race.
+            throw new IllegalArgumentException("durationMs must not be negative");
+        }
         // Mirrors the dedupe rule copyParticipants() already enforces: a person may only take part
         // in a race once. Without this, the add/edit dialog could silently create a second entry
         // for the same person in the same race.
@@ -240,54 +246,59 @@ public class ParticipantService {
                 .stream(repository.findByRaceId(sourceRaceId).spliterator(), false)
                 .toList();
 
-        int copied = 0;
-        int skipped = 0;
-        for (Long targetRaceId : targetRaceIds) {
-            List<Participant> targetParticipants = StreamSupport
-                    .stream(repository.findByRaceId(targetRaceId).spliterator(), false)
-                    .toList();
-            Set<Long> existingPersonIds = targetParticipants.stream()
-                    .map(Participant::personId)
-                    .collect(Collectors.toSet());
-            Set<Integer> existingRaceNumbers = targetParticipants.stream()
-                    .map(Participant::raceNumber)
-                    .filter(java.util.Objects::nonNull)
-                    .collect(Collectors.toSet());
+        // Wrapped as one transaction so a failure partway through (e.g. target race #3 of 5 hitting
+        // a real, non-uniqueness DataAccessException) rolls back every already-copied target race
+        // instead of leaving the caller with a confusing, undocumented partial copy.
+        return transactionOperations.executeWrite(status -> {
+            int copied = 0;
+            int skipped = 0;
+            for (Long targetRaceId : targetRaceIds) {
+                List<Participant> targetParticipants = StreamSupport
+                        .stream(repository.findByRaceId(targetRaceId).spliterator(), false)
+                        .toList();
+                Set<Long> existingPersonIds = targetParticipants.stream()
+                        .map(Participant::personId)
+                        .collect(Collectors.toSet());
+                Set<Integer> existingRaceNumbers = targetParticipants.stream()
+                        .map(Participant::raceNumber)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(Collectors.toSet());
 
-            for (Participant source : sourceParticipants) {
-                if (existingPersonIds.contains(source.personId())) {
-                    skipped++;
-                    continue;
-                }
-                Integer raceNumber = null;
-                if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
-                    raceNumber = source.raceNumber();
-                }
-                Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
-                        source.teamId(), source.categoryId(), null, null, null);
-                try {
-                    repository.save(copy);
-                } catch (DataAccessException e) {
-                    // existingRaceNumbers is a snapshot taken before this loop started - it can be
-                    // stale if another request concurrently claimed this race number in the same
-                    // target race. Fall back to no start number for this participant instead of
-                    // aborting the rest of the copy over a single collision.
-                    if (raceNumber == null || !isUniqueConstraintViolation(e)) {
-                        throw e;
+                for (Participant source : sourceParticipants) {
+                    if (existingPersonIds.contains(source.personId())) {
+                        skipped++;
+                        continue;
                     }
-                    repository.save(new Participant(null, targetRaceId, source.personId(), null,
-                            source.teamId(), source.categoryId(), null, null, null));
-                    raceNumber = null;
+                    Integer raceNumber = null;
+                    if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
+                        raceNumber = source.raceNumber();
+                    }
+                    Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
+                            source.teamId(), source.categoryId(), null, null, null);
+                    try {
+                        repository.save(copy);
+                    } catch (DataAccessException e) {
+                        // existingRaceNumbers is a snapshot taken before this loop started - it can be
+                        // stale if another request concurrently claimed this race number in the same
+                        // target race. Fall back to no start number for this participant instead of
+                        // aborting the rest of the copy over a single collision.
+                        if (raceNumber == null || !isUniqueConstraintViolation(e)) {
+                            throw e;
+                        }
+                        repository.save(new Participant(null, targetRaceId, source.personId(), null,
+                                source.teamId(), source.categoryId(), null, null, null));
+                        raceNumber = null;
+                    }
+                    if (raceNumber != null) {
+                        existingRaceNumbers.add(raceNumber);
+                    }
+                    existingPersonIds.add(source.personId());
+                    copied++;
                 }
-                if (raceNumber != null) {
-                    existingRaceNumbers.add(raceNumber);
-                }
-                existingPersonIds.add(source.personId());
-                copied++;
             }
-        }
 
-        return new ParticipantCopyResponse(copied, skipped);
+            return new ParticipantCopyResponse(copied, skipped);
+        });
     }
 
     private static boolean isUniqueConstraintViolation(DataAccessException e) {

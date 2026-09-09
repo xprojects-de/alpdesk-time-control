@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {HttpErrorResponse} from '@angular/common/http';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
@@ -56,12 +57,20 @@ export class TeamEffects {
     deleteTeam$ = createEffect(() =>
         this.actions$.pipe(
             ofType(TeamActions.deleteTeam),
-            mergeMap(({id}) =>
-                this.teamService.delete(id).pipe(
+            mergeMap(({id, force}) =>
+                this.teamService.delete(id, force).pipe(
                     map(() => TeamActions.deleteTeamSuccess({id})),
-                    catchError(error => of(TeamActions.deleteTeamFailure({
-                        error: extractErrorMessage(error, 'Failed to delete team')
-                    })))
+                    catchError(error => {
+                        if (error instanceof HttpErrorResponse && error.status === 409) {
+                            return of(TeamActions.deleteTeamConflict({
+                                id,
+                                message: extractErrorMessage(error, 'Failed to delete team')
+                            }));
+                        }
+                        return of(TeamActions.deleteTeamFailure({
+                            error: extractErrorMessage(error, 'Failed to delete team')
+                        }));
+                    })
                 )
             )
         )

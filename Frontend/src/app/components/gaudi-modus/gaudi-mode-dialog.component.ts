@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -19,8 +19,8 @@ import {MatSelectModule} from "@angular/material/select";
 import {MatIconModule} from "@angular/material/icon";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {Store} from "@ngrx/store";
-import {Observable} from "rxjs";
-import {take} from "rxjs/operators";
+import {Observable, Subject} from "rxjs";
+import {take, takeUntil} from "rxjs/operators";
 import {selectAllRaces} from "../../store/race/race.selectors";
 import {Race} from "../../models/race.model";
 import {
@@ -201,13 +201,14 @@ export interface GaudiModeDialogData {
         `,
     ],
 })
-export class GaudiModeDialogComponent implements OnInit {
+export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<GaudiModeDialogComponent>);
     private store = inject(Store);
     private pointsScaleService = inject(PointsScaleService);
     private dialog = inject(MatDialog);
     public data = inject<GaudiModeDialogData | null>(MAT_DIALOG_DATA);
+    private destroy$ = new Subject<void>();
 
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
     gaudiModeType = GaudiModeType;
@@ -240,11 +241,16 @@ export class GaudiModeDialogComponent implements OnInit {
         // Switching from a combination type (multi-race) back to LOS/TEAM (single-race) must
         // not leave more than one race selected behind - the single-race select only ever shows
         // and replaces selectedRaceIds[0], so a stale second entry would silently be saved too.
-        this.form.get("type")!.valueChanges.subscribe(() => {
+        this.form.get("type")!.valueChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
             if (!this.isCombination() && this.selectedRaceIds.length > 1) {
                 this.selectedRaceIds = this.selectedRaceIds.slice(0, 1);
             }
         });
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     isCombination(): boolean {

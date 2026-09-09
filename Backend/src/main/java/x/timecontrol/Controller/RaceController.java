@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
@@ -130,13 +131,18 @@ public class RaceController {
     @Operation(summary = "Delete a race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Race deleted")
     @ApiResponse(responseCode = "404", description = "Race not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Race still has participants assigned; retry with force=true to proceed")
+    public HttpResponse<?> delete(@PathVariable Long id, @QueryValue(defaultValue = "false") boolean force) {
         Optional<Race> race = service.findById(id);
-        if (race.isPresent()) {
-            service.delete(id);
-            return HttpResponse.noContent();
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
         }
-        return HttpResponse.notFound();
+        try {
+            service.delete(id, force);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.noContent();
     }
 
     @Post("/{raceId}/archive-measurements")
@@ -159,6 +165,8 @@ public class RaceController {
             try {
                 raceMeasurementService.copyMeasurements(raceId);
                 return HttpResponse.ok("Measurements archived successfully (database and device left unchanged)");
+            } catch (DataAccessException e) {
+                throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
             } catch (Exception e) {
                 return HttpResponse.serverError().body(new ErrorResponse("Error during archive operation: " + e.getMessage()));
             }
@@ -180,6 +188,8 @@ public class RaceController {
                 } else {
                     return HttpResponse.ok("Measurements archived successfully");
                 }
+            } catch (DataAccessException e) {
+                throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
             } catch (Exception e) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Error during archive operation: " + e.getMessage()));

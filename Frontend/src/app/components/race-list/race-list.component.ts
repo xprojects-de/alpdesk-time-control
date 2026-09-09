@@ -220,6 +220,14 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen des Rennens: ${error}`, 'OK', {duration: 5000});
         });
+        this.actions$.pipe(
+            ofType(RaceActions.deleteRaceConflict),
+            takeUntil(this.destroy$),
+        ).subscribe(({id, message}) => {
+            if (confirm(message)) {
+                this.store.dispatch(RaceActions.deleteRace({id, force: true}));
+            }
+        });
 
         // Setup sort when signal changes
         effect(() => {

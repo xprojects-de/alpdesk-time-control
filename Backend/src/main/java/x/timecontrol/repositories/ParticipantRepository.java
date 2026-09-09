@@ -15,4 +15,7 @@ public interface ParticipantRepository
     Optional<Participant> findByRaceIdAndRaceNumber(Long raceId, Integer raceNumber);
     Optional<Participant> findByRaceIdAndPersonId(Long raceId, Long personId);
     boolean existsByPersonId(Long personId);
+    long countByTeamId(Long teamId);
+    long countByCategoryId(Long categoryId);
+    long countByRaceId(Long raceId);
 }

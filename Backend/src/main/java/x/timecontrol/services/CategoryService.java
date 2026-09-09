@@ -4,6 +4,7 @@ import jakarta.inject.Singleton;
 import x.timecontrol.dto.CategoryRequest;
 import x.timecontrol.entities.Category;
 import x.timecontrol.repositories.CategoryRepository;
+import x.timecontrol.repositories.ParticipantRepository;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -15,9 +16,11 @@ import java.util.Set;
 public class CategoryService {
 
     private final CategoryRepository repository;
+    private final ParticipantRepository participantRepository;
 
-    public CategoryService(CategoryRepository repository) {
+    public CategoryService(CategoryRepository repository, ParticipantRepository participantRepository) {
         this.repository = repository;
+        this.participantRepository = participantRepository;
     }
 
     public Category create(Category category) {
@@ -62,7 +65,17 @@ public class CategoryService {
         return Optional.empty();
     }
 
-    public void delete(Long id) {
+    /**
+     * @throws IllegalStateException if participants are still assigned to this category and {@code force} is false
+     */
+    public void delete(Long id, boolean force) {
+        if (!force) {
+            long assigned = participantRepository.countByCategoryId(id);
+            if (assigned > 0) {
+                throw new IllegalStateException(assigned + " Teilnehmer sind dieser Kategorie zugeordnet. " +
+                        "Beim Löschen wird die Kategorie-Zuordnung bei diesen Teilnehmern entfernt. Trotzdem löschen?");
+            }
+        }
         repository.deleteById(id);
     }
 

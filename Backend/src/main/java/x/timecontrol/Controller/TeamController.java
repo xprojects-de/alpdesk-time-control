@@ -106,12 +106,17 @@ public class TeamController {
     @Operation(summary = "Delete a team", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Team deleted")
     @ApiResponse(responseCode = "404", description = "Team not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Team still has participants assigned; retry with force=true to proceed")
+    public HttpResponse<?> delete(@PathVariable Long id, @QueryValue(defaultValue = "false") boolean force) {
         Optional<Team> team = service.findById(id);
-        if (team.isPresent()) {
-            service.delete(id);
-            return HttpResponse.noContent();
+        if (team.isEmpty()) {
+            return HttpResponse.notFound();
         }
-        return HttpResponse.notFound();
+        try {
+            service.delete(id, force);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.noContent();
     }
 }

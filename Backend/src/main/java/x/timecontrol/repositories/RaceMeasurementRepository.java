@@ -7,11 +7,14 @@ import io.micronaut.data.repository.CrudRepository;
 import io.micronaut.data.annotation.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface RaceMeasurementRepository extends CrudRepository<RaceMeasurement, Long> {
 
     List<RaceMeasurement> findByRaceId(Long raceId);
+
+    Optional<RaceMeasurement> findByRaceIdAndParticipantId(Long raceId, Long participantId);
 
     // Upserts on the unique (race_id, device_measurement_id) index so that copying/archiving the
     // same race again is safe: it neither duplicates already-copied rows nor discards a re-measured

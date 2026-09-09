@@ -39,7 +39,7 @@ export const updateTeamFailure = createAction(
 
 export const deleteTeam = createAction(
     '[Team] Delete Team',
-    props<{ id: number }>()
+    props<{ id: number; force?: boolean }>()
 );
 export const deleteTeamSuccess = createAction(
     '[Team] Delete Team Success',
@@ -48,4 +48,8 @@ export const deleteTeamSuccess = createAction(
 export const deleteTeamFailure = createAction(
     '[Team] Delete Team Failure',
     props<{ error: string }>()
+);
+export const deleteTeamConflict = createAction(
+    '[Team] Delete Team Conflict',
+    props<{ id: number; message: string }>()
 );

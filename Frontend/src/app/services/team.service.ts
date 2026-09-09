@@ -27,7 +27,7 @@ export class TeamService {
         return this.http.put<Team>(`${this.apiUrl}/${id}`, team);
     }
 
-    delete(id: number): Observable<void> {
-        return this.http.delete<void>(`${this.apiUrl}/${id}`);
+    delete(id: number, force = false): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/${id}`, {params: {force}});
     }
 }

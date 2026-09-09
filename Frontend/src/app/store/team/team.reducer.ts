@@ -79,5 +79,9 @@ export const teamReducer = createReducer(
         ...state,
         loading: false,
         error
+    })),
+    on(TeamActions.deleteTeamConflict, state => ({
+        ...state,
+        loading: false
     }))
 );

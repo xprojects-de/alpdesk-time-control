@@ -18,6 +18,7 @@ import {MatButtonToggleModule} from "@angular/material/button-toggle";
 import {MatDatepickerModule} from "@angular/material/datepicker";
 import {MatNativeDateModule} from "@angular/material/core";
 import {MatSelectModule} from "@angular/material/select";
+import {MatSnackBar} from "@angular/material/snack-bar";
 import {
     MatAutocompleteModule,
     MatAutocompleteSelectedEvent,
@@ -40,6 +41,7 @@ import {Race, ResultUnit} from "../../models/race.model";
 import {Team} from "../../models/team.model";
 import {Category} from "../../models/category.model";
 import {PersonService} from "../../services/person.service";
+import {extractErrorMessage} from "../../utils/http-error.util";
 
 
 @Component({
@@ -254,7 +256,7 @@ import {PersonService} from "../../services/person.service";
                     mat-raised-button
                     color="primary"
                     (click)="onSave()"
-                    [disabled]="!form.valid"
+                    [disabled]="!form.valid || saving"
             >
                 Speichern
             </button>
@@ -305,10 +307,12 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     private personService = inject(PersonService);
     private cdr = inject(ChangeDetectorRef);
+    private snackBar = inject(MatSnackBar);
     private destroy$ = new Subject<void>();
 
     form: FormGroup;
     mode: "existing" | "new" = "existing";
+    saving = false;
     resultUnit = ResultUnit;
     selectedRace: Race | null = null;
     genderOptions = [
@@ -459,7 +463,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     }
 
     onSave(): void {
-        if (!this.form.valid) {
+        if (!this.form.valid || this.saving) {
             return;
         }
 
@@ -508,8 +512,21 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             gender: formValue.newGender,
             externalId: formValue.newExternalId || undefined,
         };
-        this.personService.create(personRequest).subscribe(person => {
-            this.dialogRef.close(buildRequest(person.id));
+        this.saving = true;
+        this.cdr.markForCheck();
+        this.personService.create(personRequest).subscribe({
+            next: person => {
+                this.dialogRef.close(buildRequest(person.id));
+            },
+            error: error => {
+                this.saving = false;
+                this.snackBar.open(
+                    `FEHLER beim Anlegen der Person: ${extractErrorMessage(error, "Failed to create person")}`,
+                    "OK",
+                    {duration: 5000},
+                );
+                this.cdr.markForCheck();
+            },
         });
     }
 

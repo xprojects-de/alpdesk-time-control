@@ -1,4 +1,5 @@
 import {Injectable, inject} from '@angular/core';
+import {HttpErrorResponse} from '@angular/common/http';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
@@ -56,12 +57,20 @@ export class RaceEffects {
     deleteRace$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.deleteRace),
-            mergeMap(({id}) =>
-                this.raceService.delete(id).pipe(
+            mergeMap(({id, force}) =>
+                this.raceService.delete(id, force).pipe(
                     map(() => RaceActions.deleteRaceSuccess({id})),
-                    catchError(error => of(RaceActions.deleteRaceFailure({
-                        error: extractErrorMessage(error, 'Failed to delete race')
-                    })))
+                    catchError(error => {
+                        if (error instanceof HttpErrorResponse && error.status === 409) {
+                            return of(RaceActions.deleteRaceConflict({
+                                id,
+                                message: extractErrorMessage(error, 'Failed to delete race')
+                            }));
+                        }
+                        return of(RaceActions.deleteRaceFailure({
+                            error: extractErrorMessage(error, 'Failed to delete race')
+                        }));
+                    })
                 )
             )
         )

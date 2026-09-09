@@ -66,6 +66,7 @@ public class RaceMeasurementController {
     @ApiResponse(responseCode = "200", description = "Race measurement updated", content = @Content(schema = @Schema(implementation = RaceMeasurementResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Participant is already assigned to another measurement in this race")
     public HttpResponse<?> update(@PathVariable Long id, @Body RaceMeasurementRequest request) {
         Optional<RaceMeasurement> existing = service.findById(id);
         if (existing.isEmpty()) {
@@ -88,7 +89,12 @@ public class RaceMeasurementController {
                 request.durationMs(),
                 request.measuredAt()
         );
-        Optional<RaceMeasurement> updated = service.update(id, raceMeasurement);
+        Optional<RaceMeasurement> updated;
+        try {
+            updated = service.update(id, raceMeasurement);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
         return updated.map(m -> HttpResponse.ok((Object) RaceMeasurementResponse.from(m)))
                 .orElse(HttpResponse.notFound());
     }

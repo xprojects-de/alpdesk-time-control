@@ -8,6 +8,7 @@ import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
@@ -179,6 +180,8 @@ public class MeasurementController {
                 } else {
                     return HttpResponse.ok("All measurements deleted successfully");
                 }
+            } catch (DataAccessException e) {
+                throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
             } catch (Exception e) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Error during reset operation: " + e.getMessage()));

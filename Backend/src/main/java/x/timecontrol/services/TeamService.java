@@ -3,6 +3,7 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.TeamRequest;
 import x.timecontrol.entities.Team;
+import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.TeamRepository;
 
 import java.util.Collections;
@@ -15,9 +16,11 @@ import java.util.Set;
 public class TeamService {
 
     private final TeamRepository repository;
+    private final ParticipantRepository participantRepository;
 
-    public TeamService(TeamRepository repository) {
+    public TeamService(TeamRepository repository, ParticipantRepository participantRepository) {
         this.repository = repository;
+        this.participantRepository = participantRepository;
     }
 
     public Team create(Team team) {
@@ -62,7 +65,17 @@ public class TeamService {
         return Optional.empty();
     }
 
-    public void delete(Long id) {
+    /**
+     * @throws IllegalStateException if participants are still assigned to this team and {@code force} is false
+     */
+    public void delete(Long id, boolean force) {
+        if (!force) {
+            long assigned = participantRepository.countByTeamId(id);
+            if (assigned > 0) {
+                throw new IllegalStateException(assigned + " Teilnehmer sind diesem Team zugeordnet. " +
+                        "Beim Löschen wird die Team-Zuordnung bei diesen Teilnehmern entfernt. Trotzdem löschen?");
+            }
+        }
         repository.deleteById(id);
     }
 

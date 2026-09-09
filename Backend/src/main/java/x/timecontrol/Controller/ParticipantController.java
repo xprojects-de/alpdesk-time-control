@@ -11,6 +11,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
 import x.timecontrol.services.RaceService;
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
@@ -336,6 +337,8 @@ public class ParticipantController {
             byte[] pdfBytes = body.generate(participants, race.get());
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=" + filename);
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return HttpResponse.serverError(new ErrorResponse("Failed to generate PDF: " + reason))

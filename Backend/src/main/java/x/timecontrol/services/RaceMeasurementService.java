@@ -43,10 +43,20 @@ public class RaceMeasurementService {
         return repository.findById(id);
     }
 
+    /**
+     * @throws IllegalStateException if participantId is already assigned to another measurement of the same race
+     */
     public Optional<RaceMeasurement> update(Long id, RaceMeasurement raceMeasurement) {
         return measurementTableLock.get(() -> {
             Optional<RaceMeasurement> existing = repository.findById(id);
             if (existing.isPresent()) {
+                if (raceMeasurement.participantId() != null) {
+                    Optional<RaceMeasurement> conflict = repository.findByRaceIdAndParticipantId(
+                            existing.get().raceId(), raceMeasurement.participantId());
+                    if (conflict.isPresent() && !conflict.get().id().equals(id)) {
+                        throw new IllegalStateException("This participant is already assigned to another measurement in this race");
+                    }
+                }
                 RaceMeasurement updated = new RaceMeasurement(
                         id,
                         existing.get().raceId(),

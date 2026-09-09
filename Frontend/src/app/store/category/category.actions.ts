@@ -39,7 +39,7 @@ export const updateCategoryFailure = createAction(
 
 export const deleteCategory = createAction(
     '[Category] Delete Category',
-    props<{ id: number }>()
+    props<{ id: number; force?: boolean }>()
 );
 export const deleteCategorySuccess = createAction(
     '[Category] Delete Category Success',
@@ -48,4 +48,8 @@ export const deleteCategorySuccess = createAction(
 export const deleteCategoryFailure = createAction(
     '[Category] Delete Category Failure',
     props<{ error: string }>()
+);
+export const deleteCategoryConflict = createAction(
+    '[Category] Delete Category Conflict',
+    props<{ id: number; message: string }>()
 );

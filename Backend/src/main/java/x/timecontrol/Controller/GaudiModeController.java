@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
@@ -175,6 +176,8 @@ public class GaudiModeController {
         }
         try {
             return HttpResponse.ok(service.computeRanking(gaudiMode.get()));
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to compute ranking: " + e.getMessage()));
         }
@@ -213,6 +216,8 @@ public class GaudiModeController {
 
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + ".pdf");
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             // The method-level @Produces forces "application/pdf" on a plain HttpResponse.serverError();
             // overriding the content type here is what makes the JSON ErrorResponse body actually readable
@@ -303,6 +308,8 @@ public class GaudiModeController {
             byte[] pdfBytes = body.generate(gaudiMode, ranking, races);
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + "_" + filenameSuffix);
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))

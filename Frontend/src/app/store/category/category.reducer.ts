@@ -79,5 +79,9 @@ export const categoryReducer = createReducer(
         ...state,
         loading: false,
         error
+    })),
+    on(CategoryActions.deleteCategoryConflict, state => ({
+        ...state,
+        loading: false
     }))
 );

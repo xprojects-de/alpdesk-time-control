@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {HttpErrorResponse} from '@angular/common/http';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
@@ -56,12 +57,20 @@ export class CategoryEffects {
     deleteCategory$ = createEffect(() =>
         this.actions$.pipe(
             ofType(CategoryActions.deleteCategory),
-            mergeMap(({id}) =>
-                this.categoryService.delete(id).pipe(
+            mergeMap(({id, force}) =>
+                this.categoryService.delete(id, force).pipe(
                     map(() => CategoryActions.deleteCategorySuccess({id})),
-                    catchError(error => of(CategoryActions.deleteCategoryFailure({
-                        error: extractErrorMessage(error, 'Failed to delete category')
-                    })))
+                    catchError(error => {
+                        if (error instanceof HttpErrorResponse && error.status === 409) {
+                            return of(CategoryActions.deleteCategoryConflict({
+                                id,
+                                message: extractErrorMessage(error, 'Failed to delete category')
+                            }));
+                        }
+                        return of(CategoryActions.deleteCategoryFailure({
+                            error: extractErrorMessage(error, 'Failed to delete category')
+                        }));
+                    })
                 )
             )
         )

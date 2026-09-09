@@ -5,6 +5,7 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.RaceRepository;
 
 import java.util.Collections;
@@ -17,9 +18,11 @@ import java.util.Set;
 public class RaceService {
 
     private final RaceRepository repository;
+    private final ParticipantRepository participantRepository;
 
-    public RaceService(RaceRepository repository) {
+    public RaceService(RaceRepository repository, ParticipantRepository participantRepository) {
         this.repository = repository;
+        this.participantRepository = participantRepository;
     }
 
     public Race create(Race race) {
@@ -82,7 +85,18 @@ public class RaceService {
         return Optional.empty();
     }
 
-    public void delete(Long id) {
+    /**
+     * @throws IllegalStateException if participants are still assigned to this race and {@code force} is false
+     */
+    public void delete(Long id, boolean force) {
+        if (!force) {
+            long assigned = participantRepository.countByRaceId(id);
+            if (assigned > 0) {
+                throw new IllegalStateException(assigned + " Teilnehmer sind diesem Rennen zugeordnet. " +
+                        "Beim Löschen werden alle Teilnehmer, Messungen und Zuordnungen dieses Rennens " +
+                        "unwiderruflich gelöscht. Trotzdem löschen?");
+            }
+        }
         repository.deleteById(id);
     }
 

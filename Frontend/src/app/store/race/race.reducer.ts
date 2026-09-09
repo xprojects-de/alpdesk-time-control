@@ -79,6 +79,10 @@ export const raceReducer = createReducer(
         loading: false,
         error
     })),
+    on(RaceActions.deleteRaceConflict, state => ({
+        ...state,
+        loading: false
+    })),
     on(RaceActions.selectRace, (state, {id}) => ({
         ...state,
         selectedRaceId: id

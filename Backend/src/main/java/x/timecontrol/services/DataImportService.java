@@ -91,6 +91,11 @@ public class DataImportService {
                         double timeValue = Double.parseDouble(parts[1].trim());
                         int durationMs = (int) Math.round(timeValue);
 
+                        if (durationMs < 0) {
+                            LOG.warn("Ignoring negative duration from device for ID {}: {} ms", id, durationMs);
+                            continue;
+                        }
+
                         var existingMeasurement = measurementService.findById(id);
                         Long existingParticipantId = existingMeasurement
                                 .map(Measurement::participantId)

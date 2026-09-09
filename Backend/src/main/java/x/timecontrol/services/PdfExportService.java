@@ -748,7 +748,10 @@ public class PdfExportService {
     }
 
     private static float stringWidth(PDFont font, float fontSize, String text) throws IOException {
-        return font.getStringWidth(text) / 1000 * fontSize;
+        // Sanitized for the same reason as drawText(): getStringWidth() throws for the same
+        // out-of-Latin-1 characters showText() would, so wrapping/measuring must see the exact
+        // text that will actually be drawn.
+        return font.getStringWidth(sanitizeForPdf(text)) / 1000 * fontSize;
     }
 
     private record ParticipantWithPerson(Participant participant, Person person) {
@@ -914,8 +917,34 @@ public class PdfExportService {
         stream.setFont(font, size);
         stream.beginText();
         stream.newLineAtOffset(x, y);
-        stream.showText(text);
+        stream.showText(sanitizeForPdf(text));
         stream.endText();
+    }
+
+    /**
+     * The standard-14 Helvetica fonts only support WinAnsi/Latin-1 characters; showText() throws
+     * for anything outside that range (e.g. Slovenian/Croatian š, ž, č, đ or Polish ł, ń - realistic
+     * in participant/team names). Diacritics are folded off via NFKD decomposition, the handful of
+     * common letters that don't decompose that way are mapped by hand, and anything still outside
+     * Latin-1 is replaced with '?' so PDF export can never fail on a name it can't render exactly.
+     */
+    private static String sanitizeForPdf(String text) {
+        if (text == null) {
+            return "";
+        }
+        String withKnownSubstitutions = text
+                .replace('ł', 'l').replace('Ł', 'L')
+                .replace('đ', 'd').replace('Đ', 'D');
+        String decomposed = java.text.Normalizer.normalize(withKnownSubstitutions, java.text.Normalizer.Form.NFKD);
+        StringBuilder result = new StringBuilder(decomposed.length());
+        for (int i = 0; i < decomposed.length(); i++) {
+            char c = decomposed.charAt(i);
+            if (Character.getType(c) == Character.NON_SPACING_MARK) {
+                continue;
+            }
+            result.append(c <= 0xFF ? c : '?');
+        }
+        return result.toString();
     }
 
     /**

@@ -9,6 +9,7 @@ import {
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
+import {Actions, ofType} from "@ngrx/effects";
 import {Observable, Subject} from "rxjs";
 import {takeUntil} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
@@ -281,6 +282,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 export class GaudiModeDetailComponent implements OnDestroy {
     private store = inject(Store);
     private snackBar = inject(MatSnackBar);
+    private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
     gaudiMode = input.required<GaudiMode>();
@@ -325,6 +327,25 @@ export class GaudiModeDetailComponent implements OnDestroy {
             if (gaudiMode.type === GaudiModeType.LOS) {
                 this.store.dispatch(GaudiModeActions.loadPairing({id: gaudiMode.id}));
             }
+        });
+
+        this.actions$.pipe(
+            ofType(GaudiModeActions.pairingFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER bei der Auslosung: ${error}`, "OK", {duration: 5000});
+        });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.loadRankingFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Laden der Rangliste: ${error}`, "OK", {duration: 5000});
+        });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.exportPdfFailure, GaudiModeActions.exportPdfByGenderFailure, GaudiModeActions.exportPdfAllAgeGroupsFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 5000});
         });
     }
 
