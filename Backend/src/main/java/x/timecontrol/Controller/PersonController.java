@@ -74,13 +74,18 @@ public class PersonController {
     @Operation(summary = "Create a new person", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Person created", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Another person with this externalId already exists")
     public HttpResponse<?> add(@Body PersonRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
         }
         Person person = service.createFromRequest(request);
-        Person created = service.create(person);
-        return HttpResponse.created(PersonResponse.from(created));
+        try {
+            Person created = service.create(person);
+            return HttpResponse.created(PersonResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -90,12 +95,18 @@ public class PersonController {
     @ApiResponse(responseCode = "200", description = "Person updated", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Another person with this externalId already exists")
     public HttpResponse<?> update(@PathVariable Long id, @Body PersonRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
         }
         Person person = service.createFromRequest(request);
-        Optional<Person> updated = service.update(id, person);
+        Optional<Person> updated;
+        try {
+            updated = service.update(id, person);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
         return updated.map(p -> HttpResponse.ok((Object) PersonResponse.from(p)))
                 .orElse(HttpResponse.notFound());
     }

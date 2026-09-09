@@ -136,14 +136,14 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "200", description = "Pairing drawn", content = @Content(schema = @Schema(implementation = GaudiLosPairingResponse.class)))
     @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type LOS")
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
-    public HttpResponse<List<GaudiLosPairingResponse>> draw(@PathVariable Long id) {
+    public HttpResponse<?> draw(@PathVariable Long id) {
         Optional<GaudiMode> gaudiModeOpt = service.findById(id);
         if (gaudiModeOpt.isEmpty()) {
             return HttpResponse.notFound();
         }
         GaudiMode gaudiMode = gaudiModeOpt.get();
         if (gaudiMode.type() != GaudiModeType.LOS) {
-            return HttpResponse.badRequest();
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Drawing a pairing is only valid for type LOS"));
         }
 
         List<GaudiLosPairing> pairing = service.drawLosPairing(gaudiMode);
@@ -186,7 +186,7 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportPdf(@PathVariable Long id) {
+    public HttpResponse<?> exportPdf(@PathVariable Long id) {
         Optional<GaudiMode> gaudiModeOpt = service.findById(id);
         if (gaudiModeOpt.isEmpty()) {
             return HttpResponse.notFound();
@@ -214,7 +214,12 @@ public class GaudiModeController {
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + ".pdf");
         } catch (Exception e) {
-            return HttpResponse.serverError();
+            // The method-level @Produces forces "application/pdf" on a plain HttpResponse.serverError();
+            // overriding the content type here is what makes the JSON ErrorResponse body actually readable
+            // as JSON instead of being mislabeled as a (broken) PDF download.
+            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))
+                    .contentType(MediaType.APPLICATION_JSON);
         }
     }
 

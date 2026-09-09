@@ -1,6 +1,6 @@
 import {HttpErrorResponse, HttpInterceptorFn} from '@angular/common/http';
 import {inject} from '@angular/core';
-import {throwError} from 'rxjs';
+import {catchError, throwError} from 'rxjs';
 import {AuthService} from '../services/auth.service';
 import {Router} from '@angular/router';
 
@@ -12,6 +12,20 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     if (req.url.includes('/login')) {
         return next(req);
     }
+
+    // Regardless of what local state says, a 401/403 from the backend itself (secret rotated,
+    // clock skew making a token look valid locally, server restart) means the session is no
+    // longer good - without this, the app would stay "authenticated" while every request quietly
+    // fails, with no logout and no redirect to explain why.
+    const handleAuthResponse = (request: typeof req) => next(request).pipe(
+        catchError(error => {
+            if (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403)) {
+                authService.logout();
+                router.navigate(['/login']).then();
+            }
+            return throwError(() => error);
+        })
+    );
 
     if (token) {
 
@@ -35,9 +49,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
                 Authorization: `Bearer ${token}`
             }
         });
-        return next(clonedRequest);
+        return handleAuthResponse(clonedRequest);
     }
 
-    return next(req);
+    return handleAuthResponse(req);
 };
 

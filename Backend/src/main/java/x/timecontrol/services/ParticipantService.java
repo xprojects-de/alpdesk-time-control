@@ -216,6 +216,18 @@ public class ParticipantService {
      * rather than duplicated.
      */
     public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds) {
+        // Now that PRAGMA foreign_keys=ON is enabled, saving a participant for a race that doesn't
+        // exist would otherwise throw a raw FK-constraint exception straight out of repository.save()
+        // instead of a clean, caught error.
+        if (raceService.findById(sourceRaceId).isEmpty()) {
+            throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
+        }
+        for (Long targetRaceId : targetRaceIds) {
+            if (raceService.findById(targetRaceId).isEmpty()) {
+                throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
+            }
+        }
+
         List<Participant> sourceParticipants = StreamSupport
                 .stream(repository.findByRaceId(sourceRaceId).spliterator(), false)
                 .toList();

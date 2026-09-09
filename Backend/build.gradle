@@ -94,15 +94,10 @@ tasks.named("dockerfile") {
 }
 
 tasks.withType(AbstractTestTask).configureEach {
-    failOnNoDiscoveredTests = false
+    // Now that a real Spock suite exists, a misconfigured test source set or a broken Groovy/Spock
+    // plugin wiring that silently drops every test should fail the build, not pass it by omission.
+    failOnNoDiscoveredTests = true
 }
-
-/*jar {
-    archiveFileName = 'time-control.jar'
-    manifest {
-        attributes 'Main-Class': 'x.timecontrol.Application'
-    }
-}*/
 
 shadowJar {
     archiveFileName = 'time-control.jar'

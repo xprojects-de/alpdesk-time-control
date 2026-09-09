@@ -147,8 +147,13 @@ public class ParticipantController {
             description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, raceNumber/durationMs/penalty/measuredAt left empty). A person already present in a target race is skipped rather than duplicated.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Participants copied", content = @Content(schema = @Schema(implementation = ParticipantCopyResponse.class)))
-    public HttpResponse<ParticipantCopyResponse> copyParticipants(@Body ParticipantCopyRequest request) {
-        return HttpResponse.ok(service.copyParticipants(request.sourceRaceId(), request.targetRaceIds()));
+    @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
+    public HttpResponse<?> copyParticipants(@Body ParticipantCopyRequest request) {
+        try {
+            return HttpResponse.ok(service.copyParticipants(request.sourceRaceId(), request.targetRaceIds()));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -157,7 +162,11 @@ public class ParticipantController {
             description = "Assigns race numbers 1..n to all participants of a race, randomized within each age group; participants without a matching age group are assigned last, ordered by ascending age",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
-    public HttpResponse<List<ParticipantResponse>> assignRaceNumbers(@PathVariable Long raceId) {
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> assignRaceNumbers(@PathVariable Long raceId) {
+        if (raceService.findById(raceId).isEmpty()) {
+            return HttpResponse.notFound();
+        }
         List<Participant> updated = service.assignRaceNumbers(raceId);
         return HttpResponse.ok(service.toResponses(updated));
     }
@@ -177,7 +186,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantImportResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "Import failed")
-    public HttpResponse<ParticipantImportResponse> importCsv(@PathVariable Long raceId, @Part("file") CompletedFileUpload file) {
+    public HttpResponse<?> importCsv(@PathVariable Long raceId, @Part("file") CompletedFileUpload file) {
         Optional<Race> race = raceService.findById(raceId);
         if (race.isEmpty()) {
             return HttpResponse.notFound();
@@ -190,7 +199,7 @@ public class ParticipantController {
 
             return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
         } catch (IOException e) {
-            return HttpResponse.serverError();
+            return HttpResponse.serverError(new ErrorResponse("Failed to read the uploaded file: " + e.getMessage()));
         }
     }
 
@@ -202,23 +211,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportStartListToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateStartList(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=startliste.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportStartListToPdf(@PathVariable Long raceId) {
+        return exportPdf(raceId, "startliste.pdf", pdfExportService::generateStartList);
     }
 
     @Produces("application/pdf")
@@ -229,23 +223,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateOverallRanking(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gesamtwertung.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportAllToPdf(@PathVariable Long raceId) {
+        return exportPdf(raceId, "gesamtwertung.pdf", pdfExportService::generateOverallRanking);
     }
 
     @Produces("application/pdf")
@@ -256,23 +235,9 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByGenderToPdf(@PathVariable String gender, @PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateGenderRanking(participants, gender, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_" + gender.toLowerCase() + ".pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportByGenderToPdf(@PathVariable String gender, @PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + ".pdf",
+                (participants, race) -> pdfExportService.generateGenderRanking(participants, gender, race));
     }
 
     @Produces("application/pdf")
@@ -283,23 +248,9 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByAgeGroupAndGenderToPdf(@PathVariable String ageGroup, @PathVariable String gender, @PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateAgeGroupGenderRanking(participants, ageGroup, gender, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportByAgeGroupAndGenderToPdf(@PathVariable String ageGroup, @PathVariable String gender, @PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
+                (participants, race) -> pdfExportService.generateAgeGroupGenderRanking(participants, ageGroup, gender, race));
     }
 
     @Produces("application/pdf")
@@ -310,23 +261,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllAgeGroupsToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateAllAgeGroupsRanking(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_altersklassen.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportAllAgeGroupsToPdf(@PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_altersklassen.pdf", pdfExportService::generateAllAgeGroupsRanking);
     }
 
     @Produces("application/pdf")
@@ -337,23 +273,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllByCategoryToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateOverallByCategoryRanking(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gesamtwertung_kategorien.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportAllByCategoryToPdf(@PathVariable Long raceId) {
+        return exportPdf(raceId, "gesamtwertung_kategorien.pdf", pdfExportService::generateOverallByCategoryRanking);
     }
 
     @Produces("application/pdf")
@@ -364,23 +285,9 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByGenderByCategoryToPdf(@PathVariable String gender, @PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateGenderByCategoryRanking(participants, gender, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_" + gender.toLowerCase() + "_kategorien.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportByGenderByCategoryToPdf(@PathVariable String gender, @PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + "_kategorien.pdf",
+                (participants, race) -> pdfExportService.generateGenderByCategoryRanking(participants, gender, race));
     }
 
     @Produces("application/pdf")
@@ -391,23 +298,8 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportAllAgeGroupsByCategoryToPdf(@PathVariable Long raceId) {
-        try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
-            Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateAllAgeGroupsByCategoryRanking(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_altersklassen_kategorien.pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
-        } catch (Exception e) {
-            return HttpResponse.serverError();
-        }
+    public HttpResponse<?> exportAllAgeGroupsByCategoryToPdf(@PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_altersklassen_kategorien.pdf", pdfExportService::generateAllAgeGroupsByCategoryRanking);
     }
 
     @Produces("application/pdf")
@@ -418,22 +310,36 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
-    public HttpResponse<byte[]> exportByCategoryToPdf(@PathVariable Long categoryId, @PathVariable Long raceId) {
+    public HttpResponse<?> exportByCategoryToPdf(@PathVariable Long categoryId, @PathVariable Long raceId) {
+        return exportPdf(raceId, "wertung_kategorie_" + categoryId + ".pdf",
+                (participants, race) -> pdfExportService.generateCategoryRanking(participants, categoryId, race));
+    }
+
+    @FunctionalInterface
+    private interface PdfBody {
+        byte[] generate(Iterable<Participant> participants, Race race) throws Exception;
+    }
+
+    /**
+     * Shared race-lookup + generate + error-handling scaffold for all PDF export endpoints above
+     * (previously duplicated ~9 times). On failure, the response's content type is explicitly
+     * overridden to JSON - the method-level {@code @Produces("application/pdf")} would otherwise
+     * force that header onto the error body too, mislabeling an ErrorResponse as a broken PDF.
+     */
+    private HttpResponse<?> exportPdf(Long raceId, String filename, PdfBody body) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
         try {
-            Optional<Race> race = raceService.findById(raceId);
-            if (race.isEmpty()) {
-                return HttpResponse.notFound();
-            }
-
             Iterable<Participant> participants = service.findByRaceId(raceId);
-
-            byte[] pdfBytes = pdfExportService.generateCategoryRanking(participants, categoryId, race.get());
+            byte[] pdfBytes = body.generate(participants, race.get());
             return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=wertung_kategorie_" + categoryId + ".pdf");
-        } catch (IllegalArgumentException e) {
-            return HttpResponse.serverError().body(e.getMessage().getBytes());
+                    .header("Content-Disposition", "attachment; filename=" + filename);
         } catch (Exception e) {
-            return HttpResponse.serverError();
+            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            return HttpResponse.serverError(new ErrorResponse("Failed to generate PDF: " + reason))
+                    .contentType(MediaType.APPLICATION_JSON);
         }
     }
 

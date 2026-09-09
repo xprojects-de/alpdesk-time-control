@@ -6,6 +6,7 @@ import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
+import x.timecontrol.services.ParticipantService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
@@ -40,6 +41,9 @@ public class MeasurementController {
 
     @Inject
     DataImportScheduler dataImportScheduler;
+
+    @Inject
+    ParticipantService participantService;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -83,7 +87,10 @@ public class MeasurementController {
     @Operation(summary = "Create a new measurement", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Measurement created", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<MeasurementResponse> add(@Body MeasurementRequest request) {
+    public HttpResponse<?> add(@Body MeasurementRequest request) {
+        if (request.participantId() != null && participantService.findById(request.participantId()).isEmpty()) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -101,7 +108,10 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurement updated", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "404", description = "Measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<MeasurementResponse> update(@PathVariable Long id, @Body MeasurementRequest request) {
+    public HttpResponse<?> update(@PathVariable Long id, @Body MeasurementRequest request) {
+        if (request.participantId() != null && participantService.findById(request.participantId()).isEmpty()) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -109,7 +119,7 @@ public class MeasurementController {
                 request.measuredAt()
         );
         Optional<Measurement> updated = service.update(id, measurement);
-        return updated.map(m -> HttpResponse.ok(MeasurementResponse.from(m)))
+        return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
                 .orElse(HttpResponse.notFound());
     }
 

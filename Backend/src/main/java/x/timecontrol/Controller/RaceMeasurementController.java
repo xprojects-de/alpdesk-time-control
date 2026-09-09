@@ -66,7 +66,20 @@ public class RaceMeasurementController {
     @ApiResponse(responseCode = "200", description = "Race measurement updated", content = @Content(schema = @Schema(implementation = RaceMeasurementResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<RaceMeasurementResponse> update(@PathVariable Long id, @Body RaceMeasurementRequest request) {
+    public HttpResponse<?> update(@PathVariable Long id, @Body RaceMeasurementRequest request) {
+        Optional<RaceMeasurement> existing = service.findById(id);
+        if (existing.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        if (request.participantId() != null) {
+            Optional<Participant> participant = participantService.findById(request.participantId());
+            if (participant.isEmpty()) {
+                return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+            }
+            if (!participant.get().raceId().equals(existing.get().raceId())) {
+                return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant does not belong to this race"));
+            }
+        }
         RaceMeasurement raceMeasurement = new RaceMeasurement(
                 null,
                 null,
@@ -76,7 +89,7 @@ public class RaceMeasurementController {
                 request.measuredAt()
         );
         Optional<RaceMeasurement> updated = service.update(id, raceMeasurement);
-        return updated.map(m -> HttpResponse.ok(RaceMeasurementResponse.from(m)))
+        return updated.map(m -> HttpResponse.ok((Object) RaceMeasurementResponse.from(m)))
                 .orElse(HttpResponse.notFound());
     }
 

@@ -18,13 +18,21 @@ export class AuthService {
     login(credentials: LoginRequest): Observable<LoginResponse> {
         return this.http.post<LoginResponse>(this.apiUrl, credentials).pipe(
             tap(response => {
-                const token = response.access_token || response.token;
+                const token = this.extractToken(response);
                 if (token) {
                     this.setToken(token);
                     this.setUsername(credentials.username);
                 }
             })
         );
+    }
+
+    /**
+     * The single place that knows which response field carries the token, so a login response
+     * missing both can be told apart from one that has it - see auth.effects.ts's login$.
+     */
+    extractToken(response: LoginResponse): string | null {
+        return response.access_token || response.token || null;
     }
 
     logout(): void {

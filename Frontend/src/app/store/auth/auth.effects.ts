@@ -21,6 +21,12 @@ export class AuthEffects {
                     map(response => {
                         // Store username in response
                         const enhancedResponse = {...response, username: credentials.username};
+                        if (!this.authService.extractToken(enhancedResponse)) {
+                            // A 2xx response with no token would otherwise still be treated as a
+                            // successful login (isAuthenticated: true with a null token), leaving
+                            // every subsequent request unauthenticated with no explanation.
+                            throw new Error('Login response did not include an authentication token');
+                        }
                         return AuthActions.loginSuccess({response: enhancedResponse});
                     }),
                     catchError(error => of(AuthActions.loginFailure({

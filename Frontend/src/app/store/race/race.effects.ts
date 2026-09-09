@@ -2,7 +2,7 @@ import {Injectable, inject} from '@angular/core';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
-import {map, catchError, switchMap} from 'rxjs/operators';
+import {map, catchError, mergeMap} from 'rxjs/operators';
 import {RaceService} from '../../services/race.service';
 import * as RaceActions from './race.actions';
 
@@ -14,7 +14,7 @@ export class RaceEffects {
     loadRaces$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.loadRaces),
-            switchMap(() =>
+            mergeMap(() =>
                 this.raceService.getAll().pipe(
                     map(races => RaceActions.loadRacesSuccess({races})),
                     catchError(error => of(RaceActions.loadRacesFailure({
@@ -28,7 +28,7 @@ export class RaceEffects {
     createRace$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.createRace),
-            switchMap(({race}) =>
+            mergeMap(({race}) =>
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceSuccess({race})),
                     catchError(error => of(RaceActions.createRaceFailure({
@@ -42,7 +42,7 @@ export class RaceEffects {
     updateRace$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.updateRace),
-            switchMap(({id, race}) =>
+            mergeMap(({id, race}) =>
                 this.raceService.update(id, race).pipe(
                     map(race => RaceActions.updateRaceSuccess({race})),
                     catchError(error => of(RaceActions.updateRaceFailure({
@@ -56,7 +56,7 @@ export class RaceEffects {
     deleteRace$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.deleteRace),
-            switchMap(({id}) =>
+            mergeMap(({id}) =>
                 this.raceService.delete(id).pipe(
                     map(() => RaceActions.deleteRaceSuccess({id})),
                     catchError(error => of(RaceActions.deleteRaceFailure({

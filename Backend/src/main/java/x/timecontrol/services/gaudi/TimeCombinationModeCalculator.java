@@ -11,8 +11,6 @@ import x.timecontrol.services.RankingService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,20 +41,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        Map<Long, Map<Long, Integer>> placesByRace = new HashMap<>();
-        for (RaceParticipants race : races) {
-            placesByRace.put(race.raceId(), rankingService.computePlaces(race.race(), race.participants()));
-        }
-
-        // one participant row per (personId, raceId), so a leg can be looked up per person
-        Map<Long, Map<Long, Participant>> participantByPersonAndRace = new LinkedHashMap<>();
-        for (RaceParticipants race : races) {
-            for (Participant p : race.participants()) {
-                participantByPersonAndRace
-                        .computeIfAbsent(p.personId(), k -> new HashMap<>())
-                        .put(race.raceId(), p);
-            }
-        }
+        Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
+        Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
 
         record PersonResult(String label, int totalMs, List<GaudiRankingLegResponse> legs) {
         }

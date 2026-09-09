@@ -58,6 +58,8 @@ public class RaceService {
         Optional<Race> existing = repository.findById(id);
         if (existing.isPresent()) {
             assertNameAvailable(race.name(), id);
+            // resultUnit/sortDirection defaulting is already applied once, in createFromRequest() -
+            // the only place that ever builds the `race` object passed in here.
             Race updated = new Race(
                     id,
                     race.name(),
@@ -71,9 +73,9 @@ public class RaceService {
                     race.routeLength(),
                     race.courseSetter(),
                     race.weather(),
-                    race.resultUnit() != null ? race.resultUnit() : ResultUnit.TIME,
+                    race.resultUnit(),
                     race.resultUnitLabel(),
-                    race.sortDirection() != null ? race.sortDirection() : SortDirection.ASC
+                    race.sortDirection()
             );
             return Optional.of(repository.update(updated));
         }

@@ -45,8 +45,11 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     def setup() {
         pointsScaleService.findById(1L) >> Optional.of(scale)
-        pointsScaleService.pointsForPlace(scale, 1) >> 100
-        pointsScaleService.pointsForPlace(scale, 2) >> 80
+        // Production code now parses the scale once per computeRanking() call and looks up points
+        // via the pre-parsed List<Integer> overload instead of re-parsing per person/leg.
+        pointsScaleService.parsePoints(scale) >> [100, 80, 60]
+        pointsScaleService.pointsForPlace(_ as List, 1) >> 100
+        pointsScaleService.pointsForPlace(_ as List, 2) >> 80
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
     }
 

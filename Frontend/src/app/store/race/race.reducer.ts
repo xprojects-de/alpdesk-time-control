@@ -36,7 +36,8 @@ export const raceReducer = createReducer(
     })),
     on(RaceActions.createRace, (state) => ({
         ...state,
-        loading: true
+        loading: true,
+        error: null
     })),
     on(RaceActions.createRaceSuccess, (state, {race}) => ({
         ...state,
@@ -50,7 +51,8 @@ export const raceReducer = createReducer(
     })),
     on(RaceActions.updateRace, (state) => ({
         ...state,
-        loading: true
+        loading: true,
+        error: null
     })),
     on(RaceActions.updateRaceSuccess, (state, {race}) => ({
         ...state,
@@ -64,7 +66,8 @@ export const raceReducer = createReducer(
     })),
     on(RaceActions.deleteRace, (state) => ({
         ...state,
-        loading: true
+        loading: true,
+        error: null
     })),
     on(RaceActions.deleteRaceSuccess, (state, {id}) => ({
         ...state,

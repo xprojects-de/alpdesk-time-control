@@ -29,9 +29,15 @@ public class RankingService {
             return null;
         }
         int penalty = participant.penalty() != null ? participant.penalty() : 0;
-        return race.sortDirection() == SortDirection.DESC
+        int adjusted = race.sortDirection() == SortDirection.DESC
                 ? participant.durationMs() - penalty
                 : participant.durationMs() + penalty;
+        // A penalty larger than the raw result on a DESC race (higher-is-better, e.g. points)
+        // would otherwise go negative here; ParticipantService only rejects a negative penalty,
+        // not one that exceeds the result, and formatTime()/formatDuration() render a negative
+        // value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly. Floor at 0
+        // to keep that impossible regardless of which direction the caller's race sorts in.
+        return Math.max(0, adjusted);
     }
 
     public Comparator<Participant> comparator(Race race) {

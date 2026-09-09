@@ -25,6 +25,7 @@ public class PersonService {
     }
 
     public Person create(Person person) {
+        assertExternalIdAvailable(person.externalId(), null);
         return repository.save(person);
     }
 
@@ -62,10 +63,24 @@ public class PersonService {
     public Optional<Person> update(Long id, Person person) {
         Optional<Person> existing = repository.findById(id);
         if (existing.isPresent()) {
+            assertExternalIdAvailable(person.externalId(), id);
             Person updated = new Person(id, person.firstName(), person.lastName(), person.birthDate(), person.gender(), person.externalId());
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
+    }
+
+    /**
+     * @throws IllegalStateException if another person already has this externalId
+     */
+    private void assertExternalIdAvailable(String externalId, Long excludeId) {
+        if (externalId == null || externalId.isBlank()) {
+            return;
+        }
+        Optional<Person> conflict = repository.findByExternalId(externalId);
+        if (conflict.isPresent() && !conflict.get().id().equals(excludeId)) {
+            throw new IllegalStateException("A person with externalId \"" + externalId + "\" already exists");
+        }
     }
 
     /**

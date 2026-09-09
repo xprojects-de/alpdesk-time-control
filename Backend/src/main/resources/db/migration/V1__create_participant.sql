@@ -83,6 +83,7 @@ CREATE TABLE measurement
 
     FOREIGN KEY (participant_id)
         REFERENCES participant (id)
+        ON DELETE SET NULL
 );
 
 CREATE TABLE race_measurement
@@ -99,6 +100,7 @@ CREATE TABLE race_measurement
         ON DELETE CASCADE,
     FOREIGN KEY (participant_id)
         REFERENCES participant (id)
+        ON DELETE SET NULL
 );
 
 CREATE INDEX idx_race_measurement_race_id ON race_measurement (race_id);

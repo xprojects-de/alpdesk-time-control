@@ -13,8 +13,6 @@ import x.timecontrol.services.RankingService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,19 +55,10 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        Map<Long, Map<Long, Integer>> placesByRace = new HashMap<>();
-        for (RaceParticipants race : races) {
-            placesByRace.put(race.raceId(), rankingService.computePlaces(race.race(), race.participants()));
-        }
-
-        Map<Long, Map<Long, Participant>> participantByPersonAndRace = new LinkedHashMap<>();
-        for (RaceParticipants race : races) {
-            for (Participant p : race.participants()) {
-                participantByPersonAndRace
-                        .computeIfAbsent(p.personId(), k -> new HashMap<>())
-                        .put(race.raceId(), p);
-            }
-        }
+        Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
+        Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
+        // Parsed once here rather than inside pointsForPlace() on every call below (person x race).
+        List<Integer> scalePoints = pointsScaleService.parsePoints(scale);
 
         record PersonResult(String label, int totalPoints, List<GaudiRankingLegResponse> legs) {
         }
@@ -98,7 +87,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                 Participant p = byRace.get(race.raceId());
                 Integer place = p != null ? placesByRace.get(race.raceId()).get(p.id()) : null;
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
-                int points = place != null ? (int) Math.round(pointsScaleService.pointsForPlace(scale, place) * race.weight()) : 0;
+                int points = place != null ? (int) Math.round(pointsScaleService.pointsForPlace(scalePoints, place) * race.weight()) : 0;
                 totalPoints += points;
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
