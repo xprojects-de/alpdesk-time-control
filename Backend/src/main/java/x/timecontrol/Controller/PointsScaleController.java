@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
+import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.PointsScaleRequest;
 import x.timecontrol.dto.PointsScaleResponse;
 import x.timecontrol.entities.PointsScale;
@@ -61,13 +62,18 @@ public class PointsScaleController {
     @Operation(summary = "Create a new points scale", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Points scale created", content = @Content(schema = @Schema(implementation = PointsScaleResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "A points scale with this name already exists")
     public HttpResponse<?> add(@Body PointsScaleRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and a non-empty points list are required"));
+            return HttpResponse.badRequest(new ErrorResponse("name and a non-empty points list are required"));
         }
         PointsScale pointsScale = service.createFromRequest(request);
-        PointsScale created = service.create(pointsScale);
-        return HttpResponse.created(PointsScaleResponse.from(created));
+        try {
+            PointsScale created = service.create(pointsScale);
+            return HttpResponse.created(PointsScaleResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -77,12 +83,18 @@ public class PointsScaleController {
     @ApiResponse(responseCode = "200", description = "Points scale updated", content = @Content(schema = @Schema(implementation = PointsScaleResponse.class)))
     @ApiResponse(responseCode = "404", description = "Points scale not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "A points scale with this name already exists")
     public HttpResponse<?> update(@PathVariable Long id, @Body PointsScaleRequest request) {
         if (!isValid(request)) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and a non-empty points list are required"));
+            return HttpResponse.badRequest(new ErrorResponse("name and a non-empty points list are required"));
         }
         PointsScale pointsScale = service.createFromRequest(request);
-        Optional<PointsScale> updated = service.update(id, pointsScale);
+        Optional<PointsScale> updated;
+        try {
+            updated = service.update(id, pointsScale);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
         return updated.map(p -> HttpResponse.ok((Object) PointsScaleResponse.from(p)))
                 .orElse(HttpResponse.notFound());
     }

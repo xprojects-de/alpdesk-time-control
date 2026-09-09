@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
@@ -134,7 +135,7 @@ public class MeasurementController {
      */
     private HttpResponse<?> validateParticipantId(Long participantId) {
         if (participantId != null && participantService.findById(participantId).isEmpty()) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + participantId + " does not exist"));
+            return HttpResponse.badRequest(new ErrorResponse("Participant with id " + participantId + " does not exist"));
         }
         return null;
     }
@@ -158,7 +159,7 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
-    public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
+    public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
         return dataImportScheduler.pauseDuring(() -> {
             try {
                 // If device reset is requested, do it first before deleting database
@@ -166,7 +167,7 @@ public class MeasurementController {
                     boolean deviceReset = dataImportService.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()
-                                .body("Failed to reset device. Database was not modified.");
+                                .body(new ErrorResponse("Failed to reset device. Database was not modified."));
                     }
                 }
 
@@ -180,7 +181,7 @@ public class MeasurementController {
                 }
             } catch (Exception e) {
                 return HttpResponse.serverError()
-                        .body("Error during reset operation: " + e.getMessage());
+                        .body(new ErrorResponse("Error during reset operation: " + e.getMessage()));
             }
         });
     }
@@ -191,12 +192,12 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Continuous mode set successfully")
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
-    public HttpResponse<String> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
+    public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
         try {
             boolean success = dataImportService.continuousMode(enable);
             if (!success) {
                 return HttpResponse.serverError()
-                        .body("Failed to set continuous mode on device");
+                        .body(new ErrorResponse("Failed to set continuous mode on device"));
             }
 
             if (enable) {
@@ -206,7 +207,7 @@ public class MeasurementController {
             }
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error during continuous mode operation: " + e.getMessage());
+                    .body(new ErrorResponse("Error during continuous mode operation: " + e.getMessage()));
         }
     }
 
@@ -216,17 +217,17 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Device status retrieved successfully")
     @ApiResponse(responseCode = "500", description = "Failed to get device status")
-    public HttpResponse<String> getDeviceStatus() {
+    public HttpResponse<?> getDeviceStatus() {
         try {
             String status = dataImportService.getDeviceStatus();
             if (status == null) {
                 return HttpResponse.serverError()
-                        .body("Failed to get device status");
+                        .body(new ErrorResponse("Failed to get device status"));
             }
             return HttpResponse.ok(status);
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error getting device status: " + e.getMessage());
+                    .body(new ErrorResponse("Error getting device status: " + e.getMessage()));
         }
     }
 
@@ -257,17 +258,17 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Oldest start discarded successfully")
     @ApiResponse(responseCode = "400", description = "Queue empty or not applicable in continuous mode")
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
-    public HttpResponse<String> discardOldestStart() {
+    public HttpResponse<?> discardOldestStart() {
         try {
             boolean success = dataImportService.discardOldestStart();
             if (!success) {
                 return HttpResponse.badRequest()
-                        .body("Failed to discard oldest start. Queue may be empty or device is in continuous mode.");
+                        .body(new ErrorResponse("Failed to discard oldest start. Queue may be empty or device is in continuous mode."));
             }
             return HttpResponse.ok("Oldest start discarded successfully");
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error discarding oldest start: " + e.getMessage());
+                    .body(new ErrorResponse("Error discarding oldest start: " + e.getMessage()));
         }
     }
 

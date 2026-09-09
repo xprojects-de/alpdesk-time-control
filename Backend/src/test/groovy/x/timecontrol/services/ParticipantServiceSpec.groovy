@@ -196,6 +196,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "CSV import reports a row-level error instead of aborting the whole import"() {
         given: "the second row's participant save fails (e.g. a transient DB error)"
+        repository.findByRaceId(5L) >> []
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -221,6 +222,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "CSV import does not duplicate a person who is matched via ExternalId and already a participant of this race"() {
         given:
+        repository.findByRaceId(5L) >> []
         def existingPerson = new Person(1L, "John", "Doe", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
         personService.findByExternalId("EXT-1") >> Optional.of(existingPerson)
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
@@ -238,5 +240,26 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 1
         result.errors()[0].reason().contains("already a participant")
+    }
+
+    def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {
+        given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
+        def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)
+        repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null)]
+        personService.findById(2L) >> Optional.of(existingPerson)
+
+        def csv = "Lastname,Firstname,Birthdate,Team,Gender\n" +
+                "Doe,Jane,1990-01-01,Team A,FEMALE\n"
+        def reader = new BufferedReader(new StringReader(csv))
+
+        when:
+        def result = service.importFromCsv(5L, reader)
+
+        then: "the row is reported as a duplicate instead of creating a second Person/Participant"
+        0 * personService.create(_)
+        0 * repository.save(_)
+        result.imported().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("already in this race")
     }
 }

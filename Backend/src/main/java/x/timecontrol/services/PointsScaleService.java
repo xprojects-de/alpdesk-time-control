@@ -20,6 +20,7 @@ public class PointsScaleService {
     }
 
     public PointsScale create(PointsScale pointsScale) {
+        assertNameAvailable(pointsScale.name(), null);
         return repository.save(pointsScale);
     }
 
@@ -38,6 +39,7 @@ public class PointsScaleService {
     public Optional<PointsScale> update(Long id, PointsScale pointsScale) {
         Optional<PointsScale> existing = repository.findById(id);
         if (existing.isPresent()) {
+            assertNameAvailable(pointsScale.name(), id);
             PointsScale updated = new PointsScale(id, pointsScale.name(), pointsScale.pointsCsv());
             return Optional.of(repository.update(updated));
         }
@@ -46,6 +48,16 @@ public class PointsScaleService {
 
     public void delete(Long id) {
         repository.deleteById(id);
+    }
+
+    /**
+     * @throws IllegalStateException if another points scale already has this name (case-insensitive)
+     */
+    private void assertNameAvailable(String name, Long excludeId) {
+        Optional<PointsScale> conflict = repository.findByNameIgnoreCase(name);
+        if (conflict.isPresent() && !conflict.get().id().equals(excludeId)) {
+            throw new IllegalStateException("A points scale named \"" + name + "\" already exists");
+        }
     }
 
     public PointsScale createFromRequest(PointsScaleRequest request) {

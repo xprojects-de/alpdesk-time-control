@@ -10,4 +10,5 @@ import java.util.Optional;
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface PointsScaleRepository extends CrudRepository<PointsScale, Long> {
     Optional<PointsScale> findByName(String name);
+    Optional<PointsScale> findByNameIgnoreCase(String name);
 }

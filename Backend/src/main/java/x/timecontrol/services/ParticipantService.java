@@ -363,6 +363,18 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
 
+        // Rows without an ExternalId always create a brand-new Person (see javadoc above), so
+        // re-uploading the same roster twice - or a file that accidentally lists someone twice -
+        // would otherwise silently double every such participant instead of being reported.
+        // Seeded from everyone already in this race, and grown as rows are imported below so
+        // duplicate rows within the same file are also caught.
+        Set<String> existingNameBirthDateKeys = new HashSet<>();
+        for (Participant existingParticipant : repository.findByRaceId(raceId)) {
+            personService.findById(existingParticipant.personId())
+                    .ifPresent(person -> existingNameBirthDateKeys.add(
+                            nameBirthDateKey(person.lastName(), person.firstName(), person.birthDate())));
+        }
+
         String line;
         int lineNumber = 0;
 
@@ -412,6 +424,15 @@ public class ParticipantService {
                 continue;
             }
 
+            if (externalId.isEmpty()) {
+                String key = nameBirthDateKey(lastName, firstName, birthDate);
+                if (existingNameBirthDateKeys.contains(key)) {
+                    errors.add(new ParticipantImportRowError(lineNumber, line,
+                            "A participant with this name and birthdate is already in this race (no ExternalId to disambiguate); row skipped"));
+                    continue;
+                }
+            }
+
             // Each row is its own transaction: a failure saving the participant rolls back a
             // just-created person for that row too (no orphan Person left behind), and does not
             // abort rows that were already imported successfully or rows still to come.
@@ -439,6 +460,9 @@ public class ParticipantService {
                     return repository.save(participant);
                 });
                 imported.add(saved);
+                if (externalId.isEmpty()) {
+                    existingNameBirthDateKeys.add(nameBirthDateKey(lastName, firstName, birthDate));
+                }
             } catch (Exception e) {
                 String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                 LOG.warn("Failed to import row {} for race {}: {}", lineNumber, raceId, reason);
@@ -449,6 +473,10 @@ public class ParticipantService {
         LOG.info("CSV import for race {} finished: {} imported, {} skipped", raceId, imported.size(), errors.size());
 
         return new ParticipantImportResult(imported, errors);
+    }
+
+    private static String nameBirthDateKey(String lastName, String firstName, LocalDate birthDate) {
+        return lastName.trim().toLowerCase() + "|" + firstName.trim().toLowerCase() + "|" + birthDate;
     }
 
     private Gender parseGender(String rawGender) {

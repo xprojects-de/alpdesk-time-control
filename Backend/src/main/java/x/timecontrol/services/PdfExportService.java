@@ -97,6 +97,7 @@ public class PdfExportService {
         List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
                 .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
+        List<AgeGroup> ageGroups = loadAgeGroups();
 
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
@@ -105,7 +106,7 @@ public class PdfExportService {
             String name = formatName(person);
             String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
             String gender = person != null ? genderLabel(person.gender()) : "-";
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
             String team = p.teamId() != null
                     ? teamService.findById(p.teamId()).map(Team::name).orElse("-")
                     : "-";
@@ -498,6 +499,8 @@ public class PdfExportService {
                                                                      Gender filterGender,
                                                                      String filterAgeGroup,
                                                                      Long filterCategoryId) {
+        List<AgeGroup> ageGroups = loadAgeGroups();
+
         // Only keep participants that have a measured result, resolving each one's Person once
         List<ParticipantWithPerson> validParticipants = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> rankingService.adjustedValue(race, p) != null)
@@ -516,7 +519,7 @@ public class PdfExportService {
                         }
 
                         if (filterAgeGroup != null) {
-                            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+                            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
                             if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
                                 return false;
                             }
@@ -556,7 +559,7 @@ public class PdfExportService {
             Person person = sortedParticipants.get(i).person();
 
             String name = formatName(person);
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate()) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
             Integer adjustedValue = rankingService.adjustedValue(race, p);
             Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
 
@@ -581,18 +584,24 @@ public class PdfExportService {
         return personService.displayName(person);
     }
 
-    private String calculateAgeGroup(LocalDate birthDate) {
+    /**
+     * Loads all age groups once per PDF export so per-participant age-group lookups
+     * (potentially thousands for a large by-age-group/category export) don't each hit the
+     * database - see {@link #calculateAgeGroup(LocalDate, List)}.
+     */
+    private List<AgeGroup> loadAgeGroups() {
+        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+    }
+
+    private String calculateAgeGroup(LocalDate birthDate, List<AgeGroup> ageGroups) {
         if (birthDate == null) {
             return "Unbekannt";
         }
 
         int birthYear = birthDate.getYear();
 
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
-                .toList();
-
         for (AgeGroup ageGroup : ageGroups) {
-            if (birthYear >= ageGroup.birthYearFrom() && birthYear <= ageGroup.birthYearTo()) {
+            if (ageGroupService.isYearInAgeGroup(ageGroup, birthYear)) {
                 return ageGroup.name();
             }
         }

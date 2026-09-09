@@ -71,6 +71,9 @@ CREATE INDEX idx_participant_person_id ON participant (person_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
 CREATE INDEX idx_participant_category_id ON participant (category_id);
 CREATE UNIQUE INDEX idx_participant_race_race_number_unique ON participant (race_id, race_number);
+-- Enforces "one person per race" at the DB level (application code already checks this, but
+-- without this index two concurrent requests could both pass that check and create duplicates).
+CREATE UNIQUE INDEX idx_participant_race_person_unique ON participant (race_id, person_id);
 
 CREATE TABLE measurement
 (

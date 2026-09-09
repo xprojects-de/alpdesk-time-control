@@ -145,11 +145,21 @@ public class GaudiModeService {
             // Summing raw values across races only makes sense if they share the same result unit
             // (e.g. all TIME); mixing TIME and POINTS races would sum incompatible quantities.
             Set<x.timecontrol.entities.ResultUnit> units = new LinkedHashSet<>();
+            // ...and the same sort direction: TimeCombinationModeCalculator sums each leg's
+            // adjusted value and ranks the total ascending (smaller is better), which is only
+            // correct if every leg agrees on which direction "better" is.
+            Set<x.timecontrol.entities.SortDirection> sortDirections = new LinkedHashSet<>();
             for (GaudiModeRaceEntry entry : races) {
-                raceService.findById(entry.raceId()).ifPresent(race -> units.add(race.resultUnit()));
+                raceService.findById(entry.raceId()).ifPresent(race -> {
+                    units.add(race.resultUnit());
+                    sortDirections.add(race.sortDirection());
+                });
             }
             if (units.size() > 1) {
                 throw new IllegalArgumentException("All races combined in a TIME_COMBINATION must use the same result unit");
+            }
+            if (sortDirections.size() > 1) {
+                throw new IllegalArgumentException("All races combined in a TIME_COMBINATION must use the same sort direction");
             }
         }
         if (type == GaudiModeType.TEAM && (teamSize == null || teamSize < 1)) {

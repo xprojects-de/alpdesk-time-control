@@ -19,7 +19,7 @@ public class MeasurementService {
     }
 
     public Measurement create(Measurement measurement) {
-        return repository.save(measurement);
+        return measurementTableLock.get(() -> repository.save(measurement));
     }
 
     public Iterable<Measurement> findAll() {
@@ -35,21 +35,23 @@ public class MeasurementService {
     }
 
     public Optional<Measurement> update(Long id, Measurement measurement) {
-        Optional<Measurement> existing = repository.findById(id);
-        if (existing.isPresent()) {
-            Measurement updated = new Measurement(
-                    id,
-                    measurement.participantId(),
-                    measurement.durationMs(),
-                    measurement.measuredAt()
-            );
-            return Optional.of(repository.update(updated));
-        }
-        return Optional.empty();
+        return measurementTableLock.get(() -> {
+            Optional<Measurement> existing = repository.findById(id);
+            if (existing.isPresent()) {
+                Measurement updated = new Measurement(
+                        id,
+                        measurement.participantId(),
+                        measurement.durationMs(),
+                        measurement.measuredAt()
+                );
+                return Optional.of(repository.update(updated));
+            }
+            return Optional.empty();
+        });
     }
 
     public void delete(Long id) {
-        repository.deleteById(id);
+        measurementTableLock.run(() -> repository.deleteById(id));
     }
 
     @jakarta.transaction.Transactional
@@ -61,8 +63,10 @@ public class MeasurementService {
     }
 
     public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
-        repository.insertOrReplaceWithId(id, participantId, durationMs, measuredAt);
-        return repository.findById(id).orElseThrow();
+        return measurementTableLock.get(() -> {
+            repository.insertOrReplaceWithId(id, participantId, durationMs, measuredAt);
+            return repository.findById(id).orElseThrow();
+        });
     }
 }
 

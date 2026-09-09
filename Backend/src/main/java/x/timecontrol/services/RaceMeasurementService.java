@@ -44,22 +44,24 @@ public class RaceMeasurementService {
     }
 
     public Optional<RaceMeasurement> update(Long id, RaceMeasurement raceMeasurement) {
-        Optional<RaceMeasurement> existing = repository.findById(id);
-        if (existing.isPresent()) {
-            RaceMeasurement updated = new RaceMeasurement(
-                    id,
-                    existing.get().raceId(),
-                    existing.get().deviceMeasurementId(),
-                    raceMeasurement.participantId(),
-                    raceMeasurement.durationMs(),
-                    raceMeasurement.measuredAt()
-            );
-            return Optional.of(repository.update(updated));
-        }
-        return Optional.empty();
+        return measurementTableLock.get(() -> {
+            Optional<RaceMeasurement> existing = repository.findById(id);
+            if (existing.isPresent()) {
+                RaceMeasurement updated = new RaceMeasurement(
+                        id,
+                        existing.get().raceId(),
+                        existing.get().deviceMeasurementId(),
+                        raceMeasurement.participantId(),
+                        raceMeasurement.durationMs(),
+                        raceMeasurement.measuredAt()
+                );
+                return Optional.of(repository.update(updated));
+            }
+            return Optional.empty();
+        });
     }
 
     public void delete(Long id) {
-        repository.deleteById(id);
+        measurementTableLock.run(() -> repository.deleteById(id));
     }
 }

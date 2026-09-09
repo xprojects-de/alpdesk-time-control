@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
+import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Race;
@@ -145,7 +146,7 @@ public class RaceController {
     @ApiResponse(responseCode = "200", description = "Measurements archived successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "Archive failed")
-    public HttpResponse<String> archiveMeasurements(@PathVariable Long raceId,
+    public HttpResponse<?> archiveMeasurements(@PathVariable Long raceId,
                                                       @QueryValue(defaultValue = "true") boolean resetDevice,
                                                       @QueryValue(defaultValue = "true") boolean clearAfterArchive) {
         if (service.findById(raceId).isEmpty()) {
@@ -159,7 +160,7 @@ public class RaceController {
                 raceMeasurementService.copyMeasurements(raceId);
                 return HttpResponse.ok("Measurements archived successfully (database and device left unchanged)");
             } catch (Exception e) {
-                return HttpResponse.serverError().body("Error during archive operation: " + e.getMessage());
+                return HttpResponse.serverError().body(new ErrorResponse("Error during archive operation: " + e.getMessage()));
             }
         }
 
@@ -169,7 +170,7 @@ public class RaceController {
                     boolean deviceReset = dataImportService.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()
-                                .body("Failed to reset device. Measurements were not archived.");
+                                .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
                     }
                 }
 
@@ -181,7 +182,7 @@ public class RaceController {
                 }
             } catch (Exception e) {
                 return HttpResponse.serverError()
-                        .body("Error during archive operation: " + e.getMessage());
+                        .body(new ErrorResponse("Error during archive operation: " + e.getMessage()));
             }
         });
     }
