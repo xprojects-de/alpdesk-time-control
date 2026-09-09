@@ -30,25 +30,26 @@ public class GlobalExceptionHandler {
     @Error(global = true, exception = DataAccessException.class)
     public HttpResponse<ErrorResponse> handleDataAccessException(HttpRequest<?> request, DataAccessException exception) {
         String rootMessage = rootCauseMessage(exception);
-        if (isConstraintViolation(rootMessage)) {
-            LOG.warn("Constraint violation on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
+        String lower = rootMessage == null ? "" : rootMessage.toLowerCase();
+
+        // A uniqueness violation genuinely means "this conflicts with something that already
+        // exists" (e.g. two concurrent requests racing past an app-level pre-check) - 409 fits.
+        if (lower.contains("unique constraint")) {
+            LOG.warn("Uniqueness violation on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
             return HttpResponse.status(HttpStatus.CONFLICT)
                     .body(new ErrorResponse("Die Aktion steht im Konflikt mit einem bestehenden Eintrag und konnte nicht ausgeführt werden."));
+        }
+        // NOT NULL / CHECK / FOREIGN KEY violations mean the request itself was missing or
+        // referencing invalid data, not that it conflicts with an existing entry - 400 fits
+        // better than 409 here (e.g. a required field a controller didn't validate itself).
+        if (lower.contains("not null constraint") || lower.contains("check constraint") || lower.contains("foreign key constraint")) {
+            LOG.warn("Invalid data on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
+            return HttpResponse.status(HttpStatus.BAD_REQUEST)
+                    .body(new ErrorResponse("Die Anfrage enthält ungültige oder unvollständige Daten."));
         }
         LOG.error("Unhandled persistence error on {} {}", request.getMethod(), request.getPath(), exception);
         return HttpResponse.<ErrorResponse>serverError()
                 .body(new ErrorResponse("Ein unerwarteter Fehler ist aufgetreten."));
-    }
-
-    private static boolean isConstraintViolation(String message) {
-        if (message == null) {
-            return false;
-        }
-        String lower = message.toLowerCase();
-        return lower.contains("unique constraint")
-                || lower.contains("foreign key constraint")
-                || lower.contains("not null constraint")
-                || lower.contains("check constraint");
     }
 
     private static String rootCauseMessage(Throwable throwable) {

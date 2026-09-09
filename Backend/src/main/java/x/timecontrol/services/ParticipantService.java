@@ -367,12 +367,17 @@ public class ParticipantService {
         // re-uploading the same roster twice - or a file that accidentally lists someone twice -
         // would otherwise silently double every such participant instead of being reported.
         // Seeded from everyone already in this race, and grown as rows are imported below so
-        // duplicate rows within the same file are also caught.
+        // duplicate rows within the same file are also caught. Persons are batch-loaded (like
+        // toResponses() does) instead of one findById() per existing participant.
+        List<Participant> existingParticipants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        Set<Long> existingPersonIds = existingParticipants.stream().map(Participant::personId).collect(Collectors.toSet());
+        Map<Long, Person> existingPersonsById = personService.findByIds(existingPersonIds);
         Set<String> existingNameBirthDateKeys = new HashSet<>();
-        for (Participant existingParticipant : repository.findByRaceId(raceId)) {
-            personService.findById(existingParticipant.personId())
-                    .ifPresent(person -> existingNameBirthDateKeys.add(
-                            nameBirthDateKey(person.lastName(), person.firstName(), person.birthDate())));
+        for (Participant existingParticipant : existingParticipants) {
+            Person person = existingPersonsById.get(existingParticipant.personId());
+            if (person != null) {
+                existingNameBirthDateKeys.add(nameBirthDateKey(person.lastName(), person.firstName(), person.birthDate()));
+            }
         }
 
         String line;

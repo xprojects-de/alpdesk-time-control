@@ -246,7 +246,7 @@ class ParticipantServiceSpec extends Specification {
         given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
         def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)
         repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null)]
-        personService.findById(2L) >> Optional.of(existingPerson)
+        personService.findByIds([2L] as Set) >> [2L: existingPerson]
 
         def csv = "Lastname,Firstname,Birthdate,Team,Gender\n" +
                 "Doe,Jane,1990-01-01,Team A,FEMALE\n"
