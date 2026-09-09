@@ -1,5 +1,6 @@
 package x.timecontrol.services
 
+import io.micronaut.data.exceptions.DataAccessException
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
 import x.timecontrol.entities.Gender
@@ -240,6 +241,91 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 1
         result.errors()[0].reason().contains("already a participant")
+    }
+
+    def "copyParticipants carries over the race number when requested and not already taken"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        def result = service.copyParticipants(1L, [2L], true)
+
+        then:
+        1 * repository.save({ Participant p -> p.raceNumber() == 7 })
+        result.copiedCount() == 1
+        result.skippedCount() == 0
+    }
+
+    def "copyParticipants leaves the race number empty when carryStartNumber is false"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        service.copyParticipants(1L, [2L], false)
+
+        then:
+        1 * repository.save({ Participant p -> p.raceNumber() == null })
+    }
+
+    def "copyParticipants skips the race number when it's already taken in the target race"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        def alreadyInTarget = new Participant(2L, 2L, 20L, 7, null, null, null, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> [alreadyInTarget]
+
+        when:
+        service.copyParticipants(1L, [2L], true)
+
+        then:
+        1 * repository.save({ Participant p -> p.raceNumber() == null })
+    }
+
+    def "copyParticipants falls back to no race number when a concurrent write already claimed it"() {
+        given: "the in-memory pre-check saw the number as free, but the DB save loses a race to a concurrent write"
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        def result = service.copyParticipants(1L, [2L], true)
+
+        then: "the first save (with raceNumber 7) fails with a uniqueness violation, the retry without it succeeds"
+        1 * repository.save({ Participant p -> p.raceNumber() == 7 }) >> {
+            throw new DataAccessException("UNIQUE constraint failed: participant.race_id, participant.race_number")
+        }
+        1 * repository.save({ Participant p -> p.raceNumber() == null })
+        noExceptionThrown()
+        result.copiedCount() == 1
+        result.skippedCount() == 0
+    }
+
+    def "copyParticipants does not swallow a non-uniqueness persistence failure"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+        repository.save(_) >> { throw new DataAccessException("NOT NULL constraint failed: participant.race_id") }
+
+        when:
+        service.copyParticipants(1L, [2L], true)
+
+        then:
+        thrown(DataAccessException)
     }
 
     def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {

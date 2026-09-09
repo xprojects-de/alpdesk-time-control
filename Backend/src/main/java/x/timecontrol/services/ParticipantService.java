@@ -16,6 +16,7 @@ import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.ParticipantRepository;
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.transaction.TransactionOperations;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -261,17 +262,41 @@ public class ParticipantService {
                 Integer raceNumber = null;
                 if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
                     raceNumber = source.raceNumber();
-                    existingRaceNumbers.add(raceNumber);
                 }
                 Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
                         source.teamId(), source.categoryId(), null, null, null);
-                repository.save(copy);
+                try {
+                    repository.save(copy);
+                } catch (DataAccessException e) {
+                    // existingRaceNumbers is a snapshot taken before this loop started - it can be
+                    // stale if another request concurrently claimed this race number in the same
+                    // target race. Fall back to no start number for this participant instead of
+                    // aborting the rest of the copy over a single collision.
+                    if (raceNumber == null || !isUniqueConstraintViolation(e)) {
+                        throw e;
+                    }
+                    repository.save(new Participant(null, targetRaceId, source.personId(), null,
+                            source.teamId(), source.categoryId(), null, null, null));
+                    raceNumber = null;
+                }
+                if (raceNumber != null) {
+                    existingRaceNumbers.add(raceNumber);
+                }
                 existingPersonIds.add(source.personId());
                 copied++;
             }
         }
 
         return new ParticipantCopyResponse(copied, skipped);
+    }
+
+    private static boolean isUniqueConstraintViolation(DataAccessException e) {
+        Throwable cause = e;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String message = cause.getMessage();
+        return message != null && message.toLowerCase().contains("unique constraint");
     }
 
     /**

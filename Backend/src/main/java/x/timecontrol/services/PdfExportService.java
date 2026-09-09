@@ -694,17 +694,49 @@ public class PdfExportService {
 
     /**
      * Wraps a sequence of logical blocks (each kept intact on one line whenever possible) into
-     * lines no wider than {@code maxWidth}, joining blocks that share a line with a separator.
+     * lines no wider than {@code maxWidth}, joining blocks that share a line with a separator. A
+     * single block that doesn't fit even on its own empty line (e.g. an unusually long name) is
+     * itself wrapped word-by-word rather than left to overflow the page.
      */
     private static List<String> wrapBlocks(List<String> blocks, PDFont font, float fontSize, float maxWidth) throws IOException {
         List<String> lines = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         for (String block : blocks) {
             String candidate = current.isEmpty() ? block : current + "   |   " + block;
-            float width = font.getStringWidth(candidate) / 1000 * fontSize;
-            if (width > maxWidth && !current.isEmpty()) {
+            if (stringWidth(font, fontSize, candidate) <= maxWidth) {
+                current = new StringBuilder(candidate);
+                continue;
+            }
+            if (!current.isEmpty()) {
                 lines.add(current.toString());
+                current = new StringBuilder();
+            }
+            if (stringWidth(font, fontSize, block) <= maxWidth) {
                 current = new StringBuilder(block);
+            } else {
+                List<String> wrapped = wrapWords(block, font, fontSize, maxWidth);
+                lines.addAll(wrapped.subList(0, wrapped.size() - 1));
+                current = new StringBuilder(wrapped.get(wrapped.size() - 1));
+            }
+        }
+        if (!current.isEmpty()) {
+            lines.add(current.toString());
+        }
+        return lines;
+    }
+
+    /**
+     * Word-by-word wrap for a single block too wide to fit {@code maxWidth} even alone - the
+     * fallback {@link #wrapBlocks} uses instead of drawing that block past the page margin.
+     */
+    private static List<String> wrapWords(String text, PDFont font, float fontSize, float maxWidth) throws IOException {
+        List<String> lines = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String candidate = current.isEmpty() ? word : current + " " + word;
+            if (stringWidth(font, fontSize, candidate) > maxWidth && !current.isEmpty()) {
+                lines.add(current.toString());
+                current = new StringBuilder(word);
             } else {
                 current = new StringBuilder(candidate);
             }
@@ -713,6 +745,10 @@ public class PdfExportService {
             lines.add(current.toString());
         }
         return lines;
+    }
+
+    private static float stringWidth(PDFont font, float fontSize, String text) throws IOException {
+        return font.getStringWidth(text) / 1000 * fontSize;
     }
 
     private record ParticipantWithPerson(Participant participant, Person person) {
