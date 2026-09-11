@@ -73,7 +73,7 @@ public class PdfExportService {
     private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
             new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
-            new PdfColumn<>("Altersgruppe", 1.2f, e -> truncate(e.ageGroup(), 16)),
+            new PdfColumn<>("Altersgr.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.3f, e -> truncate(e.team(), 18)),
             new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
             new PdfColumn<>("Strafe", 0.9f, RankingEntry::penaltyFormatted),
@@ -109,14 +109,17 @@ public class PdfExportService {
     }
 
     /**
-     * Drops the "Strafe" column when none of the entries actually have a penalty, instead of
-     * always reserving space for a column that would otherwise show "-"/zero for every row.
+     * Drops the "Strafe" and "Gesamt" columns when none of the entries actually have a penalty,
+     * instead of always reserving space for columns that would otherwise show "-"/zero for every
+     * row, or duplicate "Wert" verbatim since Gesamt == Wert when there is no penalty to add.
      */
     private List<PdfColumn<RankingEntry>> rankingColumns(List<RankingEntry> entries) {
         if (entries.stream().anyMatch(RankingEntry::hasPenalty)) {
             return RANKING_COLUMNS;
         }
-        return RANKING_COLUMNS.stream().filter(c -> !c.header().equals("Strafe")).toList();
+        return RANKING_COLUMNS.stream()
+                .filter(c -> !c.header().equals("Strafe") && !c.header().equals("Gesamt"))
+                .toList();
     }
 
     private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
@@ -967,13 +970,13 @@ public class PdfExportService {
         int totalSeconds = timeMs / 1000;
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;
-        int millis = timeMs % 1000;
+        int tenths = (timeMs % 1000) / 100;
 
-        return String.format("%d:%02d.%03d", minutes, seconds, millis);
+        return String.format("%d:%02d.%d", minutes, seconds, tenths);
     }
 
     /**
-     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SSS) or a
+     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.S) or a
      * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
      */
     private static String formatValue(Race race, Integer value) {
