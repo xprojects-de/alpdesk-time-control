@@ -63,9 +63,9 @@ import {Actions, ofType} from "@ngrx/effects";
                 <div class="filter-section">
                     <mat-form-field appearance="outline">
                         <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async" 
+                        <mat-select [value]="selectedRaceId$ | async"
                                    (selectionChange)="onRaceFilterChange($event.value)">
-                            <mat-option [value]="null">Alle Rennen</mat-option>
+                            <mat-option [value]="null">Rennen auswählen...</mat-option>
                             @for (race of races$ | async; track race.id) {
                                 <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
                             }
@@ -221,6 +221,9 @@ import {Actions, ofType} from "@ngrx/effects";
                     </mat-menu>
                 </div>
 
+                @if ((selectedRaceId$ | async) === null) {
+                    <p class="hint">Bitte ein Rennen auswählen, um dessen Teilnehmer anzuzeigen.</p>
+                } @else {
                 @if (loading$ | async) {
                     <div class="loading-container">
                         <mat-spinner></mat-spinner>
@@ -365,6 +368,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <div class="count-info" [class.hidden]="loading$ | async">
                     Anzahl der Teilnehmer: {{ dataSource.data.length }}
                 </div>
+                }
             </mat-card-content>
         </mat-card>
     `,
@@ -420,6 +424,10 @@ import {Actions, ofType} from "@ngrx/effects";
             font-size: 14px;
             font-weight: 500;
             color: rgba(0, 0, 0, 0.87);
+          }
+
+          .hint {
+            color: rgba(0, 0, 0, 0.6);
           }
         `,
     ],
