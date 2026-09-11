@@ -24,6 +24,7 @@ import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeRace;
 import x.timecontrol.entities.GaudiModeType;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.GaudiModeService;
@@ -241,8 +242,12 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByGender(@PathVariable Long id, @PathVariable String gender) {
         return exportPointsCombinationPdf(id, gender.toLowerCase() + ".pdf",
-                (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationGenderRanking(
-                        gaudiMode.name(), ranking, races, races.getFirst(), gender));
+                (gaudiMode, races) -> {
+                    List<GaudiRankingEntryResponse> ranking =
+                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
+                    return pdfExportService.generatePointsCombinationGenderRanking(
+                            gaudiMode.name(), ranking, races, races.getFirst(), gender);
+                });
     }
 
     @Produces("application/pdf")
@@ -256,8 +261,12 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
         return exportPointsCombinationPdf(id, ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
-                (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                        gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender));
+                (gaudiMode, races) -> {
+                    List<GaudiRankingEntryResponse> ranking =
+                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
+                    return pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
+                            gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender);
+                });
     }
 
     @Produces("application/pdf")
@@ -271,13 +280,14 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfAllAgeGroups(@PathVariable Long id) {
         return exportPointsCombinationPdf(id, "altersklassen.pdf",
-                (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
-                        gaudiMode.name(), ranking, races, races.getFirst()));
+                (gaudiMode, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
+                        gaudiMode.name(), races, races.getFirst(),
+                        (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName)));
     }
 
     @FunctionalInterface
     private interface PointsCombinationPdfBody {
-        byte[] generate(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> ranking, List<Race> races) throws Exception;
+        byte[] generate(GaudiMode gaudiMode, List<Race> races) throws Exception;
     }
 
     /**
@@ -306,8 +316,7 @@ public class GaudiModeController {
         }
 
         try {
-            List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
-            byte[] pdfBytes = body.generate(gaudiMode, ranking, races);
+            byte[] pdfBytes = body.generate(gaudiMode, races);
             return HttpResponse.ok(pdfBytes)
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + "_" + filenameSuffix);
         } catch (DataAccessException e) {

@@ -24,6 +24,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -169,16 +170,6 @@ public class PdfExportService {
     private Map<Long, Category> loadCategoriesByIds(List<Participant> participants, Function<Participant, Long> idFn) {
         Set<Long> ids = participants.stream().map(idFn).filter(Objects::nonNull).collect(Collectors.toSet());
         return categoryService.findByIds(ids);
-    }
-
-    /**
-     * Batch-loads the {@link Person}s referenced by a list of Gaudimodus ranking entries, so
-     * {@link #filterAndRePlacePointsCombinationEntries} can look them up from a map instead of
-     * querying per entry per age-group/gender section.
-     */
-    private Map<Long, Person> loadPersonsByEntryIds(List<GaudiRankingEntryResponse> entries) {
-        Set<Long> ids = entries.stream().map(GaudiRankingEntryResponse::personId).filter(Objects::nonNull).collect(Collectors.toSet());
-        return personService.findByIds(ids);
     }
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
@@ -403,60 +394,63 @@ public class PdfExportService {
     }
 
     /**
-     * Punkte-Mischwertung gefiltert nach Geschlecht, analogous to {@link #generateGenderRanking}
-     * for normal participant rankings. Places are recomputed within the filtered subset so "Platz"
-     * reflects the position within that gender rather than the overall ranking.
+     * Punkte-Mischwertung for one gender, analogous to {@link #generateGenderRanking} for normal
+     * participant rankings. Unlike that method, there's nothing to filter here: {@code entries} is
+     * expected to already be the result of {@code GaudiModeService.computeRankingForCategory}, i.e.
+     * a ranking recomputed from scratch using only that gender's participants in each leg race - so
+     * "Platz" and the per-leg breakdown are relative to that gender, not the whole field.
      */
     public byte[] generatePointsCombinationGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                           List<Race> legRaces, Race headerRace, String genderStr) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(
-                entries, gender, null, loadAgeGroups(), loadPersonsByEntryIds(entries));
         String fullTitle = title + " - " + genderLabel(gender);
 
         return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, filtered, "Teilnehmer", true,
+                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
                         e -> pointsCombinationDetailBlocks(e, legRaces)));
     }
 
     /**
-     * Punkte-Mischwertung gefiltert nach Altersklasse und Geschlecht, analogous to
-     * {@link #generateAgeGroupGenderRanking} for normal participant rankings.
+     * Punkte-Mischwertung for one age group x gender, analogous to
+     * {@link #generateAgeGroupGenderRanking} for normal participant rankings. As with
+     * {@link #generatePointsCombinationGenderRanking}, {@code entries} is expected to already be
+     * scoped to that category via {@code GaudiModeService.computeRankingForCategory}.
      */
     public byte[] generatePointsCombinationAgeGroupGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                                   List<Race> legRaces, Race headerRace,
                                                                   String ageGroup, String genderStr) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
-        List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(
-                entries, gender, ageGroup, loadAgeGroups(), loadPersonsByEntryIds(entries));
         String fullTitle = title + " - " + ageGroup + " " + genderLabel(gender);
 
         return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, filtered, "Teilnehmer", true,
+                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
                         e -> pointsCombinationDetailBlocks(e, legRaces)));
     }
 
     /**
      * Punkte-Mischwertung split into one section per age group x gender, youngest first, analogous
-     * to {@link #generateAllAgeGroupsRanking} for normal participant rankings.
+     * to {@link #generateAllAgeGroupsRanking} for normal participant rankings. Each section's ranking
+     * is fetched on demand via {@code categoryFetcher} (backed by
+     * {@code GaudiModeService.computeRankingForCategory}) rather than filtered from one flat list,
+     * so every section is a from-scratch recompute scoped to just that age group and gender.
      */
-    public byte[] generatePointsCombinationAllAgeGroupsRanking(String title, List<GaudiRankingEntryResponse> entries,
-                                                                List<Race> legRaces, Race headerRace) throws IOException {
+    public byte[] generatePointsCombinationAllAgeGroupsRanking(
+            String title, List<Race> legRaces, Race headerRace,
+            BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher) throws IOException {
         List<AgeGroup> ageGroups = loadAgeGroups();
         List<String> uniqueAgeGroupNames = ageGroups.stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
                 .map(AgeGroup::name)
                 .distinct()
                 .toList();
-        Map<Long, Person> personsById = loadPersonsByEntryIds(entries);
 
         return renderDocument(headerRace, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
-                    List<GaudiRankingEntryResponse> filtered = filterAndRePlacePointsCombinationEntries(entries, gender, ageGroupName, ageGroups, personsById);
-                    if (!filtered.isEmpty()) {
+                    List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
+                    if (!entries.isEmpty()) {
                         String sectionTitle = title + " - " + ageGroupName + " " + genderLabel(gender);
-                        drawSectionWithDetails(ctx, pointsCombinationColumns(), sectionTitle, filtered, "Teilnehmer", false,
+                        drawSectionWithDetails(ctx, pointsCombinationColumns(), sectionTitle, entries, "Teilnehmer", false,
                                 e -> pointsCombinationDetailBlocks(e, legRaces));
                     }
                 }
@@ -471,49 +465,6 @@ public class PdfExportService {
                 new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)),
                 new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-")
         );
-    }
-
-    /**
-     * Filters a Punkte-Mischwertung ranking by gender and/or age group (resolved per entry via its
-     * {@code personId}) and recomputes "Platz" within the filtered subset, mirroring how
-     * {@link #createRankingEntriesFromParticipants} filters and re-places normal participant
-     * rankings. Entries without a resolvable personId (only possible for non-Punkte-Mischwertung
-     * modes, which never call this) are dropped.
-     */
-    private List<GaudiRankingEntryResponse> filterAndRePlacePointsCombinationEntries(
-            List<GaudiRankingEntryResponse> entries, Gender filterGender, String filterAgeGroup, List<AgeGroup> ageGroups,
-            Map<Long, Person> personsById) {
-        List<GaudiRankingEntryResponse> filtered = entries.stream()
-                .filter(e -> e.personId() != null)
-                .filter(e -> {
-                    Person person = personsById.get(e.personId());
-                    if (filterGender != null && (person == null || person.gender() != filterGender)) {
-                        return false;
-                    }
-                    if (filterAgeGroup != null) {
-                        String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
-                        if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
-                .sorted(Comparator.comparingInt((GaudiRankingEntryResponse e) -> e.totalPoints() != null ? e.totalPoints() : Integer.MIN_VALUE).reversed())
-                .toList();
-
-        List<Integer> places = rankingService.assignStandardPlaces(
-                filtered.stream().map(e -> e.totalPoints() != null ? (double) e.totalPoints() : Double.NEGATIVE_INFINITY).toList());
-
-        List<GaudiRankingEntryResponse> result = new ArrayList<>();
-        for (int i = 0; i < filtered.size(); i++) {
-            result.add(withPlace(filtered.get(i), places.get(i)));
-        }
-        return result;
-    }
-
-    private static GaudiRankingEntryResponse withPlace(GaudiRankingEntryResponse e, int place) {
-        return new GaudiRankingEntryResponse(place, e.label(), e.time1Ms(), e.time2Ms(), e.valueMs(),
-                e.referenceMs(), e.diffMs(), e.totalPoints(), e.legs(), e.team(), e.members(), e.personId());
     }
 
     private List<String> pointsCombinationDetailBlocks(GaudiRankingEntryResponse entry, List<Race> legRaces) {
@@ -945,19 +896,7 @@ public class PdfExportService {
     }
 
     private String calculateAgeGroup(LocalDate birthDate, List<AgeGroup> ageGroups) {
-        if (birthDate == null) {
-            return "Unbekannt";
-        }
-
-        int birthYear = birthDate.getYear();
-
-        for (AgeGroup ageGroup : ageGroups) {
-            if (ageGroupService.isYearInAgeGroup(ageGroup, birthYear)) {
-                return ageGroup.name();
-            }
-        }
-
-        return "Unbekannt";
+        return ageGroupService.calculateAgeGroupName(birthDate, ageGroups);
     }
 
     private String genderLabel(Gender gender) {
@@ -967,16 +906,21 @@ public class PdfExportService {
     private static String formatTime(Integer timeMs) {
         if (timeMs == null) return "-";
 
-        int totalSeconds = timeMs / 1000;
+        // Round to the nearest 10ms (hundredth of a second) before splitting into
+        // minutes/seconds/hundredths, rather than truncating - a thousandths digit >= 5 rounds the
+        // hundredths up, otherwise down, and a carry (e.g. 0:00.996 -> 0:01.00) falls out correctly
+        // since it's applied to the total milliseconds first.
+        int roundedMs = Math.round(timeMs / 10.0f) * 10;
+        int totalSeconds = roundedMs / 1000;
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;
-        int hundreds = (timeMs % 1000) / 10;
+        int hundredths = (roundedMs % 1000) / 10;
 
-        return String.format("%d:%02d.%d", minutes, seconds, hundreds);
+        return String.format("%d:%02d.%02d", minutes, seconds, hundredths);
     }
 
     /**
-     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.S) or a
+     * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SS) or a
      * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
      */
     private static String formatValue(Race race, Integer value) {

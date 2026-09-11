@@ -4,11 +4,14 @@ import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiModeRaceEntry;
 import x.timecontrol.dto.GaudiModeRequest;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
+import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeRace;
 import x.timecontrol.entities.GaudiModeType;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.repositories.GaudiModeRaceRepository;
@@ -34,6 +37,8 @@ public class GaudiModeService {
     private final GaudiLosPairingRepository pairingRepository;
     private final ParticipantService participantService;
     private final RaceService raceService;
+    private final PersonService personService;
+    private final AgeGroupService ageGroupService;
     private final Map<GaudiModeType, GaudiModeCalculator> calculatorsByType;
 
     public GaudiModeService(GaudiModeRepository repository,
@@ -41,12 +46,16 @@ public class GaudiModeService {
                              GaudiLosPairingRepository pairingRepository,
                              ParticipantService participantService,
                              RaceService raceService,
+                             PersonService personService,
+                             AgeGroupService ageGroupService,
                              List<GaudiModeCalculator> calculators) {
         this.repository = repository;
         this.gaudiModeRaceRepository = gaudiModeRaceRepository;
         this.pairingRepository = pairingRepository;
         this.participantService = participantService;
         this.raceService = raceService;
+        this.personService = personService;
+        this.ageGroupService = ageGroupService;
         this.calculatorsByType = new EnumMap<>(GaudiModeType.class);
         for (GaudiModeCalculator calculator : calculators) {
             this.calculatorsByType.put(calculator.getType(), calculator);
@@ -221,6 +230,19 @@ public class GaudiModeService {
     }
 
     public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode) {
+        return computeRanking(gaudiMode, null);
+    }
+
+    /**
+     * Computes the ranking as usual, but - when {@code personIdFilter} is given - restricts every
+     * leg race's participant field to just those persons before ranking. For Punkte-Mischwertung
+     * this makes each leg's place (and the points looked up from it, and therefore the total) relative
+     * to that subset instead of the whole field: used by the "Alle Damen"/"Alle Herren"/Altersklassen
+     * PDF exports so e.g. a Punkte-Mischwertung's "Platz 1 U14 Frauen" actually had the best result
+     * among U14 women in each discipline, not merely the best combined score among a field mostly
+     * ranked against older/other-gender competitors.
+     */
+    public List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, Set<Long> personIdFilter) {
         GaudiModeCalculator calculator = calculatorsByType.get(gaudiMode.type());
         if (calculator == null) {
             return List.of();
@@ -234,10 +256,53 @@ public class GaudiModeService {
             }
             List<Participant> participants = StreamSupport
                     .stream(participantService.findByRaceId(gmr.raceId()).spliterator(), false)
+                    .filter(p -> personIdFilter == null || personIdFilter.contains(p.personId()))
                     .toList();
             races.add(new GaudiModeCalculator.RaceParticipants(gmr.raceId(), race.get(), gmr.weight(), participants));
         }
 
         return calculator.computeRanking(gaudiMode, races);
+    }
+
+    /**
+     * Punkte-Mischwertung recomputed strictly within one gender/age-group category (see
+     * {@link #computeRanking(GaudiMode, Set)}): resolves which persons among the gaudiMode's
+     * participants match the given gender and/or age-group name, then reruns the whole ranking
+     * using only that subset. Either filter may be null to leave that dimension unrestricted.
+     */
+    public List<GaudiRankingEntryResponse> computeRankingForCategory(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
+        return computeRanking(gaudiMode, resolveMatchingPersonIds(gaudiMode, filterGender, filterAgeGroup));
+    }
+
+    private Set<Long> resolveMatchingPersonIds(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
+        Set<Long> personIds = new LinkedHashSet<>();
+        for (GaudiModeRace gmr : findRacesFor(gaudiMode.id())) {
+            for (Participant p : participantService.findByRaceId(gmr.raceId())) {
+                if (p.personId() != null) {
+                    personIds.add(p.personId());
+                }
+            }
+        }
+
+        List<AgeGroup> ageGroups = filterAgeGroup != null
+                ? StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList()
+                : List.of();
+        Map<Long, Person> personsById = personService.findByIds(personIds);
+
+        Set<Long> matching = new LinkedHashSet<>();
+        for (Long personId : personIds) {
+            Person person = personsById.get(personId);
+            if (filterGender != null && (person == null || person.gender() != filterGender)) {
+                continue;
+            }
+            if (filterAgeGroup != null) {
+                String ageGroup = person != null ? ageGroupService.calculateAgeGroupName(person.birthDate(), ageGroups) : "Unbekannt";
+                if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
+                    continue;
+                }
+            }
+            matching.add(personId);
+        }
+        return matching;
     }
 }
