@@ -20,6 +20,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.Team;
 
+import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -383,14 +384,15 @@ public class PdfExportService {
 
     /**
      * Punkte-Mischwertung: a fixed summary row (Platz, Name, Team, Gesamt) per participant, with the
-     * per-race Wert/Platz/Pkt. breakdown drawn as wrapped detail line(s) below it instead of one
-     * column group per race - see {@link #generateTimeCombinationRanking} for why.
+     * per-race Wert/Platz/Pkt. breakdown drawn as a small indented sub-table below it instead of one
+     * column group per race - see {@link #generateTimeCombinationRanking} for why not the latter.
      */
     public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace) throws IOException {
+        boolean showStrafe = anyLegHasPenalty(entries);
         return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), title, entries, "Teilnehmer", true,
-                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), title, entries, "Teilnehmer", true,
+                        pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
     /**
@@ -404,10 +406,11 @@ public class PdfExportService {
                                                           List<Race> legRaces, Race headerRace, String genderStr) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         String fullTitle = title + " - " + genderLabel(gender);
+        boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
-                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
+                        pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
     /**
@@ -421,10 +424,11 @@ public class PdfExportService {
                                                                   String ageGroup, String genderStr) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         String fullTitle = title + " - " + ageGroup + " " + genderLabel(gender);
+        boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, true,
-                ctx -> drawSectionWithDetails(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
-                        e -> pointsCombinationDetailBlocks(e, legRaces)));
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
+                        pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
     /**
@@ -450,8 +454,8 @@ public class PdfExportService {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (!entries.isEmpty()) {
                         String sectionTitle = title + " - " + ageGroupName + " " + genderLabel(gender);
-                        drawSectionWithDetails(ctx, pointsCombinationColumns(), sectionTitle, entries, "Teilnehmer", false,
-                                e -> pointsCombinationDetailBlocks(e, legRaces));
+                        drawSectionWithDetailTable(ctx, pointsCombinationColumns(), sectionTitle, entries, "Teilnehmer", false,
+                                pointsCombinationDetailColumns(anyLegHasPenalty(entries)), e -> pointsCombinationDetailRows(e, legRaces));
                     }
                 }
             }
@@ -467,17 +471,44 @@ public class PdfExportService {
         );
     }
 
-    private List<String> pointsCombinationDetailBlocks(GaudiRankingEntryResponse entry, List<Race> legRaces) {
-        List<String> blocks = new ArrayList<>();
+    private record PointsCombinationLegRow(String raceName, String wert, String strafe, String platz, String pkt) {
+    }
+
+    /**
+     * Drops the "Strafe" column when none of the legs across any entry actually carry a penalty,
+     * mirroring how {@link #rankingColumns} hides it for the normal ranking table.
+     */
+    private static List<PdfColumn<PointsCombinationLegRow>> pointsCombinationDetailColumns(boolean showStrafe) {
+        List<PdfColumn<PointsCombinationLegRow>> columns = new ArrayList<>();
+        columns.add(new PdfColumn<>("Rennen", 1.6f, PointsCombinationLegRow::raceName));
+        columns.add(new PdfColumn<>("Wert", 1.0f, PointsCombinationLegRow::wert));
+        if (showStrafe) {
+            columns.add(new PdfColumn<>("Strafe", 0.8f, PointsCombinationLegRow::strafe));
+        }
+        columns.add(new PdfColumn<>("Platz", 0.7f, PointsCombinationLegRow::platz));
+        columns.add(new PdfColumn<>("Pkt.", 0.7f, PointsCombinationLegRow::pkt));
+        return columns;
+    }
+
+    private static boolean anyLegHasPenalty(List<GaudiRankingEntryResponse> entries) {
+        return entries.stream()
+                .filter(e -> e.legs() != null)
+                .flatMap(e -> e.legs().stream())
+                .anyMatch(leg -> leg.penalty() != null && leg.penalty() != 0);
+    }
+
+    private List<PointsCombinationLegRow> pointsCombinationDetailRows(GaudiRankingEntryResponse entry, List<Race> legRaces) {
+        List<PointsCombinationLegRow> rows = new ArrayList<>();
         for (int i = 0; i < legRaces.size(); i++) {
             Race legRace = legRaces.get(i);
-            String raceLabel = truncate(legRace.name(), 16);
+            String raceLabel = truncate(legRace.name(), 25);
             String wert = formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+            String strafe = formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
             String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);
-            blocks.add(raceLabel + ": Wert " + wert + ", Platz " + platz + ", Pkt. " + pkt);
+            rows.add(new PointsCombinationLegRow(raceLabel, wert, strafe, platz, pkt));
         }
-        return blocks;
+        return rows;
     }
 
     private Integer legValue(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {
@@ -549,9 +580,26 @@ public class PdfExportService {
         }
 
         void hLine(float y) throws IOException {
-            stream.moveTo(MARGIN, y);
-            stream.lineTo(page.getMediaBox().getWidth() - MARGIN, y);
+            hLine(y, MARGIN, page.getMediaBox().getWidth() - MARGIN);
+        }
+
+        void hLine(float y, float xStart, float xEnd) throws IOException {
+            stream.moveTo(xStart, y);
+            stream.lineTo(xEnd, y);
             stream.stroke();
+        }
+
+        /**
+         * Fills a background rectangle - {@code yBottom} is its lower edge, growing upward by
+         * {@code height}, matching PDF's bottom-up coordinate system. Resets the fill color back to
+         * black afterward so it never leaks into unrelated text drawn later via {@link #text}, which
+         * doesn't set its own color.
+         */
+        void fillRect(float x, float yBottom, float width, float height, Color color) throws IOException {
+            stream.setNonStrokingColor(color);
+            stream.addRect(x, yBottom, width, height);
+            stream.fill();
+            stream.setNonStrokingColor(Color.BLACK);
         }
 
         void close() throws IOException {
@@ -622,10 +670,13 @@ public class PdfExportService {
     }
 
     private <T> float[] computeColumnX(List<PdfColumn<T>> columns, float pageWidth) {
-        float usableWidth = pageWidth - MARGIN * 2;
+        return computeColumnX(columns, MARGIN, pageWidth - MARGIN * 2);
+    }
+
+    private <T> float[] computeColumnX(List<PdfColumn<T>> columns, float startX, float usableWidth) {
         float totalWeight = (float) columns.stream().mapToDouble(PdfColumn::weight).sum();
         float[] colX = new float[columns.size()];
-        float x = MARGIN;
+        float x = startX;
         for (int i = 0; i < columns.size(); i++) {
             colX[i] = x;
             x += usableWidth * columns.get(i).weight() / totalWeight;
@@ -708,6 +759,83 @@ public class PdfExportService {
                 ctx.y -= DETAIL_LINE_HEIGHT;
             }
             ctx.y -= DETAIL_ROW_GAP;
+        }
+    }
+
+    /**
+     * Like {@link #drawSectionWithDetails}, but the per-entry breakdown is drawn as a small,
+     * column-aligned sub-table (one row per race) instead of wrapped "Rennen: Wert X, Platz Y"
+     * text - used by Punkte-Mischwertung so the per-race breakdown reads as a table, not a
+     * comma-separated string.
+     */
+    private <T, D> void drawSectionWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, String title,
+                                                    List<T> entries, String unitLabel, boolean mainTitle,
+                                                    List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
+        ctx.ensureSpace(mainTitle ? 90 : 100);
+
+        ctx.y -= mainTitle ? 10 : 15;
+        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
+        ctx.y -= mainTitle ? 30 : 25;
+
+        float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
+        drawTableHeader(ctx, columns, colX);
+        drawRowsWithDetailTable(ctx, columns, colX, entries, detailColumns, detailRowsFn);
+
+        ctx.y -= 10;
+        ctx.ensureSpace(20);
+        ctx.text(FONT_BOLD, 8, MARGIN, ctx.y, "Gesamt: " + entries.size() + " " + unitLabel);
+        ctx.y -= 15;
+    }
+
+    // DETAIL_BOX_* controls the shaded background behind each participant's per-race breakdown.
+    // The box's first row sits at the same baseline a normal next table row would (no separate gap
+    // added above it), with TOP_INSET as the box's own padding extending upward from that baseline -
+    // so the box hugs the summary row above instead of floating in the middle of the whitespace
+    // before the next participant. WIDTH_FRACTION narrows the box (and its columns) to about half
+    // the row width instead of spanning it edge to edge.
+    private static final float DETAIL_TABLE_ROW_HEIGHT = 9;
+    private static final float DETAIL_BOX_TOP_INSET = 7;
+    private static final float DETAIL_BOX_BOTTOM_INSET = 3;
+    private static final float DETAIL_TABLE_GROUP_GAP = 10;
+    private static final float DETAIL_BOX_WIDTH_FRACTION = 0.5f;
+    private static final Color DETAIL_TABLE_BOX_COLOR = new Color(0.93f, 0.93f, 0.93f);
+
+    private <T, D> void drawRowsWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries,
+                                                 List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
+        float detailWidth = (ctx.page.getMediaBox().getWidth() - MARGIN * 2 - DETAIL_INDENT) * DETAIL_BOX_WIDTH_FRACTION;
+        float[] detailColX = computeColumnX(detailColumns, MARGIN + DETAIL_INDENT, detailWidth);
+
+        for (T entry : entries) {
+            List<D> detailRows = detailRowsFn.apply(entry);
+            float boxHeight = detailRows.isEmpty() ? 0
+                    : DETAIL_BOX_TOP_INSET + Math.max(0, detailRows.size() - 1) * DETAIL_TABLE_ROW_HEIGHT + DETAIL_BOX_BOTTOM_INSET;
+            float needed = 12 + (detailRows.isEmpty() ? 0 : boxHeight) + DETAIL_TABLE_GROUP_GAP;
+
+            if (ctx.y - needed < PAGE_BREAK_THRESHOLD) {
+                ctx.newPage();
+                drawTableHeader(ctx, columns, colX);
+            }
+
+            for (int i = 0; i < columns.size(); i++) {
+                ctx.text(FONT_REGULAR, 8, colX[i], ctx.y, columns.get(i).valueFn().apply(entry));
+            }
+            ctx.y -= 12;
+
+            if (!detailRows.isEmpty()) {
+                float firstRowBaseline = ctx.y;
+                float boxTop = firstRowBaseline + DETAIL_BOX_TOP_INSET;
+                float boxBottom = boxTop - boxHeight;
+                ctx.fillRect(MARGIN + DETAIL_INDENT, boxBottom, detailWidth, boxHeight, DETAIL_TABLE_BOX_COLOR);
+
+                for (D row : detailRows) {
+                    for (int i = 0; i < detailColumns.size(); i++) {
+                        ctx.text(FONT_REGULAR, 7, detailColX[i], ctx.y, detailColumns.get(i).valueFn().apply(row));
+                    }
+                    ctx.y -= DETAIL_TABLE_ROW_HEIGHT;
+                }
+                ctx.y = boxBottom;
+            }
+            ctx.y -= DETAIL_TABLE_GROUP_GAP;
         }
     }
 
