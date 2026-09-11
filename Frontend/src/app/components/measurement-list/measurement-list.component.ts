@@ -36,6 +36,7 @@ import * as MeasurementActions from "../../store/measurement/measurement.actions
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
+import * as ParticipantActions from "../../store/participant/participant.actions";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -561,7 +562,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     constructor() {
         this.measurements$ = this.store.select(
-            MeasurementSelectors.selectAllMeasurements,
+            MeasurementSelectors.selectFilteredMeasurements,
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
@@ -806,6 +807,10 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         this.loadData();
 
+        // Loaded once (not on every auto-refresh tick like measurements/races): selectFilteredMeasurements
+        // needs the participant->race mapping to filter by race, and participants rarely change while
+        // this view is open.
+        this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
         this.store.dispatch(MeasurementActions.loadDeviceStatus());
 

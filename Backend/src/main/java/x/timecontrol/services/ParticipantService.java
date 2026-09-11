@@ -14,6 +14,7 @@ import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.RaceMeasurement;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.ParticipantRepository;
 import io.micronaut.data.exceptions.DataAccessException;
@@ -30,6 +31,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,6 +93,57 @@ public class ParticipantService {
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
+    }
+
+    public record SyncMeasurementsResult(int synced, int skipped) {
+    }
+
+    /**
+     * Batch-applies durationMs/measuredAt from a race's archived measurements onto their assigned
+     * participants. Unlike {@link #update(Long, Participant)}, this intentionally skips
+     * {@link #validate(Participant, Long)}: raceId/personId/teamId/categoryId/raceNumber are left
+     * untouched here, so re-checking their existence and the race-number conflict for every row
+     * (6+ extra queries per measurement in the previous per-row implementation, on top of a
+     * findById() per measurement) is redundant - an already-persisted participant's FK references
+     * are guaranteed valid, and nothing here can introduce a race-number collision.
+     * Participants are batch-loaded and batch-written in one query each instead of one round trip
+     * per measurement. A measurement with no participantId, one referencing a participant that no
+     * longer exists, or a negative durationMs is skipped rather than aborting the whole sync -
+     * mirroring the previous per-row behaviour where one bad row couldn't lose already-synced rows.
+     */
+    public SyncMeasurementsResult syncMeasurementsToParticipants(List<RaceMeasurement> raceMeasurements) {
+        Set<Long> participantIds = raceMeasurements.stream()
+                .map(RaceMeasurement::participantId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Participant> participantsById = new HashMap<>();
+        for (Participant participant : repository.findByIdIn(participantIds)) {
+            participantsById.put(participant.id(), participant);
+        }
+
+        List<Participant> toUpdate = new ArrayList<>();
+        int skipped = 0;
+        for (RaceMeasurement raceMeasurement : raceMeasurements) {
+            if (raceMeasurement.participantId() == null || (raceMeasurement.durationMs() != null && raceMeasurement.durationMs() < 0)) {
+                skipped++;
+                continue;
+            }
+            Participant existing = participantsById.get(raceMeasurement.participantId());
+            if (existing == null) {
+                skipped++;
+                continue;
+            }
+            toUpdate.add(new Participant(
+                    existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
+                    existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt()
+            ));
+        }
+
+        if (!toUpdate.isEmpty()) {
+            repository.updateAll(toUpdate);
+        }
+
+        return new SyncMeasurementsResult(toUpdate.size(), skipped);
     }
 
     /**

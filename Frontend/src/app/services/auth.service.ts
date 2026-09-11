@@ -71,10 +71,19 @@ export class AuthService {
         }
     }
 
-    private decodeToken(token: string): any {
+    private decodeToken(token: string): { exp?: number; [key: string]: unknown } {
         try {
             const payload = token.split('.')[1];
-            const decodedPayload = atob(payload);
+            // JWT payloads are Base64URL (RFC 4648 §5): '-'/'_' instead of '+'/'/', no padding.
+            // atob() only understands standard Base64 and throws on '-'/'_', so normalize first.
+            const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const decodedPayload = decodeURIComponent(
+                atob(padded)
+                    .split('')
+                    .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+                    .join('')
+            );
             return JSON.parse(decodedPayload);
         } catch (error) {
             throw new Error('Invalid token format');

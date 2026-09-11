@@ -122,47 +122,8 @@ public class RaceMeasurementController {
     public HttpResponse<SyncMeasurementsResponse> syncMeasurementsToParticipants(@PathVariable Long raceId) {
         try {
             List<RaceMeasurement> raceMeasurements = service.findByRaceId(raceId);
-            int syncedCount = 0;
-            int skippedCount = 0;
-
-            for (RaceMeasurement raceMeasurement : raceMeasurements) {
-
-                if (raceMeasurement.participantId() != null) {
-                    Optional<Participant> participantOpt = participantService.findById(raceMeasurement.participantId());
-
-                    if (participantOpt.isPresent()) {
-                        Participant participant = participantOpt.get();
-
-                        Participant updatedParticipant = new Participant(
-                                participant.id(),
-                                participant.raceId(),
-                                participant.personId(),
-                                participant.raceNumber(),
-                                participant.teamId(),
-                                participant.categoryId(),
-                                raceMeasurement.durationMs(),
-                                participant.penalty(),
-                                raceMeasurement.measuredAt()
-                        );
-
-                        // A single participant failing validation (e.g. its race/person was deleted
-                        // concurrently) must not abort the whole sync and lose every already-synced row.
-                        try {
-                            participantService.update(participant.id(), updatedParticipant);
-                            syncedCount++;
-                        } catch (IllegalArgumentException | IllegalStateException e) {
-                            skippedCount++;
-                        }
-                    } else {
-                        skippedCount++;
-                    }
-                } else {
-                    skippedCount++;
-                }
-            }
-
-            SyncMeasurementsResponse response = SyncMeasurementsResponse.of(syncedCount, skippedCount);
-            return HttpResponse.ok(response);
+            ParticipantService.SyncMeasurementsResult result = participantService.syncMeasurementsToParticipants(raceMeasurements);
+            return HttpResponse.ok(SyncMeasurementsResponse.of(result.synced(), result.skipped()));
         } catch (Exception e) {
             SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
                     0, 0, 0, "Sync failed: " + e.getMessage()

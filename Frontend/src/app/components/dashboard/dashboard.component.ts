@@ -1,48 +1,47 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
+import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
 import {Observable} from "rxjs";
-import {MatTabsModule} from "@angular/material/tabs";
+import {MatSidenavModule} from "@angular/material/sidenav";
+import {MatListModule} from "@angular/material/list";
 import {MatToolbarModule} from "@angular/material/toolbar";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {RaceListComponent} from "../race-list/race-list.component";
-import {ParticipantListComponent} from "../participant-list/participant-list.component";
-import {MeasurementListComponent} from "../measurement-list/measurement-list.component";
-import {RaceMeasurementListComponent} from "../race-measurement-list/race-measurement-list.component";
-import {AgeGroupListComponent} from "../age-group-list/age-group-list.component";
-import {TeamListComponent} from "../team-list/team-list.component";
-import {CategoryListComponent} from "../category-list/category-list.component";
-import {GaudiModusComponent} from "../gaudi-modus/gaudi-modus.component";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
+
+interface NavItem {
+    path: string;
+    label: string;
+    icon: string;
+}
 
 @Component({
     selector: "app-dashboard",
     standalone: true,
     imports: [
         CommonModule,
-        MatTabsModule,
+        RouterOutlet,
+        RouterLink,
+        RouterLinkActive,
+        MatSidenavModule,
+        MatListModule,
         MatToolbarModule,
         MatButtonModule,
         MatIconModule,
         MatMenuModule,
         MatTooltipModule,
-        RaceListComponent,
-        ParticipantListComponent,
-        MeasurementListComponent,
-        RaceMeasurementListComponent,
-        AgeGroupListComponent,
-        TeamListComponent,
-        CategoryListComponent,
-        GaudiModusComponent,
     ],
     template: `
         <mat-toolbar color="primary">
+            <button mat-icon-button (click)="toggleNav()" [matTooltip]="navOpen() ? 'Menü einklappen' : 'Menü ausklappen'">
+                <mat-icon>menu</mat-icon>
+            </button>
             <span>Alpdesk TimeControl - Zeitnahme System</span>
             <span class="spacer"></span>
 
@@ -83,44 +82,49 @@ import * as MeasurementSelectors from "../../store/measurement/measurement.selec
             </mat-menu>
         </mat-toolbar>
 
-        <div class="dashboard-container">
-            <mat-tab-group animationDuration="0ms">
-                <mat-tab label="Altersgruppen">
-                    <app-age-group-list/>
-                </mat-tab>
-                <mat-tab label="Rennen">
-                    <app-race-list/>
-                </mat-tab>
-                <mat-tab label="Teams">
-                    <app-team-list/>
-                </mat-tab>
-                <mat-tab label="Kategorien">
-                    <app-category-list/>
-                </mat-tab>
-                <mat-tab label="Teilnehmer">
-                    <app-participant-list/>
-                </mat-tab>
-                <mat-tab label="Messungen">
-                    <app-measurement-list/>
-                </mat-tab>
-                <mat-tab label="Zuordnung &amp; Sync">
-                    <app-race-measurement-list/>
-                </mat-tab>
-                <mat-tab label="Gaudi-Modus">
-                    <app-gaudi-modus/>
-                </mat-tab>
-            </mat-tab-group>
-        </div>
+        <mat-sidenav-container class="dashboard-container">
+            <mat-sidenav mode="side" [opened]="navOpen()" class="app-nav">
+                <mat-nav-list>
+                    @for (item of navItems; track item.path) {
+                        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
+                           [matTooltip]="item.label" matTooltipPosition="right">
+                            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+                            <span matListItemTitle>{{ item.label }}</span>
+                        </a>
+                    }
+                </mat-nav-list>
+            </mat-sidenav>
+            <mat-sidenav-content class="dashboard-content">
+                <router-outlet/>
+            </mat-sidenav-content>
+        </mat-sidenav-container>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
+          :host {
+            display: block;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
+
           .dashboard-container {
+            flex: 1 1 auto;
+            min-height: 0;
+          }
+
+          .app-nav {
+            width: 220px;
+          }
+
+          .dashboard-content {
             padding: 20px;
           }
 
-          mat-toolbar {
-            margin-bottom: 20px;
+          .active-nav-item {
+            background: rgba(0, 0, 0, 0.06);
+            font-weight: 600;
           }
 
           .spacer {
@@ -166,9 +170,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
     username$: Observable<string | null>;
     deviceConnected$: Observable<boolean | null>;
 
+    readonly navItems: NavItem[] = [
+        {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
+        {path: 'races', label: 'Rennen', icon: 'flag'},
+        {path: 'teams', label: 'Teams', icon: 'groups'},
+        {path: 'categories', label: 'Kategorien', icon: 'category'},
+        {path: 'persons', label: 'Personen', icon: 'badge'},
+        {path: 'participants', label: 'Teilnehmer', icon: 'person'},
+        {path: 'measurements', label: 'Messungen', icon: 'timer'},
+        {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
+        {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
+    ];
+
+    private static readonly NAV_OPEN_KEY = 'dashboard_nav_open';
+    navOpen = signal(this.readNavOpenPreference());
+
     constructor() {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
         this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
+    }
+
+    toggleNav(): void {
+        const next = !this.navOpen();
+        this.navOpen.set(next);
+        try {
+            localStorage.setItem(DashboardComponent.NAV_OPEN_KEY, String(next));
+        } catch {
+            // Private browsing / storage disabled: the toggle still works for this session,
+            // it just won't be remembered on reload.
+        }
+    }
+
+    private readNavOpenPreference(): boolean {
+        try {
+            const stored = localStorage.getItem(DashboardComponent.NAV_OPEN_KEY);
+            return stored === null ? true : stored === 'true';
+        } catch {
+            return true;
+        }
     }
 
     ngOnInit(): void {

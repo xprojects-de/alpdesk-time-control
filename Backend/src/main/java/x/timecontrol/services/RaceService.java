@@ -19,10 +19,12 @@ public class RaceService {
 
     private final RaceRepository repository;
     private final ParticipantRepository participantRepository;
+    private final MeasurementTableLock measurementTableLock;
 
-    public RaceService(RaceRepository repository, ParticipantRepository participantRepository) {
+    public RaceService(RaceRepository repository, ParticipantRepository participantRepository, MeasurementTableLock measurementTableLock) {
         this.repository = repository;
         this.participantRepository = participantRepository;
+        this.measurementTableLock = measurementTableLock;
     }
 
     public Race create(Race race) {
@@ -97,7 +99,10 @@ public class RaceService {
                         "unwiderruflich gelöscht. Trotzdem löschen?");
             }
         }
-        repository.deleteById(id);
+        // race_measurement.race_id has ON DELETE CASCADE, so deleting a race implicitly writes to
+        // race_measurement - the same table archive/reset operations guard with this lock. Without
+        // taking it here too, a concurrent archive could race with this cascade.
+        measurementTableLock.run(() -> repository.deleteById(id));
     }
 
     public Race createFromRequest(RaceRequest request) {

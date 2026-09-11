@@ -14,11 +14,7 @@ import {
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
-import {MatButtonToggleModule} from "@angular/material/button-toggle";
-import {MatDatepickerModule} from "@angular/material/datepicker";
-import {MatNativeDateModule} from "@angular/material/core";
 import {MatSelectModule} from "@angular/material/select";
-import {MatSnackBar} from "@angular/material/snack-bar";
 import {
     MatAutocompleteModule,
     MatAutocompleteSelectedEvent,
@@ -27,8 +23,7 @@ import {
     Participant,
     ParticipantRequest,
 } from "../../models/participant.model";
-import {Person, PersonRequest} from "../../models/person.model";
-import {Gender, GenderLabels} from "../../models/gender.model";
+import {Person} from "../../models/person.model";
 import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
 import {selectAllTeams} from "../../store/team/team.selectors";
@@ -41,7 +36,6 @@ import {Race, ResultUnit} from "../../models/race.model";
 import {Team} from "../../models/team.model";
 import {Category} from "../../models/category.model";
 import {PersonService} from "../../services/person.service";
-import {extractErrorMessage} from "../../utils/http-error.util";
 
 
 @Component({
@@ -54,9 +48,6 @@ import {extractErrorMessage} from "../../utils/http-error.util";
         MatFormFieldModule,
         MatInputModule,
         MatButtonModule,
-        MatButtonToggleModule,
-        MatDatepickerModule,
-        MatNativeDateModule,
         MatSelectModule,
         MatAutocompleteModule,
     ],
@@ -67,101 +58,33 @@ import {extractErrorMessage} from "../../utils/http-error.util";
         <mat-dialog-content>
             <form [formGroup]="form" class="participant-form">
                 <h3 class="section-title">Person</h3>
-                <mat-button-toggle-group
-                        class="person-mode-toggle"
-                        [value]="mode"
-                        (change)="setMode($event.value)"
-                >
-                    <mat-button-toggle value="existing">Bestehende Person suchen</mat-button-toggle>
-                    <mat-button-toggle value="new">Neue Person anlegen</mat-button-toggle>
-                </mat-button-toggle-group>
-
-                @if (mode === "existing") {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Person</mat-label>
-                        <input
-                                type="text"
-                                matInput
-                                formControlName="personSearch"
-                                [matAutocomplete]="auto"
-                                placeholder="Suche nach Name"
-                        />
-                        <mat-autocomplete
-                                #auto="matAutocomplete"
-                                [displayWith]="displayPerson.bind(this)"
-                                (optionSelected)="onPersonSelected($event)"
-                        >
-                            @for (person of personResults$ | async; track person.id) {
-                                <mat-option [value]="person">
-                                    {{ person.lastName }} {{ person.firstName }}
-                                    ({{ formatRaceDate(person.birthDate) }}{{ person.externalId ? ", " + person.externalId : "" }})
-                                </mat-option>
-                            }
-                        </mat-autocomplete>
-                        @if (form.get("personId")?.hasError("required") &&
-                        form.get("personId")?.touched) {
-                            <mat-error>Bitte eine Person auswählen</mat-error>
+                <mat-form-field appearance="outline">
+                    <mat-label>Person</mat-label>
+                    <input
+                            type="text"
+                            matInput
+                            formControlName="personSearch"
+                            [matAutocomplete]="auto"
+                            placeholder="Suche nach Name"
+                    />
+                    <mat-autocomplete
+                            #auto="matAutocomplete"
+                            [displayWith]="displayPerson.bind(this)"
+                            (optionSelected)="onPersonSelected($event)"
+                    >
+                        @for (person of personResults$ | async; track person.id) {
+                            <mat-option [value]="person">
+                                {{ person.lastName }} {{ person.firstName }}
+                                ({{ formatRaceDate(person.birthDate) }}{{ person.externalId ? ", " + person.externalId : "" }})
+                            </mat-option>
                         }
-                    </mat-form-field>
-                } @else {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Vorname</mat-label>
-                        <input matInput formControlName="newFirstName" required/>
-                        @if (form.get("newFirstName")?.hasError("required") &&
-                        form.get("newFirstName")?.touched) {
-                            <mat-error>Vorname ist erforderlich</mat-error>
-                        }
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline">
-                        <mat-label>Nachname</mat-label>
-                        <input matInput formControlName="newLastName" required/>
-                        @if (form.get("newLastName")?.hasError("required") &&
-                        form.get("newLastName")?.touched) {
-                            <mat-error>Nachname ist erforderlich</mat-error>
-                        }
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline">
-                        <mat-label>Geburtsdatum</mat-label>
-                        <input
-                                matInput
-                                [matDatepicker]="picker"
-                                formControlName="newBirthDate"
-                                placeholder="TT.MM.JJJJ"
-                                required
-                        />
-                        <mat-datepicker-toggle
-                                matSuffix
-                                [for]="picker"
-                        ></mat-datepicker-toggle>
-                        <mat-datepicker #picker></mat-datepicker>
-                        <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
-                        @if (form.get("newBirthDate")?.hasError("required") &&
-                        form.get("newBirthDate")?.touched) {
-                            <mat-error>Geburtsdatum ist erforderlich</mat-error>
-                        }
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline">
-                        <mat-label>Geschlecht</mat-label>
-                        <mat-select formControlName="newGender" required>
-                            @for (gender of genderOptions; track gender.value) {
-                                <mat-option [value]="gender.value">{{ gender.label }}</mat-option>
-                            }
-                        </mat-select>
-                        @if (form.get("newGender")?.hasError("required") &&
-                        form.get("newGender")?.touched) {
-                            <mat-error>Geschlecht ist erforderlich</mat-error>
-                        }
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline">
-                        <mat-label>Externe ID (optional)</mat-label>
-                        <input matInput formControlName="newExternalId"/>
-                        <mat-hint>Vereins-/Verbandsnummer, falls vorhanden</mat-hint>
-                    </mat-form-field>
-                }
+                    </mat-autocomplete>
+                    <mat-hint>Neue Personen werden unter "Personen" angelegt</mat-hint>
+                    @if (form.get("personId")?.hasError("required") &&
+                    form.get("personId")?.touched) {
+                        <mat-error>Bitte eine Person auswählen</mat-error>
+                    }
+                </mat-form-field>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Rennen</mat-label>
@@ -256,7 +179,7 @@ import {extractErrorMessage} from "../../utils/http-error.util";
                     mat-raised-button
                     color="primary"
                     (click)="onSave()"
-                    [disabled]="!form.valid || saving"
+                    [disabled]="!form.valid"
             >
                 Speichern
             </button>
@@ -284,10 +207,6 @@ import {extractErrorMessage} from "../../utils/http-error.util";
             color: rgba(0, 0, 0, 0.6);
           }
 
-          .person-mode-toggle {
-            margin-bottom: 4px;
-          }
-
           .time-input-group {
             display: flex;
             gap: 12px;
@@ -307,18 +226,11 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     private personService = inject(PersonService);
     private cdr = inject(ChangeDetectorRef);
-    private snackBar = inject(MatSnackBar);
     private destroy$ = new Subject<void>();
 
     form: FormGroup;
-    mode: "existing" | "new" = "existing";
-    saving = false;
     resultUnit = ResultUnit;
     selectedRace: Race | null = null;
-    genderOptions = [
-        {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
-        {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
-    ];
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
     selectedRaceId$: Observable<number | null> = this.store.select(selectSelectedRaceId);
     teams$: Observable<Team[]> = this.store.select(selectAllTeams);
@@ -336,12 +248,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
 
         this.form = this.fb.group({
             personSearch: [this.data?.person || ""],
-            personId: [this.data?.person?.id || null],
-            newFirstName: [""],
-            newLastName: [""],
-            newBirthDate: [""],
-            newGender: [""],
-            newExternalId: [""],
+            personId: [this.data?.person?.id || null, Validators.required],
             race: [this.data?.race?.id || "", Validators.required],
             raceNumber: [this.data?.raceNumber ?? ""],
             teamId: [this.data?.team?.id || null],
@@ -354,8 +261,6 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             penaltyPointsValue: [penaltyPointsValue, [Validators.min(0)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
         });
-
-        this.setMode("existing");
 
         this.personResults$ = this.form.get("personSearch")!.valueChanges.pipe(
             startWith(this.form.get("personSearch")!.value),
@@ -432,38 +337,12 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
         this.destroy$.complete();
     }
 
-    setMode(mode: "existing" | "new"): void {
-        this.mode = mode;
-        const personId = this.form.get("personId")!;
-        const newFirstName = this.form.get("newFirstName")!;
-        const newLastName = this.form.get("newLastName")!;
-        const newBirthDate = this.form.get("newBirthDate")!;
-        const newGender = this.form.get("newGender")!;
-
-        if (mode === "existing") {
-            personId.setValidators([Validators.required]);
-            newFirstName.clearValidators();
-            newLastName.clearValidators();
-            newBirthDate.clearValidators();
-            newGender.clearValidators();
-        } else {
-            personId.clearValidators();
-            newFirstName.setValidators([Validators.required]);
-            newLastName.setValidators([Validators.required]);
-            newBirthDate.setValidators([Validators.required]);
-            newGender.setValidators([Validators.required]);
-        }
-
-        [personId, newFirstName, newLastName, newBirthDate, newGender]
-            .forEach(control => control.updateValueAndValidity());
-    }
-
     onCancel(): void {
         this.dialogRef.close();
     }
 
     onSave(): void {
-        if (!this.form.valid || this.saving) {
+        if (!this.form.valid) {
             return;
         }
 
@@ -489,45 +368,17 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             : (formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
                 ? Math.round(Number(formValue.penaltySeconds) * 1000) : undefined);
 
-        const buildRequest = (personId: number): ParticipantRequest => ({
+        const request: ParticipantRequest = {
             raceId: Number(formValue.race),
-            personId,
+            personId: Number(formValue.personId),
             raceNumber: formValue.raceNumber !== "" && formValue.raceNumber !== null ? Number(formValue.raceNumber) : undefined,
             teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
             categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
             durationMs,
             penalty,
             measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
-        });
-
-        if (this.mode === "existing") {
-            this.dialogRef.close(buildRequest(Number(formValue.personId)));
-            return;
-        }
-
-        const personRequest: PersonRequest = {
-            firstName: formValue.newFirstName,
-            lastName: formValue.newLastName,
-            birthDate: this.formatDate(formValue.newBirthDate),
-            gender: formValue.newGender,
-            externalId: formValue.newExternalId || undefined,
         };
-        this.saving = true;
-        this.cdr.markForCheck();
-        this.personService.create(personRequest).subscribe({
-            next: person => {
-                this.dialogRef.close(buildRequest(person.id));
-            },
-            error: error => {
-                this.saving = false;
-                this.snackBar.open(
-                    `FEHLER beim Anlegen der Person: ${extractErrorMessage(error, "Failed to create person")}`,
-                    "OK",
-                    {duration: 5000},
-                );
-                this.cdr.markForCheck();
-            },
-        });
+        this.dialogRef.close(request);
     }
 
     onPersonSelected(event: MatAutocompleteSelectedEvent): void {
@@ -542,17 +393,6 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             return "";
         }
         return `${person.lastName} ${person.firstName}`;
-    }
-
-    private formatDate(date: Date | string): string {
-        if (typeof date === "string") {
-            return date;
-        }
-        const d = new Date(date);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
     }
 
     formatRaceDate(dateString: string): string {

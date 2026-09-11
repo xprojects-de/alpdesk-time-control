@@ -11,10 +11,13 @@ export class MeasurementEffects {
     private actions$ = inject(Actions);
     private measurementService = inject(MeasurementService);
 
+    // switchMap, not mergeMap: this is re-dispatched every 2s by the live auto-refresh poll, and only
+    // the most recently requested snapshot should ever be applied. With mergeMap, a slow response to
+    // an earlier tick can arrive after a faster later one and overwrite newer data with stale data.
     loadMeasurements$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.loadMeasurements),
-            mergeMap(() =>
+            switchMap(() =>
                 this.measurementService.getAll().pipe(
                     map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements})),
                     catchError(error => of(MeasurementActions.loadMeasurementsFailure({

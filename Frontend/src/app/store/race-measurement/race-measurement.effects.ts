@@ -2,7 +2,7 @@ import {inject, Injectable} from '@angular/core';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
-import {catchError, map, mergeMap} from 'rxjs/operators';
+import {catchError, map, mergeMap, switchMap} from 'rxjs/operators';
 import {RaceMeasurementService} from '../../services/race-measurement.service';
 import * as RaceMeasurementActions from './race-measurement.actions';
 
@@ -11,10 +11,13 @@ export class RaceMeasurementEffects {
     private actions$ = inject(Actions);
     private raceMeasurementService = inject(RaceMeasurementService);
 
+    // switchMap, not mergeMap: dispatched again on every race-selection change. With mergeMap, quickly
+    // switching from race A to race B can let A's (now stale) response arrive after B's and overwrite
+    // the correct table contents with the wrong race's measurements.
     loadRaceMeasurements$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceMeasurementActions.loadRaceMeasurements),
-            mergeMap(({raceId}) =>
+            switchMap(({raceId}) =>
                 this.raceMeasurementService.getByRace(raceId).pipe(
                     map(raceMeasurements => RaceMeasurementActions.loadRaceMeasurementsSuccess({raceMeasurements})),
                     catchError(error => of(RaceMeasurementActions.loadRaceMeasurementsFailure({
