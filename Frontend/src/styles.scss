@@ -46,6 +46,36 @@ body {
   overflow-x: auto;
 }
 
+/*
+ * Responsive toolbar rows used across the list pages (filter bar + action buttons).
+ * Each list component still declares its own `.header-actions`/`.filter-section` with
+ * `display: flex; gap: ...`; this only switches them to a stacked, full-width layout on
+ * small screens so buttons stop shrinking, wrapping their label onto two lines and
+ * overlapping their icon.
+ */
+@media (max-width: 768px) {
+  .filter-section,
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions .button-group {
+    flex-wrap: wrap;
+  }
+
+  .header-actions .button-group > button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .filter-section mat-form-field,
+  .header-actions mat-form-field {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
 /* Error Snackbar Styling */
 .error-snackbar {
   --mdc-snackbar-container-color: #f44336 !important;

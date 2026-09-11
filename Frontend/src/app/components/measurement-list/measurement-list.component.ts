@@ -109,167 +109,149 @@ import {Actions, ofType} from "@ngrx/effects";
                 </div>
 
                 <div class="header-actions">
-                    <!-- Gruppe 1: Neue Messung & Aktualisierung -->
-                    <div class="button-group">
-                        <button
-                                mat-raised-button
-                                color="primary"
-                                (click)="openCreateDialog()"
-                        >
-                            <mat-icon>add</mat-icon>
-                            Neue Messung
-                        </button>
-                        <button mat-raised-button (click)="manualRefresh()">
-                            <mat-icon>refresh</mat-icon>
-                            Manuell aktualisieren
-                        </button>
-                    </div>
+                    <button
+                            mat-raised-button
+                            color="primary"
+                            (click)="openCreateDialog()"
+                    >
+                        <mat-icon>add</mat-icon>
+                        Neue Messung
+                    </button>
+                    <button mat-raised-button (click)="manualRefresh()">
+                        <mat-icon>refresh</mat-icon>
+                        Manuell aktualisieren
+                    </button>
 
-                    <!-- Gruppe 2: Archivieren -->
-                    <div class="button-group">
+                    <button
+                            mat-raised-button
+                            color="accent"
+                            [matMenuTriggerFor]="archiveMenu"
+                            matTooltip="Aktuelle Messungen für das gewählte Rennen archivieren und Messtabelle leeren"
+                    >
+                        <mat-icon>archive</mat-icon>
+                        Archivieren
+                        <mat-icon>arrow_drop_down</mat-icon>
+                    </button>
+
+                    <mat-menu #archiveMenu="matMenu">
+                        <button mat-menu-item (click)="archiveMeasurements(false, true)">
+                            <mat-icon>archive</mat-icon>
+                            <span>Archivieren (nur Datenbank)</span>
+                        </button>
+
+                        <button mat-menu-item (click)="archiveMeasurements(true, true)">
+                            <mat-icon>archive</mat-icon>
+                            <span>Archivieren (inkl. Gerät-Reset)</span>
+                        </button>
+
+                        <button mat-menu-item (click)="archiveMeasurements(false, false)">
+                            <mat-icon>content_copy</mat-icon>
+                            <span>Archivieren (ohne Löschen)</span>
+                        </button>
+                    </mat-menu>
+
+                    <button
+                            mat-raised-button
+                            (click)="exportMeasurements()"
+                            matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                    >
+                        <mat-icon>download</mat-icon>
+                        JSON Export
+                    </button>
+                    <button
+                            mat-raised-button
+                            (click)="triggerJsonImport()"
+                            matTooltip="Messungen aus JSON-Datei importieren"
+                    >
+                        <mat-icon>upload</mat-icon>
+                        JSON Import
+                    </button>
+                    <input
+                            #jsonImportInput
+                            type="file"
+                            accept=".json,application/json"
+                            style="display:none"
+                            (change)="onJsonFileSelected($event)"
+                    />
+
+                    @if ((deviceStatus$ | async) === 'continuous') {
                         <button
                                 mat-raised-button
                                 color="accent"
-                                [matMenuTriggerFor]="archiveMenu"
-                                matTooltip="Aktuelle Messungen für das gewählte Rennen archivieren und Messtabelle leeren"
+                                class="active-mode"
+                                (click)="toggleContinuousMode(false)"
+                                matTooltip="Kontinuierlichen Modus deaktivieren"
                         >
-                            <mat-icon>archive</mat-icon>
-                            Archivieren
-                            <mat-icon>arrow_drop_down</mat-icon>
+                            <mat-icon>stop</mat-icon>
+                            Kontinuierlich AUS
                         </button>
-
-                        <mat-menu #archiveMenu="matMenu">
-                            <button mat-menu-item (click)="archiveMeasurements(false, true)">
-                                <mat-icon>archive</mat-icon>
-                                <span>Archivieren (nur Datenbank)</span>
-                            </button>
-
-                            <button mat-menu-item (click)="archiveMeasurements(true, true)">
-                                <mat-icon>archive</mat-icon>
-                                <span>Archivieren (inkl. Gerät-Reset)</span>
-                            </button>
-
-                            <button mat-menu-item (click)="archiveMeasurements(false, false)">
-                                <mat-icon>content_copy</mat-icon>
-                                <span>Archivieren (ohne Löschen)</span>
-                            </button>
-                        </mat-menu>
-                    </div>
-
-                    <!-- Gruppe 3: Export & Import -->
-                    <div class="button-group">
+                    } @else {
                         <button
                                 mat-raised-button
-                                (click)="exportMeasurements()"
-                                matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                                (click)="toggleContinuousMode(true)"
+                                matTooltip="Kontinuierlichen Modus aktivieren"
                         >
-                            <mat-icon>download</mat-icon>
-                            JSON Export
+                            <mat-icon>play_arrow</mat-icon>
+                            Kontinuierlich AN
                         </button>
-                        <button
-                                mat-raised-button
-                                (click)="triggerJsonImport()"
-                                matTooltip="Messungen aus JSON-Datei importieren"
-                        >
-                            <mat-icon>upload</mat-icon>
-                            JSON Import
-                        </button>
-                        <input
-                                #jsonImportInput
-                                type="file"
-                                accept=".json,application/json"
-                                style="display:none"
-                                (change)="onJsonFileSelected($event)"
-                        />
-                    </div>
+                    }
 
-                    <!-- Gruppe 4: Kontinuierlich & Sturz -->
-                    <div class="button-group">
-                        @if ((deviceStatus$ | async) === 'continuous') {
-                            <button
-                                    mat-raised-button
-                                    color="accent"
-                                    class="active-mode"
-                                    (click)="toggleContinuousMode(false)"
-                                    matTooltip="Kontinuierlichen Modus deaktivieren"
-                            >
-                                <mat-icon>stop</mat-icon>
-                                Kontinuierlich AUS
-                            </button>
-                        } @else {
-                            <button
-                                    mat-raised-button
-                                    (click)="toggleContinuousMode(true)"
-                                    matTooltip="Kontinuierlichen Modus aktivieren"
-                            >
-                                <mat-icon>play_arrow</mat-icon>
-                                Kontinuierlich AN
-                            </button>
-                        }
-
-                        @if ((deviceStatus$ | async) === 'normal') {
-                            <button
-                                    mat-raised-button
-                                    color="warn"
-                                    (click)="discardOldestStart()"
-                                    matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
-                            >
-                                <mat-icon>person_off</mat-icon>
-                                Sturz signalisieren
-                            </button>
-                        }
-                    </div>
-
-                    <!-- Gruppe 4: Auto-Import -->
-                    <div class="button-group">
-                        @if (scheduledImportEnabled$ | async) {
-                            <button
-                                    mat-raised-button
-                                    color="accent"
-                                    class="active-mode"
-                                    (click)="toggleScheduledImport(false)"
-                                    matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
-                            >
-                                <mat-icon>cloud_sync</mat-icon>
-                                Auto-Import AUS
-                            </button>
-                        } @else {
-                            <button
-                                    mat-raised-button
-                                    (click)="toggleScheduledImport(true)"
-                                    matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
-                            >
-                                <mat-icon>cloud_download</mat-icon>
-                                Auto-Import AN
-                            </button>
-                        }
-                    </div>
-
-                    <!-- Zurücksetzen - ganz rechts -->
-                    <div class="button-group reset-group">
+                    @if ((deviceStatus$ | async) === 'normal') {
                         <button
                                 mat-raised-button
                                 color="warn"
-                                [matMenuTriggerFor]="resetMenu"
-                                matTooltip="Alle Messungen zurücksetzen"
+                                (click)="discardOldestStart()"
+                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
                         >
+                            <mat-icon>person_off</mat-icon>
+                            Sturz signalisieren
+                        </button>
+                    }
+
+                    @if (scheduledImportEnabled$ | async) {
+                        <button
+                                mat-raised-button
+                                color="accent"
+                                class="active-mode"
+                                (click)="toggleScheduledImport(false)"
+                                matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
+                        >
+                            <mat-icon>cloud_sync</mat-icon>
+                            Auto-Import AUS
+                        </button>
+                    } @else {
+                        <button
+                                mat-raised-button
+                                (click)="toggleScheduledImport(true)"
+                                matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
+                        >
+                            <mat-icon>cloud_download</mat-icon>
+                            Auto-Import AN
+                        </button>
+                    }
+
+                    <button
+                            mat-raised-button
+                            color="warn"
+                            [matMenuTriggerFor]="resetMenu"
+                            matTooltip="Alle Messungen zurücksetzen"
+                    >
+                        <mat-icon>delete_sweep</mat-icon>
+                        Zurücksetzen
+                        <mat-icon>arrow_drop_down</mat-icon>
+                    </button>
+
+                    <mat-menu #resetMenu="matMenu">
+                        <button mat-menu-item (click)="resetMeasurements(false)">
                             <mat-icon>delete_sweep</mat-icon>
-                            Zurücksetzen
-                            <mat-icon>arrow_drop_down</mat-icon>
+                            <span>Alle Messungen löschen (nur Datenbank)</span>
                         </button>
 
-                        <mat-menu #resetMenu="matMenu">
-                            <button mat-menu-item (click)="resetMeasurements(false)">
-                                <mat-icon>delete_sweep</mat-icon>
-                                <span>Alle Messungen löschen (nur Datenbank)</span>
-                            </button>
-
-                            <button mat-menu-item (click)="resetMeasurements(true)">
-                                <mat-icon>delete_forever</mat-icon>
-                                <span>Alle löschen (inkl. Gerät)</span>
-                            </button>
-                        </mat-menu>
-                    </div>
+                        <button mat-menu-item (click)="resetMeasurements(true)">
+                            <mat-icon>delete_forever</mat-icon>
+                            <span>Alle löschen (inkl. Gerät)</span>
+                        </button>
+                    </mat-menu>
                 </div>
 
                 @if (loading$ | async) {
@@ -397,26 +379,10 @@ import {Actions, ofType} from "@ngrx/effects";
             margin-top: 20px;
             margin-bottom: 20px;
             display: flex;
-            gap: 16px;
+            gap: 10px;
             position: relative;
             flex-wrap: wrap;
             align-items: center;
-          }
-
-          .button-group {
-            display: flex;
-            gap: 8px;
-            padding-right: 16px;
-            border-right: 1px solid rgba(0, 0, 0, 0.12);
-          }
-
-          .button-group:last-child {
-            border-right: none;
-          }
-
-          .reset-group {
-            margin-left: auto;
-            padding-right: 0;
           }
 
           .active-mode {
@@ -493,44 +459,6 @@ import {Actions, ofType} from "@ngrx/effects";
             .title-row {
               flex-wrap: wrap;
               gap: 8px;
-            }
-
-            .header-actions {
-              flex-direction: column;
-              align-items: stretch;
-              gap: 8px;
-            }
-
-            .button-group {
-              flex-wrap: wrap;
-              padding-right: 0;
-              border-right: none;
-              border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-              padding-bottom: 8px;
-            }
-
-            .button-group:last-child {
-              border-bottom: none;
-              padding-bottom: 0;
-            }
-
-            .reset-group {
-              margin-left: 0;
-            }
-
-            .button-group button {
-              flex: 1 1 auto;
-              min-width: 0;
-              font-size: 12px;
-            }
-
-            mat-form-field {
-              min-width: 100%;
-              width: 100%;
-            }
-
-            .measurement-table {
-              font-size: 12px;
             }
           }
         `,

@@ -241,17 +241,6 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
               margin: 8px;
             }
 
-            .header-actions {
-              flex-direction: column;
-              align-items: stretch;
-              gap: 8px;
-            }
-
-            mat-form-field {
-              min-width: 100%;
-              width: 100%;
-            }
-
             .race-measurement-table {
               font-size: 12px;
             }
