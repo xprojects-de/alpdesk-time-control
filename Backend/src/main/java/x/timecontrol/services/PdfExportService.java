@@ -73,7 +73,7 @@ public class PdfExportService {
     private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
             new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
-            new PdfColumn<>("Altersgr.", 1.2f, e -> truncate(e.ageGroup(), 16)),
+            new PdfColumn<>("Alterskl.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.3f, e -> truncate(e.team(), 18)),
             new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
             new PdfColumn<>("Strafe", 0.9f, RankingEntry::penaltyFormatted),
@@ -86,7 +86,7 @@ public class PdfExportService {
             new PdfColumn<>("Name Vorname", 2.2f, e -> truncate(e.name(), 35)),
             new PdfColumn<>("Jg.", 0.5f, StartListEntry::birthYear),
             new PdfColumn<>("Geschl.", 0.7f, StartListEntry::gender),
-            new PdfColumn<>("Altersgruppe", 1.5f, e -> truncate(e.ageGroup(), 20)),
+            new PdfColumn<>("Alterskl.", 1.5f, e -> truncate(e.ageGroup(), 20)),
             new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
             new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20))
     );
@@ -970,9 +970,9 @@ public class PdfExportService {
         int totalSeconds = timeMs / 1000;
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;
-        int tenths = (timeMs % 1000) / 100;
+        int hundreds = (timeMs % 1000) / 10;
 
-        return String.format("%d:%02d.%d", minutes, seconds, tenths);
+        return String.format("%d:%02d.%d", minutes, seconds, hundreds);
     }
 
     /**
