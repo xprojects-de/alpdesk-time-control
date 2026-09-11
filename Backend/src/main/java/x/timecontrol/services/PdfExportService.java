@@ -59,11 +59,12 @@ public class PdfExportService {
     }
 
     private record RankingEntry(int place, String name, String ageGroup, String team, String valueFormatted,
-                                 String penaltyFormatted, String totalFormatted, String diffFormatted) {
+                                 String penaltyFormatted, String totalFormatted, String diffFormatted,
+                                 boolean hasPenalty) {
     }
 
     private record StartListEntry(String raceNumber, String name, String birthYear, String gender,
-                                   String ageGroup, String team, String category) {
+                                   String ageGroup, String team, String category, boolean hasCategory) {
     }
 
     private record PdfColumn<T>(String header, float weight, Function<T, String> valueFn) {
@@ -93,7 +94,29 @@ public class PdfExportService {
     public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
         List<StartListEntry> entries = createStartListEntries(participants);
         return renderDocument(race, false,
-                ctx -> drawSection(ctx, START_LIST_COLUMNS, "Startliste", entries, "Teilnehmer", true));
+                ctx -> drawSection(ctx, startListColumns(entries), "Startliste", entries, "Teilnehmer", true));
+    }
+
+    /**
+     * Drops the "Kategorie" column when none of the entries have an assigned category, instead of
+     * always reserving space for a column that would otherwise show "-" for every row.
+     */
+    private List<PdfColumn<StartListEntry>> startListColumns(List<StartListEntry> entries) {
+        if (entries.stream().anyMatch(StartListEntry::hasCategory)) {
+            return START_LIST_COLUMNS;
+        }
+        return START_LIST_COLUMNS.stream().filter(c -> !c.header().equals("Kategorie")).toList();
+    }
+
+    /**
+     * Drops the "Strafe" column when none of the entries actually have a penalty, instead of
+     * always reserving space for a column that would otherwise show "-"/zero for every row.
+     */
+    private List<PdfColumn<RankingEntry>> rankingColumns(List<RankingEntry> entries) {
+        if (entries.stream().anyMatch(RankingEntry::hasPenalty)) {
+            return RANKING_COLUMNS;
+        }
+        return RANKING_COLUMNS.stream().filter(c -> !c.header().equals("Strafe")).toList();
     }
 
     private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
@@ -120,7 +143,7 @@ public class PdfExportService {
                     ? Optional.ofNullable(categoriesById.get(p.categoryId())).map(Category::name).orElse("-")
                     : "-";
 
-            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category));
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null));
         }
         return entries;
     }
@@ -157,16 +180,16 @@ public class PdfExportService {
 
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, null, loadPersonTeamLookup(participants));
-        return renderDocument(race, false,
-                ctx -> drawSection(ctx, RANKING_COLUMNS, "Gesamtwertung", entries, "Teilnehmer", true));
+        return renderDocument(race, true,
+                ctx -> drawSection(ctx, rankingColumns(entries), "Gesamtwertung", entries, "Teilnehmer", true));
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, null, loadPersonTeamLookup(participants));
         String title = "Wertung " + genderLabel(gender);
-        return renderDocument(race, false,
-                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
+        return renderDocument(race, true,
+                ctx -> drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
@@ -174,8 +197,8 @@ public class PdfExportService {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null, loadPersonTeamLookup(participants));
         String title = "Wertung " + ageGroup + " " + genderLabel(gender);
-        return renderDocument(race, false,
-                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
+        return renderDocument(race, true,
+                ctx -> drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Participant> participants, Race race) throws IOException {
@@ -187,13 +210,13 @@ public class PdfExportService {
                 .toList();
         PersonTeamLookup lookup = loadPersonTeamLookup(participants);
 
-        return renderDocument(race, false, ctx -> {
+        return renderDocument(race, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
                     List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null, lookup);
                     if (!entries.isEmpty()) {
                         String title = "Wertung " + ageGroupName + " " + genderLabel(gender);
-                        drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                        drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", false);
                     }
                 }
             }
@@ -206,20 +229,20 @@ public class PdfExportService {
                 .orElse("Unbekannt");
         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, categoryId, loadPersonTeamLookup(participants));
         String title = "Wertung " + categoryName;
-        return renderDocument(race, false,
-                ctx -> drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", true));
+        return renderDocument(race, true,
+                ctx -> drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", true));
     }
 
     public byte[] generateOverallByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
         List<Category> categories = sortedCategoriesWithNoCategory();
         PersonTeamLookup lookup = loadPersonTeamLookup(participants);
 
-        return renderDocument(race, false, ctx -> {
+        return renderDocument(race, true, ctx -> {
             for (Category category : categories) {
                 List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, null, null, category.id(), lookup);
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name();
-                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                    drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", false);
                 }
             }
         });
@@ -230,12 +253,12 @@ public class PdfExportService {
         List<Category> categories = sortedCategoriesWithNoCategory();
         PersonTeamLookup lookup = loadPersonTeamLookup(participants);
 
-        return renderDocument(race, false, ctx -> {
+        return renderDocument(race, true, ctx -> {
             for (Category category : categories) {
                 List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, null, category.id(), lookup);
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name() + " " + genderLabel(gender);
-                    drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                    drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", false);
                 }
             }
         });
@@ -250,14 +273,14 @@ public class PdfExportService {
         List<Category> categories = sortedCategoriesWithNoCategory();
         PersonTeamLookup lookup = loadPersonTeamLookup(participants);
 
-        return renderDocument(race, false, ctx -> {
+        return renderDocument(race, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
                     for (Category category : categories) {
                         List<RankingEntry> entries = createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id(), lookup);
                         if (!entries.isEmpty()) {
                             String title = "Wertung " + ageGroupName + " " + genderLabel(gender) + " " + category.name();
-                            drawSection(ctx, RANKING_COLUMNS, title, entries, "Teilnehmer", false);
+                            drawSection(ctx, rankingColumns(entries), title, entries, "Teilnehmer", false);
                         }
                     }
                 }
@@ -894,7 +917,8 @@ public class PdfExportService {
                     formatValue(race, p.durationMs()),
                     formatValue(race, p.penalty()),
                     formatValue(race, adjustedValue),
-                    diff != null ? "+" + formatValue(race, diff) : "-"
+                    diff != null ? "+" + formatValue(race, diff) : "-",
+                    p.penalty() != null && p.penalty() != 0
             ));
         }
 
