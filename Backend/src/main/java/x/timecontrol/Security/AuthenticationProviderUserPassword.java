@@ -43,10 +43,11 @@ class AuthenticationProviderUserPassword<B> implements HttpRequestAuthentication
     @Value("${app.password}")
     private String expectedPassword;
 
+    @org.jspecify.annotations.NonNull
     @Override
     public AuthenticationResponse authenticate(
             @Nullable HttpRequest<B> httpRequest,
-            @NonNull AuthenticationRequest<String, String> authenticationRequest
+            @NonNull @org.jspecify.annotations.NonNull AuthenticationRequest<String, String> authenticationRequest
     ) {
         LoginAttemptState state = attemptsByClient.computeIfAbsent(clientKey(httpRequest), key -> new LoginAttemptState());
 

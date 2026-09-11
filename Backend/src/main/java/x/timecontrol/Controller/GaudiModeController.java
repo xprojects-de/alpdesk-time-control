@@ -208,10 +208,12 @@ public class GaudiModeController {
         try {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
             byte[] pdfBytes = switch (gaudiMode.type()) {
-                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, races.get(0));
-                case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, races.get(0));
-                case TIME_COMBINATION -> pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.get(0));
-                case POINTS_COMBINATION -> pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.get(0));
+                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, races.getFirst());
+                case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, races.getFirst());
+                case TIME_COMBINATION ->
+                        pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst());
+                case POINTS_COMBINATION ->
+                        pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst());
             };
 
             return HttpResponse.ok(pdfBytes)
@@ -240,7 +242,7 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfByGender(@PathVariable Long id, @PathVariable String gender) {
         return exportPointsCombinationPdf(id, gender.toLowerCase() + ".pdf",
                 (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationGenderRanking(
-                        gaudiMode.name(), ranking, races, races.get(0), gender));
+                        gaudiMode.name(), ranking, races, races.getFirst(), gender));
     }
 
     @Produces("application/pdf")
@@ -255,7 +257,7 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
         return exportPointsCombinationPdf(id, ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
                 (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                        gaudiMode.name(), ranking, races, races.get(0), ageGroup, gender));
+                        gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender));
     }
 
     @Produces("application/pdf")
@@ -270,7 +272,7 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfAllAgeGroups(@PathVariable Long id) {
         return exportPointsCombinationPdf(id, "altersklassen.pdf",
                 (gaudiMode, ranking, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
-                        gaudiMode.name(), ranking, races, races.get(0)));
+                        gaudiMode.name(), ranking, races, races.getFirst()));
     }
 
     @FunctionalInterface

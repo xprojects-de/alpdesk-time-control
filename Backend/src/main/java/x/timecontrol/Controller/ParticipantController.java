@@ -74,8 +74,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Participant not found")
     public HttpResponse<ParticipantResponse> getById(@PathVariable Long id) {
         Optional<Participant> participant = service.findById(id);
-        return participant.map(p -> HttpResponse.ok(service.toResponses(List.of(p)).get(0)))
-                .orElse(HttpResponse.notFound());
+        return participant.map(p -> HttpResponse.ok(service.toResponses(List.of(p)).getFirst())).orElse(HttpResponse.notFound());
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -95,7 +94,7 @@ public class ParticipantController {
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
-        return HttpResponse.created(service.toResponses(List.of(created)).get(0));
+        return HttpResponse.created(service.toResponses(List.of(created)).getFirst());
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -116,8 +115,7 @@ public class ParticipantController {
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
-        return updated.map(p -> HttpResponse.ok((Object) service.toResponses(List.of(p)).get(0)))
-                .orElse(HttpResponse.notFound());
+        return updated.map(p -> HttpResponse.ok((Object) service.toResponses(List.of(p)).getFirst())).orElse(HttpResponse.notFound());
     }
 
     @Delete("/{id}")
@@ -144,9 +142,7 @@ public class ParticipantController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     @Post("/copy")
-    @Operation(summary = "Copy participants into other races",
-            description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race). A person already present in a target race is skipped rather than duplicated.",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Copy participants into other races", description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race). A person already present in a target race is skipped rather than duplicated.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Participants copied", content = @Content(schema = @Schema(implementation = ParticipantCopyResponse.class)))
     @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
     public HttpResponse<?> copyParticipants(@Body ParticipantCopyRequest request) {
@@ -159,9 +155,7 @@ public class ParticipantController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/race/{raceId}/assign-race-numbers")
-    @Operation(summary = "Randomly assign race numbers for a race",
-            description = "Assigns race numbers 1..n to all participants of a race, randomized within each age group; participants without a matching age group are assigned last, ordered by ascending age",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Randomly assign race numbers for a race", description = "Assigns race numbers 1..n to all participants of a race, randomized within each age group; participants without a matching age group are assigned last, ordered by ascending age", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<?> assignRaceNumbers(@PathVariable Long raceId) {
@@ -175,15 +169,7 @@ public class ParticipantController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import/{raceId}")
-    @Operation(summary = "Import participants from CSV for a race",
-            description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender and " +
-                    "an optional 6th ExternalId column. The header row is ignored. Teams are looked up case-insensitively " +
-                    "and created (uppercased) if they don't exist yet. Rows with a missing/invalid gender (only MALE or " +
-                    "FEMALE are accepted) or an invalid birthdate (expected yyyy-MM-dd) are skipped and reported in the " +
-                    "response. ExternalId is fully optional (omit the column entirely, or leave it empty); when given, " +
-                    "it is used to find-or-create the matching Person so the same person can be re-imported for a later " +
-                    "race/season without creating a duplicate.",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Import participants from CSV for a race", description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender and " + "an optional 6th ExternalId column. The header row is ignored. Teams are looked up case-insensitively " + "and created (uppercased) if they don't exist yet. Rows with a missing/invalid gender (only MALE or " + "FEMALE are accepted) or an invalid birthdate (expected yyyy-MM-dd) are skipped and reported in the " + "response. ExternalId is fully optional (omit the column entirely, or leave it empty); when given, " + "it is used to find-or-create the matching Person so the same person can be re-imported for a later " + "race/season without creating a duplicate.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantImportResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "Import failed")
@@ -206,9 +192,7 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/startlist/{raceId}")
-    @Operation(summary = "Export start list as PDF",
-            description = "Generates a PDF start list sorted by race number for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export start list as PDF", description = "Generates a PDF start list sorted by race number for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -218,9 +202,7 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/all/{raceId}")
-    @Operation(summary = "Export all participants as PDF",
-            description = "Generates a PDF with all participants sorted by time (fastest to slowest) for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export all participants as PDF", description = "Generates a PDF with all participants sorted by time (fastest to slowest) for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -230,35 +212,27 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/gender/{gender}/{raceId}")
-    @Operation(summary = "Export participants by gender as PDF",
-            description = "Generates a PDF with participants filtered by gender, sorted by time for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export participants by gender as PDF", description = "Generates a PDF with participants filtered by gender, sorted by time for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportByGenderToPdf(@PathVariable String gender, @PathVariable Long raceId) {
-        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + ".pdf",
-                (participants, race) -> pdfExportService.generateGenderRanking(participants, gender, race));
+        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + ".pdf", (participants, race) -> pdfExportService.generateGenderRanking(participants, gender, race));
     }
 
     @Produces("application/pdf")
     @Get("/export/pdf/agegroup/{ageGroup}/gender/{gender}/{raceId}")
-    @Operation(summary = "Export participants by age group and gender as PDF",
-            description = "Generates a PDF with participants filtered by age group and gender, sorted by time for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export participants by age group and gender as PDF", description = "Generates a PDF with participants filtered by age group and gender, sorted by time for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportByAgeGroupAndGenderToPdf(@PathVariable String ageGroup, @PathVariable String gender, @PathVariable Long raceId) {
-        return exportPdf(raceId, "wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
-                (participants, race) -> pdfExportService.generateAgeGroupGenderRanking(participants, ageGroup, gender, race));
+        return exportPdf(raceId, "wertung_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf", (participants, race) -> pdfExportService.generateAgeGroupGenderRanking(participants, ageGroup, gender, race));
     }
 
     @Produces("application/pdf")
     @Get("/export/pdf/agegroups/all/{raceId}")
-    @Operation(summary = "Export all age groups separated by gender as PDF",
-            description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export all age groups separated by gender as PDF", description = "Generates a PDF with all age groups, each split by gender (male/female), starting from youngest for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -268,9 +242,7 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/all/categories/{raceId}")
-    @Operation(summary = "Export overall ranking split by category as PDF",
-            description = "Generates a PDF with all participants sorted by time, split into one section per category",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export overall ranking split by category as PDF", description = "Generates a PDF with all participants sorted by time, split into one section per category", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -280,22 +252,17 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/gender/{gender}/categories/{raceId}")
-    @Operation(summary = "Export participants by gender split by category as PDF",
-            description = "Generates a PDF with participants filtered by gender, split into one section per category",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export participants by gender split by category as PDF", description = "Generates a PDF with participants filtered by gender, split into one section per category", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportByGenderByCategoryToPdf(@PathVariable String gender, @PathVariable Long raceId) {
-        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + "_kategorien.pdf",
-                (participants, race) -> pdfExportService.generateGenderByCategoryRanking(participants, gender, race));
+        return exportPdf(raceId, "wertung_" + gender.toLowerCase() + "_kategorien.pdf", (participants, race) -> pdfExportService.generateGenderByCategoryRanking(participants, gender, race));
     }
 
     @Produces("application/pdf")
     @Get("/export/pdf/agegroups/all/categories/{raceId}")
-    @Operation(summary = "Export all age groups split by gender and category as PDF",
-            description = "Generates a PDF with all age groups, each split by gender and then by category",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export all age groups split by gender and category as PDF", description = "Generates a PDF with all age groups, each split by gender and then by category", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
@@ -305,15 +272,12 @@ public class ParticipantController {
 
     @Produces("application/pdf")
     @Get("/export/pdf/category/{categoryId}/{raceId}")
-    @Operation(summary = "Export participants by category as PDF",
-            description = "Generates a PDF with participants filtered by category, sorted by time for a specific race",
-            security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export participants by category as PDF", description = "Generates a PDF with participants filtered by category, sorted by time for a specific race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportByCategoryToPdf(@PathVariable Long categoryId, @PathVariable Long raceId) {
-        return exportPdf(raceId, "wertung_kategorie_" + categoryId + ".pdf",
-                (participants, race) -> pdfExportService.generateCategoryRanking(participants, categoryId, race));
+        return exportPdf(raceId, "wertung_kategorie_" + categoryId + ".pdf", (participants, race) -> pdfExportService.generateCategoryRanking(participants, categoryId, race));
     }
 
     @FunctionalInterface
@@ -335,14 +299,12 @@ public class ParticipantController {
         try {
             Iterable<Participant> participants = service.findByRaceId(raceId);
             byte[] pdfBytes = body.generate(participants, race.get());
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=" + filename);
+            return HttpResponse.ok(pdfBytes).header("Content-Disposition", "attachment; filename=" + filename);
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return HttpResponse.serverError(new ErrorResponse("Failed to generate PDF: " + reason))
-                    .contentType(MediaType.APPLICATION_JSON);
+            return HttpResponse.serverError(new ErrorResponse("Failed to generate PDF: " + reason)).contentType(MediaType.APPLICATION_JSON);
         }
     }
 

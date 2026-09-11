@@ -50,8 +50,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
         if (races.isEmpty()) {
             return List.of();
         }
-        Race race = races.get(0).race();
-        List<Participant> raceParticipants = races.get(0).participants();
+        Race race = races.getFirst().race();
+        List<Participant> raceParticipants = races.getFirst().participants();
 
         Map<Long, Participant> participantsById = new HashMap<>();
         for (Participant p : raceParticipants) {

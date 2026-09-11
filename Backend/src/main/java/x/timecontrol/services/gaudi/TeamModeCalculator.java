@@ -47,8 +47,8 @@ public class TeamModeCalculator implements GaudiModeCalculator {
         if (races.isEmpty()) {
             return List.of();
         }
-        Race race = races.get(0).race();
-        List<Participant> raceParticipants = races.get(0).participants();
+        Race race = races.getFirst().race();
+        List<Participant> raceParticipants = races.getFirst().participants();
         int teamSize = gaudiMode.teamSize() != null ? gaudiMode.teamSize() : 1;
 
         Map<Long, List<Participant>> membersByTeam = raceParticipants.stream()

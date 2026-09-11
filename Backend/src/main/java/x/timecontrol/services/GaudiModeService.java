@@ -188,7 +188,7 @@ public class GaudiModeService {
         if (races.isEmpty()) {
             return List.of();
         }
-        Long raceId = races.get(0).raceId();
+        Long raceId = races.getFirst().raceId();
 
         List<Participant> participants = new ArrayList<>(
                 StreamSupport.stream(participantService.findByRaceId(raceId).spliterator(), false).toList()
@@ -207,7 +207,7 @@ public class GaudiModeService {
         }
 
         if (participants.size() % 2 != 0) {
-            Participant leftover = participants.get(participants.size() - 1);
+            Participant leftover = participants.getLast();
             created.add(pairingRepository.save(
                     new GaudiLosPairing(null, gaudiMode.id(), leftover.id(), null)
             ));

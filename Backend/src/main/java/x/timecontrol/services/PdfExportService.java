@@ -716,7 +716,7 @@ public class PdfExportService {
             } else {
                 List<String> wrapped = wrapWords(block, font, fontSize, maxWidth);
                 lines.addAll(wrapped.subList(0, wrapped.size() - 1));
-                current = new StringBuilder(wrapped.get(wrapped.size() - 1));
+                current = new StringBuilder(wrapped.getLast());
             }
         }
         if (!current.isEmpty()) {
@@ -815,7 +815,7 @@ public class PdfExportService {
 
         // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
-        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.get(0).participant());
+        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.getFirst().participant());
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
             Participant p = sortedParticipants.get(i).participant();
