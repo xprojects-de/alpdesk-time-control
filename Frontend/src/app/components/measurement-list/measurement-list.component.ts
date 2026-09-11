@@ -24,12 +24,8 @@ import {MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {MatBadgeModule} from "@angular/material/badge";
 import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatMenuModule} from "@angular/material/menu";
-import {MatDividerModule} from "@angular/material/divider";
-import {MatSelectModule} from "@angular/material/select";
-import {MatFormFieldModule} from "@angular/material/form-field";
 import {Measurement} from "../../models/measurement.model";
 import {Race} from "../../models/race.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -38,6 +34,10 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
+import {
+    ArchiveMeasurementsDialogComponent,
+    ArchiveMeasurementsDialogResult,
+} from "./archive-measurements-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
@@ -53,13 +53,9 @@ import {Actions, ofType} from "@ngrx/effects";
         MatSnackBarModule,
         MatCardModule,
         MatTooltipModule,
-        MatBadgeModule,
         MatSlideToggleModule,
         MatMenuModule,
-        MatDividerModule,
         FormsModule,
-        MatSelectModule,
-        MatFormFieldModule,
     ],
     template: `
         <mat-card>
@@ -94,20 +90,6 @@ import {Actions, ofType} from "@ngrx/effects";
                 </mat-card-title>
             </mat-card-header>
             <mat-card-content>
-                <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async"
-                                    (selectionChange)="onRaceFilterChange($event.value)">
-                            <mat-option [value]="null">Alle Rennen</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})
-                                </mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
-                </div>
-
                 <div class="header-actions">
                     <button
                             mat-raised-button
@@ -125,30 +107,12 @@ import {Actions, ofType} from "@ngrx/effects";
                     <button
                             mat-raised-button
                             color="accent"
-                            [matMenuTriggerFor]="archiveMenu"
-                            matTooltip="Aktuelle Messungen für das gewählte Rennen archivieren und Messtabelle leeren"
+                            (click)="openArchiveDialog()"
+                            matTooltip="Aktuelle Messungen einem Rennen zuordnen und archivieren"
                     >
                         <mat-icon>archive</mat-icon>
                         Archivieren
-                        <mat-icon>arrow_drop_down</mat-icon>
                     </button>
-
-                    <mat-menu #archiveMenu="matMenu">
-                        <button mat-menu-item (click)="archiveMeasurements(false, true)">
-                            <mat-icon>archive</mat-icon>
-                            <span>Archivieren (nur Datenbank)</span>
-                        </button>
-
-                        <button mat-menu-item (click)="archiveMeasurements(true, true)">
-                            <mat-icon>archive</mat-icon>
-                            <span>Archivieren (inkl. Gerät-Reset)</span>
-                        </button>
-
-                        <button mat-menu-item (click)="archiveMeasurements(false, false)">
-                            <mat-icon>content_copy</mat-icon>
-                            <span>Archivieren (ohne Löschen)</span>
-                        </button>
-                    </mat-menu>
 
                     <button
                             mat-raised-button
@@ -325,14 +289,6 @@ import {Actions, ofType} from "@ngrx/effects";
     changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .filter-section {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-          }
-
           .title-row {
             display: flex;
             justify-content: space-between;
@@ -405,12 +361,6 @@ import {Actions, ofType} from "@ngrx/effects";
             padding: 10px;
           }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 40px;
-          }
-
           .measurement-table {
             width: 100%;
             transition: opacity 0.2s ease;
@@ -426,19 +376,6 @@ import {Actions, ofType} from "@ngrx/effects";
 
           mat-card-content {
             position: relative;
-          }
-
-          .menu-section-header {
-            opacity: 0.7;
-            cursor: default !important;
-          }
-
-          .menu-section-header span {
-            font-size: 0.875rem;
-          }
-
-          mat-form-field {
-            min-width: 250px;
           }
 
           .count-info {
@@ -474,7 +411,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     measurements$: Observable<Measurement[]>;
     races$: Observable<Race[]>;
-    selectedRaceId$: Observable<number | null>;
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
@@ -490,10 +426,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     constructor() {
         this.measurements$ = this.store.select(
-            MeasurementSelectors.selectFilteredMeasurements,
+            MeasurementSelectors.selectAllMeasurements,
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
-        this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
         );
@@ -847,21 +782,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    onRaceFilterChange(raceId: number | null): void {
-        this.store.dispatch(RaceActions.selectRace({id: raceId}));
-    }
-
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const year = parts[0];
-            const month = parts[1];
-            const day = parts[2];
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
-    }
-
 
     resetMeasurements(resetDevice: boolean): void {
         const message = resetDevice
@@ -882,27 +802,23 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(MeasurementActions.setScheduledImport({enable}));
     }
 
-    archiveMeasurements(resetDevice: boolean, clearAfterArchive: boolean): void {
-        this.selectedRaceId$.pipe(take(1)).subscribe(raceId => {
-            if (!raceId) {
-                this.snackBar.open('Bitte zuerst ein Rennen im Filter auswählen', 'OK', {
-                    duration: 4000,
-                    panelClass: 'error-snackbar'
+    openArchiveDialog(): void {
+        this.races$.pipe(take(1)).subscribe(races => {
+            const dialogRef = this.dialog.open(ArchiveMeasurementsDialogComponent, {
+                width: "500px",
+                data: {races},
+            });
+
+            dialogRef.afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((result?: ArchiveMeasurementsDialogResult) => {
+                    if (!result) {
+                        return;
+                    }
+                    this.lastArchiveResetDevice = result.resetDevice;
+                    this.lastArchiveClearAfterArchive = result.clearAfterArchive;
+                    this.store.dispatch(MeasurementActions.archiveMeasurements(result));
                 });
-                return;
-            }
-
-            const message = !clearAfterArchive
-                ? 'Möchten Sie die aktuellen Messungen für dieses Rennen archivieren? Datenbank und Gerät werden dabei NICHT verändert, das können Sie bei Bedarf später manuell erledigen.'
-                : resetDevice
-                    ? 'Möchten Sie die aktuellen Messungen wirklich archivieren und das Gerät zurücksetzen? Danach kann sofort das nächste Rennen gemessen werden.'
-                    : 'Möchten Sie die aktuellen Messungen wirklich archivieren (nur Datenbank)? Danach kann sofort das nächste Rennen gemessen werden.';
-
-            if (confirm(message)) {
-                this.lastArchiveResetDevice = resetDevice;
-                this.lastArchiveClearAfterArchive = clearAfterArchive;
-                this.store.dispatch(MeasurementActions.archiveMeasurements({raceId, resetDevice, clearAfterArchive}));
-            }
         });
     }
 
