@@ -462,9 +462,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
-    private sortInitialized = false;
 
-    sort = viewChild.required(MatSort);
+    // Optional, not required: the table (and its matSort) only renders once a race is
+    // selected - see the @if in the template - so it may genuinely not exist yet, and is
+    // destroyed/recreated (as a fresh MatSort instance) each time the selection is cleared
+    // and set again.
+    sort = viewChild(MatSort);
 
     constructor() {
         this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
@@ -576,13 +579,15 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Vergeben der Startnummern: ${error}`, "OK", {duration: 5000});
         });
 
-        // Setup sort when signal changes
+        // Setup sort when signal changes - re-attaches whenever a *new* MatSort instance
+        // appears (initial render, or the table being recreated after the race filter is
+        // cleared and set again), not just once, since sortInstance !== a stale destroyed
+        // instance already assigned to dataSource.sort.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
                 }, 100);
             }
         });
