@@ -1,0 +1,1 @@
+import{lt as Xb,yt as Zf}from"./chunk-G_SeKo1t.js";var c=Xb(`race`);var l=Zf(c,e=>e.races);var n=Zf(c,e=>e.loading);Zf(c,e=>e.error);var s=Zf(c,e=>e.selectedRaceId);Zf(l,s,(e,a)=>a?e.find(o=>o.id===a):null);export{n,s as r,l as t};

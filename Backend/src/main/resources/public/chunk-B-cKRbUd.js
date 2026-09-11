@@ -1,0 +1,1 @@
+import{lt as Xb,yt as Zf}from"./chunk-G_SeKo1t.js";var r=Xb(`category`);var c=Zf(r,e=>e.categories);var s=Zf(r,e=>e.loading);Zf(r,e=>e.error);export{s as n,c as t};

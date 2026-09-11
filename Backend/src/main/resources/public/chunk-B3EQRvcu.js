@@ -1,0 +1,1 @@
+var e={MALE:`Männlich`,FEMALE:`Weiblich`,BOTH:`Beide`};export{e as t};
