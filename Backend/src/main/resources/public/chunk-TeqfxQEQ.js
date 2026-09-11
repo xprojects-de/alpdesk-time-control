@@ -1,1 +1,0 @@
-import{lt as Xb,yt as Zf}from"./chunk-G_SeKo1t.js";var r=Xb(`team`);var c=Zf(r,e=>e.teams);var m=Zf(r,e=>e.loading);Zf(r,e=>e.error);export{m as n,c as t};

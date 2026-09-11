@@ -1,0 +1,1 @@
+import{gt as Zf,mt as Zb}from"./chunk-CvvWUGgn.js";var c=Zb(`race`);var l=Zf(c,e=>e.races);var n=Zf(c,e=>e.loading);Zf(c,e=>e.error);var s=Zf(c,e=>e.selectedRaceId);Zf(l,s,(e,a)=>a?e.find(o=>o.id===a):null);export{n,s as r,l as t};

@@ -1,0 +1,1 @@
+import{gt as Zf,mt as Zb}from"./chunk-CvvWUGgn.js";var r=Zb(`category`);var c=Zf(r,e=>e.categories);var s=Zf(r,e=>e.loading);Zf(r,e=>e.error);export{s as n,c as t};
