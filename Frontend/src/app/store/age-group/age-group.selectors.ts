@@ -18,20 +18,3 @@ export const selectAgeGroupError = createSelector(
     state => state.error
 );
 
-export const selectSelectedAgeGroupId = createSelector(
-    selectAgeGroupState,
-    state => state.selectedAgeGroupId
-);
-
-export const selectSelectedAgeGroup = createSelector(
-    selectAllAgeGroups,
-    selectSelectedAgeGroupId,
-    (ageGroups, selectedId) =>
-        selectedId ? ageGroups.find(a => a.id === selectedId) : null
-);
-
-export const selectAgeGroupById = (id: number) => createSelector(
-    selectAllAgeGroups,
-    ageGroups => ageGroups.find(a => a.id === id)
-);
-

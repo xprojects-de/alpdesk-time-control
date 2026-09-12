@@ -1,5 +1,7 @@
 import {createReducer, on} from '@ngrx/store';
 import {Participant} from '../../models/participant.model';
+import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantCopyResponse} from '../../models/participant-copy.model';
 import * as ParticipantActions from './participant.actions';
 
 export interface ParticipantState {
@@ -7,6 +9,10 @@ export interface ParticipantState {
     selectedParticipantId: number | null;
     loading: boolean;
     pdfExportLoading: boolean;
+    importLoading: boolean;
+    importResult: ParticipantImportResponse | null;
+    copyLoading: boolean;
+    copyResult: ParticipantCopyResponse | null;
     error: string | null;
 }
 
@@ -15,6 +21,10 @@ export const initialState: ParticipantState = {
     selectedParticipantId: null,
     loading: false,
     pdfExportLoading: false,
+    importLoading: false,
+    importResult: null,
+    copyLoading: false,
+    copyResult: null,
     error: null
 };
 
@@ -132,11 +142,75 @@ export const participantReducer = createReducer(
         selectedParticipantId: id
     })),
 
+    // Assign race numbers
+    on(ParticipantActions.assignRaceNumbers, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(ParticipantActions.assignRaceNumbersSuccess, (state, {participants}) => ({
+        ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        loading: false
+    })),
+    on(ParticipantActions.assignRaceNumbersFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
+    })),
+
+    // Import participants from CSV
+    on(ParticipantActions.importParticipantsCsv, state => ({
+        ...state,
+        importLoading: true,
+        importResult: null,
+        error: null
+    })),
+    on(ParticipantActions.importParticipantsCsvSuccess, (state, {result}) => {
+        // The backend omits empty array fields from the JSON response entirely, so
+        // "imported"/"errors" can be undefined when there was nothing to report.
+        const imported = result.imported ?? [];
+        const errors = result.errors ?? [];
+        return {
+            ...state,
+            participants: [...state.participants, ...imported],
+            importLoading: false,
+            importResult: {...result, imported, errors}
+        };
+    }),
+    on(ParticipantActions.importParticipantsCsvFailure, (state, {error}) => ({
+        ...state,
+        importLoading: false,
+        error
+    })),
+
+    // Copy participants into other races
+    on(ParticipantActions.copyParticipants, state => ({
+        ...state,
+        copyLoading: true,
+        copyResult: null,
+        error: null
+    })),
+    on(ParticipantActions.copyParticipantsSuccess, (state, {result}) => ({
+        ...state,
+        copyLoading: false,
+        copyResult: result
+    })),
+    on(ParticipantActions.copyParticipantsFailure, (state, {error}) => ({
+        ...state,
+        copyLoading: false,
+        error
+    })),
+
     // PDF Export
     on(
         ParticipantActions.exportAllPdf,
         ParticipantActions.exportByGenderPdf,
         ParticipantActions.exportAllAgeGroupsPdf,
+        ParticipantActions.exportAllByCategoryPdf,
+        ParticipantActions.exportByGenderByCategoryPdf,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdf,
+        ParticipantActions.exportStartListPdf,
         state => ({
             ...state,
             pdfExportLoading: true,
@@ -147,6 +221,10 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllPdfSuccess,
         ParticipantActions.exportByGenderPdfSuccess,
         ParticipantActions.exportAllAgeGroupsPdfSuccess,
+        ParticipantActions.exportAllByCategoryPdfSuccess,
+        ParticipantActions.exportByGenderByCategoryPdfSuccess,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
+        ParticipantActions.exportStartListPdfSuccess,
         state => ({
             ...state,
             pdfExportLoading: false
@@ -156,6 +234,10 @@ export const participantReducer = createReducer(
         ParticipantActions.exportAllPdfFailure,
         ParticipantActions.exportByGenderPdfFailure,
         ParticipantActions.exportAllAgeGroupsPdfFailure,
+        ParticipantActions.exportAllByCategoryPdfFailure,
+        ParticipantActions.exportByGenderByCategoryPdfFailure,
+        ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure,
+        ParticipantActions.exportStartListPdfFailure,
         (state, {error}) => ({
             ...state,
             pdfExportLoading: false,

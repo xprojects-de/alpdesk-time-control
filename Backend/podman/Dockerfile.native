@@ -1,0 +1,44 @@
+
+# GraalVM native-image build for Linux, mirroring the nativeCompile step already used for the
+# macOS/Windows installers in .github/workflows/build-installers.yml. Produces a small,
+# fast-starting container without a JVM at runtime.
+
+FROM ghcr.io/graalvm/native-image-community:25 AS builder
+
+ARG ARTIFACT_NAME=""
+
+WORKDIR /home/app
+
+COPY . .
+
+RUN ./gradlew clean nativeCompile -x test --no-daemon
+
+RUN ls -lsa /home/app/build/native/nativeCompile/
+
+# RUNTIME
+
+FROM ubuntu:24.04
+
+ARG ARTIFACT_NAME
+
+WORKDIR /home/app
+
+LABEL maintainer="X-Projects"
+
+# Change this for Production - the server always listens on 18000
+# (see Backend/src/main/resources/application.properties, micronaut.server.port)
+ENV APP_USERNAME="time-control"
+ENV APP_PASSWORD="alpdesk"
+ENV OPEN_BROWSER="false"
+
+COPY --from=builder /home/app/build/native/nativeCompile/${ARTIFACT_NAME} /app/time-control
+
+RUN groupadd -r appuser && useradd --no-log-init -r -g appuser appuser \
+    && mkdir -p /home/app/database \
+    && chown -R appuser:appuser /home/app
+USER appuser
+
+EXPOSE 18000
+VOLUME ["/home/app/database"]
+
+ENTRYPOINT ["/app/time-control"]

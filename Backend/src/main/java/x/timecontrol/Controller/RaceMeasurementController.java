@@ -1,0 +1,134 @@
+package x.timecontrol.Controller;
+
+import x.timecontrol.dto.RaceMeasurementRequest;
+import x.timecontrol.dto.RaceMeasurementResponse;
+import x.timecontrol.dto.SyncMeasurementsResponse;
+import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.RaceMeasurement;
+import x.timecontrol.services.ParticipantService;
+import x.timecontrol.services.RaceMeasurementService;
+import io.micronaut.http.HttpResponse;
+import io.micronaut.http.MediaType;
+import io.micronaut.http.annotation.*;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
+import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.rules.SecurityRule;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
+
+@Secured(SecurityRule.IS_AUTHENTICATED)
+@Controller("/race-measurements")
+@ExecuteOn(TaskExecutors.BLOCKING)
+@Tag(name = "RaceMeasurement")
+public class RaceMeasurementController {
+
+    @Inject
+    RaceMeasurementService service;
+
+    @Inject
+    ParticipantService participantService;
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/race/{raceId}")
+    @Operation(summary = "List archived measurements for a race", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "List of archived measurements for the race", content = @Content(schema = @Schema(implementation = RaceMeasurementResponse.class)))
+    public HttpResponse<List<RaceMeasurementResponse>> listByRace(@PathVariable Long raceId) {
+        List<RaceMeasurementResponse> response = service.findByRaceId(raceId).stream()
+                .map(RaceMeasurementResponse::from)
+                .toList();
+        return HttpResponse.ok(response);
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/{id}")
+    @Operation(summary = "Get an archived race measurement by ID", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race measurement found", content = @Content(schema = @Schema(implementation = RaceMeasurementResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race measurement not found")
+    public HttpResponse<RaceMeasurementResponse> getById(@PathVariable Long id) {
+        Optional<RaceMeasurement> raceMeasurement = service.findById(id);
+        return raceMeasurement.map(m -> HttpResponse.ok(RaceMeasurementResponse.from(m)))
+                .orElse(HttpResponse.notFound());
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Put("/{id}")
+    @Operation(summary = "Update an archived race measurement (e.g. assign a participant)", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race measurement updated", content = @Content(schema = @Schema(implementation = RaceMeasurementResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race measurement not found")
+    @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Participant is already assigned to another measurement in this race")
+    public HttpResponse<?> update(@PathVariable Long id, @Body RaceMeasurementRequest request) {
+        Optional<RaceMeasurement> existing = service.findById(id);
+        if (existing.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        if (request.participantId() != null) {
+            Optional<Participant> participant = participantService.findById(request.participantId());
+            if (participant.isEmpty()) {
+                return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant with id " + request.participantId() + " does not exist"));
+            }
+            if (!participant.get().raceId().equals(existing.get().raceId())) {
+                return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant does not belong to this race"));
+            }
+        }
+        RaceMeasurement raceMeasurement = new RaceMeasurement(
+                null,
+                null,
+                null,
+                request.participantId(),
+                request.durationMs(),
+                request.measuredAt()
+        );
+        Optional<RaceMeasurement> updated;
+        try {
+            updated = service.update(id, raceMeasurement);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(m -> HttpResponse.ok((Object) RaceMeasurementResponse.from(m)))
+                .orElse(HttpResponse.notFound());
+    }
+
+    @Delete("/{id}")
+    @Operation(summary = "Delete an archived race measurement", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "204", description = "Race measurement deleted")
+    @ApiResponse(responseCode = "404", description = "Race measurement not found")
+    public HttpResponse<Void> delete(@PathVariable Long id) {
+        Optional<RaceMeasurement> raceMeasurement = service.findById(id);
+        if (raceMeasurement.isPresent()) {
+            service.delete(id);
+            return HttpResponse.noContent();
+        }
+        return HttpResponse.notFound();
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/race/{raceId}/sync-to-participants")
+    @Operation(summary = "Sync archived race measurements to participants",
+            description = "Transfers measurement data (duration_ms and measured_at) from archived race measurements to participant records, for all race measurements of this race that have a participant_id assigned",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race measurements synced successfully")
+    @ApiResponse(responseCode = "500", description = "Sync failed")
+    public HttpResponse<SyncMeasurementsResponse> syncMeasurementsToParticipants(@PathVariable Long raceId) {
+        try {
+            List<RaceMeasurement> raceMeasurements = service.findByRaceId(raceId);
+            ParticipantService.SyncMeasurementsResult result = participantService.syncMeasurementsToParticipants(raceMeasurements);
+            return HttpResponse.ok(SyncMeasurementsResponse.of(result.synced(), result.skipped()));
+        } catch (Exception e) {
+            SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
+                    0, 0, 0, "Sync failed: " + e.getMessage()
+            );
+            return HttpResponse.serverError().body(errorResponse);
+        }
+    }
+}

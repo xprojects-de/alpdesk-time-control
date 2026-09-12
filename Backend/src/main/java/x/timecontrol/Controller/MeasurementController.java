@@ -1,15 +1,22 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.AutoAssignEnableRequest;
+import x.timecontrol.dto.AutoAssignSetNextRequest;
+import x.timecontrol.dto.AutoAssignStatusResponse;
+import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
-import x.timecontrol.dto.SyncMeasurementsResponse;
 import x.timecontrol.entities.Measurement;
-import x.timecontrol.entities.Participant;
+import x.timecontrol.services.AutoAssignService;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
+import x.timecontrol.services.RaceService;
+import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpHeaders;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.scheduling.TaskExecutors;
@@ -30,6 +37,7 @@ import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/measurements")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Measurement")
 public class MeasurementController {
 
@@ -44,6 +52,12 @@ public class MeasurementController {
 
     @Inject
     ParticipantService participantService;
+
+    @Inject
+    AutoAssignService autoAssignService;
+
+    @Inject
+    RaceService raceService;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -87,7 +101,11 @@ public class MeasurementController {
     @Operation(summary = "Create a new measurement", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Measurement created", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<MeasurementResponse> add(@Body MeasurementRequest request) {
+    public HttpResponse<?> add(@Body MeasurementRequest request) {
+        HttpResponse<?> validationError = validateParticipantId(request.participantId());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -105,7 +123,14 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurement updated", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "404", description = "Measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<MeasurementResponse> update(@PathVariable Long id, @Body MeasurementRequest request) {
+    public HttpResponse<?> update(@PathVariable Long id, @Body MeasurementRequest request) {
+        if (service.findById(id).isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        HttpResponse<?> validationError = validateParticipantId(request.participantId());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -113,8 +138,19 @@ public class MeasurementController {
                 request.measuredAt()
         );
         Optional<Measurement> updated = service.update(id, measurement);
-        return updated.map(m -> HttpResponse.ok(MeasurementResponse.from(m)))
+        return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    /**
+     * @return a 400 HttpResponse if participantId is set but doesn't reference an existing
+     * participant, otherwise null (shared by add() and update(), which both accept participantId).
+     */
+    private HttpResponse<?> validateParticipantId(Long participantId) {
+        if (participantId != null && participantService.findById(participantId).isEmpty()) {
+            return HttpResponse.badRequest(new ErrorResponse("Participant with id " + participantId + " does not exist"));
+        }
+        return null;
     }
 
     @Delete("/{id}")
@@ -131,50 +167,52 @@ public class MeasurementController {
     }
 
     @Delete("/reset")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Delete all measurements and optionally reset device",
             description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
-    public HttpResponse<String> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
-        try {
-            // If device reset is requested, do it first before deleting database
-            if (resetDevice) {
-                boolean deviceReset = dataImportService.resetDevice();
-                if (!deviceReset) {
-                    return HttpResponse.serverError()
-                            .body("Failed to reset device. Database was not modified.");
+    public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
+        return dataImportScheduler.pauseDuring(() -> {
+            try {
+                // If device reset is requested, do it first before deleting database
+                if (resetDevice) {
+                    boolean deviceReset = dataImportService.resetDevice();
+                    if (!deviceReset) {
+                        return HttpResponse.serverError()
+                                .body(new ErrorResponse("Failed to reset device. Database was not modified."));
+                    }
                 }
-            }
 
-            // Only delete database if device reset was successful (or not requested)
-            service.deleteAll();
+                // Only delete database if device reset was successful (or not requested)
+                service.deleteAll();
 
-            if (resetDevice) {
-                return HttpResponse.ok("Device reset and all measurements deleted successfully");
-            } else {
-                return HttpResponse.ok("All measurements deleted successfully");
+                if (resetDevice) {
+                    return HttpResponse.ok("Device reset and all measurements deleted successfully");
+                } else {
+                    return HttpResponse.ok("All measurements deleted successfully");
+                }
+            } catch (DataAccessException e) {
+                throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+            } catch (Exception e) {
+                return HttpResponse.serverError()
+                        .body(new ErrorResponse("Error during reset operation: " + e.getMessage()));
             }
-        } catch (Exception e) {
-            return HttpResponse.serverError()
-                    .body("Error during reset operation: " + e.getMessage());
-        }
+        });
     }
 
     @Put("/continuous-mode")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Enable or disable continuous mode on device",
             description = "Enables or disables continuous mode on the SKitiming Controller device. When enabled, the device will continuously measure. When disabled, manual triggering is required.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Continuous mode set successfully")
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
-    public HttpResponse<String> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
+    public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
         try {
             boolean success = dataImportService.continuousMode(enable);
             if (!success) {
                 return HttpResponse.serverError()
-                        .body("Failed to set continuous mode on device");
+                        .body(new ErrorResponse("Failed to set continuous mode on device"));
             }
 
             if (enable) {
@@ -184,33 +222,31 @@ public class MeasurementController {
             }
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error during continuous mode operation: " + e.getMessage());
+                    .body(new ErrorResponse("Error during continuous mode operation: " + e.getMessage()));
         }
     }
 
     @Get("/device-status")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Get device status",
             description = "Returns the current mode of the SKitiming Controller device ('continuous' or 'normal')",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Device status retrieved successfully")
     @ApiResponse(responseCode = "500", description = "Failed to get device status")
-    public HttpResponse<String> getDeviceStatus() {
+    public HttpResponse<?> getDeviceStatus() {
         try {
             String status = dataImportService.getDeviceStatus();
             if (status == null) {
                 return HttpResponse.serverError()
-                        .body("Failed to get device status");
+                        .body(new ErrorResponse("Failed to get device status"));
             }
             return HttpResponse.ok(status);
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error getting device status: " + e.getMessage());
+                    .body(new ErrorResponse("Error getting device status: " + e.getMessage()));
         }
     }
 
     @Get("/device-connection")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Check device connection",
             description = "Checks if the SKitiming Controller device is reachable and returns the connection status via HTTP status code",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -231,30 +267,37 @@ public class MeasurementController {
     }
 
     @Post("/discard")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Discard oldest start from device queue",
             description = "Discards the oldest start from the device's internal queue. Only works in normal mode (not in continuous mode)",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Oldest start discarded successfully")
     @ApiResponse(responseCode = "400", description = "Queue empty or not applicable in continuous mode")
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
-    public HttpResponse<String> discardOldestStart() {
+    public HttpResponse<?> discardOldestStart() {
         try {
             boolean success = dataImportService.discardOldestStart();
             if (!success) {
                 return HttpResponse.badRequest()
-                        .body("Failed to discard oldest start. Queue may be empty or device is in continuous mode.");
+                        .body(new ErrorResponse("Failed to discard oldest start. Queue may be empty or device is in continuous mode."));
+            }
+            // The discarded start is exactly the racer the auto-assign cursor is currently waiting
+            // on (both sides assume arrival order equals start order) - advance it too, or the next
+            // arriving measurement would get wrongly attributed to whoever fell. Enforced here rather
+            // than by the caller so it holds regardless of which client calls this endpoint.
+            try {
+                autoAssignService.skip();
+            } catch (IllegalStateException ignored) {
+                // Auto-assign mode isn't active for any race right now - nothing to advance.
             }
             return HttpResponse.ok("Oldest start discarded successfully");
         } catch (Exception e) {
             return HttpResponse.serverError()
-                    .body("Error discarding oldest start: " + e.getMessage());
+                    .body(new ErrorResponse("Error discarding oldest start: " + e.getMessage()));
         }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/import")
-    @ExecuteOn(TaskExecutors.BLOCKING)
     @Operation(summary = "Import measurements from external device",
             description = "Fetches timing data from http://192.168.4.1/data and creates measurements",
             security = @SecurityRequirement(name = "BearerAuth"))
@@ -299,58 +342,95 @@ public class MeasurementController {
 
 
     @Produces(MediaType.APPLICATION_JSON)
-    @Post("/sync-to-participants")
-    @Operation(summary = "Sync measurements to participants",
-            description = "Transfers measurement data (duration_ms and measured_at) to participant records for all measurements that have a participant_id assigned",
+    @Get("/export")
+    @Operation(summary = "Export all measurements as JSON download",
+            description = "Returns all measurements as a JSON file download (without IDs, suitable for re-import)",
             security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Measurements synced successfully")
-    @ApiResponse(responseCode = "500", description = "Sync failed")
-    public HttpResponse<SyncMeasurementsResponse> syncMeasurementsToParticipants() {
+    @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
+    public HttpResponse<List<MeasurementRequest>> exportMeasurements() {
+        Iterable<Measurement> measurements = service.findAll();
+        List<MeasurementRequest> response = StreamSupport.stream(measurements.spliterator(), false)
+                .map(m -> new MeasurementRequest(m.participantId(), m.durationMs(), m.measuredAt()))
+                .toList();
+        return HttpResponse.ok(response)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/import-json")
+    @Operation(summary = "Import measurements from JSON",
+            description = "Imports a list of measurements from a JSON body. Existing measurements are kept; duplicates are inserted as new entries.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
+            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid JSON input")
+    public HttpResponse<?> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("A non-empty list of measurements is required"));
+        }
+        List<MeasurementResponse> created = requests.stream()
+                .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))
+                .map(service::create)
+                .map(MeasurementResponse::from)
+                .toList();
+        return HttpResponse.created(created);
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/auto-assign/status")
+    @Operation(summary = "Get the current live auto-assign status", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Current auto-assign status", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    public HttpResponse<AutoAssignStatusResponse> autoAssignStatus() {
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.getStatus()));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/enable")
+    @Operation(summary = "Enable live auto-assign mode for a race", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Auto-assign mode enabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Race does not exist")
+    public HttpResponse<?> enableAutoAssign(@Body AutoAssignEnableRequest request) {
+        if (request.raceId() == null || raceService.findById(request.raceId()).isEmpty()) {
+            return HttpResponse.badRequest(new ErrorResponse("Race with id " + request.raceId() + " does not exist"));
+        }
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/disable")
+    @Operation(summary = "Disable live auto-assign mode", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Auto-assign mode disabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    public HttpResponse<AutoAssignStatusResponse> disableAutoAssign() {
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.disable()));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/skip")
+    @Operation(summary = "Skip the currently expected race number without assigning it (e.g. a starter that did not start)", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race number skipped", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    public HttpResponse<?> skipAutoAssign() {
         try {
-            Iterable<Measurement> allMeasurements = service.findAll();
-            int syncedCount = 0;
-            int skippedCount = 0;
-
-            for (Measurement measurement : allMeasurements) {
-
-                if (measurement.participantId() != null) {
-                    Optional<Participant> participantOpt = participantService.findById(measurement.participantId());
-
-                    if (participantOpt.isPresent()) {
-                        Participant participant = participantOpt.get();
-
-                        Participant updatedParticipant = new Participant(
-                            participant.id(),
-                            participant.raceId(),
-                            participant.firstName(),
-                            participant.lastName(),
-                            participant.birthDate(),
-                            participant.gender(),
-                            participant.raceNumber(),
-                            participant.association(),
-                            measurement.durationMs(),
-                            measurement.measuredAt()
-                        );
-
-                        participantService.update(participant.id(), updatedParticipant);
-                        syncedCount++;
-                    } else {
-                        skippedCount++;
-                    }
-                } else {
-                    skippedCount++;
-                }
-            }
-
-            SyncMeasurementsResponse response = SyncMeasurementsResponse.of(syncedCount, skippedCount);
-            return HttpResponse.ok(response);
-        } catch (Exception e) {
-            SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
-                    0, 0, 0, "Sync failed: " + e.getMessage()
-            );
-            return HttpResponse.serverError().body(errorResponse);
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.skip()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
         }
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/set-next")
+    @Operation(summary = "Manually set the next expected race number (e.g. after a correction)", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Next race number updated", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    public HttpResponse<?> setNextAutoAssignRaceNumber(@Body AutoAssignSetNextRequest request) {
+        try {
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.setNextRaceNumber(request.raceNumber())));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
+        }
+    }
 }
 

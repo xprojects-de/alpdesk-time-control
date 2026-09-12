@@ -11,3 +11,14 @@ export interface MeasurementRequest {
     measuredAt: string;
 }
 
+export interface AutoAssignStatus {
+    raceId: number | null;
+    active: boolean;
+    nextRaceNumber: number | null;
+}
+
+export interface AutoAssignEnableRequest {
+    raceId: number;
+    startRaceNumber?: number | null;
+}
+

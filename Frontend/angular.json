@@ -2,7 +2,8 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": false
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -30,6 +31,17 @@
               }
             ],
             "styles": [
+              "material-icons/iconfont/material-icons.css",
+              "@fontsource/roboto/300.css",
+              "@fontsource/roboto/300-italic.css",
+              "@fontsource/roboto/400.css",
+              "@fontsource/roboto/400-italic.css",
+              "@fontsource/roboto/500.css",
+              "@fontsource/roboto/500-italic.css",
+              "@fontsource/roboto/700.css",
+              "@fontsource/roboto/700-italic.css",
+              "@fontsource/roboto/900.css",
+              "@fontsource/roboto/900-italic.css",
               "src/styles.scss"
             ]
           },
@@ -47,7 +59,13 @@
                   "maximumError": "16kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,

@@ -45,7 +45,7 @@ import {takeUntil} from "rxjs/operators";
                     <mat-card-title>
                         <div class="title-with-icon">
                             <mat-icon>access_time</mat-icon>
-                            <span>TimeControl Login</span>
+                            <span>Alpdesk TimeControl</span>
                         </div>
                     </mat-card-title>
                 </mat-card-header>
@@ -120,7 +120,7 @@ import {takeUntil} from "rxjs/operators";
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #eeffdc 0%, #578238 100%);
             padding: 20px;
           }
 
@@ -204,8 +204,8 @@ export class LoginComponent implements OnInit, OnDestroy {
 
     constructor() {
         this.loginForm = this.fb.group({
-            username: ["time-control", Validators.required],
-            password: ["time-control", Validators.required],
+            username: ["", Validators.required],
+            password: ["", Validators.required],
         });
 
         this.loading$ = this.store.select(AuthSelectors.selectAuthLoading);

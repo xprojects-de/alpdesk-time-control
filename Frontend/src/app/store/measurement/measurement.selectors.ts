@@ -83,3 +83,8 @@ export const selectIsPollingDeviceConnection = createSelector(
     state => state.isPollingDeviceConnection
 );
 
+export const selectAutoAssignStatus = createSelector(
+    selectMeasurementState,
+    state => state.autoAssignStatus
+);
+

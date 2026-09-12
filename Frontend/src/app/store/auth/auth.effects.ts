@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {extractErrorMessage} from '../../utils/http-error.util';
 import {Router} from '@angular/router';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
@@ -20,25 +21,25 @@ export class AuthEffects {
                     map(response => {
                         // Store username in response
                         const enhancedResponse = {...response, username: credentials.username};
+                        if (!this.authService.extractToken(enhancedResponse)) {
+                            // A 2xx response with no token would otherwise still be treated as a
+                            // successful login (isAuthenticated: true with a null token), leaving
+                            // every subsequent request unauthenticated with no explanation.
+                            throw new Error('Login response did not include an authentication token');
+                        }
                         return AuthActions.loginSuccess({response: enhancedResponse});
                     }),
                     catchError(error => of(AuthActions.loginFailure({
-                        error: error.error?.message || error.message || 'Login fehlgeschlagen'
+                        error: extractErrorMessage(error, 'Login fehlgeschlagen')
                     })))
                 )
             )
         )
     );
 
-    loginSuccess$ = createEffect(() =>
-            this.actions$.pipe(
-                ofType(AuthActions.loginSuccess),
-                tap(() => {
-                    this.router.navigate(['/dashboard']).then();
-                })
-            ),
-        {dispatch: false}
-    );
+    // No loginSuccess$ navigation effect: LoginComponent already redirects to /dashboard whenever
+    // selectIsAuthenticated becomes true (which a successful login causes), and a second navigate
+    // call here duplicated that on every login.
 
     logout$ = createEffect(() =>
         this.actions$.pipe(

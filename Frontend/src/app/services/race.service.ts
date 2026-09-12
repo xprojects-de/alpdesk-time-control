@@ -31,8 +31,8 @@ export class RaceService {
         return this.http.put<Race>(`${this.apiUrl}/${id}`, race);
     }
 
-    delete(id: number): Observable<void> {
-        return this.http.delete<void>(`${this.apiUrl}/${id}`);
+    delete(id: number, force = false): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/${id}`, {params: {force}});
     }
 }
 

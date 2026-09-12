@@ -61,6 +61,9 @@ jobs:
           - os: windows-latest
             platform: windows
             artifact-name: TimeControl-Windows-Setup.exe
+          - os: ubuntu-latest
+            platform: linux
+            artifact-name: TimeControl-Linux.tar.gz
 
     steps:
       - name: Checkout Repository
@@ -112,6 +115,16 @@ jobs:
             --app-drop-link 600 185 \
             "Backend/dist/${{ matrix.artifact-name }}" \
             "Backend/build/native/nativeCompile/"
+
+      - name: Build Linux Native Image
+        if: matrix.platform == 'linux'
+        run: ./gradlew nativeCompile --no-daemon
+
+      - name: Package Linux Archive
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p dist
+          tar -czf "dist/${{ matrix.artifact-name }}" -C build/native/nativeCompile time-control
 
       - name: Build Windows Native Image
         if: matrix.platform == 'windows'

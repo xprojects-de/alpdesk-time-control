@@ -3,6 +3,8 @@ package x.timecontrol.Controller;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +25,7 @@ import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @Controller("/age-groups")
+@ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Age Group")
 public class AgeGroupController {
 
@@ -69,10 +72,19 @@ public class AgeGroupController {
     @Operation(summary = "Create a new age group", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Age group created", content = @Content(schema = @Schema(implementation = AgeGroupResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<AgeGroupResponse> add(@Body AgeGroupRequest request) {
+    @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
+    public HttpResponse<?> add(@Body AgeGroupRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
+                    "Name, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
+        }
         AgeGroup ageGroup = service.createFromRequest(request);
-        AgeGroup created = service.create(ageGroup);
-        return HttpResponse.created(AgeGroupResponse.from(created));
+        try {
+            AgeGroup created = service.create(ageGroup);
+            return HttpResponse.created(AgeGroupResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -82,11 +94,34 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "200", description = "Age group updated", content = @Content(schema = @Schema(implementation = AgeGroupResponse.class)))
     @ApiResponse(responseCode = "404", description = "Age group not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
-    public HttpResponse<AgeGroupResponse> update(@PathVariable Long id, @Body AgeGroupRequest request) {
+    @ApiResponse(responseCode = "409", description = "An age group with this name already exists")
+    public HttpResponse<?> update(@PathVariable Long id, @Body AgeGroupRequest request) {
+        if (!isValid(request)) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
+                    "Name, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
+        }
         AgeGroup ageGroup = service.createFromRequest(request);
-        Optional<AgeGroup> updated = service.update(id, ageGroup);
-        return updated.map(ag -> HttpResponse.ok(AgeGroupResponse.from(ag)))
+        Optional<AgeGroup> updated;
+        try {
+            updated = service.update(id, ageGroup);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
+        return updated.map(ag -> HttpResponse.ok((Object) AgeGroupResponse.from(ag)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    /**
+     * Manual validation (no bean-validation framework is wired up in this codebase): missing
+     * required fields would otherwise persist as null and NPE later, e.g. when
+     * ParticipantService.findMatchingAgeGroup unboxes birthYearFrom/birthYearTo.
+     */
+    private boolean isValid(AgeGroupRequest request) {
+        return request.name() != null && !request.name().isBlank()
+                && request.birthYearFrom() != null
+                && request.birthYearTo() != null
+                && request.birthYearFrom() <= request.birthYearTo()
+                && request.gender() != null;
     }
 
     @Delete("/{id}")

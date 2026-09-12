@@ -9,7 +9,55 @@ export const routes: Routes = [
     {
         path: 'dashboard',
         component: DashboardComponent,
-        canActivate: [authGuard]
+        canActivate: [authGuard],
+        children: [
+            {path: '', redirectTo: 'age-groups', pathMatch: 'full'},
+            {
+                path: 'age-groups',
+                loadComponent: () => import('./components/age-group-list/age-group-list.component')
+                    .then(m => m.AgeGroupListComponent)
+            },
+            {
+                path: 'races',
+                loadComponent: () => import('./components/race-list/race-list.component')
+                    .then(m => m.RaceListComponent)
+            },
+            {
+                path: 'teams',
+                loadComponent: () => import('./components/team-list/team-list.component')
+                    .then(m => m.TeamListComponent)
+            },
+            {
+                path: 'categories',
+                loadComponent: () => import('./components/category-list/category-list.component')
+                    .then(m => m.CategoryListComponent)
+            },
+            {
+                path: 'persons',
+                loadComponent: () => import('./components/person-list/person-list.component')
+                    .then(m => m.PersonListComponent)
+            },
+            {
+                path: 'participants',
+                loadComponent: () => import('./components/participant-list/participant-list.component')
+                    .then(m => m.ParticipantListComponent)
+            },
+            {
+                path: 'measurements',
+                loadComponent: () => import('./components/measurement-list/measurement-list.component')
+                    .then(m => m.MeasurementListComponent)
+            },
+            {
+                path: 'race-measurements',
+                loadComponent: () => import('./components/race-measurement-list/race-measurement-list.component')
+                    .then(m => m.RaceMeasurementListComponent)
+            },
+            {
+                path: 'gaudi-mode',
+                loadComponent: () => import('./components/gaudi-modus/gaudi-modus.component')
+                    .then(m => m.GaudiModusComponent)
+            },
+        ]
     },
     {path: '**', redirectTo: '/login'}
 ];

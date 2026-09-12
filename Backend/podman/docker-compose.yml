@@ -1,0 +1,49 @@
+services:
+
+  alpdesk-time-control:
+    build:
+      context: ..
+      dockerfile: podman/Dockerfile
+      args:
+        ARTIFACT_NAME: time-control
+    image: localhost/alpdesk/alpdesk-time-control:latest
+    container_name: alpdesk-time-control
+
+    ports:
+      - "18000:18000"
+
+    environment:
+      APP_USERNAME: "time-control"
+      APP_PASSWORD: "alpdesk"
+      OPEN_BROWSER: "false"
+
+    volumes:
+      - ../database:/home/app/database
+
+    restart: unless-stopped
+
+  # GraalVM native-image variant (smaller image, near-instant startup).
+  # Run with: podman compose --profile native up -d --build alpdesk-time-control-native
+  alpdesk-time-control-native:
+    profiles: ["native"]
+
+    build:
+      context: ..
+      dockerfile: podman/Dockerfile.native
+      args:
+        ARTIFACT_NAME: time-control
+    image: localhost/alpdesk/alpdesk-time-control-native:latest
+    container_name: alpdesk-time-control-native
+
+    ports:
+      - "18000:18000"
+
+    environment:
+      APP_USERNAME: "time-control"
+      APP_PASSWORD: "alpdesk"
+      OPEN_BROWSER: "false"
+
+    volumes:
+      - ../database:/home/app/database
+
+    restart: unless-stopped

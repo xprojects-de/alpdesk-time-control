@@ -5,6 +5,14 @@ import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.Base64;
 
 @OpenAPIDefinition(
         info = @Info(title = "Time-Control", version = "1.0")
@@ -19,7 +27,63 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme;
 )
 public class Application {
 
+    private static final Logger LOG = LoggerFactory.getLogger(Application.class);
+    private static final String JWT_SECRET_ENV_KEY = "JWT_GENERATOR_SIGNATURE_SECRET";
+    private static final Path JWT_SECRET_FILE = Path.of("database", "jwt-secret.txt");
+
     static void main(String[] args) {
+        ensureJwtSecret();
+        warnIfDefaultCredentials();
         Micronaut.run(Application.class, args);
+    }
+
+    /**
+     * Warns loudly at startup if the login still uses the example credentials from
+     * application.properties (time-control/time-control) - anyone who can reach this server
+     * on the network could otherwise log in with them.
+     */
+    private static void warnIfDefaultCredentials() {
+        boolean usingDefaultUsername = isUnset("APP_USERNAME");
+        boolean usingDefaultPassword = isUnset("APP_PASSWORD");
+        if (usingDefaultUsername && usingDefaultPassword) {
+            LOG.warn("APP_USERNAME/APP_PASSWORD are not set - login is using the default credentials " +
+                    "'time-control'/'time-control' from application.properties. Set both environment " +
+                    "variables before exposing this server beyond localhost.");
+        }
+    }
+
+    private static boolean isUnset(String envKey) {
+        return System.getenv(envKey) == null && System.getProperty(envKey) == null;
+    }
+
+    /**
+     * The JWT signing secret must never fall back to the public default that ships in
+     * application.properties (anyone on the network could forge tokens with it). If no
+     * explicit override is configured, generate a random secret once and persist it next
+     * to the SQLite database so it survives restarts.
+     */
+    private static void ensureJwtSecret() {
+        if (System.getenv(JWT_SECRET_ENV_KEY) != null || System.getProperty(JWT_SECRET_ENV_KEY) != null) {
+            return;
+        }
+        try {
+            String secret;
+            if (Files.exists(JWT_SECRET_FILE)) {
+                secret = Files.readString(JWT_SECRET_FILE).trim();
+            } else {
+                secret = generateSecret();
+                Files.createDirectories(JWT_SECRET_FILE.getParent());
+                Files.writeString(JWT_SECRET_FILE, secret);
+            }
+            System.setProperty(JWT_SECRET_ENV_KEY, secret);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not initialize JWT signing secret", e);
+        }
+    }
+
+    private static String generateSecret() {
+        byte[] bytes = new byte[64];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

@@ -10,5 +10,6 @@ import java.util.Optional;
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface AgeGroupRepository extends CrudRepository<AgeGroup, Long> {
     Optional<AgeGroup> findByName(String name);
+    Optional<AgeGroup> findByNameIgnoreCase(String name);
 }
 

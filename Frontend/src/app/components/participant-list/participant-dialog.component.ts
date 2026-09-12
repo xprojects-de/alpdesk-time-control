@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -14,19 +14,28 @@ import {
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
-import {MatDatepickerModule} from "@angular/material/datepicker";
-import {MatNativeDateModule} from "@angular/material/core";
 import {MatSelectModule} from "@angular/material/select";
+import {
+    MatAutocompleteModule,
+    MatAutocompleteSelectedEvent,
+} from "@angular/material/autocomplete";
 import {
     Participant,
     ParticipantRequest,
 } from "../../models/participant.model";
-import {Gender, GenderLabels} from "../../models/gender.model";
+import {Person} from "../../models/person.model";
 import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
-import {Observable, Subject} from "rxjs";
-import {take} from "rxjs/operators";
-import {Race} from "../../models/race.model";
+import {selectAllTeams} from "../../store/team/team.selectors";
+import * as TeamActions from "../../store/team/team.actions";
+import {selectAllCategories} from "../../store/category/category.selectors";
+import * as CategoryActions from "../../store/category/category.actions";
+import {Observable, Subject, of, combineLatest} from "rxjs";
+import {take, takeUntil, debounceTime, distinctUntilChanged, switchMap, startWith} from "rxjs/operators";
+import {Race, ResultUnit} from "../../models/race.model";
+import {Team} from "../../models/team.model";
+import {Category} from "../../models/category.model";
+import {PersonService} from "../../services/person.service";
 
 
 @Component({
@@ -39,9 +48,8 @@ import {Race} from "../../models/race.model";
         MatFormFieldModule,
         MatInputModule,
         MatButtonModule,
-        MatDatepickerModule,
-        MatNativeDateModule,
         MatSelectModule,
+        MatAutocompleteModule,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -49,55 +57,32 @@ import {Race} from "../../models/race.model";
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="participant-form">
+                <h3 class="section-title">Person</h3>
                 <mat-form-field appearance="outline">
-                    <mat-label>Vorname</mat-label>
-                    <input matInput formControlName="firstName" required/>
-                    @if (form.get("firstName")?.hasError("required") &&
-                    form.get("firstName")?.touched) {
-                        <mat-error>Vorname ist erforderlich</mat-error>
-                    }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                    <mat-label>Nachname</mat-label>
-                    <input matInput formControlName="lastName" required/>
-                    @if (form.get("lastName")?.hasError("required") &&
-                    form.get("lastName")?.touched) {
-                        <mat-error>Nachname ist erforderlich</mat-error>
-                    }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                    <mat-label>Geburtsdatum</mat-label>
+                    <mat-label>Person</mat-label>
                     <input
+                            type="text"
                             matInput
-                            [matDatepicker]="picker"
-                            formControlName="birthDate"
-                            placeholder="TT.MM.JJJJ"
-                            required
+                            formControlName="personSearch"
+                            [matAutocomplete]="auto"
+                            placeholder="Suche nach Name"
                     />
-                    <mat-datepicker-toggle
-                            matSuffix
-                            [for]="picker"
-                    ></mat-datepicker-toggle>
-                    <mat-datepicker #picker></mat-datepicker>
-                    <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
-                    @if (form.get("birthDate")?.hasError("required") &&
-                    form.get("birthDate")?.touched) {
-                        <mat-error>Geburtsdatum ist erforderlich</mat-error>
-                    }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                    <mat-label>Geschlecht</mat-label>
-                    <mat-select formControlName="gender" required>
-                        @for (gender of genderOptions; track gender.value) {
-                            <mat-option [value]="gender.value">{{ gender.label }}</mat-option>
+                    <mat-autocomplete
+                            #auto="matAutocomplete"
+                            [displayWith]="displayPerson.bind(this)"
+                            (optionSelected)="onPersonSelected($event)"
+                    >
+                        @for (person of personResults$ | async; track person.id) {
+                            <mat-option [value]="person">
+                                {{ person.lastName }} {{ person.firstName }}
+                                ({{ formatRaceDate(person.birthDate) }}{{ person.externalId ? ", " + person.externalId : "" }})
+                            </mat-option>
                         }
-                    </mat-select>
-                    @if (form.get("gender")?.hasError("required") &&
-                    form.get("gender")?.touched) {
-                        <mat-error>Geschlecht ist erforderlich</mat-error>
+                    </mat-autocomplete>
+                    <mat-hint>Neue Personen werden unter "Personen" angelegt</mat-hint>
+                    @if (form.get("personId")?.hasError("required") &&
+                    form.get("personId")?.touched) {
+                        <mat-error>Bitte eine Person auswählen</mat-error>
                     }
                 </mat-form-field>
 
@@ -116,16 +101,75 @@ import {Race} from "../../models/race.model";
 
                 <mat-form-field appearance="outline">
                     <mat-label>Startnummer</mat-label>
-                    <input matInput type="number" formControlName="raceNumber" required/>
-                    @if (form.get("raceNumber")?.hasError("required") &&
-                    form.get("raceNumber")?.touched) {
-                        <mat-error>Startnummer ist erforderlich</mat-error>
-                    }
+                    <input matInput type="number" formControlName="raceNumber"/>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
-                    <mat-label>Verein</mat-label>
-                    <input matInput formControlName="association"/>
+                    <mat-label>Team</mat-label>
+                    <mat-select formControlName="teamId">
+                        <mat-option [value]="null">Kein Team</mat-option>
+                        @for (team of teams$ | async; track team.id) {
+                            <mat-option [value]="team.id">{{ team.name }}</mat-option>
+                        }
+                    </mat-select>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Kategorie</mat-label>
+                    <mat-select formControlName="categoryId">
+                        <mat-option [value]="null">Keine Kategorie</mat-option>
+                        @for (category of categories$ | async; track category.id) {
+                            <mat-option [value]="category.id">{{ category.name }}</mat-option>
+                        }
+                    </mat-select>
+                </mat-form-field>
+
+                <h3 class="section-title">{{ isPointsRace() ? "Wert" : "Zeit" }}</h3>
+                @if (!isPointsRace()) {
+                    <div class="time-input-group">
+                        <mat-form-field appearance="outline">
+                            <mat-label>Minuten</mat-label>
+                            <input matInput type="number" formControlName="minutes" min="0"/>
+                        </mat-form-field>
+
+                        <mat-form-field appearance="outline">
+                            <mat-label>Sekunden</mat-label>
+                            <input matInput type="number" formControlName="seconds" min="0" max="59"/>
+                            @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
+                                <mat-error>Sekunden: 0-59</mat-error>
+                            }
+                        </mat-form-field>
+
+                        <mat-form-field appearance="outline">
+                            <mat-label>Millisekunden</mat-label>
+                            <input matInput type="number" formControlName="milliseconds" min="0" max="999"/>
+                            @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
+                                <mat-error>Millisekunden: 0-999</mat-error>
+                            }
+                        </mat-form-field>
+                    </div>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Strafe (Sekunden)</mat-label>
+                        <input matInput type="number" formControlName="penaltySeconds" min="0" step="0.01"/>
+                        <mat-hint>Wird zur Zeit addiert; leer lassen, wenn keine Strafe</mat-hint>
+                    </mat-form-field>
+                } @else {
+                    <mat-form-field appearance="outline">
+                        <mat-label>Wert{{ selectedRace?.resultUnitLabel ? " (" + selectedRace?.resultUnitLabel + ")" : "" }}</mat-label>
+                        <input matInput type="number" formControlName="pointsValue" step="0.01"/>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Strafe{{ selectedRace?.resultUnitLabel ? " (" + selectedRace?.resultUnitLabel + ")" : "" }}</mat-label>
+                        <input matInput type="number" formControlName="penaltyPointsValue" min="0" step="0.01"/>
+                        <mat-hint>Wird zum Wert addiert; leer lassen, wenn keine Strafe</mat-hint>
+                    </mat-form-field>
+                }
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Gemessen am</mat-label>
+                    <input matInput type="datetime-local" formControlName="measuredAt" step="1"/>
                 </mat-form-field>
             </form>
         </mat-dialog-content>
@@ -155,6 +199,23 @@ import {Race} from "../../models/race.model";
           mat-form-field {
             width: 100%;
           }
+
+          .section-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.6);
+          }
+
+          .time-input-group {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+          }
+
+          .time-input-group mat-form-field {
+            flex: 1;
+          }
         `,
     ],
 })
@@ -163,52 +224,113 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
     private store = inject(Store);
+    private personService = inject(PersonService);
+    private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
 
     form: FormGroup;
-    genderOptions = [
-        {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
-        {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
-    ];
+    resultUnit = ResultUnit;
+    selectedRace: Race | null = null;
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
     selectedRaceId$: Observable<number | null> = this.store.select(selectSelectedRaceId);
+    teams$: Observable<Team[]> = this.store.select(selectAllTeams);
+    categories$: Observable<Category[]> = this.store.select(selectAllCategories);
+    personResults$: Observable<Person[]>;
 
     constructor() {
-        let birthDate: Date | string = this.data?.birthDate || "";
-        if (birthDate && typeof birthDate === "string") {
-            const parts = birthDate.split("-");
-            if (parts.length === 3) {
-                birthDate = new Date(
-                    parseInt(parts[0]),
-                    parseInt(parts[1]) - 1,
-                    parseInt(parts[2]),
-                );
-            }
-        }
+        const timeComponents = this.splitMilliseconds(this.data?.durationMs);
+        const pointsValue = this.data?.durationMs !== undefined && this.data?.durationMs !== null
+            ? (this.data.durationMs / 100).toFixed(2) : "";
+        const penaltyPointsValue = this.data?.penalty !== undefined && this.data?.penalty !== null
+            ? (this.data.penalty / 100).toFixed(2) : "";
+
+        this.selectedRace = this.data?.race ?? null;
 
         this.form = this.fb.group({
-            firstName: [this.data?.firstName || "", Validators.required],
-            lastName: [this.data?.lastName || "", Validators.required],
-            birthDate: [birthDate, Validators.required],
-            gender: [this.data?.gender || "", Validators.required],
+            personSearch: [this.data?.person || ""],
+            personId: [this.data?.person?.id || null, Validators.required],
             race: [this.data?.race?.id || "", Validators.required],
-            raceNumber: [this.data?.raceNumber || "", Validators.required],
-            association: [this.data?.association || ""],
+            raceNumber: [this.data?.raceNumber ?? ""],
+            teamId: [this.data?.team?.id || null],
+            categoryId: [this.data?.category?.id || null],
+            minutes: [timeComponents.minutes, [Validators.min(0)]],
+            seconds: [timeComponents.seconds, [Validators.min(0), Validators.max(59)]],
+            milliseconds: [timeComponents.milliseconds, [Validators.min(0), Validators.max(999)]],
+            penaltySeconds: [this.data?.penalty !== undefined && this.data?.penalty !== null ? this.data.penalty / 1000 : "", [Validators.min(0)]],
+            pointsValue: [pointsValue],
+            penaltyPointsValue: [penaltyPointsValue, [Validators.min(0)]],
+            measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
+        });
+
+        this.personResults$ = this.form.get("personSearch")!.valueChanges.pipe(
+            startWith(this.form.get("personSearch")!.value),
+            debounceTime(250),
+            distinctUntilChanged(),
+            switchMap((value) => {
+                const term = typeof value === "string" ? value : "";
+                if (!term || term.trim().length < 2) {
+                    return of([]);
+                }
+                return this.personService.search(term);
+            }),
+        );
+
+        // A selection sets personSearch's value to the full Person object (see [value]="person"
+        // on the mat-option below); any further edit to the search text turns the value back into
+        // a plain string. That means the previously selected person no longer matches what's shown,
+        // so the stale personId must be cleared - otherwise a user who picks Person A, then edits
+        // the text without picking a new suggestion, would silently save Person A anyway.
+        this.form.get("personSearch")!.valueChanges
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((value) => {
+                if (typeof value === "string") {
+                    this.form.get("personId")!.setValue(null);
+                }
+            });
+
+        // Track the currently selected race's resultUnit/resultUnitLabel so the Zeit/Wert
+        // section can switch between the time inputs and a generic decimal-value input.
+        // If the user actually changes the race to one with a different resultUnit, the
+        // now-hidden field set is cleared - otherwise a value entered/pre-filled under the
+        // old unit would silently be reinterpreted and submitted under the new one.
+        let previousResultUnit: ResultUnit | null = null;
+        combineLatest([
+            this.races$,
+            this.form.get("race")!.valueChanges.pipe(startWith(this.form.value.race)),
+        ]).pipe(takeUntil(this.destroy$)).subscribe(([races, raceId]) => {
+            const found = races.find(r => r.id === Number(raceId));
+            if (found) {
+                if (previousResultUnit !== null && previousResultUnit !== found.resultUnit) {
+                    this.form.patchValue({
+                        minutes: "", seconds: "", milliseconds: "", penaltySeconds: "",
+                        pointsValue: "", penaltyPointsValue: "",
+                    }, {emitEvent: false});
+                }
+                previousResultUnit = found.resultUnit;
+                this.selectedRace = found;
+                this.cdr.markForCheck();
+            }
         });
     }
 
-     ngOnInit(): void {
+    ngOnInit(): void {
+        this.store.dispatch(TeamActions.loadTeams());
+        this.store.dispatch(CategoryActions.loadCategories());
 
-         if (!this.data) {
-             this.selectedRaceId$
+        if (!this.data) {
+            this.selectedRaceId$
                 .pipe(take(1))
-                 .subscribe(selectedRaceId => {
-                     if (selectedRaceId) {
-                         this.form.patchValue({race: selectedRaceId});
-                     }
-                 });
-         }
-     }
+                .subscribe(selectedRaceId => {
+                    if (selectedRaceId) {
+                        this.form.patchValue({race: selectedRaceId});
+                    }
+                });
+        }
+    }
+
+    isPointsRace(): boolean {
+        return this.selectedRace?.resultUnit === ResultUnit.POINTS;
+    }
 
     ngOnDestroy(): void {
         this.destroy$.next();
@@ -220,30 +342,57 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     }
 
     onSave(): void {
-        if (this.form.valid) {
-            const formValue = this.form.value;
-            const participant: ParticipantRequest = {
-                raceId: Number(formValue.race),
-                firstName: formValue.firstName,
-                lastName: formValue.lastName,
-                birthDate: this.formatDate(formValue.birthDate),
-                gender: formValue.gender,
-                raceNumber: Number(formValue.raceNumber),
-                association: formValue.association || undefined,
-            };
-            this.dialogRef.close(participant);
+        if (!this.form.valid) {
+            return;
         }
+
+        const formValue = this.form.value;
+        const isPoints = this.isPointsRace();
+        const timeEntered = isPoints
+            ? (formValue.pointsValue !== "" && formValue.pointsValue !== null)
+            : (formValue.minutes !== "" && formValue.minutes !== null ||
+                formValue.seconds !== "" && formValue.seconds !== null ||
+                formValue.milliseconds !== "" && formValue.milliseconds !== null);
+
+        const durationMs = !timeEntered ? undefined : isPoints
+            ? Math.round(Number(formValue.pointsValue) * 100)
+            : this.convertToMilliseconds(
+                Number(formValue.minutes || 0),
+                Number(formValue.seconds || 0),
+                Number(formValue.milliseconds || 0),
+            );
+
+        const penalty = !timeEntered ? undefined : isPoints
+            ? (formValue.penaltyPointsValue !== "" && formValue.penaltyPointsValue !== null
+                ? Math.round(Number(formValue.penaltyPointsValue) * 100) : undefined)
+            : (formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
+                ? Math.round(Number(formValue.penaltySeconds) * 1000) : undefined);
+
+        const request: ParticipantRequest = {
+            raceId: Number(formValue.race),
+            personId: Number(formValue.personId),
+            raceNumber: formValue.raceNumber !== "" && formValue.raceNumber !== null ? Number(formValue.raceNumber) : undefined,
+            teamId: formValue.teamId ? Number(formValue.teamId) : undefined,
+            categoryId: formValue.categoryId ? Number(formValue.categoryId) : undefined,
+            durationMs,
+            penalty,
+            measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
+        };
+        this.dialogRef.close(request);
     }
 
-    private formatDate(date: Date | string): string {
-        if (typeof date === "string") {
-            return date;
+    onPersonSelected(event: MatAutocompleteSelectedEvent): void {
+        const person: Person | null = event.option.value;
+        this.form.patchValue({
+            personId: person ? person.id : null,
+        });
+    }
+
+    displayPerson(person: Person | null): string {
+        if (!person) {
+            return "";
         }
-        const d = new Date(date);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
+        return `${person.lastName} ${person.firstName}`;
     }
 
     formatRaceDate(dateString: string): string {
@@ -255,5 +404,48 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             return `${day}.${month}.${year}`;
         }
         return dateString;
+    }
+
+    private convertToMilliseconds(minutes: number, seconds: number, milliseconds: number): number {
+        return (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
+    }
+
+    private splitMilliseconds(totalMs: number | null | undefined): { minutes: number | string; seconds: number | string; milliseconds: number | string } {
+        if (totalMs === null || totalMs === undefined) {
+            return {minutes: "", seconds: "", milliseconds: ""};
+        }
+        const minutes = Math.floor(totalMs / (60 * 1000));
+        const remainingAfterMinutes = totalMs % (60 * 1000);
+        const seconds = Math.floor(remainingAfterMinutes / 1000);
+        const milliseconds = remainingAfterMinutes % 1000;
+        return {minutes, seconds, milliseconds};
+    }
+
+    private formatDateTimeForInput(dateTime?: string): string {
+        if (!dateTime) {
+            return "";
+        }
+        return this.toLocalISOString(new Date(dateTime));
+    }
+
+    private toLocalISOString(date: Date): string {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    }
+
+    private formatDateTimeForBackend(dateTime: string): string {
+        const date = dateTime ? new Date(dateTime) : new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
     }
 }

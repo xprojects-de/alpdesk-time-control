@@ -1,10 +1,17 @@
 import { TestBed } from '@angular/core/testing';
+import { Store } from '@ngrx/store';
+import { vi } from 'vitest';
 import { App } from './app';
+import * as AuthActions from './store/auth/auth.actions';
 
 describe('App', () => {
+  let dispatchSpy: ReturnType<typeof vi.fn>;
+
   beforeEach(async () => {
+    dispatchSpy = vi.fn();
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [{ provide: Store, useValue: { dispatch: dispatchSpy } }],
     }).compileComponents();
   });
 
@@ -14,10 +21,16 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
+  it('should dispatch checkAuth on init', () => {
     const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(dispatchSpy).toHaveBeenCalledWith(AuthActions.checkAuth());
+  });
+
+  it('should render a router outlet', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, time-control');
+    expect(compiled.querySelector('router-outlet')).toBeTruthy();
   });
 });

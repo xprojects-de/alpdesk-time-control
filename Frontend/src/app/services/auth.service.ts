@@ -18,13 +18,21 @@ export class AuthService {
     login(credentials: LoginRequest): Observable<LoginResponse> {
         return this.http.post<LoginResponse>(this.apiUrl, credentials).pipe(
             tap(response => {
-                const token = response.access_token || response.token;
+                const token = this.extractToken(response);
                 if (token) {
                     this.setToken(token);
                     this.setUsername(credentials.username);
                 }
             })
         );
+    }
+
+    /**
+     * The single place that knows which response field carries the token, so a login response
+     * missing both can be told apart from one that has it - see auth.effects.ts's login$.
+     */
+    extractToken(response: LoginResponse): string | null {
+        return response.access_token || response.token || null;
     }
 
     logout(): void {
@@ -63,10 +71,19 @@ export class AuthService {
         }
     }
 
-    private decodeToken(token: string): any {
+    private decodeToken(token: string): { exp?: number; [key: string]: unknown } {
         try {
             const payload = token.split('.')[1];
-            const decodedPayload = atob(payload);
+            // JWT payloads are Base64URL (RFC 4648 §5): '-'/'_' instead of '+'/'/', no padding.
+            // atob() only understands standard Base64 and throws on '-'/'_', so normalize first.
+            const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const decodedPayload = decodeURIComponent(
+                atob(padded)
+                    .split('')
+                    .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+                    .join('')
+            );
             return JSON.parse(decodedPayload);
         } catch (error) {
             throw new Error('Invalid token format');

@@ -1,12 +1,10 @@
 package x.timecontrol.dto;
 
 import io.micronaut.core.annotation.Nullable;
-import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Serdeable
@@ -19,24 +17,21 @@ public record ParticipantResponse(
         @Schema(description = "Race information", nullable = true)
         RaceResponse race,
 
-        @Schema(description = "First name of the participant", example = "John")
-        String firstName,
+        @Nullable
+        @Schema(description = "Person taking part", nullable = true)
+        PersonResponse person,
 
-        @Schema(description = "Last name of the participant", example = "Doe")
-        String lastName,
-
-        @Schema(description = "Birth date of the participant", example = "1990-01-15")
-        LocalDate birthDate,
-
-        @Schema(description = "Gender of the participant", example = "MALE")
-        Gender gender,
-
-        @Schema(description = "Race number of the participant", example = "42")
+        @Nullable
+        @Schema(description = "Race number of the participant", example = "42", nullable = true)
         Integer raceNumber,
 
         @Nullable
-        @Schema(description = "Association of the participant", example = "Marathon Club")
-        String association,
+        @Schema(description = "Team the participant belongs to", nullable = true)
+        TeamResponse team,
+
+        @Nullable
+        @Schema(description = "Category the participant belongs to", nullable = true)
+        CategoryResponse category,
 
         @Nullable
         @Schema(description = "Age group of the participant based on birth date", nullable = true)
@@ -47,39 +42,25 @@ public record ParticipantResponse(
         Integer durationMs,
 
         @Nullable
+        @Schema(description = "Penalty added to the raw result, makes the result worse", example = "2000", nullable = true)
+        Integer penalty,
+
+        @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
         LocalDateTime measuredAt
 ) {
-    public static ParticipantResponse from(Participant participant) {
-        return new ParticipantResponse(
-                participant.id(),
-                null,
-                participant.firstName(),
-                participant.lastName(),
-                participant.birthDate(),
-                participant.gender(),
-                participant.raceNumber(),
-                participant.association(),
-                null,
-                participant.durationMs(),
-                participant.measuredAt()
-        );
-    }
-
-    public static ParticipantResponse from(Participant participant, RaceResponse race, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
                 participant.id(),
                 race,
-                participant.firstName(),
-                participant.lastName(),
-                participant.birthDate(),
-                participant.gender(),
+                person,
                 participant.raceNumber(),
-                participant.association(),
+                team,
+                category,
                 ageGroup,
                 participant.durationMs(),
+                participant.penalty(),
                 participant.measuredAt()
         );
     }
 }
-
