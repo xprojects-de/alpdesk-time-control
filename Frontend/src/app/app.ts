@@ -1,6 +1,5 @@
 import {
     Component,
-    signal,
     OnInit,
     ChangeDetectionStrategy, inject,
 } from "@angular/core";
@@ -16,7 +15,6 @@ import * as AuthActions from "./store/auth/auth.actions";
     styleUrl: "./app.scss",
 })
 export class App implements OnInit {
-    protected readonly title = signal("Alpdesk TimeControl");
     private store: Store = inject(Store);
 
     ngOnInit(): void {

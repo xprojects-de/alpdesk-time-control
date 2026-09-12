@@ -5,7 +5,7 @@ import {map, take} from 'rxjs/operators';
 import * as AuthSelectors from '../store/auth/auth.selectors';
 import * as AuthActions from '../store/auth/auth.actions';
 
-export const authGuard: CanActivateFn = (route, state) => {
+export const authGuard: CanActivateFn = () => {
     const store = inject(Store);
     const router = inject(Router);
 
@@ -17,7 +17,7 @@ export const authGuard: CanActivateFn = (route, state) => {
             if (isAuthenticated) {
                 return true;
             } else {
-                router.navigate(['/login']);
+                router.navigate(['/login']).then();
                 return false;
             }
         })
