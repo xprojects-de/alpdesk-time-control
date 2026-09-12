@@ -9,6 +9,33 @@ All commands below assume the project is already built once for the frontend, i.
 [Backend README](../README.md) / `Frontend/npm run deploy` + `./gradlew copyFrontend`). The
 Dockerfiles just package what's already on disk, they don't build the frontend themselves.
 
+## Quick start (JVM image)
+
+The fastest way to get the app running locally, using the plain JVM image (no GraalVM/native
+build needed for this).
+
+1. Start Podman (macOS only - skip if Podman is already running or you're on Linux):
+   ```shell
+   podman machine start
+   ```
+2. From this `podman/` folder, build and start the container:
+   ```shell
+   podman compose up -d --build
+   ```
+3. Watch it come up (wait for "Startup completed" and stop with Ctrl-C):
+   ```shell
+   podman compose logs -f alpdesk-time-control
+   ```
+4. Open **http://localhost:18000** and log in with `time-control` / `alpdesk`.
+5. When you're done:
+   ```shell
+   podman compose down
+   ```
+
+That's it - see [Local testing](#local-testing) below for details (data persistence, changing
+credentials, manual `podman build`/`podman run` without compose) and for the GraalVM native
+variant.
+
 There are two Dockerfiles:
 
 * **`Dockerfile`** - plain JVM image (`eclipse-temurin` JRE). Simple, well understood, works on
