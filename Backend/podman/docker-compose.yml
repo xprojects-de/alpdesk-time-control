@@ -1,37 +1,49 @@
-version: '3.8'
-
 services:
 
   alpdesk-time-control:
-
-    image: localhost/alpdesk/alpdesk-ai-worker:latest
+    build:
+      context: ..
+      dockerfile: podman/Dockerfile
+      args:
+        ARTIFACT_NAME: time-control
+    image: localhost/alpdesk/alpdesk-time-control:latest
     container_name: alpdesk-time-control
 
-    expose:
-      - "18000"
+    ports:
+      - "18000:18000"
 
     environment:
       APP_USERNAME: "time-control"
       APP_PASSWORD: "alpdesk"
-
-    restart: always
-
-  caddy:
-    image: caddy:latest
-    container_name: caddy-proxy
-
-    ports:
-      - "80:80"
-      - "443:443"
+      OPEN_BROWSER: "false"
 
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
+      - ../database:/home/app/database
 
-    depends_on:
-      - alpdesk-time-control
+    restart: unless-stopped
 
-    restart: always
+  # GraalVM native-image variant (smaller image, near-instant startup).
+  # Run with: podman compose --profile native up -d --build alpdesk-time-control-native
+  alpdesk-time-control-native:
+    profiles: ["native"]
 
-volumes:
-  caddy_data:
+    build:
+      context: ..
+      dockerfile: podman/Dockerfile.native
+      args:
+        ARTIFACT_NAME: time-control
+    image: localhost/alpdesk/alpdesk-time-control-native:latest
+    container_name: alpdesk-time-control-native
+
+    ports:
+      - "18000:18000"
+
+    environment:
+      APP_USERNAME: "time-control"
+      APP_PASSWORD: "alpdesk"
+      OPEN_BROWSER: "false"
+
+    volumes:
+      - ../database:/home/app/database
+
+    restart: unless-stopped

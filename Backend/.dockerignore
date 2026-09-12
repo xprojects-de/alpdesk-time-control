@@ -1,0 +1,7 @@
+build/
+.gradle/
+database/
+dist/
+*.log
+.idea/
+.vscode/
