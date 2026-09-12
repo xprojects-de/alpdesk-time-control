@@ -1,0 +1,10 @@
+
+# Remove on production
+:80 {
+    reverse_proxy alpdesk-time-control:18000
+}
+
+# replace with your domain
+https://localhost {
+    reverse_proxy alpdesk-time-control:18000
+}

@@ -232,9 +232,12 @@ interface MeasurementWithParticipant extends Measurement {
 
                 <div class="auto-assign-row">
                     <mat-form-field appearance="outline" class="race-select"
-                                    matTooltip="Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie">
+                                    [matTooltip]="(scheduledImportEnabled$ | async)
+                                        ? 'Automatischen Import zuerst deaktivieren, um das Rennen zu wechseln'
+                                        : 'Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie'">
                         <mat-label>Rennen (Automatik-Zuordnung)</mat-label>
                         <mat-select [value]="selectedRaceId$ | async"
+                                    [disabled]="!!(scheduledImportEnabled$ | async)"
                                     (selectionChange)="onRaceChange($event.value)">
                             <mat-option [value]="null">— kein Rennen —</mat-option>
                             @for (race of races$ | async; track race.id) {
