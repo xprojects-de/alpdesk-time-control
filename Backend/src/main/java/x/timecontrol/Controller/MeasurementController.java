@@ -1,16 +1,22 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.AutoAssignEnableRequest;
+import x.timecontrol.dto.AutoAssignSetNextRequest;
+import x.timecontrol.dto.AutoAssignStatusResponse;
 import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
+import x.timecontrol.services.AutoAssignService;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
+import x.timecontrol.services.RaceService;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.scheduling.TaskExecutors;
@@ -46,6 +52,12 @@ public class MeasurementController {
 
     @Inject
     ParticipantService participantService;
+
+    @Inject
+    AutoAssignService autoAssignService;
+
+    @Inject
+    RaceService raceService;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -268,6 +280,15 @@ public class MeasurementController {
                 return HttpResponse.badRequest()
                         .body(new ErrorResponse("Failed to discard oldest start. Queue may be empty or device is in continuous mode."));
             }
+            // The discarded start is exactly the racer the auto-assign cursor is currently waiting
+            // on (both sides assume arrival order equals start order) - advance it too, or the next
+            // arriving measurement would get wrongly attributed to whoever fell. Enforced here rather
+            // than by the caller so it holds regardless of which client calls this endpoint.
+            try {
+                autoAssignService.skip();
+            } catch (IllegalStateException ignored) {
+                // Auto-assign mode isn't active for any race right now - nothing to advance.
+            }
             return HttpResponse.ok("Oldest start discarded successfully");
         } catch (Exception e) {
             return HttpResponse.serverError()
@@ -356,5 +377,60 @@ public class MeasurementController {
         return HttpResponse.created(created);
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/auto-assign/status")
+    @Operation(summary = "Get the current live auto-assign status", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Current auto-assign status", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    public HttpResponse<AutoAssignStatusResponse> autoAssignStatus() {
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.getStatus()));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/enable")
+    @Operation(summary = "Enable live auto-assign mode for a race", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Auto-assign mode enabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Race does not exist")
+    public HttpResponse<?> enableAutoAssign(@Body AutoAssignEnableRequest request) {
+        if (request.raceId() == null || raceService.findById(request.raceId()).isEmpty()) {
+            return HttpResponse.badRequest(new ErrorResponse("Race with id " + request.raceId() + " does not exist"));
+        }
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/disable")
+    @Operation(summary = "Disable live auto-assign mode", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Auto-assign mode disabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    public HttpResponse<AutoAssignStatusResponse> disableAutoAssign() {
+        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.disable()));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/skip")
+    @Operation(summary = "Skip the currently expected race number without assigning it (e.g. a starter that did not start)", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race number skipped", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    public HttpResponse<?> skipAutoAssign() {
+        try {
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.skip()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/auto-assign/set-next")
+    @Operation(summary = "Manually set the next expected race number (e.g. after a correction)", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Next race number updated", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    public HttpResponse<?> setNextAutoAssignRaceNumber(@Body AutoAssignSetNextRequest request) {
+        try {
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.setNextRaceNumber(request.raceNumber())));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
+        }
+    }
 }
 

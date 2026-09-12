@@ -275,5 +275,75 @@ export class MeasurementEffects {
             )
         )
     );
+
+    loadAutoAssignStatus$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.loadAutoAssignStatus),
+            switchMap(() =>
+                this.measurementService.getAutoAssignStatus().pipe(
+                    map(status => MeasurementActions.loadAutoAssignStatusSuccess({status})),
+                    catchError(error => of(MeasurementActions.loadAutoAssignStatusFailure({
+                        error: extractErrorMessage(error, 'Failed to load auto-assign status')
+                    })))
+                )
+            )
+        )
+    );
+
+    enableAutoAssign$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.enableAutoAssign),
+            mergeMap(({request}) =>
+                this.measurementService.enableAutoAssign(request).pipe(
+                    map(status => MeasurementActions.enableAutoAssignSuccess({status})),
+                    catchError(error => of(MeasurementActions.enableAutoAssignFailure({
+                        error: extractErrorMessage(error, 'Failed to enable auto-assign mode')
+                    })))
+                )
+            )
+        )
+    );
+
+    disableAutoAssign$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.disableAutoAssign),
+            mergeMap(() =>
+                this.measurementService.disableAutoAssign().pipe(
+                    map(status => MeasurementActions.disableAutoAssignSuccess({status})),
+                    catchError(error => of(MeasurementActions.disableAutoAssignFailure({
+                        error: extractErrorMessage(error, 'Failed to disable auto-assign mode')
+                    })))
+                )
+            )
+        )
+    );
+
+    skipAutoAssign$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.skipAutoAssign),
+            mergeMap(() =>
+                this.measurementService.skipAutoAssign().pipe(
+                    map(status => MeasurementActions.skipAutoAssignSuccess({status})),
+                    catchError(error => of(MeasurementActions.skipAutoAssignFailure({
+                        error: extractErrorMessage(error, 'Failed to skip race number')
+                    })))
+                )
+            )
+        )
+    );
+
+    setNextAutoAssignRaceNumber$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.setNextAutoAssignRaceNumber),
+            mergeMap(({raceNumber}) =>
+                this.measurementService.setNextAutoAssignRaceNumber(raceNumber).pipe(
+                    map(status => MeasurementActions.setNextAutoAssignRaceNumberSuccess({status})),
+                    catchError(error => of(MeasurementActions.setNextAutoAssignRaceNumberFailure({
+                        error: extractErrorMessage(error, 'Failed to set next race number')
+                    })))
+                )
+            )
+        )
+    );
 }
 

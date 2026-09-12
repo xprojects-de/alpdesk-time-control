@@ -1,7 +1,7 @@
 import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
-import {Measurement, MeasurementRequest} from '../models/measurement.model';
+import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../models/measurement.model';
 import {environment} from '../../environments/environment';
 
 
@@ -88,6 +88,26 @@ export class MeasurementService {
 
     importMeasurementsFromJson(measurements: { participantId: number | null; durationMs: number; measuredAt: string }[]): Observable<Measurement[]> {
         return this.http.post<Measurement[]>(`${this.apiUrl}/import-json`, measurements);
+    }
+
+    getAutoAssignStatus(): Observable<AutoAssignStatus> {
+        return this.http.get<AutoAssignStatus>(`${this.apiUrl}/auto-assign/status`);
+    }
+
+    enableAutoAssign(request: AutoAssignEnableRequest): Observable<AutoAssignStatus> {
+        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/enable`, request);
+    }
+
+    disableAutoAssign(): Observable<AutoAssignStatus> {
+        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/disable`, null);
+    }
+
+    skipAutoAssign(): Observable<AutoAssignStatus> {
+        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/skip`, null);
+    }
+
+    setNextAutoAssignRaceNumber(raceNumber: number | null): Observable<AutoAssignStatus> {
+        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/set-next`, {raceNumber});
     }
 
     checkDeviceConnection(): Observable<boolean> {

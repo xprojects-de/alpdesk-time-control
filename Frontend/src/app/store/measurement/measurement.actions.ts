@@ -1,5 +1,5 @@
 import {createAction, props} from '@ngrx/store';
-import {Measurement, MeasurementRequest} from '../../models/measurement.model';
+import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../../models/measurement.model';
 
 // Load all measurements
 export const loadMeasurements = createAction('[Measurement] Load Measurements');
@@ -225,6 +225,70 @@ export const checkDeviceConnectionSuccess = createAction(
 );
 export const checkDeviceConnectionFailure = createAction(
     '[Measurement] Check Device Connection Failure',
+    props<{ error: string }>()
+);
+
+// Live auto-assign mode: matches incoming device measurements to participants by race number
+// while a race is selected for it. Nothing is archived here - see archiveMeasurements above for that.
+export const loadAutoAssignStatus = createAction(
+    '[Measurement] Load Auto-Assign Status'
+);
+export const loadAutoAssignStatusSuccess = createAction(
+    '[Measurement] Load Auto-Assign Status Success',
+    props<{ status: AutoAssignStatus }>()
+);
+export const loadAutoAssignStatusFailure = createAction(
+    '[Measurement] Load Auto-Assign Status Failure',
+    props<{ error: string }>()
+);
+
+export const enableAutoAssign = createAction(
+    '[Measurement] Enable Auto-Assign',
+    props<{ request: AutoAssignEnableRequest }>()
+);
+export const enableAutoAssignSuccess = createAction(
+    '[Measurement] Enable Auto-Assign Success',
+    props<{ status: AutoAssignStatus }>()
+);
+export const enableAutoAssignFailure = createAction(
+    '[Measurement] Enable Auto-Assign Failure',
+    props<{ error: string }>()
+);
+
+export const disableAutoAssign = createAction(
+    '[Measurement] Disable Auto-Assign'
+);
+export const disableAutoAssignSuccess = createAction(
+    '[Measurement] Disable Auto-Assign Success',
+    props<{ status: AutoAssignStatus }>()
+);
+export const disableAutoAssignFailure = createAction(
+    '[Measurement] Disable Auto-Assign Failure',
+    props<{ error: string }>()
+);
+
+export const skipAutoAssign = createAction(
+    '[Measurement] Skip Auto-Assign'
+);
+export const skipAutoAssignSuccess = createAction(
+    '[Measurement] Skip Auto-Assign Success',
+    props<{ status: AutoAssignStatus }>()
+);
+export const skipAutoAssignFailure = createAction(
+    '[Measurement] Skip Auto-Assign Failure',
+    props<{ error: string }>()
+);
+
+export const setNextAutoAssignRaceNumber = createAction(
+    '[Measurement] Set Next Auto-Assign Race Number',
+    props<{ raceNumber: number | null }>()
+);
+export const setNextAutoAssignRaceNumberSuccess = createAction(
+    '[Measurement] Set Next Auto-Assign Race Number Success',
+    props<{ status: AutoAssignStatus }>()
+);
+export const setNextAutoAssignRaceNumberFailure = createAction(
+    '[Measurement] Set Next Auto-Assign Race Number Failure',
     props<{ error: string }>()
 );
 

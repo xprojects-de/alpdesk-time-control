@@ -10,11 +10,13 @@ import {
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, interval, Subject, EMPTY} from "rxjs";
+import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
 import {
     take,
     takeUntil,
     switchMap,
+    map,
+    distinctUntilChanged,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -26,19 +28,27 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatMenuModule} from "@angular/material/menu";
-import {Measurement} from "../../models/measurement.model";
+import {MatSelectModule} from "@angular/material/select";
+import {MatFormFieldModule} from "@angular/material/form-field";
+import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
 import {Race} from "../../models/race.model";
+import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
+import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {
     ArchiveMeasurementsDialogComponent,
     ArchiveMeasurementsDialogResult,
 } from "./archive-measurements-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
+
+interface MeasurementWithParticipant extends Measurement {
+    participantName?: string;
+}
 
 @Component({
     selector: "app-measurement-list",
@@ -55,6 +65,8 @@ import {Actions, ofType} from "@ngrx/effects";
         MatTooltipModule,
         MatSlideToggleModule,
         MatMenuModule,
+        MatSelectModule,
+        MatFormFieldModule,
         FormsModule,
     ],
     template: `
@@ -218,6 +230,46 @@ import {Actions, ofType} from "@ngrx/effects";
                     </mat-menu>
                 </div>
 
+                <div class="auto-assign-row">
+                    <mat-form-field appearance="outline" class="race-select"
+                                    matTooltip="Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie">
+                        <mat-label>Rennen (Automatik-Zuordnung)</mat-label>
+                        <mat-select [value]="selectedRaceId$ | async"
+                                    (selectionChange)="onRaceChange($event.value)">
+                            <mat-option [value]="null">— kein Rennen —</mat-option>
+                            @for (race of races$ | async; track race.id) {
+                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    @if (selectedRaceId$ | async; as selectedRaceId) {
+                        @if (autoAssignStatus$ | async; as autoStatus) {
+                            @if (autoStatus.active && autoStatus.raceId === selectedRaceId) {
+                                <button
+                                        mat-raised-button
+                                        (click)="skipAutoAssign()"
+                                        matTooltip="Aktuell erwartete Startnummer überspringen (z. B. nicht gestartet)"
+                                >
+                                    <mat-icon>skip_next</mat-icon>
+                                    Überspringen
+                                </button>
+                                <span class="next-number-info">
+                                    Nächste erwartete Startnummer:
+                                    @if (autoStatus.nextRaceNumber !== null) {
+                                        <strong>{{ autoStatus.nextRaceNumber }}</strong>
+                                        ({{ getParticipantNameByRaceNumber(selectedRaceId, autoStatus.nextRaceNumber, (participants$ | async) || []) }})
+                                    } @else {
+                                        <em>keine weiteren Startnummern</em>
+                                    }
+                                </span>
+                            }
+                        }
+                    } @else {
+                        <span class="hint">Rennen auswählen, um Messungen automatisch zuzuordnen.</span>
+                    }
+                </div>
+
                 @if (loading$ | async) {
                     <div class="loading-overlay">
                         <mat-spinner diameter="30"></mat-spinner>
@@ -227,7 +279,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <div class="table-container">
                 <table
                         mat-table
-                        [dataSource]="(measurements$ | async) || []"
+                        [dataSource]="(measurementsWithParticipants$ | async) || []"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                 >
@@ -242,6 +294,15 @@ import {Actions, ofType} from "@ngrx/effects";
                         <th mat-header-cell *matHeaderCellDef>Dauer</th>
                         <td mat-cell *matCellDef="let measurement">
                             {{ formatDuration(measurement.durationMs) }}
+                        </td>
+                    </ng-container>
+
+                    <!-- Participant Column -->
+                    <ng-container matColumnDef="participant">
+                        <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
+                        <td mat-cell *matCellDef="let measurement"
+                            [matTooltip]="measurement.participantId ? 'Bereits einem Rennen zugeordnet' : ''">
+                            {{ measurement.participantName || "-" }}
                         </td>
                     </ng-container>
 
@@ -350,6 +411,27 @@ import {Actions, ofType} from "@ngrx/effects";
             background-color: #45a049 !important;
           }
 
+          .auto-assign-row {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+
+          .race-select {
+            min-width: 280px;
+          }
+
+          .next-number-info {
+            font-size: 0.9rem;
+            color: rgba(0, 0, 0, 0.7);
+          }
+
+          .hint {
+            color: rgba(0, 0, 0, 0.6);
+          }
+
           .loading-overlay {
             position: absolute;
             top: 0;
@@ -411,11 +493,15 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     measurements$: Observable<Measurement[]>;
     races$: Observable<Race[]>;
+    participants$: Observable<Participant[]>;
+    measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
+    selectedRaceId$: Observable<number | null>;
+    autoAssignStatus$: Observable<AutoAssignStatus>;
     loading$: Observable<boolean>;
     continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
-    displayedColumns = ["id", "duration", "measuredAt", "actions"];
+    displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
     private lastResetDevice = false;
@@ -429,8 +515,28 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             MeasurementSelectors.selectAllMeasurements,
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
+        this.participants$ = this.store.select(
+            ParticipantSelectors.selectAllParticipants,
+        );
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
+        );
+
+        this.measurementsWithParticipants$ = combineLatest([
+            this.measurements$,
+            this.participants$,
+        ]).pipe(
+            map(([measurements, participants]) =>
+                measurements.map((m) => ({
+                    ...m,
+                    participantName: m.participantId
+                        ? this.getParticipantName(m.participantId, participants)
+                        : undefined,
+                })),
+            ),
+            distinctUntilChanged(
+                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
+            ),
         );
         this.continuousModeEnabled$ = this.store.select(
             MeasurementSelectors.selectContinuousModeEnabled,
@@ -441,6 +547,42 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.deviceStatus$ = this.store.select(
             MeasurementSelectors.selectDeviceStatus,
         );
+        this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
+        this.autoAssignStatus$ = this.store.select(
+            MeasurementSelectors.selectAutoAssignStatus,
+        );
+
+        // Listen for successful auto-assign changes
+        this.actions$.pipe(
+            ofType(
+                MeasurementActions.enableAutoAssignSuccess,
+                MeasurementActions.disableAutoAssignSuccess,
+                MeasurementActions.skipAutoAssignSuccess,
+            ),
+            takeUntil(this.destroy$)
+        ).subscribe((action) => {
+            const message = action.type === MeasurementActions.enableAutoAssignSuccess.type
+                ? "Automatik-Modus aktiviert"
+                : action.type === MeasurementActions.disableAutoAssignSuccess.type
+                    ? "Automatik-Modus deaktiviert"
+                    : "Startnummer übersprungen";
+            this.snackBar.open(message, "OK", {duration: 3000});
+        });
+
+        // Listen for failed auto-assign changes
+        this.actions$.pipe(
+            ofType(
+                MeasurementActions.enableAutoAssignFailure,
+                MeasurementActions.disableAutoAssignFailure,
+                MeasurementActions.skipAutoAssignFailure,
+            ),
+            takeUntil(this.destroy$)
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER: ${error}`, "OK", {
+                duration: 10000,
+                panelClass: "error-snackbar"
+            });
+        });
 
         // Listen for successful/failed create, update and delete of a single measurement
         this.actions$.pipe(
@@ -597,11 +739,15 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             }
         });
 
-        // Listen for successful discard
+        // Listen for successful discard. The backend already advances the auto-assign cursor in
+        // lockstep when it's active (see MeasurementController#discardOldestStart) - just refresh
+        // the status here so the displayed "next expected number" updates immediately instead of
+        // waiting for the next auto-refresh tick.
         this.actions$.pipe(
             ofType(MeasurementActions.discardOldestStartSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
+            this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
             this.snackBar.open('Ältester Start erfolgreich verworfen', 'OK', {
                 duration: 3000,
             });
@@ -711,12 +857,59 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private loadData(): void {
         this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(RaceActions.loadRaces());
+        // Piggy-backs on the same manual/auto refresh as everything else on this screen, so the
+        // "next expected number" and the auto-assigned Teilnehmer column stay in step with it too.
+        this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
         this.updateLastUpdateTime();
     }
 
     private updateLastUpdateTime(): void {
         const now = new Date();
         this.lastUpdate = now.toLocaleTimeString("de-DE");
+    }
+
+    getParticipantName(
+        participantId: number,
+        participants: Participant[],
+    ): string {
+        const participant = participants.find((p) => p.id === participantId);
+        return participant?.person
+            ? `${participant.person.firstName} ${participant.person.lastName}`
+            : "-";
+    }
+
+    getParticipantNameByRaceNumber(
+        raceId: number,
+        raceNumber: number,
+        participants: Participant[],
+    ): string {
+        const participant = participants.find((p) => p.race?.id === raceId && p.raceNumber === raceNumber);
+        return participant?.person
+            ? `${participant.person.firstName} ${participant.person.lastName}`
+            : "unbekannt";
+    }
+
+    formatRaceDate(dateString: string): string {
+        const parts = dateString.split("-");
+        if (parts.length === 3) {
+            const [year, month, day] = parts;
+            return `${day}.${month}.${year}`;
+        }
+        return dateString;
+    }
+
+    onRaceChange(raceId: number | null): void {
+        this.store.dispatch(RaceActions.selectRace({id: raceId}));
+        // Selecting a race is the on/off switch for auto-assign - no separate start/stop button.
+        if (raceId !== null) {
+            this.store.dispatch(MeasurementActions.enableAutoAssign({request: {raceId}}));
+        } else {
+            this.store.dispatch(MeasurementActions.disableAutoAssign());
+        }
+    }
+
+    skipAutoAssign(): void {
+        this.store.dispatch(MeasurementActions.skipAutoAssign());
     }
 
     formatDuration(ms: number): string {

@@ -21,6 +21,9 @@ public class DataImportScheduler {
     @Inject
     DataImportService dataImportService;
 
+    @Inject
+    AutoAssignService autoAssignService;
+
     @Property(name = "data-import.enabled", defaultValue = "true")
     boolean enabled;
 
@@ -80,6 +83,12 @@ public class DataImportScheduler {
             } else {
                 LOG.debug("Scheduled import completed: no new measurements");
             }
+
+            // Runs every cycle regardless of whether this cycle imported anything new, so a race
+            // stays caught up even if a previous cycle's measurements weren't matched yet. Only
+            // updates participantId on still-unassigned raw measurements - no-ops immediately if no
+            // race currently has auto-assign mode active, and never touches race_measurement itself.
+            autoAssignService.processNewMeasurements();
 
         } catch (Exception e) {
             LOG.debug("Scheduled data import failed (will retry in 5s): {}", e.getMessage());

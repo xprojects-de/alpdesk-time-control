@@ -1,5 +1,5 @@
 import {createReducer, on} from '@ngrx/store';
-import {Measurement} from '../../models/measurement.model';
+import {AutoAssignStatus, Measurement} from '../../models/measurement.model';
 import * as MeasurementActions from './measurement.actions';
 
 export interface MeasurementState {
@@ -12,6 +12,7 @@ export interface MeasurementState {
     deviceStatus: string | null;
     deviceConnected: boolean | null;
     isPollingDeviceConnection: boolean;
+    autoAssignStatus: AutoAssignStatus;
 }
 
 export const initialState: MeasurementState = {
@@ -23,7 +24,8 @@ export const initialState: MeasurementState = {
     scheduledImportEnabled: false,
     deviceStatus: null,
     deviceConnected: null,
-    isPollingDeviceConnection: false
+    isPollingDeviceConnection: false,
+    autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null}
 };
 
 export const measurementReducer = createReducer(
@@ -310,6 +312,34 @@ export const measurementReducer = createReducer(
         ...state,
         deviceConnected: false,
         error
-    }))
+    })),
+
+    // Live auto-assign mode
+    on(MeasurementActions.loadAutoAssignStatus, state => ({
+        ...state,
+        error: null
+    })),
+    on(
+        MeasurementActions.loadAutoAssignStatusSuccess,
+        MeasurementActions.enableAutoAssignSuccess,
+        MeasurementActions.disableAutoAssignSuccess,
+        MeasurementActions.skipAutoAssignSuccess,
+        MeasurementActions.setNextAutoAssignRaceNumberSuccess,
+        (state, {status}) => ({
+            ...state,
+            autoAssignStatus: status
+        })
+    ),
+    on(
+        MeasurementActions.loadAutoAssignStatusFailure,
+        MeasurementActions.enableAutoAssignFailure,
+        MeasurementActions.disableAutoAssignFailure,
+        MeasurementActions.skipAutoAssignFailure,
+        MeasurementActions.setNextAutoAssignRaceNumberFailure,
+        (state, {error}) => ({
+            ...state,
+            error
+        })
+    )
 );
 
