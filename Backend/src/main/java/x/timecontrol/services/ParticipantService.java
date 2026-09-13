@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -488,7 +489,9 @@ public class ParticipantService {
             }
 
             String externalId = parts.length > 5 ? parts[5].trim() : "";
-            importRow(raceId, lineNumber, line, parts[0], parts[1], parts[2], parts[3], parts[4], externalId, null, null, null,
+            importRow(raceId, lineNumber, line,
+                    new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
+                            null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -521,15 +524,19 @@ public class ParticipantService {
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
             importRow(raceId, rowNumber, row.toString(),
-                    valueFor(row, effectiveMapping, "lastName"),
-                    valueFor(row, effectiveMapping, "firstName"),
-                    valueFor(row, effectiveMapping, "birthDate"),
-                    valueFor(row, effectiveMapping, "team"),
-                    valueFor(row, effectiveMapping, "gender"),
-                    valueFor(row, effectiveMapping, "externalId"),
-                    valueFor(row, effectiveMapping, "raceNumber"),
-                    valueFor(row, effectiveMapping, "category"),
-                    valueFor(row, effectiveMapping, "ageGroup"),
+                    new ImportRowFields(
+                            valueFor(row, effectiveMapping, "lastName"),
+                            valueFor(row, effectiveMapping, "firstName"),
+                            valueFor(row, effectiveMapping, "birthDate"),
+                            valueFor(row, effectiveMapping, "team"),
+                            valueFor(row, effectiveMapping, "gender"),
+                            valueFor(row, effectiveMapping, "externalId"),
+                            valueFor(row, effectiveMapping, "raceNumber"),
+                            valueFor(row, effectiveMapping, "category"),
+                            valueFor(row, effectiveMapping, "ageGroup"),
+                            valueFor(row, effectiveMapping, "durationMs"),
+                            valueFor(row, effectiveMapping, "penalty"),
+                            valueFor(row, effectiveMapping, "measuredAt")),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -561,6 +568,54 @@ public class ParticipantService {
         return sourceField == null ? null : row.get(sourceField);
     }
 
+    private static final char EXPORT_DELIMITER = ';';
+
+    /**
+     * Exports every participant of a race as CSV - including person data (not just a reference to
+     * it) and the result fields (durationMs/penalty/measuredAt) - for migrating a whole race's roster
+     * and results to another instance. Uses our own canonical field names as the header row (see
+     * {@link ParticipantImportParsers#TARGET_FIELDS}) so re-importing it via {@link #importMapped}
+     * needs no manual mapping: each header self-suggests via that field's own-name alias.
+     * AgeGroup is deliberately not exported - it isn't stored per participant (see importRow), it's
+     * recomputed automatically from birthDate/gender against whatever AgeGroups exist in the target
+     * instance. Semicolon-delimited: the parser this round-trips through has no quoting support, so
+     * values are sanitized (delimiter/newlines replaced with a space) instead - simple, and lossless
+     * for realistic data (none of which legitimately contains a semicolon).
+     */
+    public String exportCsv(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        List<ParticipantResponse> responses = toResponses(participants);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), ParticipantImportParsers.TARGET_FIELDS)).append('\n');
+        for (ParticipantResponse p : responses) {
+            PersonResponse person = p.person();
+            List<String> values = List.of(
+                    sanitizeForExport(person != null ? person.lastName() : ""),
+                    sanitizeForExport(person != null ? person.firstName() : ""),
+                    person != null && person.birthDate() != null ? person.birthDate().toString() : "",
+                    person != null && person.gender() != null ? person.gender().name() : "",
+                    "",
+                    sanitizeForExport(p.team() != null ? p.team().name() : ""),
+                    sanitizeForExport(p.category() != null ? p.category().name() : ""),
+                    sanitizeForExport(person != null && person.externalId() != null ? person.externalId() : ""),
+                    p.raceNumber() != null ? p.raceNumber().toString() : "",
+                    p.durationMs() != null ? p.durationMs().toString() : "",
+                    p.penalty() != null ? p.penalty().toString() : "",
+                    p.measuredAt() != null ? p.measuredAt().toString() : ""
+            );
+            csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
+        }
+        return csv.toString();
+    }
+
+    private static String sanitizeForExport(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace(String.valueOf(EXPORT_DELIMITER), " ").replace("\n", " ").replace("\r", " ");
+    }
+
     /**
      * Seeds the ExternalId-less dedupe check with everyone already in this race, keyed by
      * lastName|firstName|birthDate. Without this, re-uploading the same roster twice - or a file
@@ -584,36 +639,44 @@ public class ParticipantService {
     }
 
     /**
+     * Raw (unparsed, possibly null) values for one import row - name-based instead of positional so
+     * the two call sites ({@link #importFromCsv}, {@link #importMapped}) can't silently swap two
+     * same-typed String arguments.
+     */
+    private record ImportRowFields(
+            String lastName, String firstName, String birthDate, String team, String gender,
+            String externalId, String raceNumber, String category, String ageGroup,
+            String durationMs, String penalty, String measuredAt) {
+    }
+
+    /**
      * Validates and saves a single import row (shared by the fixed-column CSV import and the
      * mapped/generic import), appending either to {@code imported} or {@code errors} - never throws.
      * {@code existingNameBirthDateKeys} is grown in place so duplicate ExternalId-less rows later in
      * the same file are also caught.
      */
-    private void importRow(Long raceId, int rowNumber, String rawRowDescription,
-                            String lastNameRaw, String firstNameRaw, String birthDateRaw, String teamNameRaw,
-                            String genderRaw, String externalIdRaw, String raceNumberRaw, String categoryNameRaw,
-                            String ageGroupNameRaw,
+    private void importRow(Long raceId, int rowNumber, String rawRowDescription, ImportRowFields fields,
                             Set<String> existingNameBirthDateKeys, List<Participant> imported, List<ParticipantImportRowError> errors) {
-        String lastName = lastNameRaw != null ? lastNameRaw.trim() : "";
-        String firstName = firstNameRaw != null ? firstNameRaw.trim() : "";
-        String teamName = teamNameRaw != null ? teamNameRaw.trim() : "";
-        String categoryName = categoryNameRaw != null ? categoryNameRaw.trim() : "";
-        String ageGroupName = ageGroupNameRaw != null ? ageGroupNameRaw.trim() : "";
-        String externalId = externalIdRaw != null ? externalIdRaw.trim() : "";
+        String lastName = fields.lastName() != null ? fields.lastName().trim() : "";
+        String firstName = fields.firstName() != null ? fields.firstName().trim() : "";
+        String teamName = fields.team() != null ? fields.team().trim() : "";
+        String categoryName = fields.category() != null ? fields.category().trim() : "";
+        String ageGroupName = fields.ageGroup() != null ? fields.ageGroup().trim() : "";
+        String externalId = fields.externalId() != null ? fields.externalId().trim() : "";
 
         if (lastName.isEmpty() || firstName.isEmpty()) {
             errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription, "Lastname and Firstname are required"));
             return;
         }
 
-        Gender gender = parseGender(genderRaw);
+        Gender gender = parseGender(fields.gender());
         if (gender == null) {
             errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription,
                     "Missing or invalid gender (expected MALE/FEMALE or M/W), row skipped"));
             return;
         }
 
-        LocalDate birthDate = parseBirthDate(birthDateRaw);
+        LocalDate birthDate = parseBirthDate(fields.birthDate());
         if (birthDate == null) {
             errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription,
                     "Invalid or missing birthdate (expected yyyy-MM-dd, dd.MM.yyyy or a 4-digit birth year)"));
@@ -629,7 +692,13 @@ public class ParticipantService {
             }
         }
 
-        Integer raceNumber = parseRaceNumber(raceNumberRaw);
+        Integer raceNumber = parseOptionalInt(fields.raceNumber());
+        // Result fields (durationMs/penalty/measuredAt): present when importing a full race export
+        // (see ParticipantController#exportCsv), absent from a plain start-list import - optional and
+        // best-effort like raceNumber, an unparsable value is simply left unset rather than failing the row.
+        Integer durationMs = parseOptionalInt(fields.durationMs());
+        Integer penalty = parseOptionalInt(fields.penalty());
+        LocalDateTime measuredAt = parseMeasuredAt(fields.measuredAt());
 
         // Each row is its own transaction: a failure saving the participant rolls back a
         // just-created person for that row too (no orphan Person left behind), and does not
@@ -661,7 +730,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, null, null, null);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt);
                 return repository.save(participant);
             });
             imported.add(saved);
@@ -724,20 +793,41 @@ public class ParticipantService {
     }
 
     /**
-     * Race number is optional and best-effort: an unparsable value (e.g. a stray non-numeric StNr)
-     * is simply left unset rather than rejecting the whole row over a field nobody strictly needs.
+     * Shared by raceNumber/durationMs/penalty: all three are optional and best-effort - an
+     * unparsable value (e.g. a stray non-numeric StNr) is simply left unset rather than rejecting the
+     * whole row over a field nobody strictly needs.
      */
-    private Integer parseRaceNumber(String rawRaceNumber) {
-        if (rawRaceNumber == null) {
+    private Integer parseOptionalInt(String raw) {
+        if (raw == null) {
             return null;
         }
-        String trimmed = rawRaceNumber.trim();
+        String trimmed = raw.trim();
         if (trimmed.isEmpty()) {
             return null;
         }
         try {
             return Integer.parseInt(trimmed);
         } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Optional and best-effort like {@link #parseOptionalInt}: expects the ISO format
+     * {@code LocalDateTime} is naturally serialized as (e.g. "2026-08-18T10:30:00", see
+     * ParticipantController#exportCsv) - an unparsable value is left unset, not an error.
+     */
+    private LocalDateTime parseMeasuredAt(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(trimmed);
+        } catch (DateTimeParseException e) {
             return null;
         }
     }

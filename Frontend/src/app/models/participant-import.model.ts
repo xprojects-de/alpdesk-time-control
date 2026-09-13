@@ -31,6 +31,8 @@ export interface ParticipantImportTargetField {
 // "ageGroup" (e.g. "U14m") isn't a field stored on the participant - it just ensures a matching
 // AgeGroup exists (created or widened as needed); actual assignment happens automatically from
 // birth date + gender. "category" is a separate, genuinely free-text field.
+// durationMs/penalty/measuredAt are the participant's *result* - only relevant for a full race
+// export/import (see ParticipantController#exportCsv), not a plain start-list import.
 export const PARTICIPANT_IMPORT_TARGET_FIELDS: ParticipantImportTargetField[] = [
     {key: 'lastName', label: 'Nachname', required: true},
     {key: 'firstName', label: 'Vorname', required: true},
@@ -41,6 +43,9 @@ export const PARTICIPANT_IMPORT_TARGET_FIELDS: ParticipantImportTargetField[] = 
     {key: 'category', label: 'Kategorie', required: false},
     {key: 'externalId', label: 'Externe ID (z.B. DSV-Code)', required: false},
     {key: 'raceNumber', label: 'Startnummer', required: false},
+    {key: 'durationMs', label: 'Zeit (ms)', required: false},
+    {key: 'penalty', label: 'Strafe (ms)', required: false},
+    {key: 'measuredAt', label: 'Gemessen am', required: false},
 ];
 
 export interface ParticipantImportPreviewResponse {

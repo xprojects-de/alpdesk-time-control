@@ -17,6 +17,7 @@ import x.timecontrol.repositories.ParticipantRepository
 
 import java.sql.Connection
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class ParticipantServiceSpec extends Specification {
 
@@ -371,6 +372,45 @@ class ParticipantServiceSpec extends Specification {
         then: "the AgeGroup is resolved (not treated as the free-text category) and the real category column still goes through categoryService"
         1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE) >> new AgeGroup(1L, "U14M", 2012, 2012, Gender.MALE)
         1 * categoryService.findOrCreateByName("Ski Alpin") >> new Category(1L, "SKI ALPIN")
+        result.imported().size() == 1
+        result.errors().isEmpty()
+    }
+
+    def "exportCsv writes our own field names as the header and includes person data plus results"() {
+        given: "one participant with a full result"
+        def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
+        def participant = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 2000, LocalDateTime.of(2026, 8, 18, 10, 30, 0))
+        repository.findByRaceId(5L) >> [participant]
+        personService.findByIds([1L] as Set) >> [1L: person]
+        teamService.findByIds([2L] as Set) >> [2L: new Team(2L, "TEAM A")]
+        categoryService.findByIds([3L] as Set) >> [3L: new Category(3L, "SKI ALPIN")]
+        raceService.findByIds(_ as Set) >> [:]
+
+        when:
+        def lines = service.exportCsv(5L).readLines()
+
+        then: "the header uses our canonical field names (so re-importing needs no manual mapping) and the row carries person + team + category + result data"
+        lines[0] == "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt"
+        lines[1] == "Mustermann;Max;1990-01-01;MALE;;TEAM A;SKI ALPIN;EXT-1;42;125000;2000;2026-08-18T10:30"
+    }
+
+    def "mapped import carries over durationMs/penalty/measuredAt when the file provides them (full race export round-trip)"() {
+        given: "a CSV using exactly the header exportCsv would produce"
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+
+        def csv = "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt\n" +
+                "Mustermann;Max;1990-01-01;MALE;;;;;42;125000;2000;2026-08-18T10:30:00\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null, null)
+
+        then: "the header self-suggests via each field's own-name alias, so an omitted mapping still resolves every column"
+        1 * repository.save({ Participant p ->
+            p.raceNumber() == 42 && p.durationMs() == 125000 && p.penalty() == 2000 &&
+                    p.measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0)
+        }) >> { Participant p -> p }
         result.imported().size() == 1
         result.errors().isEmpty()
     }

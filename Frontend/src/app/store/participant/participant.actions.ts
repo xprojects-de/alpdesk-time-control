@@ -139,6 +139,20 @@ export const importParticipantsMappedFailure = createAction(
     props<{ error: string }>()
 );
 
+// Full race export (roster + results) as CSV
+export const exportParticipantsCsv = createAction(
+    '[Participant] Export Participants CSV',
+    props<{ raceId: number; filename: string }>()
+);
+export const exportParticipantsCsvSuccess = createAction(
+    '[Participant] Export Participants CSV Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportParticipantsCsvFailure = createAction(
+    '[Participant] Export Participants CSV Failure',
+    props<{ error: string }>()
+);
+
 // Copy participants into other races
 export const copyParticipants = createAction(
     '[Participant] Copy Participants',

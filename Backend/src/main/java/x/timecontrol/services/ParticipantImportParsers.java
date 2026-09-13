@@ -32,22 +32,30 @@ public final class ParticipantImportParsers {
     private ParticipantImportParsers() {
     }
 
+    // durationMs/penalty/measuredAt are the participant's *result*, not identity data - present when
+    // importing a full race export (see ParticipantController's export-csv/import-mapped pair), absent
+    // from a plain start-list import. Their aliases include our own field name verbatim so a file we
+    // exported ourselves round-trips with zero manual mapping (see ParticipantController#exportCsv).
     public static final List<String> TARGET_FIELDS = List.of(
-            "lastName", "firstName", "birthDate", "gender", "ageGroup", "team", "category", "externalId", "raceNumber");
+            "lastName", "firstName", "birthDate", "gender", "ageGroup", "team", "category", "externalId",
+            "raceNumber", "durationMs", "penalty", "measuredAt");
 
     // "Klasse" (DSV-Wettkampfdatei, RaceEngine, ...) names an age+gender class like "U14m" - an
     // AgeGroup, not our free-text Category - so it's aliased to ageGroup, not category. "Kategorie"
     // is kept on category since that's the more generic/neutral term for an actual free-text category.
-    private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.of(
-            "lastName", List.of("nachname", "lastname", "name"),
-            "firstName", List.of("vorname", "firstname"),
-            "birthDate", List.of("geburtsdatum", "birthdate", "jahrgang", "jg", "geburtsjahr", "birthyear"),
-            "gender", List.of("geschlecht", "gender", "sex"),
-            "ageGroup", List.of("klasse", "altersklasse", "altersgruppe", "agegroup"),
-            "team", List.of("verein", "vereinsname", "team", "club"),
-            "category", List.of("kategorie", "category"),
-            "externalId", List.of("dsvcode", "dsvid", "externalid"),
-            "raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber"));
+    private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.ofEntries(
+            Map.entry("lastName", List.of("nachname", "lastname", "name")),
+            Map.entry("firstName", List.of("vorname", "firstname")),
+            Map.entry("birthDate", List.of("geburtsdatum", "birthdate", "jahrgang", "jg", "geburtsjahr", "birthyear")),
+            Map.entry("gender", List.of("geschlecht", "gender", "sex")),
+            Map.entry("ageGroup", List.of("klasse", "altersklasse", "altersgruppe", "agegroup")),
+            Map.entry("team", List.of("verein", "vereinsname", "team", "club")),
+            Map.entry("category", List.of("kategorie", "category")),
+            Map.entry("externalId", List.of("dsvcode", "dsvid", "externalid")),
+            Map.entry("raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber")),
+            Map.entry("durationMs", List.of("durationms", "zeit", "zeitms", "time", "result", "ergebnis")),
+            Map.entry("penalty", List.of("penalty", "strafe", "strafzeit")),
+            Map.entry("measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp")));
 
     private static final char[] CSV_DELIMITER_CANDIDATES = {';', ',', '\t', '|'};
 

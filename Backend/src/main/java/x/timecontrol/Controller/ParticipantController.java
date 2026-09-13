@@ -275,6 +275,21 @@ public class ParticipantController {
         }
     }
 
+    @Produces("text/csv")
+    @Get("/export/csv/{raceId}")
+    @Operation(summary = "Export a race's full participant list (with results) as CSV", description = "Exports every participant of a race as CSV, including person data and results (durationMs/penalty/measuredAt) - for migrating a whole race's roster and results to another instance. Uses our own field names as the header row, so re-importing the file via import-mapped needs no manual mapping.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> exportParticipantsCsv(@PathVariable Long raceId) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        String csv = service.exportCsv(raceId);
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header("Content-Disposition", "attachment; filename=rennergebnisse_" + raceId + ".csv");
+    }
+
     @Produces("application/pdf")
     @Get("/export/pdf/startlist/{raceId}")
     @Operation(summary = "Export start list as PDF", description = "Generates a PDF start list sorted by race number for a specific race", security = @SecurityRequirement(name = "BearerAuth"))

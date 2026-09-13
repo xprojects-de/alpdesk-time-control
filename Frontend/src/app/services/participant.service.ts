@@ -85,6 +85,16 @@ export class ParticipantService {
         return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import-mapped/${raceId}`, formData);
     }
 
+    /**
+     * Full race export (roster + results) as CSV, using our own field names as the header - re-import
+     * it via importMapped/import-mapped with no manual mapping needed.
+     */
+    exportCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/csv/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
     copyParticipants(request: ParticipantCopyRequest): Observable<ParticipantCopyResponse> {
         return this.http.post<ParticipantCopyResponse>(`${this.apiUrl}/copy`, request);
     }
