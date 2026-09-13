@@ -57,6 +57,21 @@ Kein Terminal-Befehl nötig – ist nur ein Klick-Dialog.
 
 Keine Sicherheitswarnung, kein Zusatzschritt nötig.
 
+## Wo liegt die Datenbank?
+
+Der Pfad ist im Code relativ (`database/time-control.db`, siehe
+[application.properties](src/main/resources/application.properties)) – identisch bei beiden
+Build-Varianten. Wo das konkret landet, hängt vom Startweg ab:
+
+- **Doppelklick im Finder/Dock (macOS):** macOS setzt dabei das Arbeitsverzeichnis auf das
+  Home-Verzeichnis des Nutzers. Die Datenbank liegt also unter
+  `/Users/<Benutzername>/database/time-control.db` (z. B.
+  `/Users/BenjaminHummel/database/time-control.db`).
+- **Start aus dem Terminal:** relativ zu dem Verzeichnis, in dem die Shell gerade steht.
+
+Gilt entsprechend für die JWT-Secret-Datei (`database/jwt-secret.txt`), die im selben Ordner
+liegt.
+
 ## Lokal selbst bauen
 
 Voraussetzung: [GraalVM](https://www.graalvm.org/) 25 als JDK (Toolchain ist in
