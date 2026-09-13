@@ -19,11 +19,12 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
-import {Participant} from "../../models/participant.model";
+import {DisqualificationStatus, Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as ParticipantActions from "../../store/participant/participant.actions";
@@ -32,6 +33,10 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
 import {ParticipantCopyDialogComponent, ParticipantCopyDialogResult} from "./participant-copy-dialog.component";
+import {
+    ParticipantImportMappingDialogComponent,
+    ParticipantImportMappingDialogResult
+} from "./participant-import-mapping-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -49,6 +54,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatCardModule,
         MatTooltipModule,
         MatSortModule,
+        MatPaginatorModule,
         MatSelectModule,
         MatFormFieldModule,
         MatMenuModule,
@@ -124,24 +130,17 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <button
                                 mat-raised-button
-                                (click)="fileInput.click()"
+                                (click)="openImportDialog()"
                                 [disabled]="importLoading$ | async"
-                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender, optional: ExternalId)"
+                                matTooltip="Teilnehmer importieren (CSV mit beliebigem Trennzeichen oder DSV-Wettkampfdatei, mit Spalten-Zuordnung)"
                         >
                             @if (importLoading$ | async) {
                                 <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
                             } @else {
                                 <mat-icon>upload_file</mat-icon>
                             }
-                            CSV Import
+                            Teilnehmer importieren
                         </button>
-                        <input
-                                #fileInput
-                                type="file"
-                                accept=".csv,text/csv"
-                                hidden
-                                (change)="onCsvFileSelected($event)"
-                        />
 
                         <button
                                 mat-raised-button
@@ -330,11 +329,34 @@ import {Actions, ofType} from "@ngrx/effects";
                          </td>
                      </ng-container>
 
+                     <!-- Status Column -->
+                     <ng-container matColumnDef="status">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+                         <td mat-cell *matCellDef="let participant">
+                             @if (participant.status && participant.status !== 'NONE') {
+                                 <span class="status-badge" [class]="'status-' + participant.status"
+                                       [matTooltip]="getStatusLabel(participant.status)">
+                                     {{ participant.status }}
+                                 </span>
+                             } @else {
+                                 -
+                             }
+                         </td>
+                     </ng-container>
+
                      <!-- Measured At Column -->
                      <ng-container matColumnDef="measuredAt">
                          <th mat-header-cell *matHeaderCellDef mat-sort-header>Gemessen am</th>
                          <td mat-cell *matCellDef="let participant">
                              {{ participant.measuredAt ? (participant.measuredAt | date: "dd.MM.yyyy HH:mm:ss") : "-" }}
+                         </td>
+                     </ng-container>
+
+                     <!-- Comment Column -->
+                     <ng-container matColumnDef="comment">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Kommentar</th>
+                         <td mat-cell *matCellDef="let participant" class="comment-cell" [matTooltip]="participant.comment || ''">
+                             {{ participant.comment || "-" }}
                          </td>
                      </ng-container>
 
@@ -364,6 +386,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
                 </div>
+                <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
 
                 <div class="count-info" [class.hidden]="loading$ | async">
                     Anzahl der Teilnehmer: {{ dataSource.data.length }}
@@ -429,6 +452,34 @@ import {Actions, ofType} from "@ngrx/effects";
           .hint {
             color: rgba(0, 0, 0, 0.6);
           }
+
+          .comment-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+          }
+
+          .status-DNS {
+            background-color: #ff9800;
+          }
+
+          .status-DNF {
+            background-color: #f57c00;
+          }
+
+          .status-DSQ {
+            background-color: #f44336;
+          }
         `,
     ],
 })
@@ -458,7 +509,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "ageGroup",
         "race",
         "durationMs",
+        "status",
         "measuredAt",
+        "comment",
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
@@ -468,6 +521,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     // destroyed/recreated (as a fresh MatSort instance) each time the selection is cleared
     // and set again.
     sort = viewChild(MatSort);
+    paginator = viewChild(MatPaginator);
 
     constructor() {
         this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
@@ -591,6 +645,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 }, 100);
             }
         });
+
+        // Same re-attach logic as sort above: the table (and its MatPaginator) only exists once a
+        // race is selected, and is destroyed/recreated each time the selection is cleared and set again.
+        effect(() => {
+            const paginatorInstance = this.paginator();
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                setTimeout(() => {
+                    this.dataSource.paginator = paginatorInstance;
+                }, 100);
+            }
+        });
     }
 
     ngAfterViewInit(): void {
@@ -609,7 +674,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return;
                 }
                 this.snackBar.open(
-                    `CSV Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                    `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
                     'OK',
                     {duration: 5000},
                 );
@@ -649,6 +714,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         return GenderLabels[gender] || gender;
     }
 
+    private static readonly STATUS_LABELS: Record<DisqualificationStatus, string> = {
+        NONE: "Gewertet",
+        DNS: "DNS – nicht gestartet",
+        DNF: "DNF – nicht beendet",
+        DSQ: "DSQ – disqualifiziert",
+    };
+
+    getStatusLabel(status: DisqualificationStatus): string {
+        return ParticipantListComponent.STATUS_LABELS[status] ?? status;
+    }
+
     formatRaceDate(dateString: string): string {
         const parts = dateString.split("-");
         if (parts.length === 3) {
@@ -664,11 +740,20 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         if (participant.durationMs === undefined || participant.durationMs === null) {
             return "-";
         }
+        const hasPenalty = participant.penalty !== undefined && participant.penalty !== null && participant.penalty !== 0;
         if (participant.race?.resultUnit === ResultUnit.POINTS) {
             const label = participant.race?.resultUnitLabel ? ` ${participant.race.resultUnitLabel}` : "";
-            return `${(participant.durationMs / 100).toFixed(2)}${label}`;
+            const value = `${(participant.durationMs / 100).toFixed(2)}${label}`;
+            if (hasPenalty) {
+                return `${value} (+${(participant.penalty! / 100).toFixed(2)}${label})`;
+            }
+            return value;
         }
-        return this.formatDuration(participant.durationMs);
+        const value = this.formatDuration(participant.durationMs);
+        if (hasPenalty) {
+            return `${value} (+${this.formatDuration(participant.penalty!)})`;
+        }
+        return value;
     }
 
     formatDuration(ms: number): string {
@@ -762,27 +847,34 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             });
     }
 
-    onCsvFileSelected(event: Event): void {
-        const input = event.target as HTMLInputElement;
-        const file = input.files?.[0];
-        input.value = '';
-
-        if (!file) {
+async openImportDialog(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
             return;
         }
 
-        this.selectedRaceId$
-            .pipe(take(1))
-            .subscribe((raceId) => {
-                if (!raceId) {
-                    this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
-                        duration: 5000,
-                        panelClass: ['error-snackbar'],
-                    });
-                    return;
+        const dialogRef = this.dialog.open(ParticipantImportMappingDialogComponent, {
+            width: '900px',
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(ParticipantActions.importParticipantsMapped({
+                        raceId,
+                        file: result.file,
+                        format: result.format,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
-                this.store.dispatch(ParticipantActions.importParticipantsCsv({raceId, file}));
-                this.snackBar.open('CSV Import gestartet...', 'OK', {duration: 2000});
             });
     }
 

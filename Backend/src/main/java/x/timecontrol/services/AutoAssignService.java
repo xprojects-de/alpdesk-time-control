@@ -6,11 +6,14 @@ import x.timecontrol.repositories.MeasurementRepository;
 import x.timecontrol.repositories.ParticipantRepository;
 import jakarta.inject.Singleton;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -80,8 +83,8 @@ public class AutoAssignService {
             if (startRaceNumber != null) {
                 nextRaceNumber = startRaceNumber;
             } else {
-                List<Integer> raceNumbers = sortedRaceNumbers(raceId);
-                nextRaceNumber = skipAlreadyAssigned(raceId, raceNumbers, raceNumbers.stream().findFirst().orElse(null), assignedParticipantIds());
+                RaceRoster roster = loadRoster(raceId);
+                nextRaceNumber = skipAlreadyAssigned(roster, roster.raceNumbers().stream().findFirst().orElse(null), assignedParticipantIds());
             }
             activeRaceId = raceId;
             return currentStatus();
@@ -102,8 +105,8 @@ public class AutoAssignService {
     public Status skip() {
         return measurementTableLock.get(() -> {
             Long raceId = requireActive();
-            List<Integer> raceNumbers = sortedRaceNumbers(raceId);
-            nextRaceNumber = skipAlreadyAssigned(raceId, raceNumbers, firstGreaterThan(raceNumbers, nextRaceNumber), assignedParticipantIds());
+            RaceRoster roster = loadRoster(raceId);
+            nextRaceNumber = skipAlreadyAssigned(roster, firstGreaterThan(roster.raceNumbers(), nextRaceNumber), assignedParticipantIds());
             return currentStatus();
         });
     }
@@ -163,7 +166,7 @@ public class AutoAssignService {
                 return;
             }
 
-            List<Integer> raceNumbers = sortedRaceNumbers(raceId);
+            RaceRoster roster = loadRoster(raceId);
             Set<Long> assignedParticipantIds = all.stream()
                     .map(Measurement::participantId)
                     .filter(Objects::nonNull)
@@ -172,35 +175,59 @@ public class AutoAssignService {
             // A race number may have picked up a measurement since the last cycle through a manual
             // edit (e.g. correcting a specific row in the Messungen dialog) rather than through this
             // loop. Re-check before trusting the cursor so the same participant is never matched twice.
-            nextRaceNumber = skipAlreadyAssigned(raceId, raceNumbers, nextRaceNumber, assignedParticipantIds);
+            nextRaceNumber = skipAlreadyAssigned(roster, nextRaceNumber, assignedParticipantIds);
 
             for (Measurement measurement : pending) {
                 if (nextRaceNumber == null) {
                     break;
                 }
-                Optional<Participant> participant = participantRepository.findByRaceIdAndRaceNumber(raceId, nextRaceNumber);
-                if (participant.isEmpty()) {
-                    break; // shouldn't happen: nextRaceNumber is always sourced from raceNumbers
+                Participant participant = roster.byRaceNumber().get(nextRaceNumber);
+                if (participant == null) {
+                    break; // shouldn't happen: nextRaceNumber is always sourced from the roster
                 }
                 measurementRepository.update(new Measurement(
-                        measurement.id(), participant.get().id(), measurement.durationMs(), measurement.measuredAt()
+                        measurement.id(), participant.id(), measurement.durationMs(), measurement.measuredAt()
                 ));
-                assignedParticipantIds.add(participant.get().id());
-                nextRaceNumber = skipAlreadyAssigned(raceId, raceNumbers, firstGreaterThan(raceNumbers, nextRaceNumber), assignedParticipantIds);
+                assignedParticipantIds.add(participant.id());
+                nextRaceNumber = skipAlreadyAssigned(roster, firstGreaterThan(roster.raceNumbers(), nextRaceNumber), assignedParticipantIds);
             }
         });
     }
 
     /**
+     * A race's participants (by race number), loaded once per call instead of the previous
+     * one-query-per-candidate-number approach: {@link #skipAlreadyAssigned} and the match loop in
+     * {@link #processNewMeasurements} both used to call {@code participantRepository.findByRaceIdAndRaceNumber}
+     * per race number checked, which meant one DB round trip per already-assigned/skipped number on
+     * every 5s scheduler cycle - wasteful for a large field with many already-matched participants.
+     */
+    private record RaceRoster(List<Integer> raceNumbers, Map<Integer, Participant> byRaceNumber) {
+    }
+
+    private RaceRoster loadRoster(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(participantRepository.findByRaceId(raceId).spliterator(), false).toList();
+        Map<Integer, Participant> byRaceNumber = new HashMap<>();
+        List<Integer> raceNumbers = new ArrayList<>();
+        for (Participant participant : participants) {
+            if (participant.raceNumber() != null) {
+                raceNumbers.add(participant.raceNumber());
+                byRaceNumber.put(participant.raceNumber(), participant);
+            }
+        }
+        Collections.sort(raceNumbers);
+        return new RaceRoster(raceNumbers, byRaceNumber);
+    }
+
+    /**
      * Must only be called while holding measurementTableLock.
      */
-    private Integer skipAlreadyAssigned(Long raceId, List<Integer> raceNumbers, Integer candidate, Set<Long> assignedParticipantIds) {
+    private Integer skipAlreadyAssigned(RaceRoster roster, Integer candidate, Set<Long> assignedParticipantIds) {
         while (candidate != null) {
-            Optional<Participant> participant = participantRepository.findByRaceIdAndRaceNumber(raceId, candidate);
-            if (participant.isEmpty() || !assignedParticipantIds.contains(participant.get().id())) {
+            Participant participant = roster.byRaceNumber().get(candidate);
+            if (participant == null || !assignedParticipantIds.contains(participant.id())) {
                 return candidate;
             }
-            candidate = firstGreaterThan(raceNumbers, candidate);
+            candidate = firstGreaterThan(roster.raceNumbers(), candidate);
         }
         return null;
     }
@@ -217,13 +244,5 @@ public class AutoAssignService {
             return null;
         }
         return sortedRaceNumbers.stream().filter(n -> n > current).findFirst().orElse(null);
-    }
-
-    private List<Integer> sortedRaceNumbers(Long raceId) {
-        return StreamSupport.stream(participantRepository.findByRaceId(raceId).spliterator(), false)
-                .map(Participant::raceNumber)
-                .filter(Objects::nonNull)
-                .sorted()
-                .toList();
     }
 }

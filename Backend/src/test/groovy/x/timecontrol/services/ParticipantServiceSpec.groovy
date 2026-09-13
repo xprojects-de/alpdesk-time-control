@@ -3,6 +3,10 @@ package x.timecontrol.services
 import io.micronaut.data.exceptions.DataAccessException
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
+import x.timecontrol.dto.ParticipantImportFormat
+import x.timecontrol.entities.AgeGroup
+import x.timecontrol.entities.Category
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Person
@@ -14,6 +18,7 @@ import x.timecontrol.repositories.ParticipantRepository
 
 import java.sql.Connection
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class ParticipantServiceSpec extends Specification {
 
@@ -45,7 +50,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "create rejects a participant without a raceId"() {
         given:
-        def participant = new Participant(null, null, 1L, null, null, null, null, null, null)
+        def participant = new Participant(null, null, 1L, null, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -57,7 +62,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "create rejects a participant without a personId"() {
         given:
-        def participant = new Participant(null, 1L, null, null, null, null, null, null, null)
+        def participant = new Participant(null, 1L, null, null, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -70,7 +75,7 @@ class ParticipantServiceSpec extends Specification {
     def "create rejects a participant referencing a non-existent race"() {
         given:
         raceService.findById(1L) >> Optional.empty()
-        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null)
+        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -84,7 +89,7 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         personService.findById(1L) >> Optional.empty()
-        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null)
+        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -98,8 +103,8 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         personService.findById(1L) >> Optional.of(person())
-        repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(new Participant(99L, 1L, 2L, 5, null, null, null, null, null))
-        def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null)
+        repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(new Participant(99L, 1L, 2L, 5, null, null, null, null, null, null))
+        def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -113,8 +118,8 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         personService.findById(1L) >> Optional.of(person())
-        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(new Participant(99L, 1L, 1L, null, null, null, null, null, null))
-        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null)
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(new Participant(99L, 1L, 1L, null, null, null, null, null, null, null))
+        def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
 
         when:
         service.create(participant)
@@ -130,8 +135,8 @@ class ParticipantServiceSpec extends Specification {
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.empty()
         repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.empty()
-        def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null)
-        def saved = new Participant(10L, 1L, 1L, 5, null, null, null, null, null)
+        def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null, null)
+        def saved = new Participant(10L, 1L, 1L, 5, null, null, null, null, null, null)
 
         when:
         def result = service.create(participant)
@@ -145,12 +150,12 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         personService.findById(1L) >> Optional.of(person())
-        def existing = new Participant(10L, 1L, 1L, 5, null, null, null, null, null)
+        def existing = new Participant(10L, 1L, 1L, 5, null, null, null, null, null, null)
         repository.findById(10L) >> Optional.of(existing)
         // the only participant with race number 5, and the only one for person 1, is the one being updated itself
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(existing)
         repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(existing)
-        def request = new Participant(null, 1L, 1L, 5, null, null, null, null, null)
+        def request = new Participant(null, 1L, 1L, 5, null, null, null, null, null, null)
 
         when:
         def result = service.update(10L, request)
@@ -162,9 +167,9 @@ class ParticipantServiceSpec extends Specification {
 
     def "assignRaceNumbers re-shuffling an already-numbered race does not collide with the unique constraint"() {
         given: "3 participants already hold numbers 2,3,1; the new assignment (by birthdate, youngest first) is 1,2,3 - a naive single-pass update would collide immediately"
-        def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null)
-        def p2 = new Participant(2L, 5L, 2L, 3, null, null, null, null, null)
-        def p3 = new Participant(3L, 5L, 3L, 1, null, null, null, null, null)
+        def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null, null)
+        def p2 = new Participant(2L, 5L, 2L, 3, null, null, null, null, null, null)
+        def p3 = new Participant(3L, 5L, 3L, 1, null, null, null, null, null, null)
         repository.findByRaceId(5L) >> [p1, p2, p3]
         personService.findByIds(_) >> [
                 1L: new Person(1L, "A", "A", LocalDate.of(2000, 1, 1), Gender.MALE, null),
@@ -212,9 +217,9 @@ class ParticipantServiceSpec extends Specification {
         def result = service.importFromCsv(5L, reader)
 
         then: "two rows succeed and the failing row is reported, not thrown"
-        1 * repository.save(_) >> new Participant(1L, 5L, 1L, null, 1L, null, null, null, null)
+        1 * repository.save(_) >> new Participant(1L, 5L, 1L, null, 1L, null, null, null, null, null)
         1 * repository.save(_) >> { throw new RuntimeException("db unavailable") }
-        1 * repository.save(_) >> new Participant(3L, 5L, 1L, null, 1L, null, null, null, null)
+        1 * repository.save(_) >> new Participant(3L, 5L, 1L, null, 1L, null, null, null, null, null)
         result.imported().size() == 2
         result.errors().size() == 1
         result.errors()[0].lineNumber() == 3
@@ -227,7 +232,7 @@ class ParticipantServiceSpec extends Specification {
         def existingPerson = new Person(1L, "John", "Doe", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
         personService.findByExternalId("EXT-1") >> Optional.of(existingPerson)
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
-        repository.findByRaceIdAndPersonId(5L, 1L) >> Optional.of(new Participant(99L, 5L, 1L, null, null, null, null, null, null))
+        repository.findByRaceIdAndPersonId(5L, 1L) >> Optional.of(new Participant(99L, 5L, 1L, null, null, null, null, null, null, null))
 
         def csv = "Lastname,Firstname,Birthdate,Team,Gender,ExternalId\n" +
                 "Doe,John,1990-01-01,Team A,MALE,EXT-1\n"
@@ -247,7 +252,7 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         raceService.findById(2L) >> Optional.of(race())
-        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
 
@@ -264,7 +269,7 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         raceService.findById(2L) >> Optional.of(race())
-        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
 
@@ -279,8 +284,8 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         raceService.findById(2L) >> Optional.of(race())
-        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
-        def alreadyInTarget = new Participant(2L, 2L, 20L, 7, null, null, null, null, null)
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
+        def alreadyInTarget = new Participant(2L, 2L, 20L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> [alreadyInTarget]
 
@@ -295,7 +300,7 @@ class ParticipantServiceSpec extends Specification {
         given: "the in-memory pre-check saw the number as free, but the DB save loses a race to a concurrent write"
         raceService.findById(1L) >> Optional.of(race())
         raceService.findById(2L) >> Optional.of(race())
-        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
 
@@ -316,7 +321,7 @@ class ParticipantServiceSpec extends Specification {
         given:
         raceService.findById(1L) >> Optional.of(race())
         raceService.findById(2L) >> Optional.of(race())
-        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null)
+        def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
         repository.save(_) >> { throw new DataAccessException("NOT NULL constraint failed: participant.race_id") }
@@ -331,7 +336,7 @@ class ParticipantServiceSpec extends Specification {
     def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {
         given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
         def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)
-        repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null)]
+        repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null, null)]
         personService.findByIds([2L] as Set) >> [2L: existingPerson]
 
         def csv = "Lastname,Firstname,Birthdate,Team,Gender\n" +
@@ -347,5 +352,109 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 1
         result.errors()[0].reason().contains("already in this race")
+    }
+
+    def "mapped import resolves the ageGroup column via AgeGroupService instead of Category, independently of an actual category column"() {
+        given: "a semicolon CSV whose Klasse column is mapped to ageGroup and whose separate Kategorie column is mapped to category"
+        repository.findByRaceId(5L) >> []
+        teamService.findOrCreateByName("SC Oberstdorf") >> new Team(1L, "SC OBERSTDORF")
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.save(_) >> { Participant p -> new Participant(1L, 5L, 1L, p.raceNumber(), p.teamId(), p.categoryId(), null, null, null, null) }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Verein;Klasse;Kategorie\n" +
+                "Müller;Maximilian;2012;M;SC Oberstdorf;U14m;Ski Alpin\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht",
+                 team: "Verein", ageGroup: "Klasse", category: "Kategorie"])
+
+        then: "the AgeGroup is resolved (not treated as the free-text category) and the real category column still goes through categoryService"
+        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE) >> new AgeGroup(1L, "U14M", 2012, 2012, Gender.MALE)
+        1 * categoryService.findOrCreateByName("Ski Alpin") >> new Category(1L, "SKI ALPIN")
+        result.imported().size() == 1
+        result.errors().isEmpty()
+    }
+
+    def "mapped import parses a status column into the participant's DisqualificationStatus"() {
+        given: "a CSV with a Status column marking the row as disqualified"
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        Participant saved = null
+        repository.save(_) >> { Participant p -> saved = p; p }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Status\n" +
+                "Mustermann;Max;1990;M;DSQ\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht", status: "Status"])
+
+        then:
+        result.imported().size() == 1
+        result.errors().isEmpty()
+        saved.status() == DisqualificationStatus.DSQ
+    }
+
+    def "mapped import defaults a blank/unrecognized status column to NONE instead of failing the row"() {
+        given:
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        Participant saved = null
+        repository.save(_) >> { Participant p -> saved = p; p }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Status\n" +
+                "Mustermann;Max;1990;M;\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht", status: "Status"])
+
+        then:
+        result.imported().size() == 1
+        saved.status() == DisqualificationStatus.NONE
+    }
+
+    def "exportCsv writes our own field names as the header and includes person data plus results"() {
+        given: "one participant with a full result"
+        def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
+        def participant = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 2000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen")
+        repository.findByRaceId(5L) >> [participant]
+        personService.findByIds([1L] as Set) >> [1L: person]
+        teamService.findByIds([2L] as Set) >> [2L: new Team(2L, "TEAM A")]
+        categoryService.findByIds([3L] as Set) >> [3L: new Category(3L, "SKI ALPIN")]
+        raceService.findByIds(_ as Set) >> [:]
+
+        when:
+        def lines = service.exportCsv(5L).readLines()
+
+        then: "the header uses our canonical field names (so re-importing needs no manual mapping) and the row carries person + team + category + result data"
+        lines[0] == "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment;status"
+        lines[1] == "Mustermann;Max;1990-01-01;MALE;;TEAM A;SKI ALPIN;EXT-1;42;125000;2000;2026-08-18T10:30;Ski gebrochen;NONE"
+    }
+
+    def "mapped import carries over durationMs/penalty/measuredAt when the file provides them (full race export round-trip)"() {
+        given: "a CSV using exactly the header exportCsv would produce"
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+
+        def csv = "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment\n" +
+                "Mustermann;Max;1990-01-01;MALE;;;;;42;125000;2000;2026-08-18T10:30:00;Ski gebrochen\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null, null)
+
+        then: "the header self-suggests via each field's own-name alias, so an omitted mapping still resolves every column"
+        1 * repository.save({ Participant p ->
+            p.raceNumber() == 42 && p.durationMs() == 125000 && p.penalty() == 2000 &&
+                    p.measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0) &&
+                    p.comment() == "Ski gebrochen"
+        }) >> { Participant p -> p }
+        result.imported().size() == 1
+        result.errors().isEmpty()
     }
 }

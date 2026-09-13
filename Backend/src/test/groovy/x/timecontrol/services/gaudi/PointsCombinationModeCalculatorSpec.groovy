@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.GaudiModeType
@@ -10,6 +11,7 @@ import x.timecontrol.entities.PointsScale
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.services.AgeGroupService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.PointsScaleService
 import x.timecontrol.services.RankingService
@@ -23,8 +25,11 @@ class PointsCombinationModeCalculatorSpec extends Specification {
     PersonService personService = Mock()
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
+    AgeGroupService ageGroupService = Mock() {
+        findAll() >> []
+    }
     PointsCombinationModeCalculator calculator =
-            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService)
+            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService, ageGroupService)
 
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60")
 
@@ -34,7 +39,11 @@ class PointsCombinationModeCalculatorSpec extends Specification {
     }
 
     private static Participant participant(Long id, Long personId, Integer durationMs) {
-        new Participant(id, 1L, personId, null, null, null, durationMs, null, null)
+        new Participant(id, 1L, personId, null, null, null, durationMs, null, null, null)
+    }
+
+    private static Participant participantWithStatus(Long id, Long personId, Integer durationMs, DisqualificationStatus status) {
+        new Participant(id, 1L, personId, null, null, null, durationMs, null, null, null, status)
     }
 
     private static Person person(Long id, String firstName) {
@@ -86,6 +95,38 @@ class PointsCombinationModeCalculatorSpec extends Specification {
         ranking.isEmpty()
     }
 
+    def "computeDnsEntries reports the explicit DSQ status of the leg that carries it"() {
+        given: "Anna is DSQ in race 1 (despite having a measured time there) and has a normal result in race 2"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participantWithStatus(1L, 1L, 60000, DisqualificationStatus.DSQ)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 65000)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(pointsMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DSQ"
+    }
+
+    def "computeDnsEntries falls back to the generic DNS label when nobody has an explicit status"() {
+        given: "Anna simply has no result at all in race 2, which actually counts (weight 1.0)"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(pointsMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DNS"
+    }
+
     def "points from each race are weighted before summing"() {
         given:
         personService.findById(1L) >> Optional.of(person(1L, "Anna"))
@@ -105,5 +146,26 @@ class PointsCombinationModeCalculatorSpec extends Specification {
         byPersonPoints["Anna"] == 140
         and: "Ben: 80 (2nd in race1) + 50 (0.5 * 100 for 1st in race2) = 130"
         byPersonPoints["Ben"] == 130
+    }
+
+    def "the total is rounded once, not per leg - avoiding compounded rounding error"() {
+        given: "two legs weighted 0.5 each, both award Anna 33 points (3rd place); rounding each leg " +
+                "separately (round(16.5)=17 twice = 34) would overstate the correct total of round(16.5+16.5)=33"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        pointsScaleService.pointsForPlace(_ as List, 3) >> 33
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.5d,
+                        [participant(10L, 2L, 10000), participant(11L, 3L, 20000), participant(1L, 1L, 30000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 0.5d,
+                        [participant(20L, 4L, 10000), participant(21L, 5L, 20000), participant(2L, 1L, 30000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(pointsMode(), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].label() == "Anna"
+        ranking[0].totalPoints() == 33
     }
 }

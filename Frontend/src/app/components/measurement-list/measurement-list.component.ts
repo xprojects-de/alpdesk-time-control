@@ -501,7 +501,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     autoAssignStatus$: Observable<AutoAssignStatus>;
     loading$: Observable<boolean>;
-    continuousModeEnabled$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
@@ -540,9 +539,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             distinctUntilChanged(
                 (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
             ),
-        );
-        this.continuousModeEnabled$ = this.store.select(
-            MeasurementSelectors.selectContinuousModeEnabled,
         );
         this.scheduledImportEnabled$ = this.store.select(
             MeasurementSelectors.selectScheduledImportEnabled,
@@ -991,7 +987,13 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     toggleContinuousMode(enable: boolean): void {
-        this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
+        const message = enable
+            ? 'Möchten Sie den kontinuierlichen Modus wirklich aktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!'
+            : 'Möchten Sie den kontinuierlichen Modus wirklich deaktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!';
+
+        if (confirm(message)) {
+            this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
+        }
     }
 
     toggleScheduledImport(enable: boolean): void {

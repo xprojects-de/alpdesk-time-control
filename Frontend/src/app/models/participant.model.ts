@@ -4,6 +4,9 @@ import {Team} from './team.model';
 import {Category} from './category.model';
 import {Person} from './person.model';
 
+/** Mirrors the backend's DisqualificationStatus enum. NONE = normal, rankable result. */
+export type DisqualificationStatus = 'NONE' | 'DNS' | 'DNF' | 'DSQ';
+
 export interface Participant {
     id: number;
     race?: Race;
@@ -15,6 +18,8 @@ export interface Participant {
     durationMs?: number;
     penalty?: number;
     measuredAt?: string;
+    comment?: string;
+    status?: DisqualificationStatus;
 }
 
 export interface ParticipantRequest {
@@ -26,4 +31,6 @@ export interface ParticipantRequest {
     durationMs?: number;
     penalty?: number;
     measuredAt?: string;
+    comment?: string;
+    status?: DisqualificationStatus;
 }

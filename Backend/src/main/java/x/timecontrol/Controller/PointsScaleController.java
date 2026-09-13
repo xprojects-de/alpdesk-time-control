@@ -102,10 +102,14 @@ public class PointsScaleController {
     /**
      * An empty/missing points list would otherwise crash later: toCsv([]) persists an empty
      * string, and re-parsing "" via split(",") yields [""], which throws NumberFormatException.
+     * A null entry (JSON allows "points": [100, null, 60]) is rejected for the same reason:
+     * toCsv() would render it as the literal string "null", which fails to parse just as badly
+     * the next time a ranking is computed against this scale - see PointsScaleService#parsePoints.
      */
     private boolean isValid(PointsScaleRequest request) {
         return request.name() != null && !request.name().isBlank()
-                && request.points() != null && !request.points().isEmpty();
+                && request.points() != null && !request.points().isEmpty()
+                && request.points().stream().noneMatch(java.util.Objects::isNull);
     }
 
     @Delete("/{id}")

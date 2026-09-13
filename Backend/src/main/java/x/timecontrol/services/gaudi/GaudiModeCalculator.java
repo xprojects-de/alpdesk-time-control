@@ -1,5 +1,6 @@
 package x.timecontrol.services.gaudi;
 
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.Participant;
@@ -29,6 +30,18 @@ public interface GaudiModeCalculator {
     }
 
     List<GaudiRankingEntryResponse> computeRanking(GaudiMode gaudiMode, List<RaceParticipants> races);
+
+    /**
+     * Persons referenced by the combined races who were excluded from {@link #computeRanking} for
+     * missing a valid result in at least one leg, so a PDF export can list them separately as "nicht
+     * gewertet" (DNS) instead of silently dropping them. Only meaningful for the two calculators that
+     * combine several races per person (Zeit-Kombination, Punkte-Mischwertung); Los-Modus and
+     * Mannschaftswertung rank pairs/teams rather than individuals, so there's no single person to
+     * report as DNS there - they keep this default empty implementation.
+     */
+    default List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        return List.of();
+    }
 
     /**
      * Each race's own within-race places, keyed by raceId then participantId - shared by the two

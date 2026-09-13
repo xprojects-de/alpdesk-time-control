@@ -19,6 +19,7 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {Team} from "../../models/team.model";
 import * as TeamActions from "../../store/team/team.actions";
 import * as TeamSelectors from "../../store/team/team.selectors";
@@ -40,6 +41,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatCardModule,
         MatTooltipModule,
         MatSortModule,
+        MatPaginatorModule,
     ],
     template: `
         <mat-card>
@@ -117,6 +119,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
                 </div>
+                <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
         </mat-card>
     `,
@@ -166,8 +169,10 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "name", "actions"];
     dataSource = new MatTableDataSource<Team>([]);
     private sortInitialized = false;
+    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
+    paginator = viewChild.required(MatPaginator);
 
     constructor() {
         this.teams$ = this.store.select(TeamSelectors.selectAllTeams);
@@ -226,6 +231,16 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
                     this.sortInitialized = true;
+                }, 100);
+            }
+        });
+
+        effect(() => {
+            const paginatorInstance = this.paginator();
+            if (paginatorInstance && !this.paginatorInitialized) {
+                setTimeout(() => {
+                    this.dataSource.paginator = paginatorInstance;
+                    this.paginatorInitialized = true;
                 }, 100);
             }
         });

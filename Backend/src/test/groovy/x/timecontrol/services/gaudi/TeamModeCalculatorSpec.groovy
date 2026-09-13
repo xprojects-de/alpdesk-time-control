@@ -29,7 +29,7 @@ class TeamModeCalculatorSpec extends Specification {
     }
 
     private static Participant participant(Long id, Long teamId, Integer durationMs, Integer penalty = null) {
-        new Participant(id, 1L, id, null, teamId, null, durationMs, penalty, null)
+        new Participant(id, 1L, id, null, teamId, null, durationMs, penalty, null, null)
     }
 
     private static GaudiMode teamMode(Integer teamSize) {

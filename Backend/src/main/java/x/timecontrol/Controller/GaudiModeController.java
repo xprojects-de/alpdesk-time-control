@@ -212,9 +212,11 @@ public class GaudiModeController {
                 case LOS -> pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, races.getFirst());
                 case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, races.getFirst());
                 case TIME_COMBINATION ->
-                        pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst());
+                        pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst(),
+                                service.computeDnsEntries(gaudiMode));
                 case POINTS_COMBINATION ->
-                        pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst());
+                        pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst(),
+                                service.computeDnsEntries(gaudiMode));
             };
 
             return HttpResponse.ok(pdfBytes)
@@ -246,7 +248,7 @@ public class GaudiModeController {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
                     return pdfExportService.generatePointsCombinationGenderRanking(
-                            gaudiMode.name(), ranking, races, races.getFirst(), gender);
+                            gaudiMode.name(), ranking, races, races.getFirst(), gender, service.computeDnsEntries(gaudiMode));
                 });
     }
 
@@ -265,7 +267,7 @@ public class GaudiModeController {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
                     return pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                            gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender);
+                            gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender, service.computeDnsEntries(gaudiMode));
                 });
     }
 
@@ -282,7 +284,8 @@ public class GaudiModeController {
         return exportPointsCombinationPdf(id, "altersklassen.pdf",
                 (gaudiMode, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
                         gaudiMode.name(), races, races.getFirst(),
-                        (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName)));
+                        (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName),
+                        service.computeDnsEntries(gaudiMode)));
     }
 
     @FunctionalInterface

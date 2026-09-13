@@ -1,11 +1,13 @@
 package x.timecontrol.services;
 
 import jakarta.inject.Singleton;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +27,10 @@ public class RankingService {
      * A penalty always makes the result worse, regardless of sort direction. Null if no result was measured.
      */
     public Integer adjustedValue(Race race, Participant participant) {
-        if (participant.durationMs() == null) {
+        // A DSQ/DNF/DNS participant may well have a measured durationMs (e.g. disqualified after
+        // crossing the finish line) - that result must never count towards a ranking/place.
+        if (participant.durationMs() == null
+                || (participant.status() != null && participant.status() != DisqualificationStatus.NONE)) {
             return null;
         }
         int penalty = participant.penalty() != null ? participant.penalty() : 0;
@@ -38,6 +43,33 @@ public class RankingService {
         // value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly. Floor at 0
         // to keep that impossible regardless of which direction the caller's race sorts in.
         return Math.max(0, adjusted);
+    }
+
+    /**
+     * The label to show for a participant excluded from a ranking ("nicht gewertet" section of a
+     * PDF export): the explicit DSQ/DNF/DNS status if one was recorded, otherwise the generic
+     * "DNS" fallback for someone who is simply missing a measured result with no recorded reason.
+     */
+    public String dnsStatusLabel(Participant participant) {
+        DisqualificationStatus status = participant.status();
+        return status != null && status != DisqualificationStatus.NONE ? status.name() : "DNS";
+    }
+
+    /**
+     * Same as {@link #dnsStatusLabel(Participant)}, but for a Gaudi-Modus person who is excluded
+     * for missing a valid result in at least one of several combined races: reports the first leg
+     * that actually carries an explicit status (DSQ/DNF/DNS), since a single person can only be
+     * shown with one label even though the reason may differ per leg. Falls back to the generic
+     * "DNS" when none of their legs has an explicit status.
+     */
+    public String dnsStatusLabel(Collection<Participant> legParticipants) {
+        for (Participant participant : legParticipants) {
+            DisqualificationStatus status = participant.status();
+            if (status != null && status != DisqualificationStatus.NONE) {
+                return status.name();
+            }
+        }
+        return "DNS";
     }
 
     public Comparator<Participant> comparator(Race race) {

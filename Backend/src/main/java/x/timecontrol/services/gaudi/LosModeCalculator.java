@@ -128,6 +128,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     null,
                     r.team(),
                     null,
+                    null,
                     null
             ));
         }

@@ -1,6 +1,7 @@
 /Backend/database/
 /Backend/build/
 /Backend/.gradle
+/Backend/dist/
 /Frontend/.angular
 /Frontend/dist
 /Frontend/node_modules

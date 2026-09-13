@@ -159,14 +159,15 @@ export const participantReducer = createReducer(
         error
     })),
 
-    // Import participants from CSV
-    on(ParticipantActions.importParticipantsCsv, state => ({
+    // Import participants from CSV, or via a mapped import (CSV any delimiter / DSV-Wettkampfdatei
+    // XML) - both produce the same ParticipantImportResponse, so they share import state.
+    on(ParticipantActions.importParticipantsCsv, ParticipantActions.importParticipantsMapped, state => ({
         ...state,
         importLoading: true,
         importResult: null,
         error: null
     })),
-    on(ParticipantActions.importParticipantsCsvSuccess, (state, {result}) => {
+    on(ParticipantActions.importParticipantsCsvSuccess, ParticipantActions.importParticipantsMappedSuccess, (state, {result}) => {
         // The backend omits empty array fields from the JSON response entirely, so
         // "imported"/"errors" can be undefined when there was nothing to report.
         const imported = result.imported ?? [];
@@ -178,7 +179,7 @@ export const participantReducer = createReducer(
             importResult: {...result, imported, errors}
         };
     }),
-    on(ParticipantActions.importParticipantsCsvFailure, (state, {error}) => ({
+    on(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
         error

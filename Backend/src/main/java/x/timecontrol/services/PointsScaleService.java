@@ -64,10 +64,27 @@ public class PointsScaleService {
         return new PointsScale(null, request.name(), toCsv(request.points()));
     }
 
+    /**
+     * @throws IllegalStateException if the stored CSV is empty or contains a non-numeric entry -
+     *                                defensive: {@link x.timecontrol.Controller.PointsScaleController#isValid}
+     *                                already rejects a request that would produce this at save time, but this
+     *                                is also reached from ranking calculations reading whatever is already
+     *                                persisted, so a corrupt row must fail with a clear message here rather
+     *                                than an uncaught {@link NumberFormatException} out of a ranking endpoint.
+     */
     public List<Integer> parsePoints(PointsScale pointsScale) {
+        String csv = pointsScale.pointsCsv();
+        if (csv == null || csv.isBlank()) {
+            throw new IllegalStateException("Points scale \"" + pointsScale.name() + "\" has no points configured");
+        }
         List<Integer> points = new ArrayList<>();
-        for (String part : pointsScale.pointsCsv().split(",")) {
-            points.add(Integer.parseInt(part.trim()));
+        for (String part : csv.split(",")) {
+            String trimmed = part.trim();
+            try {
+                points.add(Integer.parseInt(trimmed));
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException("Points scale \"" + pointsScale.name() + "\" contains a non-numeric value: \"" + trimmed + "\"", e);
+            }
         }
         return points;
     }

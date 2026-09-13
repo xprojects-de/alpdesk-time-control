@@ -14,6 +14,9 @@ import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
+import * as VersionActions from "../../store/version/version.actions";
+import * as VersionSelectors from "../../store/version/version.selectors";
+import {VersionInfo} from "../../models/version.model";
 
 interface NavItem {
     path: string;
@@ -84,7 +87,7 @@ interface NavItem {
 
         <mat-sidenav-container class="dashboard-container">
             <mat-sidenav mode="side" [opened]="navOpen()" class="app-nav">
-                <mat-nav-list>
+                <mat-nav-list class="nav-list">
                     @for (item of navItems; track item.path) {
                         <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
                            [matTooltip]="item.label" matTooltipPosition="right">
@@ -93,6 +96,11 @@ interface NavItem {
                         </a>
                     }
                 </mat-nav-list>
+                @if (version$ | async; as version) {
+                    <div class="app-version" [matTooltip]="version.application" matTooltipPosition="right">
+                        v{{ version.version }}
+                    </div>
+                }
             </mat-sidenav>
             <mat-sidenav-content class="dashboard-content">
                 <router-outlet/>
@@ -116,6 +124,18 @@ interface NavItem {
 
           .app-nav {
             width: 220px;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .nav-list {
+            flex: 1 1 auto;
+          }
+
+          .app-version {
+            padding: 8px 16px 12px;
+            font-size: 11px;
+            color: rgba(0, 0, 0, 0.4);
           }
 
           .dashboard-content {
@@ -169,6 +189,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     username$: Observable<string | null>;
     deviceConnected$: Observable<boolean | null>;
+    version$: Observable<VersionInfo | null>;
 
     readonly navItems: NavItem[] = [
         {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
@@ -188,6 +209,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     constructor() {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
         this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
+        this.version$ = this.store.select(VersionSelectors.selectVersion);
     }
 
     toggleNav(): void {
@@ -215,6 +237,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
         // Trigger immediate check
         this.store.dispatch(MeasurementActions.checkDeviceConnection());
+        this.store.dispatch(VersionActions.loadVersion());
     }
 
     ngOnDestroy(): void {

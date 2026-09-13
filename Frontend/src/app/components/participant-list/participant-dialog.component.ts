@@ -20,6 +20,7 @@ import {
     MatAutocompleteSelectedEvent,
 } from "@angular/material/autocomplete";
 import {
+    DisqualificationStatus,
     Participant,
     ParticipantRequest,
 } from "../../models/participant.model";
@@ -171,6 +172,21 @@ import {PersonService} from "../../services/person.service";
                     <mat-label>Gemessen am</mat-label>
                     <input matInput type="datetime-local" formControlName="measuredAt" step="1"/>
                 </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Status</mat-label>
+                    <mat-select formControlName="status">
+                        @for (option of statusOptions; track option.value) {
+                            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+                        }
+                    </mat-select>
+                    <mat-hint>Schließt den Teilnehmer aus jeder Rangliste aus, auch bei gemessener Zeit</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Kommentar</mat-label>
+                    <textarea matInput formControlName="comment" rows="2"></textarea>
+                </mat-form-field>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -230,6 +246,12 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
 
     form: FormGroup;
     resultUnit = ResultUnit;
+    readonly statusOptions: { value: DisqualificationStatus; label: string }[] = [
+        {value: "NONE", label: "Gewertet"},
+        {value: "DNS", label: "DNS – nicht gestartet"},
+        {value: "DNF", label: "DNF – nicht beendet"},
+        {value: "DSQ", label: "DSQ – disqualifiziert"},
+    ];
     selectedRace: Race | null = null;
     races$: Observable<Race[]> = this.store.select(selectAllRaces);
     selectedRaceId$: Observable<number | null> = this.store.select(selectSelectedRaceId);
@@ -260,6 +282,8 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             pointsValue: [pointsValue],
             penaltyPointsValue: [penaltyPointsValue, [Validators.min(0)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
+            status: [this.data?.status ?? "NONE"],
+            comment: [this.data?.comment ?? ""],
         });
 
         this.personResults$ = this.form.get("personSearch")!.valueChanges.pipe(
@@ -377,6 +401,8 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             durationMs,
             penalty,
             measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
+            comment: formValue.comment !== "" && formValue.comment !== null ? formValue.comment : undefined,
+            status: formValue.status ?? undefined,
         };
         this.dialogRef.close(request);
     }

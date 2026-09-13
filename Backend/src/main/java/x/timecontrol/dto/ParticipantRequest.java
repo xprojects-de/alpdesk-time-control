@@ -3,6 +3,7 @@ package x.timecontrol.dto;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
+import x.timecontrol.entities.DisqualificationStatus;
 
 import java.time.LocalDateTime;
 
@@ -37,7 +38,15 @@ public record ParticipantRequest(
 
         @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        @Nullable
+        @Schema(description = "Free-text comment/info about the participant", example = "Ski gebrochen", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        String comment,
+
+        @Nullable
+        @Schema(description = "Disqualification/no-result status; omitted or NONE means a normal, rankable result. Left unset on update, an existing status is preserved.", example = "NONE", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        DisqualificationStatus status
 ) {
 }
 

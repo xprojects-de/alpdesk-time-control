@@ -16,9 +16,18 @@ import {
     MAT_DATE_FORMATS,
     DateAdapter,
 } from "@angular/material/core";
+import {MatPaginatorIntl} from "@angular/material/paginator";
 import {registerLocaleData} from "@angular/common";
 import localeDe from "@angular/common/locales/de";
 import {GermanDateAdapter} from "./utils/german-date-adapter";
+
+// Same as the default MatPaginatorIntl, just without the "Items per page:" label - the page
+// size select is self-explanatory, the label only takes up space next to it.
+function paginatorIntlFactory(): MatPaginatorIntl {
+    const intl = new MatPaginatorIntl();
+    intl.itemsPerPageLabel = "";
+    return intl;
+}
 
 import {routes} from "./app.routes";
 import {provideStore} from "@ngrx/store";
@@ -35,6 +44,7 @@ import {teamReducer} from "./store/team/team.reducer";
 import {categoryReducer} from "./store/category/category.reducer";
 import {personReducer} from "./store/person/person.reducer";
 import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
+import {versionReducer} from "./store/version/version.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {RaceMeasurementEffects} from "./store/race-measurement/race-measurement.effects";
@@ -45,6 +55,7 @@ import {TeamEffects} from "./store/team/team.effects";
 import {CategoryEffects} from "./store/category/category.effects";
 import {PersonEffects} from "./store/person/person.effects";
 import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
+import {VersionEffects} from "./store/version/version.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 
 registerLocaleData(localeDe);
@@ -71,6 +82,7 @@ export const appConfig: ApplicationConfig = {
         {provide: MAT_DATE_LOCALE, useValue: "de-DE"},
         {provide: DateAdapter, useClass: GermanDateAdapter},
         {provide: MAT_DATE_FORMATS, useValue: DE_DATE_FORMATS},
+        {provide: MatPaginatorIntl, useFactory: paginatorIntlFactory},
         provideStore({
             auth: authReducer,
             race: raceReducer,
@@ -82,8 +94,9 @@ export const appConfig: ApplicationConfig = {
             category: categoryReducer,
             person: personReducer,
             gaudiMode: gaudiModeReducer,
+            version: versionReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
         ...(isDevMode() ? [provideStoreDevtools({

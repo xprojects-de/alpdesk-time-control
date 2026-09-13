@@ -123,6 +123,34 @@ export class ParticipantEffects {
         )
     );
 
+    importParticipantsMapped$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsMapped),
+            mergeMap(({raceId, file, format, delimiter, mapping}) =>
+                this.participantService.importMapped(raceId, file, format, delimiter, mapping).pipe(
+                    map(result => ParticipantActions.importParticipantsMappedSuccess({result})),
+                    catchError(error => of(ParticipantActions.importParticipantsMappedFailure({
+                        error: extractErrorMessage(error, 'Failed to import participants')
+                    })))
+                )
+            )
+        )
+    );
+
+    exportParticipantsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportParticipantsCsv),
+            mergeMap(({raceId, filename}) =>
+                this.participantService.exportCsv(raceId).pipe(
+                    map(blob => ParticipantActions.exportParticipantsCsvSuccess({blob, filename})),
+                    catchError(error => of(ParticipantActions.exportParticipantsCsvFailure({
+                        error: extractErrorMessage(error, 'Failed to export CSV')
+                    })))
+                )
+            )
+        )
+    );
+
     copyParticipants$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.copyParticipants),
@@ -257,8 +285,8 @@ export class ParticipantEffects {
         )
     );
 
-    // Auto-download PDF when export is successful
-    downloadPdf$ = createEffect(() =>
+    // Auto-download the exported file (PDF or CSV) once the export succeeds
+    downloadExportedFile$ = createEffect(() =>
         this.actions$.pipe(
             ofType(
                 ParticipantActions.exportAllPdfSuccess,
@@ -267,7 +295,8 @@ export class ParticipantEffects {
                 ParticipantActions.exportAllByCategoryPdfSuccess,
                 ParticipantActions.exportByGenderByCategoryPdfSuccess,
                 ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
-                ParticipantActions.exportStartListPdfSuccess
+                ParticipantActions.exportStartListPdfSuccess,
+                ParticipantActions.exportParticipantsCsvSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

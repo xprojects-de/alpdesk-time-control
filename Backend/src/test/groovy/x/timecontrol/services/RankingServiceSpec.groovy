@@ -3,6 +3,7 @@ package x.timecontrol.services
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Unroll
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
@@ -25,12 +26,79 @@ class RankingServiceSpec extends Specification {
     }
 
     private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
-        new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null)
+        new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null, null)
+    }
+
+    private static Participant participantWithStatus(Long id, Integer durationMs, DisqualificationStatus status) {
+        new Participant(id, 1L, 1L, null, null, null, durationMs, null, null, null, status)
     }
 
     def "adjustedValue is null when no result was measured"() {
         expect:
         rankingService.adjustedValue(raceAsc, participant(1L, null)) == null
+    }
+
+    @Unroll
+    def "adjustedValue is null for a #status participant even with a measured duration"() {
+        expect:
+        rankingService.adjustedValue(raceAsc, participantWithStatus(1L, 60000, status)) == null
+
+        where:
+        status << [DisqualificationStatus.DNS, DisqualificationStatus.DNF, DisqualificationStatus.DSQ]
+    }
+
+    def "adjustedValue counts a NONE-status participant's measured duration normally"() {
+        expect:
+        rankingService.adjustedValue(raceAsc, participantWithStatus(1L, 60000, DisqualificationStatus.NONE)) == 60000
+    }
+
+    def "computePlaces excludes a disqualified participant even though they have a measured duration"() {
+        given:
+        def participants = [
+                participant(1L, 60000),
+                participantWithStatus(2L, 50000, DisqualificationStatus.DSQ), // would otherwise be 1st
+        ]
+
+        when:
+        def places = rankingService.computePlaces(raceAsc, participants)
+
+        then:
+        places == [1L: 1]
+    }
+
+    @Unroll
+    def "dnsStatusLabel(Participant) reports the explicit status, or DNS when there is none"() {
+        expect:
+        rankingService.dnsStatusLabel(participantWithStatus(1L, null, status)) == expectedLabel
+
+        where:
+        status                              || expectedLabel
+        DisqualificationStatus.DSQ          || "DSQ"
+        DisqualificationStatus.DNF          || "DNF"
+        DisqualificationStatus.DNS          || "DNS"
+        DisqualificationStatus.NONE         || "DNS" // no explicit reason recorded - generic fallback
+    }
+
+    def "dnsStatusLabel(Collection) reports the first leg with an explicit status"() {
+        given: "the person's first leg has no explicit status, but their second leg is DSQ"
+        def legs = [
+                participantWithStatus(1L, null, DisqualificationStatus.NONE),
+                participantWithStatus(2L, 60000, DisqualificationStatus.DSQ),
+        ]
+
+        expect:
+        rankingService.dnsStatusLabel(legs) == "DSQ"
+    }
+
+    def "dnsStatusLabel(Collection) falls back to DNS when no leg has an explicit status"() {
+        given:
+        def legs = [
+                participantWithStatus(1L, null, DisqualificationStatus.NONE),
+                participantWithStatus(2L, null, DisqualificationStatus.NONE),
+        ]
+
+        expect:
+        rankingService.dnsStatusLabel(legs) == "DNS"
     }
 
     @Unroll
