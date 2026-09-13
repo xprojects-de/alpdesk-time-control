@@ -170,7 +170,7 @@ def jpackageArgs = { String type, File destDir ->
     ]
 
     if (jpackagePlatform == 'macos') {
-        argsList += ['--java-options', '-XstartOnFirstThread']
+        // argsList += ['--java-options', '-XstartOnFirstThread']
         argsList += ['--java-options', '-Djava.awt.headless=false']
     }
 
