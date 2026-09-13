@@ -180,7 +180,7 @@ jobs:
           retention-days: 14
 
   build-jpackage-installer:
-    name: Build jpackage Installer (${{ matrix.platform }}-${{ matrix.arch }})
+    name: Build jpackage Installer on ${{ matrix.os }}
     needs: build-frontend
     runs-on: ${{ matrix.os }}
 
@@ -192,29 +192,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Apple Silicon (M1/M2/M3/M4)
           - os: macos-latest
             platform: macos
-            arch: arm64
-            artifact-name: TimeControl-macOS-arm64.dmg
-
-          # Intel Macs
-          - os: macos-13
-            platform: macos
-            arch: x86_64
-            artifact-name: TimeControl-macOS-x86_64.dmg
-
-          # Windows
           - os: windows-latest
             platform: windows
-            arch: x64
-            artifact-name: TimeControl-Windows-Setup.exe
-
-          # Linux
           - os: ubuntu-latest
             platform: linux
-            arch: x64
-            artifact-name: TimeControl-Linux.deb
 
     steps:
       - name: Checkout Repository
@@ -258,21 +241,10 @@ jobs:
             ./gradlew jpackageInstaller --no-daemon
           fi
 
-      - name: Rename macOS DMG
-        run: |
-          dmg_file=$(ls dist/*.dmg 2>/dev/null | head -n 1)
-          if [ -n "$dmg_file" ]; then
-            mv "$dmg_file" "dist/${{ matrix.artifact-name }}"
-          else
-            echo "Error: No .dmg file found in dist/"
-            ls -la dist/
-            exit 1
-          fi
-
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.arch }}-jpackage-installer
+          name: ${{ matrix.platform }}-jpackage-installer
           path: |
             Backend/dist/*.dmg
             Backend/dist/*.exe
@@ -295,7 +267,7 @@ jobs:
       - name: Flatten Directory Structure
         run: |
           mkdir -p final-assets
-          find release-assets/ -type f -exec cp {} final-assets/ \;
+          cp release-assets/*-installer/* final-assets/
 
       - name: Read App Version
         id: read_version
