@@ -1,1 +1,0 @@
-import{X as Ph,nn as lD}from"./chunk-ZMC-HYpb.js";var c=lD(`race`);var l=Ph(c,e=>e.races);var n=Ph(c,e=>e.loading);Ph(c,e=>e.error);var s=Ph(c,e=>e.selectedRaceId);Ph(l,s,(e,a)=>a?e.find(o=>o.id===a):null);export{n,s as r,l as t};

@@ -1,1 +1,0 @@
-import{X as Ph,nn as lD}from"./chunk-ZMC-HYpb.js";var r=lD(`team`);var c=Ph(r,e=>e.teams);var m=Ph(r,e=>e.loading);Ph(r,e=>e.error);export{m as n,c as t};
