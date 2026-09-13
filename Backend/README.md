@@ -22,6 +22,22 @@ Zertifikat signiert. Deshalb meldet sich beim ersten Start jeweils der Betriebss
 (Gatekeeper unter macOS, SmartScreen unter Windows) – siehe unten, wie man das einmalig
 bestätigt. Unter Linux gibt es keine vergleichbare Warnung.
 
+## Fallback: TimeControl.jar
+
+Zusätzlich liegt an jedem Release ein plattformunabhängiges `TimeControl.jar` bei. Keine
+Installer-Verpackung, kein Gatekeeper/SmartScreen (läuft nur über die Kommandozeile, nie über
+Doppelklick/LaunchServices), aber es muss selbst eine **Java-25-Laufzeitumgebung** installiert
+sein (z. B. [Eclipse Temurin](https://adoptium.net/) oder Amazon Corretto – jeder Hersteller
+geht, GraalVM wird nur zum *Bauen* gebraucht, nicht zum Ausführen). Start:
+
+```bash
+java -jar TimeControl.jar
+```
+
+Die Datenbank landet dabei relativ zum Verzeichnis, aus dem der Befehl gestartet wird (siehe
+[Wo liegt die Datenbank?](#wo-liegt-die-datenbank)) – am besten immer aus demselben Ordner
+starten.
+
 ## macOS
 
 Betrifft **beide** Varianten (`.dmg`) gleichermaßen, da beide unsigniert sind.
@@ -64,18 +80,25 @@ Keine Sicherheitswarnung, kein Zusatzschritt nötig.
 
 ## Wo liegt die Datenbank?
 
-Der Pfad ist im Code relativ (`database/time-control.db`, siehe
-[application.properties](src/main/resources/application.properties)) – identisch bei beiden
-Build-Varianten. Wo das konkret landet, hängt vom Startweg ab:
+- **Lokale Entwicklung** (`./gradlew run`, IDE-Start, Tests): Der Pfad ist relativ
+  (`database/time-control.db`, siehe
+  [application.properties](src/main/resources/application.properties)) und liegt damit im
+  jeweiligen Arbeitsverzeichnis des Prozesses – bei uns i. d. R. `Backend/database/`.
+- **jpackage-Installer** (Doppelklick der `.app`/`.exe`/`.deb`): Hier ist das
+  Arbeitsverzeichnis des Prozesses **nicht** zuverlässig – macOS setzt es bei Start über
+  Finder/LaunchServices z. B. auf `/` (schreibgeschütztes System-Volume seit Catalina), was
+  ohne Gegenmaßnahme sofort beim Start crasht (`FileSystemException: /database: Read-only
+  file system`). Deshalb setzt `jpackageArgs` in [build.gradle](build.gradle) das
+  Java-Property `-Dapp.packaged=true`, wodurch [Application.java](src/main/java/x/timecontrol/Application.java)
+  Datenbank und JWT-Secret-Datei fest unter `<Home-Verzeichnis>/database/` ablegt –
+  unabhängig vom tatsächlichen Arbeitsverzeichnis beim Start.
+- **Native-Image-Build** (GraalVM, `nativeCompile`): nutzt denselben `Application`-Code,
+  bekommt aber `-Dapp.packaged=true` bisher **nicht** gesetzt (das Binary wird ohne
+  jpackage-Wrapper direkt in die DMG/das Archiv gepackt). Das gleiche Crash-Muster ist hier
+  beim Doppelklick auf macOS zu erwarten, wurde aber noch nicht separat gefixt/getestet.
 
-- **Doppelklick im Finder/Dock (macOS):** macOS setzt dabei das Arbeitsverzeichnis auf das
-  Home-Verzeichnis des Nutzers. Die Datenbank liegt also unter
-  `/Users/<Benutzername>/database/time-control.db` (z. B.
-  `/Users/BenjaminHummel/database/time-control.db`).
-- **Start aus dem Terminal:** relativ zu dem Verzeichnis, in dem die Shell gerade steht.
-
-Gilt entsprechend für die JWT-Secret-Datei (`database/jwt-secret.txt`), die im selben Ordner
-liegt.
+Gilt entsprechend für die JWT-Secret-Datei (`database/jwt-secret.txt` bzw.
+`<Home>/database/jwt-secret.txt`), die im selben Ordner liegt.
 
 ## Lokal selbst bauen
 

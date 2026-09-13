@@ -179,6 +179,54 @@ jobs:
           path: Backend/dist/*
           retention-days: 14
 
+  build-shadow-jar:
+    name: Build Shadow JAR (fallback, runs on any Java 25 JRE)
+    needs: build-frontend
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Backend
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: Frontend/dist
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          cache-dependency-path: Backend/build.gradle
+
+      - name: Copy Frontend Assets to Backend
+        run: |
+          chmod +x gradlew
+          ./gradlew copyFrontend --no-daemon
+
+      - name: Build Shadow JAR
+        run: ./gradlew shadowJar --no-daemon
+
+      - name: Rename Shadow JAR for release
+        run: |
+          mkdir -p dist
+          cp build/libs/time-control.jar dist/TimeControl.jar
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-jar
+          path: Backend/dist/TimeControl.jar
+          retention-days: 14
+
   build-jpackage-installer:
     name: Build jpackage Installer on ${{ matrix.os }}
     needs: build-frontend
@@ -253,7 +301,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [ build-native-installer, build-jpackage-installer ]
+    needs: [ build-native-installer, build-jpackage-installer, build-shadow-jar ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -268,6 +316,7 @@ jobs:
         run: |
           mkdir -p final-assets
           cp release-assets/*-installer/* final-assets/
+          cp release-assets/shadow-jar/* final-assets/
 
       - name: Read App Version
         id: read_version
