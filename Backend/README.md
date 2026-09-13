@@ -27,16 +27,21 @@ bestätigt. Unter Linux gibt es keine vergleichbare Warnung.
 Betrifft **beide** Varianten (`.dmg`) gleichermaßen, da beide unsigniert sind.
 
 1. `.dmg` öffnen und die App nach `Programme`/`Applications` ziehen.
-2. Beim ersten Start meldet macOS *"kann nicht geöffnet werden, da der Entwickler nicht
-   verifiziert werden kann"*. Dafür **eine** der beiden Optionen:
-   - Im Finder mit **Rechtsklick → Öffnen** starten (statt Doppelklick) und im Dialog
-     nochmal **Öffnen** bestätigen. Danach startet die App auch per Doppelklick normal.
-   - Oder im Terminal einmalig die Quarantäne-Markierung entfernen:
+2. Beim ersten Start meldet macOS *"Apple konnte nicht überprüfen, ob … frei von
+   Schadsoftware ist"*. Bei aktuellem macOS (Sonoma/Sequoia) bietet **Rechtsklick → Öffnen**
+   dabei keinen Bypass mehr an (nur noch "In den Papierkorb legen"/"Abbrechen") – stattdessen
+   **eine** der Optionen:
+   - Terminal, einmalig die Quarantäne-Markierung entfernen:
      ```bash
      xattr -rd com.apple.quarantine "/Applications/Time Control.app"
      ```
      (Beim Graal-Build entsprechend `TimeControl.app` bzw. den tatsächlichen App-Namen
      verwenden.)
+   - Ohne Terminal: Im Finder mit **Rechtsklick → Öffnen** starten (statt Doppelklick) und im Dialog
+     nochmal **Öffnen** bestätigen, dann **Systemeinstellungen → Datenschutz & Sicherheit** → runterscrollen bis
+     zur Meldung *"'Time Control' wurde blockiert…"* → **Trotzdem öffnen** (Passwort/Touch-ID
+     nötig) → App danach nochmal starten, dann erscheint ein zweiter Dialog mit einem
+     tatsächlichen "Trotzdem öffnen"-Button.
 
 ## Windows
 
