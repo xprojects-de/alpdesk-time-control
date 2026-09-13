@@ -226,7 +226,7 @@ public class PdfExportService {
         List<DnsRow> dns = createDnsRows(participants, race, lookup);
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), "Gesamtwertung", entries, true);
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -238,7 +238,7 @@ public class PdfExportService {
         String title = "Wertung " + genderLabel(gender);
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -251,7 +251,7 @@ public class PdfExportService {
         String title = "Wertung " + ageGroup + " " + genderLabel(gender);
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -275,7 +275,7 @@ public class PdfExportService {
                     }
                 }
             }
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -289,7 +289,7 @@ public class PdfExportService {
         String title = "Wertung " + categoryName;
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -306,7 +306,7 @@ public class PdfExportService {
                     drawSection(ctx, rankingColumns(entries), title, entries, false);
                 }
             }
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -324,7 +324,7 @@ public class PdfExportService {
                     drawSection(ctx, rankingColumns(entries), title, entries, false);
                 }
             }
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -350,7 +350,7 @@ public class PdfExportService {
                     }
                 }
             }
-            drawDnsSection(ctx, dns, true);
+            drawDnsSection(ctx, dns);
         });
     }
 
@@ -444,7 +444,7 @@ public class PdfExportService {
 
         return renderDocument(headerRace, title, true, ctx -> {
             drawSectionWithDetails(ctx, summaryColumns, title, entries, true, e -> timeCombinationDetailBlocks(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries), true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
 
@@ -472,7 +472,7 @@ public class PdfExportService {
         return renderDocument(headerRace, title, true, ctx -> {
             drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), title, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries), true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
 
@@ -493,7 +493,7 @@ public class PdfExportService {
         return renderDocument(headerRace, title, true, ctx -> {
             drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries), true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
 
@@ -514,7 +514,7 @@ public class PdfExportService {
         return renderDocument(headerRace, title, true, ctx -> {
             drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries), true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
 
@@ -547,7 +547,7 @@ public class PdfExportService {
                     }
                 }
             }
-            drawDnsSection(ctx, toDnsRows(dnsEntries), true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
 
@@ -819,20 +819,20 @@ public class PdfExportService {
     }
 
     /**
-     * Draws the "nicht gewertet" (DNS) list right after the ranking table it belongs to - a no-op
-     * when there's nobody to list, so a PDF with no non-starters doesn't grow an empty section.
-     * {@code mainTitle} mirrors {@link #drawSection}'s title-size distinction between a single-ranking
-     * PDF and one section of a multi-section PDF.
+     * Draws the "nicht gewertet" (DNS) list once at the end of a PDF - a no-op when there's nobody
+     * to list, so a PDF with no non-starters doesn't grow an empty section. Always drawn as a
+     * document-level closing section (one list per race/Gaudi-Modus, not per ranking sub-section -
+     * see {@link #createDnsRows}), so unlike {@link #drawSection} it has only one title size.
      */
-    private void drawDnsSection(PdfContext ctx, List<DnsRow> rows, boolean mainTitle) throws IOException {
+    private void drawDnsSection(PdfContext ctx, List<DnsRow> rows) throws IOException {
         if (rows.isEmpty()) {
             return;
         }
-        ctx.ensureSpace(mainTitle ? 60 : 70);
+        ctx.ensureSpace(60);
 
-        ctx.y -= mainTitle ? 8 : 12;
-        ctx.text(FONT_BOLD, mainTitle ? 12 : 10, MARGIN, ctx.y, "Nicht gewertet (DNS)");
-        ctx.y -= mainTitle ? 22 : 18;
+        ctx.y -= 8;
+        ctx.text(FONT_BOLD, 12, MARGIN, ctx.y, "Nicht gewertet (DNS)");
+        ctx.y -= 22;
 
         List<PdfColumn<DnsRow>> columns = dnsColumns(rows);
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
@@ -1151,9 +1151,9 @@ public class PdfExportService {
     }
 
     /**
-     * Shared gender/age-group/category filter used both to scope the scored ranking entries in
-     * {@link #createRankingEntriesFromParticipants} and to scope the "nicht gewertet" (DNS) rows in
-     * {@link #createDnsRows} the same way, so e.g. a "Wertung Frauen" PDF's DNS list only lists women.
+     * Gender/age-group/category filter used to scope the scored ranking entries in
+     * {@link #createRankingEntriesFromParticipants}. Not used for the "nicht gewertet" (DNS) rows in
+     * {@link #createDnsRows} - that list is deliberately unfiltered, see its own doc comment.
      */
     private boolean matchesCategoryFilters(ParticipantWithPerson pwp, Gender filterGender, String filterAgeGroup,
                                             Long filterCategoryId, List<AgeGroup> ageGroups) {

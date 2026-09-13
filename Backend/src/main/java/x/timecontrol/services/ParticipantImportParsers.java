@@ -75,8 +75,8 @@ public final class ParticipantImportParsers {
             return new ParsedRows(List.of(), List.of());
         }
 
-        char delim = delimiter != null ? delimiter : detectDelimiter(lines.get(0));
-        String[] headerParts = splitLine(lines.get(0), delim);
+        char delim = delimiter != null ? delimiter : detectDelimiter(lines.getFirst());
+        String[] headerParts = splitLine(lines.getFirst(), delim);
         List<String> fields = new ArrayList<>();
         for (String header : headerParts) {
             fields.add(header.trim());
