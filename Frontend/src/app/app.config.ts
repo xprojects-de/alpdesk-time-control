@@ -16,9 +16,18 @@ import {
     MAT_DATE_FORMATS,
     DateAdapter,
 } from "@angular/material/core";
+import {MatPaginatorIntl} from "@angular/material/paginator";
 import {registerLocaleData} from "@angular/common";
 import localeDe from "@angular/common/locales/de";
 import {GermanDateAdapter} from "./utils/german-date-adapter";
+
+// Same as the default MatPaginatorIntl, just without the "Items per page:" label - the page
+// size select is self-explanatory, the label only takes up space next to it.
+function paginatorIntlFactory(): MatPaginatorIntl {
+    const intl = new MatPaginatorIntl();
+    intl.itemsPerPageLabel = "";
+    return intl;
+}
 
 import {routes} from "./app.routes";
 import {provideStore} from "@ngrx/store";
@@ -71,6 +80,7 @@ export const appConfig: ApplicationConfig = {
         {provide: MAT_DATE_LOCALE, useValue: "de-DE"},
         {provide: DateAdapter, useClass: GermanDateAdapter},
         {provide: MAT_DATE_FORMATS, useValue: DE_DATE_FORMATS},
+        {provide: MatPaginatorIntl, useFactory: paginatorIntlFactory},
         provideStore({
             auth: authReducer,
             race: raceReducer,
