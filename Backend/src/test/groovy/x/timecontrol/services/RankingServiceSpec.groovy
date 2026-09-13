@@ -25,7 +25,7 @@ class RankingServiceSpec extends Specification {
     }
 
     private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
-        new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null)
+        new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null, null)
     }
 
     def "adjustedValue is null when no result was measured"() {

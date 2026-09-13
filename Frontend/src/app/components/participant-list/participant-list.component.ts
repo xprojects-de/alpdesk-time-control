@@ -337,6 +337,14 @@ import {Actions, ofType} from "@ngrx/effects";
                          </td>
                      </ng-container>
 
+                     <!-- Comment Column -->
+                     <ng-container matColumnDef="comment">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Kommentar</th>
+                         <td mat-cell *matCellDef="let participant" class="comment-cell" [matTooltip]="participant.comment || ''">
+                             {{ participant.comment || "-" }}
+                         </td>
+                     </ng-container>
+
                      <!-- Actions Column -->
                      <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
@@ -429,6 +437,13 @@ import {Actions, ofType} from "@ngrx/effects";
           .hint {
             color: rgba(0, 0, 0, 0.6);
           }
+
+          .comment-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
         `,
     ],
 })
@@ -459,6 +474,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "race",
         "durationMs",
         "measuredAt",
+        "comment",
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
@@ -676,11 +692,20 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         if (participant.durationMs === undefined || participant.durationMs === null) {
             return "-";
         }
+        const hasPenalty = participant.penalty !== undefined && participant.penalty !== null && participant.penalty !== 0;
         if (participant.race?.resultUnit === ResultUnit.POINTS) {
             const label = participant.race?.resultUnitLabel ? ` ${participant.race.resultUnitLabel}` : "";
-            return `${(participant.durationMs / 100).toFixed(2)}${label}`;
+            const value = `${(participant.durationMs / 100).toFixed(2)}${label}`;
+            if (hasPenalty) {
+                return `${value} (+${(participant.penalty! / 100).toFixed(2)}${label})`;
+            }
+            return value;
         }
-        return this.formatDuration(participant.durationMs);
+        const value = this.formatDuration(participant.durationMs);
+        if (hasPenalty) {
+            return `${value} (+${this.formatDuration(participant.penalty!)})`;
+        }
+        return value;
     }
 
     formatDuration(ms: number): string {

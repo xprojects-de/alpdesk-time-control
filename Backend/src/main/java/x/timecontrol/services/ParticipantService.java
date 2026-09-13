@@ -95,7 +95,7 @@ public class ParticipantService {
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
             Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
-            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt);
+            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment());
             return Optional.of(repository.update(updated));
         }
         return Optional.empty();
@@ -141,7 +141,8 @@ public class ParticipantService {
             }
             toUpdate.add(new Participant(
                     existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
-                    existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt()
+                    existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt(),
+                    existing.comment()
             ));
         }
 
@@ -333,7 +334,7 @@ public class ParticipantService {
                         raceNumber = source.raceNumber();
                     }
                     Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
-                            source.teamId(), source.categoryId(), null, null, null);
+                            source.teamId(), source.categoryId(), null, null, null, null);
                     try {
                         repository.save(copy);
                     } catch (DataAccessException e) {
@@ -345,7 +346,7 @@ public class ParticipantService {
                             throw e;
                         }
                         repository.save(new Participant(null, targetRaceId, source.personId(), null,
-                                source.teamId(), source.categoryId(), null, null, null));
+                                source.teamId(), source.categoryId(), null, null, null, null));
                         raceNumber = null;
                     }
                     if (raceNumber != null) {
@@ -450,7 +451,8 @@ public class ParticipantService {
                 participant.categoryId(),
                 participant.durationMs(),
                 participant.penalty(),
-                participant.measuredAt()
+                participant.measuredAt(),
+                participant.comment()
         );
     }
 
@@ -730,7 +732,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, null);
                 return repository.save(participant);
             });
             imported.add(saved);

@@ -47,7 +47,11 @@ public record ParticipantResponse(
 
         @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", nullable = true)
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        @Nullable
+        @Schema(description = "Free-text comment/info about the participant", example = "Ski gebrochen", nullable = true)
+        String comment
 ) {
     public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
@@ -60,7 +64,8 @@ public record ParticipantResponse(
                 ageGroup,
                 participant.durationMs(),
                 participant.penalty(),
-                participant.measuredAt()
+                participant.measuredAt(),
+                participant.comment()
         );
     }
 }

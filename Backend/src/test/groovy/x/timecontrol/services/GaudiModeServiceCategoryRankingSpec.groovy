@@ -52,7 +52,7 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60,50")
 
     private static Participant participant(Long id, Long personId, int durationMs) {
-        new Participant(id, 10L, personId, null, null, null, durationMs, null, null)
+        new Participant(id, 10L, personId, null, null, null, durationMs, null, null, null)
     }
 
     private static Person person(Long id, Gender gender, LocalDate birthDate) {

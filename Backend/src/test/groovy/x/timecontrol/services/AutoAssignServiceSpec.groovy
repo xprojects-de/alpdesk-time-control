@@ -18,7 +18,7 @@ class AutoAssignServiceSpec extends Specification {
             measurementRepository, participantRepository, measurementTableLock)
 
     private static Participant participant(Long id, Integer raceNumber) {
-        new Participant(id, 1L, id, raceNumber, null, null, null, null, null)
+        new Participant(id, 1L, id, raceNumber, null, null, null, null, null, null)
     }
 
     private static Measurement measurement(Long id, Long participantId, int durationMs) {

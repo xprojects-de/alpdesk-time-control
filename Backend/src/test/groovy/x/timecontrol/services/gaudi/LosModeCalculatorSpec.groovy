@@ -29,7 +29,7 @@ class LosModeCalculatorSpec extends Specification {
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC)
 
     private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
-        new Participant(id, 1L, id, null, null, null, durationMs, penalty, null)
+        new Participant(id, 1L, id, null, null, null, durationMs, penalty, null, null)
     }
 
     private static Person person(Long id, String firstName) {

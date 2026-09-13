@@ -28,7 +28,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
     }
 
     private static Participant participant(Long id, Long personId, Integer durationMs, Integer penalty = null) {
-        new Participant(id, 1L, personId, null, null, null, durationMs, penalty, null)
+        new Participant(id, 1L, personId, null, null, null, durationMs, penalty, null, null)
     }
 
     private static Person person(Long id, String firstName) {

@@ -29,6 +29,8 @@ public record Participant(
         @Nullable
         Integer penalty,
         @Nullable
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+        @Nullable
+        String comment
 ) {
 }

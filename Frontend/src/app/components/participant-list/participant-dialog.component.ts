@@ -171,6 +171,11 @@ import {PersonService} from "../../services/person.service";
                     <mat-label>Gemessen am</mat-label>
                     <input matInput type="datetime-local" formControlName="measuredAt" step="1"/>
                 </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Kommentar</mat-label>
+                    <textarea matInput formControlName="comment" rows="2"></textarea>
+                </mat-form-field>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -260,6 +265,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             pointsValue: [pointsValue],
             penaltyPointsValue: [penaltyPointsValue, [Validators.min(0)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt)],
+            comment: [this.data?.comment ?? ""],
         });
 
         this.personResults$ = this.form.get("personSearch")!.valueChanges.pipe(
@@ -377,6 +383,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
             durationMs,
             penalty,
             measuredAt: timeEntered ? this.formatDateTimeForBackend(formValue.measuredAt) : undefined,
+            comment: formValue.comment !== "" && formValue.comment !== null ? formValue.comment : undefined,
         };
         this.dialogRef.close(request);
     }

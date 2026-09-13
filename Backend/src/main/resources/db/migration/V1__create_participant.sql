@@ -59,6 +59,7 @@ CREATE TABLE participant
     duration_ms INTEGER,
     penalty     INTEGER,
     measured_at TIMESTAMP,
+    comment     TEXT,
 
     FOREIGN KEY (race_id)
         REFERENCES race (id)

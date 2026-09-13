@@ -15,6 +15,7 @@ export interface Participant {
     durationMs?: number;
     penalty?: number;
     measuredAt?: string;
+    comment?: string;
 }
 
 export interface ParticipantRequest {
@@ -26,4 +27,5 @@ export interface ParticipantRequest {
     durationMs?: number;
     penalty?: number;
     measuredAt?: string;
+    comment?: string;
 }

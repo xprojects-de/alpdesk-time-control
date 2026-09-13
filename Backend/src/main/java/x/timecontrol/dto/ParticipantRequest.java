@@ -37,7 +37,11 @@ public record ParticipantRequest(
 
         @Nullable
         @Schema(description = "Timestamp when the measurement was taken", example = "2026-08-18T10:30:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        @Nullable
+        @Schema(description = "Free-text comment/info about the participant", example = "Ski gebrochen", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        String comment
 ) {
 }
 
