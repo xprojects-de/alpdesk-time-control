@@ -9,6 +9,7 @@ import x.timecontrol.repositories.AgeGroupRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 
 @Singleton
 public class AgeGroupService {
@@ -91,19 +92,42 @@ public class AgeGroupService {
     /**
      * Find-or-create for participant import: an import's "Klasse"/age-class column (DSV-Wettkampfdatei,
      * RaceEngine, ...) names an age+gender class such as "U14m" - an AgeGroup, not a free-text
-     * Category. Resolved by name (case-insensitive), like Team/Category's findOrCreateByName. A newly
-     * created group starts as a single birth year (this row's); an existing group's range is widened
-     * to include this row's birth year when it falls outside it, since one sample row never tells us
-     * a class's full range up front. An existing group's gender is left as-is - age_group.name is
-     * globally unique, so real exports already bake gender into the name (U14m vs U14w).
+     * Category.
+     * <p>
+     * First choice is any <em>existing</em> AgeGroup that already covers this birth year for this
+     * gender (a BOTH-gender group counts too) - regardless of its name. This mirrors exactly how
+     * {@link x.timecontrol.services.ParticipantService}'s own age-group matching resolves a person
+     * (year in range + gender matches, first one wins), so import never creates a redundant
+     * "U14M" next to an already-existing "U14" (BOTH) that already covers 2012 for males - the
+     * existing, broader group is reused as-is instead.
+     * <p>
+     * Only when nothing already covers this year/gender does it fall back to name-based
+     * find-or-create (case-insensitive), like Team/Category's findOrCreateByName: a newly created
+     * group starts as a single birth year (this row's); an existing same-named group's range is
+     * widened to include this row's birth year when it falls outside it, since one sample row never
+     * tells us a class's full range up front. That existing group's gender is left as-is -
+     * age_group.name is globally unique, so real exports already bake gender into the name (U14m vs
+     * U14w).
      */
     public AgeGroup findOrCreateForImport(String rawLabel, int birthYear, Gender gender) {
+        List<AgeGroup> existingGroups = StreamSupport.stream(repository.findAll().spliterator(), false).toList();
+
+        for (AgeGroup ageGroup : existingGroups) {
+            boolean yearMatches = isYearInAgeGroup(ageGroup, birthYear);
+            boolean genderMatches = ageGroup.gender() == gender || ageGroup.gender() == Gender.BOTH;
+            if (yearMatches && genderMatches) {
+                return ageGroup;
+            }
+        }
+
         String normalized = rawLabel.trim().toUpperCase();
-        Optional<AgeGroup> existing = repository.findByNameIgnoreCase(normalized);
-        if (existing.isEmpty()) {
+        Optional<AgeGroup> byName = existingGroups.stream()
+                .filter(ag -> ag.name().equalsIgnoreCase(normalized))
+                .findFirst();
+        if (byName.isEmpty()) {
             return repository.save(new AgeGroup(null, normalized, birthYear, birthYear, gender));
         }
-        AgeGroup match = existing.get();
+        AgeGroup match = byName.get();
         int widenedFrom = Math.min(match.birthYearFrom(), birthYear);
         int widenedTo = Math.max(match.birthYearTo(), birthYear);
         if (widenedFrom == match.birthYearFrom() && widenedTo == match.birthYearTo()) {
