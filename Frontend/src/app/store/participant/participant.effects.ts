@@ -123,6 +123,20 @@ export class ParticipantEffects {
         )
     );
 
+    importParticipantsMapped$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsMapped),
+            mergeMap(({raceId, file, format, delimiter, mapping}) =>
+                this.participantService.importMapped(raceId, file, format, delimiter, mapping).pipe(
+                    map(result => ParticipantActions.importParticipantsMappedSuccess({result})),
+                    catchError(error => of(ParticipantActions.importParticipantsMappedFailure({
+                        error: extractErrorMessage(error, 'Failed to import participants')
+                    })))
+                )
+            )
+        )
+    );
+
     copyParticipants$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.copyParticipants),

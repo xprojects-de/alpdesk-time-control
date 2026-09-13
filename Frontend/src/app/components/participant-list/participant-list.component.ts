@@ -32,6 +32,10 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {ParticipantDialogComponent} from "./participant-dialog.component";
 import {ParticipantCopyDialogComponent, ParticipantCopyDialogResult} from "./participant-copy-dialog.component";
+import {
+    ParticipantImportMappingDialogComponent,
+    ParticipantImportMappingDialogResult
+} from "./participant-import-mapping-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -124,24 +128,17 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <button
                                 mat-raised-button
-                                (click)="fileInput.click()"
+                                (click)="openImportDialog()"
                                 [disabled]="importLoading$ | async"
-                                matTooltip="Teilnehmer aus CSV importieren (Lastname,Firstname,Birthdate,Team,Gender, optional: ExternalId)"
+                                matTooltip="Teilnehmer importieren (CSV mit beliebigem Trennzeichen oder DSV-Wettkampfdatei, mit Spalten-Zuordnung)"
                         >
                             @if (importLoading$ | async) {
                                 <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
                             } @else {
                                 <mat-icon>upload_file</mat-icon>
                             }
-                            CSV Import
+                            Teilnehmer importieren
                         </button>
-                        <input
-                                #fileInput
-                                type="file"
-                                accept=".csv,text/csv"
-                                hidden
-                                (change)="onCsvFileSelected($event)"
-                        />
 
                         <button
                                 mat-raised-button
@@ -609,7 +606,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return;
                 }
                 this.snackBar.open(
-                    `CSV Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                    `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
                     'OK',
                     {duration: 5000},
                 );
@@ -762,27 +759,34 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             });
     }
 
-    onCsvFileSelected(event: Event): void {
-        const input = event.target as HTMLInputElement;
-        const file = input.files?.[0];
-        input.value = '';
-
-        if (!file) {
+async openImportDialog(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
             return;
         }
 
-        this.selectedRaceId$
-            .pipe(take(1))
-            .subscribe((raceId) => {
-                if (!raceId) {
-                    this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
-                        duration: 5000,
-                        panelClass: ['error-snackbar'],
-                    });
-                    return;
+        const dialogRef = this.dialog.open(ParticipantImportMappingDialogComponent, {
+            width: '900px',
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(ParticipantActions.importParticipantsMapped({
+                        raceId,
+                        file: result.file,
+                        format: result.format,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
-                this.store.dispatch(ParticipantActions.importParticipantsCsv({raceId, file}));
-                this.snackBar.open('CSV Import gestartet...', 'OK', {duration: 2000});
             });
     }
 

@@ -3,6 +3,8 @@ package x.timecontrol.Controller;
 import x.timecontrol.dto.ErrorResponse;
 import x.timecontrol.dto.ParticipantCopyRequest;
 import x.timecontrol.dto.ParticipantCopyResponse;
+import x.timecontrol.dto.ParticipantImportFormat;
+import x.timecontrol.dto.ParticipantImportPreviewResponse;
 import x.timecontrol.dto.ParticipantImportResponse;
 import x.timecontrol.dto.ParticipantRequest;
 import x.timecontrol.dto.ParticipantResponse;
@@ -16,6 +18,7 @@ import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.http.multipart.CompletedFileUpload;
+import io.micronaut.json.JsonMapper;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -32,7 +35,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
@@ -50,6 +55,9 @@ public class ParticipantController {
 
     @Inject
     RaceService raceService;
+
+    @Inject
+    JsonMapper jsonMapper;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -187,6 +195,83 @@ public class ParticipantController {
             return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
         } catch (IOException e) {
             return HttpResponse.serverError(new ErrorResponse("Failed to read the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-preview")
+    @Operation(summary = "Preview a participant import file", description = "Parses a CSV (any delimiter) or DSV-Wettkampfdatei XML file and returns the detected source fields, a best-effort suggested mapping onto our participant fields, and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = ParticipantImportPreviewResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unknown format or unreadable file")
+    public HttpResponse<?> importPreview(@Part("file") CompletedFileUpload file,
+                                          @Part("format") String format,
+                                          @Part("delimiter") Optional<String> delimiter) {
+        ParticipantImportFormat parsedFormat;
+        try {
+            parsedFormat = ParticipantImportFormat.valueOf(format.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Unknown format: " + format + " (expected CSV or DSV_XML)"));
+        }
+
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            return HttpResponse.ok(service.previewImport(bytes, parsedFormat, delim));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-mapped/{raceId}")
+    @Operation(summary = "Import participants with a custom column/field mapping", description = "Imports a CSV (any delimiter) or DSV-Wettkampfdatei XML file for a race, using an explicit mapping from our fields (lastName, firstName, birthDate, gender, team, category, externalId, raceNumber) onto the file's source fields/columns. A field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-preview) is used. Usable directly via REST without any UI - mapping is passed as a JSON object part, not persisted anywhere.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantImportResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unknown format, invalid mapping JSON, or unreadable file")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> importMapped(@PathVariable Long raceId,
+                                         @Part("file") CompletedFileUpload file,
+                                         @Part("format") String format,
+                                         @Part("delimiter") Optional<String> delimiter,
+                                         @Part("mapping") Optional<String> mappingJson) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+
+        ParticipantImportFormat parsedFormat;
+        try {
+            parsedFormat = ParticipantImportFormat.valueOf(format.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Unknown format: " + format + " (expected CSV or DSV_XML)"));
+        }
+
+        Map<String, String> mapping = null;
+        if (mappingJson.isPresent() && !mappingJson.get().isBlank()) {
+            try {
+                Map<?, ?> raw = jsonMapper.readValue(mappingJson.get(), Map.class);
+                mapping = new HashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getValue() != null) {
+                        mapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                    }
+                }
+            } catch (IOException e) {
+                return HttpResponse.badRequest(new ErrorResponse("Invalid mapping JSON: " + e.getMessage()));
+            }
+        }
+
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            ParticipantService.ParticipantImportResult result = service.importMapped(raceId, bytes, parsedFormat, delim, mapping);
+            List<ParticipantResponse> imported = service.toResponses(result.imported());
+            return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
         }
     }
 

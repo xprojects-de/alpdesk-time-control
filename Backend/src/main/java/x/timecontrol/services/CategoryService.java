@@ -92,4 +92,13 @@ public class CategoryService {
             throw new IllegalStateException("A category named \"" + name + "\" already exists");
         }
     }
+
+    /**
+     * Finds a category by name (case-insensitive), creating it with an uppercased name if it does not exist yet.
+     */
+    public Category findOrCreateByName(String name) {
+        String normalized = name.trim().toUpperCase();
+        return repository.findByNameIgnoreCase(normalized)
+                .orElseGet(() -> repository.save(new Category(null, normalized)));
+    }
 }

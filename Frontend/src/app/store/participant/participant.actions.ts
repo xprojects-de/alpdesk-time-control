@@ -1,6 +1,6 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
-import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantImportFileFormat, ParticipantImportResponse} from '../../models/participant-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
 
 // Load all participants
@@ -115,6 +115,27 @@ export const importParticipantsCsvSuccess = createAction(
 );
 export const importParticipantsCsvFailure = createAction(
     '[Participant] Import Participants CSV Failure',
+    props<{ error: string }>()
+);
+
+// Import participants with a user-defined column/field mapping (CSV with any delimiter, or
+// DSV-Wettkampfdatei XML)
+export const importParticipantsMapped = createAction(
+    '[Participant] Import Participants Mapped',
+    props<{
+        raceId: number;
+        file: File;
+        format: ParticipantImportFileFormat;
+        delimiter?: string;
+        mapping: Record<string, string>;
+    }>()
+);
+export const importParticipantsMappedSuccess = createAction(
+    '[Participant] Import Participants Mapped Success',
+    props<{ result: ParticipantImportResponse }>()
+);
+export const importParticipantsMappedFailure = createAction(
+    '[Participant] Import Participants Mapped Failure',
     props<{ error: string }>()
 );
 
