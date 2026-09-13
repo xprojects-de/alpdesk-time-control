@@ -47,6 +47,7 @@ export const PARTICIPANT_IMPORT_TARGET_FIELDS: ParticipantImportTargetField[] = 
     {key: 'penalty', label: 'Strafe (ms)', required: false},
     {key: 'measuredAt', label: 'Gemessen am', required: false},
     {key: 'comment', label: 'Kommentar', required: false},
+    {key: 'status', label: 'Status (DSQ/DNF/DNS)', required: false},
 ];
 
 export interface ParticipantImportPreviewResponse {

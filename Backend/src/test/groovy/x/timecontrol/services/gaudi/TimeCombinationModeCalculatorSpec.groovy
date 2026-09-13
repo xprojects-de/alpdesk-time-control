@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.GaudiModeType
@@ -33,6 +34,10 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     private static Participant participant(Long id, Long personId, Integer durationMs, Integer penalty = null) {
         new Participant(id, 1L, personId, null, null, null, durationMs, penalty, null, null)
+    }
+
+    private static Participant participantWithStatus(Long id, Long personId, Integer durationMs, DisqualificationStatus status) {
+        new Participant(id, 1L, personId, null, null, null, durationMs, null, null, null, status)
     }
 
     private static Person person(Long id, String firstName) {
@@ -93,6 +98,38 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
         then:
         ranking.isEmpty()
+    }
+
+    def "computeDnsEntries reports the explicit DSQ status of the leg that carries it"() {
+        given: "Anna is DSQ in leg 1 (despite having a measured time there) and has a normal result in leg 2"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participantWithStatus(1L, 1L, 60000, DisqualificationStatus.DSQ)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 70000)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DSQ"
+    }
+
+    def "computeDnsEntries falls back to the generic DNS label when nobody has an explicit status"() {
+        given: "Anna simply has no result at all in leg 2"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DNS"
     }
 
     def "a combined total tied with the leader shows no gap instead of +0"() {

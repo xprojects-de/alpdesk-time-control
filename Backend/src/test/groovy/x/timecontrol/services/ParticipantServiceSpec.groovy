@@ -6,6 +6,7 @@ import spock.lang.Specification
 import x.timecontrol.dto.ParticipantImportFormat
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.Category
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Person
@@ -376,6 +377,47 @@ class ParticipantServiceSpec extends Specification {
         result.errors().isEmpty()
     }
 
+    def "mapped import parses a status column into the participant's DisqualificationStatus"() {
+        given: "a CSV with a Status column marking the row as disqualified"
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        Participant saved = null
+        repository.save(_) >> { Participant p -> saved = p; p }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Status\n" +
+                "Mustermann;Max;1990;M;DSQ\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht", status: "Status"])
+
+        then:
+        result.imported().size() == 1
+        result.errors().isEmpty()
+        saved.status() == DisqualificationStatus.DSQ
+    }
+
+    def "mapped import defaults a blank/unrecognized status column to NONE instead of failing the row"() {
+        given:
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        Participant saved = null
+        repository.save(_) >> { Participant p -> saved = p; p }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Status\n" +
+                "Mustermann;Max;1990;M;\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht", status: "Status"])
+
+        then:
+        result.imported().size() == 1
+        saved.status() == DisqualificationStatus.NONE
+    }
+
     def "exportCsv writes our own field names as the header and includes person data plus results"() {
         given: "one participant with a full result"
         def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
@@ -390,8 +432,8 @@ class ParticipantServiceSpec extends Specification {
         def lines = service.exportCsv(5L).readLines()
 
         then: "the header uses our canonical field names (so re-importing needs no manual mapping) and the row carries person + team + category + result data"
-        lines[0] == "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment"
-        lines[1] == "Mustermann;Max;1990-01-01;MALE;;TEAM A;SKI ALPIN;EXT-1;42;125000;2000;2026-08-18T10:30;Ski gebrochen"
+        lines[0] == "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment;status"
+        lines[1] == "Mustermann;Max;1990-01-01;MALE;;TEAM A;SKI ALPIN;EXT-1;42;125000;2000;2026-08-18T10:30;Ski gebrochen;NONE"
     }
 
     def "mapped import carries over durationMs/penalty/measuredAt when the file provides them (full race export round-trip)"() {

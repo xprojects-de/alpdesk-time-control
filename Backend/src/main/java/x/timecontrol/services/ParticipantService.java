@@ -536,7 +536,7 @@ public class ParticipantService {
             String externalId = parts.length > 5 ? parts[5].trim() : "";
             importRow(raceId, lineNumber, line,
                     new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
-                            null, null, null, null, null, null, null),
+                            null, null, null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -582,7 +582,8 @@ public class ParticipantService {
                             valueFor(row, effectiveMapping, "durationMs"),
                             valueFor(row, effectiveMapping, "penalty"),
                             valueFor(row, effectiveMapping, "measuredAt"),
-                            valueFor(row, effectiveMapping, "comment")),
+                            valueFor(row, effectiveMapping, "comment"),
+                            valueFor(row, effectiveMapping, "status")),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -649,7 +650,8 @@ public class ParticipantService {
                     p.durationMs() != null ? p.durationMs().toString() : "",
                     p.penalty() != null ? p.penalty().toString() : "",
                     p.measuredAt() != null ? p.measuredAt().toString() : "",
-                    sanitizeForExport(p.comment())
+                    sanitizeForExport(p.comment()),
+                    p.status().name()
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
@@ -693,7 +695,7 @@ public class ParticipantService {
     private record ImportRowFields(
             String lastName, String firstName, String birthDate, String team, String gender,
             String externalId, String raceNumber, String category, String ageGroup,
-            String durationMs, String penalty, String measuredAt, String comment) {
+            String durationMs, String penalty, String measuredAt, String comment, String status) {
     }
 
     /**
@@ -747,6 +749,7 @@ public class ParticipantService {
         Integer penalty = parseOptionalInt(fields.penalty());
         LocalDateTime measuredAt = parseMeasuredAt(fields.measuredAt());
         String comment = fields.comment() != null && !fields.comment().trim().isEmpty() ? fields.comment().trim() : null;
+        DisqualificationStatus participantStatus = parseStatus(fields.status());
 
         // Each row is its own transaction: a failure saving the participant rolls back a
         // just-created person for that row too (no orphan Person left behind), and does not
@@ -778,7 +781,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, participantStatus);
                 return repository.save(participant);
             });
             imported.add(saved);
@@ -809,6 +812,25 @@ public class ParticipantService {
             case "M", "MALE", "MÄNNLICH", "MAENNLICH" -> Gender.MALE;
             case "W", "F", "FEMALE", "WEIBLICH" -> Gender.FEMALE;
             default -> null;
+        };
+    }
+
+    /**
+     * Best-effort like {@link #parseOptionalInt}: blank/unrecognized values default to NONE (a
+     * normal, rankable result) instead of failing the row - the safe direction to fail in, since a
+     * value nobody meant as a disqualification marker can only leave someone wrongly rankable, not
+     * wrongly excluded. Recognizes our own enum names plus the German terms used on export/reports.
+     */
+    private DisqualificationStatus parseStatus(String rawStatus) {
+        if (rawStatus == null) {
+            return DisqualificationStatus.NONE;
+        }
+        String normalized = rawStatus.trim().toUpperCase();
+        return switch (normalized) {
+            case "DSQ", "DISQUALIFIZIERT", "DISQUALIFIED" -> DisqualificationStatus.DSQ;
+            case "DNF", "AUFGEGEBEN" -> DisqualificationStatus.DNF;
+            case "DNS", "NICHT GESTARTET", "NICHT_GESTARTET" -> DisqualificationStatus.DNS;
+            default -> DisqualificationStatus.NONE;
         };
     }
 

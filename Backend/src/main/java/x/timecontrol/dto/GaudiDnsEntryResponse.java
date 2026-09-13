@@ -24,6 +24,11 @@ public record GaudiDnsEntryResponse(
 
         @Nullable
         @Schema(description = "External ID of the person, if set", example = "12345", nullable = true)
-        String externalId
+        String externalId,
+
+        @Schema(description = "Reason label: the explicit DSQ/DNF/DNS status of the first combined-race leg that " +
+                "carries one, or the generic \"DNS\" fallback when none of their legs has an explicit status",
+                example = "DNS")
+        String status
 ) {
 }

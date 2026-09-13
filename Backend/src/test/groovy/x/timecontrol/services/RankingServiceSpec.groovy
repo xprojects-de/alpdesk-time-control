@@ -67,6 +67,41 @@ class RankingServiceSpec extends Specification {
     }
 
     @Unroll
+    def "dnsStatusLabel(Participant) reports the explicit status, or DNS when there is none"() {
+        expect:
+        rankingService.dnsStatusLabel(participantWithStatus(1L, null, status)) == expectedLabel
+
+        where:
+        status                              || expectedLabel
+        DisqualificationStatus.DSQ          || "DSQ"
+        DisqualificationStatus.DNF          || "DNF"
+        DisqualificationStatus.DNS          || "DNS"
+        DisqualificationStatus.NONE         || "DNS" // no explicit reason recorded - generic fallback
+    }
+
+    def "dnsStatusLabel(Collection) reports the first leg with an explicit status"() {
+        given: "the person's first leg has no explicit status, but their second leg is DSQ"
+        def legs = [
+                participantWithStatus(1L, null, DisqualificationStatus.NONE),
+                participantWithStatus(2L, 60000, DisqualificationStatus.DSQ),
+        ]
+
+        expect:
+        rankingService.dnsStatusLabel(legs) == "DSQ"
+    }
+
+    def "dnsStatusLabel(Collection) falls back to DNS when no leg has an explicit status"() {
+        given:
+        def legs = [
+                participantWithStatus(1L, null, DisqualificationStatus.NONE),
+                participantWithStatus(2L, null, DisqualificationStatus.NONE),
+        ]
+
+        expect:
+        rankingService.dnsStatusLabel(legs) == "DNS"
+    }
+
+    @Unroll
     def "adjustedValue adds the penalty for ASC races and subtracts it for DESC races"() {
         expect:
         rankingService.adjustedValue(race, participant(1L, rawValue, penalty)) == expected

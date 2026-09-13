@@ -188,7 +188,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             String firstName = person.map(Person::firstName).orElse("");
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace), ageGroup, externalId));
+            String status = rankingService.dnsStatusLabel(byRace.values());
+            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace), ageGroup, externalId, status));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))

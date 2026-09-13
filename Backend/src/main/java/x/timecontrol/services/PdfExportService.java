@@ -71,11 +71,13 @@ public class PdfExportService {
     }
 
     /**
-     * One row of the "nicht gewertet" (DNS) list appended at the end of a ranking/results PDF -
+     * One row of the "nicht gewertet" list appended at the end of a ranking/results PDF -
      * participants/persons excluded from the ranking above it for lacking a valid result.
-     * {@code position} is this row's position within the DNS list itself, not a race number.
+     * {@code position} is this row's position within the list itself, not a race number.
+     * {@code status} is the actual reason ("DSQ"/"DNF"/"DNS" - see
+     * {@link RankingService#dnsStatusLabel(Participant)}), not always literally "DNS".
      */
-    private record DnsRow(int position, String name, String externalId, String ageGroup, String team) {
+    private record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status) {
     }
 
     private record PdfColumn<T>(String header, float weight, Function<T, String> valueFn) {
@@ -87,7 +89,7 @@ public class PdfExportService {
             new PdfColumn<>("ID", 1.0f, e -> externalIdOrDash(e.externalId())),
             new PdfColumn<>("Alterskl.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
-            new PdfColumn<>("Status", 0.8f, e -> "DNS")
+            new PdfColumn<>("Status", 0.8f, DnsRow::status)
     );
 
     /**
@@ -612,7 +614,7 @@ public class PdfExportService {
         for (int i = 0; i < entries.size(); i++) {
             GaudiDnsEntryResponse e = entries.get(i);
             String name = (e.lastName() + " " + e.firstName()).trim();
-            rows.add(new DnsRow(i + 1, name, e.externalId(), e.ageGroup(), e.team() != null ? e.team() : "-"));
+            rows.add(new DnsRow(i + 1, name, e.externalId(), e.ageGroup(), e.team() != null ? e.team() : "-", e.status()));
         }
         return rows;
     }
@@ -831,7 +833,7 @@ public class PdfExportService {
         ctx.ensureSpace(60);
 
         ctx.y -= 8;
-        ctx.text(FONT_BOLD, 12, MARGIN, ctx.y, "Nicht gewertet (DNS)");
+        ctx.text(FONT_BOLD, 12, MARGIN, ctx.y, "Nicht gewertet");
         ctx.y -= 22;
 
         List<PdfColumn<DnsRow>> columns = dnsColumns(rows);
@@ -1212,7 +1214,8 @@ public class PdfExportService {
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
-            rows.add(new DnsRow(i + 1, formatName(person), person != null ? person.externalId() : null, ageGroup, team));
+            rows.add(new DnsRow(i + 1, formatName(person), person != null ? person.externalId() : null, ageGroup, team,
+                    rankingService.dnsStatusLabel(p)));
         }
         return rows;
     }
