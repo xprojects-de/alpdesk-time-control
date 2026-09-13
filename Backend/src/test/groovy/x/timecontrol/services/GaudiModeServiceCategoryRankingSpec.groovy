@@ -12,6 +12,7 @@ import x.timecontrol.entities.PointsScale
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import io.micronaut.transaction.TransactionOperations
 import x.timecontrol.repositories.GaudiLosPairingRepository
 import x.timecontrol.repositories.GaudiModeRaceRepository
 import x.timecontrol.repositories.GaudiModeRepository
@@ -40,11 +41,12 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
+    TransactionOperations transactionOperations = Mock()
 
     def calculator = new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService, ageGroupService)
 
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
-            raceService, personService, ageGroupService, [calculator])
+            raceService, personService, ageGroupService, [calculator], transactionOperations)
 
     def gaudiMode = new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Kondiwettkamp", null, 1L, LocalDateTime.now())
     def race = new Race(10L, "Schnelligkeit", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,

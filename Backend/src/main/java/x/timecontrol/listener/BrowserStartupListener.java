@@ -8,6 +8,7 @@ import jakarta.inject.Singleton;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import x.timecontrol.util.BrowserLauncher;
 
 @Singleton
 @Requires(property = "app.openBrowser", value = "true", defaultValue = "true")
@@ -33,7 +34,7 @@ public class BrowserStartupListener implements ApplicationEventListener<ServerSt
             String url = "http://localhost:" + serverPort;
             LOG.info("Server started successfully. Opening browser at: {}", url);
 
-            openBrowserNative(url);
+            BrowserLauncher.open(url);
 
             LOG.info("Browser opened successfully");
         } catch (Exception e) {
@@ -41,32 +42,4 @@ public class BrowserStartupListener implements ApplicationEventListener<ServerSt
                     e.getMessage(), serverPort);
         }
     }
-
-    /**
-     * Opens a URL in the default browser using platform-specific commands.
-     * This method works in GraalVM Native Images without requiring AWT libraries.
-     *
-     * @param url the URL to open
-     * @throws Exception if the browser cannot be opened
-     */
-    private void openBrowserNative(String url) throws Exception {
-        String os = System.getProperty("os.name").toLowerCase();
-        ProcessBuilder processBuilder;
-
-        if (os.contains("mac") || os.contains("darwin")) {
-            // macOS
-            processBuilder = new ProcessBuilder("open", url);
-        } else if (os.contains("win")) {
-            // Windows
-            processBuilder = new ProcessBuilder("cmd", "/c", "start", url);
-        } else if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
-            // Linux/Unix
-            processBuilder = new ProcessBuilder("xdg-open", url);
-        } else {
-            throw new UnsupportedOperationException("Unsupported operating system: " + os);
-        }
-
-        processBuilder.start();
-    }
 }
-

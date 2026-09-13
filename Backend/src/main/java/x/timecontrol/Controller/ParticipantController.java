@@ -93,7 +93,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "400", description = "Invalid input")
     @ApiResponse(responseCode = "409", description = "Race number already assigned in this race")
     public HttpResponse<?> add(@Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt(), request.comment());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt(), request.comment(), request.status());
         Participant created;
         try {
             created = service.create(participant);
@@ -114,7 +114,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "400", description = "Invalid input")
     @ApiResponse(responseCode = "409", description = "Race number already assigned in this race")
     public HttpResponse<?> update(@PathVariable Long id, @Body ParticipantRequest request) {
-        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt(), request.comment());
+        Participant participant = new Participant(null, request.raceId(), request.personId(), request.raceNumber(), request.teamId(), request.categoryId(), request.durationMs(), request.penalty(), request.measuredAt(), request.comment(), request.status());
         Optional<Participant> updated;
         try {
             updated = service.update(id, participant);

@@ -24,8 +24,9 @@ import java.util.stream.StreamSupport;
 
 /**
  * Zeit-Kombination: sums each participant's adjusted time (raw time + penalty, per race sort
- * direction) across all referenced races. Participants are matched across races by Person; only
- * a person with a valid result in EVERY referenced race is included in the combined ranking.
+ * direction), multiplied by that race's configured weight, across all referenced races.
+ * Participants are matched across races by Person; only a person with a valid result in EVERY
+ * referenced race is included in the combined ranking.
  */
 @Singleton
 public class TimeCombinationModeCalculator implements GaudiModeCalculator {
@@ -75,11 +76,14 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             }
 
             List<GaudiRankingLegResponse> legs = new ArrayList<>();
-            int total = 0;
+            // Accumulated as a double and rounded only once at the end (not per leg) - rounding
+            // each weighted leg separately compounds error across legs for a non-integer weight
+            // (e.g. two legs at weight 0.5 would round 16.5 -> 17 twice instead of the correct 33).
+            double weightedTotal = 0;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
                 Integer adjusted = rankingService.adjustedValue(race.race(), p);
-                total += adjusted;
+                weightedTotal += adjusted * race.weight();
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
                         race.race().name(),
@@ -90,6 +94,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                         null
                 ));
             }
+            int total = (int) Math.round(weightedTotal);
 
             Optional<Person> person = personService.findById(personId);
             String label = person.map(personService::displayName).orElse("Unbekannt");

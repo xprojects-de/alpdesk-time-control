@@ -122,5 +122,75 @@ tasks.register('copyFrontend', Copy) {
     }
 }
 
+// jpackage: bundles the shadowJar with a jlinked Java 25 runtime into a self-contained,
+// platform-native installer/app-image - a parallel, non-native-image alternative to
+// `nativeCompile` that trades a larger download for not needing GraalVM reachability config.
+def jpackagePlatform = org.gradle.internal.os.OperatingSystem.current().with {
+    isMacOsX() ? 'macos' : (isWindows() ? 'windows' : 'linux')
+}
+def jpackageIconExtension = [macos: 'icns', windows: 'ico', linux: 'png'][jpackagePlatform]
+def jpackageIcon = file("packaging/icons/app.${jpackageIconExtension}")
+def jpackageInstallerType = [macos: 'dmg', windows: 'exe', linux: 'deb'][jpackagePlatform]
+// jpackage wants a dotted numeric version, padded to at least 3 components ("0.1" -> "0.1.0").
+// macOS additionally rejects a leading "0" (jpackage's mac bundler requires a positive first
+// component), so only there a leading "1." is prepended ("0.1" -> "1.0.1") rather than
+// overwriting the leading digit, to keep the original version numbers recognizable. This is
+// just the installer's package version - the app's own displayed version (app.version,
+// VersionController) is untouched.
+def jpackageVersionParts = project.version.toString().tokenize('.')
+if (jpackagePlatform == 'macos' && jpackageVersionParts[0] == '0') {
+    jpackageVersionParts = ['1'] + jpackageVersionParts
+}
+def jpackageVersion = (jpackageVersionParts + ['0', '0']).take(Math.max(3, jpackageVersionParts.size())).join('.')
+
+def jpackageExecutable = {
+    def launcher = javaToolchains.launcherFor(java.toolchain).get()
+    def javaBin = launcher.executablePath.asFile
+    new File(javaBin.parentFile, jpackagePlatform == 'windows' ? 'jpackage.exe' : 'jpackage').absolutePath
+}
+
+def jpackageArgs = { String type, File destDir ->
+    [
+            '--input', file('build/libs').absolutePath,
+            '--main-jar', 'time-control.jar',
+            '--main-class', 'x.timecontrol.Application',
+            '--name', 'Time Control',
+            '--app-version', jpackageVersion,
+            '--vendor', 'Alpdesk',
+            '--icon', jpackageIcon.absolutePath,
+            '--type', type,
+            '--dest', destDir.absolutePath,
+            // Only the jpackage build shows the status window - see DesktopWindowStartupListener.
+            '--java-options', '-Dapp.showWindow=true',
+    ]
+}
+
+// Fast, no extra OS tooling required (no WiX/dpkg) - good for local iteration.
+tasks.register('jpackageAppImage', Exec) {
+    group = 'distribution'
+    description = 'Builds a self-contained app image (bundled Java 25 runtime, no installer wrapper) via jpackage.'
+    dependsOn tasks.named('shadowJar')
+    def destDir = file('dist')
+    doFirst {
+        delete file('dist/Time Control.app'), file('dist/Time Control')
+        destDir.mkdirs()
+    }
+    executable jpackageExecutable()
+    args jpackageArgs('app-image', destDir)
+}
+
+// Produces the real one-click installer: .dmg (macOS), .exe (Windows, needs WiX Toolset),
+// .deb (Linux, needs dpkg-deb, preinstalled on Debian/Ubuntu).
+tasks.register('jpackageInstaller', Exec) {
+    group = 'distribution'
+    description = "Builds a native installer (.${jpackageInstallerType} on this OS) with a bundled Java 25 runtime via jpackage."
+    dependsOn tasks.named('shadowJar')
+    def destDir = file('dist')
+    doFirst {
+        destDir.mkdirs()
+    }
+    executable jpackageExecutable()
+    args jpackageArgs(jpackageInstallerType, destDir)
+}
 
 

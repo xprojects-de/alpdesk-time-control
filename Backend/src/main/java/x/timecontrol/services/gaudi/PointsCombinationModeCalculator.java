@@ -96,13 +96,18 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             }
 
             List<GaudiRankingLegResponse> legs = new ArrayList<>();
-            int totalPoints = 0;
+            // Each leg's weighted points are kept as a double and only the total is rounded below -
+            // rounding every leg separately compounds error across legs for a non-integer weight
+            // (e.g. two legs at weight 0.5 would round 16.5 -> 17 twice instead of the correct 33),
+            // which would otherwise flip close placings. Per-leg points shown in the response are
+            // still rounded individually - only for display, the total below is not derived from them.
+            double weightedTotal = 0;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
                 Integer place = p != null ? placesByRace.get(race.raceId()).get(p.id()) : null;
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
-                int points = place != null ? (int) Math.round(pointsScaleService.pointsForPlace(scalePoints, place) * race.weight()) : 0;
-                totalPoints += points;
+                double weightedPoints = place != null ? pointsScaleService.pointsForPlace(scalePoints, place) * race.weight() : 0;
+                weightedTotal += weightedPoints;
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
                         race.race().name(),
@@ -110,9 +115,10 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                         p != null ? p.penalty() : null,
                         adjusted,
                         place,
-                        points
+                        (int) Math.round(weightedPoints)
                 ));
             }
+            int totalPoints = (int) Math.round(weightedTotal);
 
             Optional<Person> person = personService.findById(personId);
             String label = person.map(personService::displayName).orElse("Unbekannt");

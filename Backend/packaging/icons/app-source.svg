@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="#49732A"/>
+  </g>
+  <text x="512" y="700" font-family="Helvetica, Arial, sans-serif" font-weight="700"
+        font-size="560" fill="#FFFFFF" text-anchor="middle">AD</text>
+</svg>

@@ -179,9 +179,81 @@ jobs:
           path: Backend/dist/*
           retention-days: 14
 
+  build-jpackage-installer:
+    name: Build jpackage Installer on ${{ matrix.os }}
+    needs: build-frontend
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: Backend
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-latest
+            platform: linux
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: Frontend/dist
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          cache-dependency-path: Backend/build.gradle
+
+      - name: Copy Frontend Assets to Backend
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./gradlew.bat copyFrontend --no-daemon
+          else
+            chmod +x gradlew
+            ./gradlew copyFrontend --no-daemon
+          fi
+
+      - name: Install WiX Toolset (Windows)
+        if: matrix.platform == 'windows'
+        run: choco install wixtoolset -y
+
+      - name: Build jpackage Installer
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./gradlew.bat jpackageInstaller --no-daemon
+          else
+            ./gradlew jpackageInstaller --no-daemon
+          fi
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-jpackage-installer
+          path: |
+            Backend/dist/*.dmg
+            Backend/dist/*.exe
+            Backend/dist/*.deb
+          retention-days: 14
+
   create-release:
     name: Create GitHub Release
-    needs: build-native-installer
+    needs: [ build-native-installer, build-jpackage-installer ]
     runs-on: ubuntu-latest
     steps:
       - name: Download all Build Artifacts

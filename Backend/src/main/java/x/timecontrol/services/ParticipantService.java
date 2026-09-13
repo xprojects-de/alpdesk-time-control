@@ -12,6 +12,7 @@ import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
@@ -73,9 +74,27 @@ public class ParticipantService {
         this.transactionOperations = transactionOperations;
     }
 
+    /**
+     * @throws IllegalStateException if the race number (or, more rarely, a person-per-race
+     *                                conflict slipped past {@link #validate}) collides with a row a
+     *                                concurrent request just committed - the DB's unique indexes are
+     *                                the actual guard against that race; this only translates the
+     *                                resulting {@link DataAccessException} into the same clean 409
+     *                                the pre-check above normally produces.
+     */
     public Participant create(Participant participant) {
         validate(participant, null);
-        return repository.save(participant);
+        Participant toSave = new Participant(participant.id(), participant.raceId(), participant.personId(), participant.raceNumber(),
+                participant.teamId(), participant.categoryId(), participant.durationMs(), participant.penalty(),
+                participant.measuredAt(), participant.comment(), resolveStatus(participant, DisqualificationStatus.NONE));
+        try {
+            return repository.save(toSave);
+        } catch (DataAccessException e) {
+            if (isUniqueConstraintViolation(e)) {
+                throw new IllegalStateException("Race number or person is already assigned in this race", e);
+            }
+            throw e;
+        }
     }
 
     public Iterable<Participant> findAll() {
@@ -86,17 +105,30 @@ public class ParticipantService {
         return repository.findById(id);
     }
 
+    /**
+     * @throws IllegalStateException if the race number collides with a row a concurrent request
+     *                                just committed - see {@link #create} for why this is caught
+     *                                here rather than left to surface as a raw 500.
+     */
     public Optional<Participant> update(Long id, Participant participant) {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
             validate(participant, id);
-            // durationMs/penalty/measuredAt are omitted by most update flows (e.g. editing name/team) and must not
-            // wipe out a time that was already assigned via the measurement sync; only overwrite when provided.
+            // durationMs/penalty/measuredAt/status are omitted by most update flows (e.g. editing name/team) and
+            // must not wipe out a time (or a DSQ/DNF/DNS status) that was already assigned; only overwrite when provided.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
             Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
-            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment());
-            return Optional.of(repository.update(updated));
+            DisqualificationStatus status = resolveStatus(participant, existing.get().status());
+            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment(), status);
+            try {
+                return Optional.of(repository.update(updated));
+            } catch (DataAccessException e) {
+                if (isUniqueConstraintViolation(e)) {
+                    throw new IllegalStateException("Race number or person is already assigned in this race", e);
+                }
+                throw e;
+            }
         }
         return Optional.empty();
     }
@@ -142,7 +174,7 @@ public class ParticipantService {
             toUpdate.add(new Participant(
                     existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt(),
-                    existing.comment()
+                    existing.comment(), existing.status()
             ));
         }
 
@@ -452,8 +484,19 @@ public class ParticipantService {
                 participant.durationMs(),
                 participant.penalty(),
                 participant.measuredAt(),
-                participant.comment()
+                participant.comment(),
+                participant.status()
         );
+    }
+
+    /**
+     * Picks the status to persist: an explicitly given one (including a request that explicitly
+     * resets to NONE), or {@code fallback} (the existing row's status on update, NONE on create)
+     * when the caller's Participant carries no status at all - the same "omitted means unchanged"
+     * convention already used for durationMs/penalty/measuredAt above.
+     */
+    private static DisqualificationStatus resolveStatus(Participant participant, DisqualificationStatus fallback) {
+        return participant.status() != null ? participant.status() : fallback;
     }
 
     /**

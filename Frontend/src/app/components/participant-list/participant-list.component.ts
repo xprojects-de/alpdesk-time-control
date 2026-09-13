@@ -24,7 +24,7 @@ import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
-import {Participant} from "../../models/participant.model";
+import {DisqualificationStatus, Participant} from "../../models/participant.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as ParticipantActions from "../../store/participant/participant.actions";
@@ -329,6 +329,21 @@ import {Actions, ofType} from "@ngrx/effects";
                          </td>
                      </ng-container>
 
+                     <!-- Status Column -->
+                     <ng-container matColumnDef="status">
+                         <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+                         <td mat-cell *matCellDef="let participant">
+                             @if (participant.status && participant.status !== 'NONE') {
+                                 <span class="status-badge" [class]="'status-' + participant.status"
+                                       [matTooltip]="getStatusLabel(participant.status)">
+                                     {{ participant.status }}
+                                 </span>
+                             } @else {
+                                 -
+                             }
+                         </td>
+                     </ng-container>
+
                      <!-- Measured At Column -->
                      <ng-container matColumnDef="measuredAt">
                          <th mat-header-cell *matHeaderCellDef mat-sort-header>Gemessen am</th>
@@ -444,6 +459,27 @@ import {Actions, ofType} from "@ngrx/effects";
             text-overflow: ellipsis;
             white-space: nowrap;
           }
+
+          .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+          }
+
+          .status-DNS {
+            background-color: #ff9800;
+          }
+
+          .status-DNF {
+            background-color: #f57c00;
+          }
+
+          .status-DSQ {
+            background-color: #f44336;
+          }
         `,
     ],
 })
@@ -473,6 +509,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "ageGroup",
         "race",
         "durationMs",
+        "status",
         "measuredAt",
         "comment",
         "actions",
@@ -675,6 +712,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             return "—";
         }
         return GenderLabels[gender] || gender;
+    }
+
+    private static readonly STATUS_LABELS: Record<DisqualificationStatus, string> = {
+        NONE: "Gewertet",
+        DNS: "DNS – nicht gestartet",
+        DNF: "DNF – nicht beendet",
+        DSQ: "DSQ – disqualifiziert",
+    };
+
+    getStatusLabel(status: DisqualificationStatus): string {
+        return ParticipantListComponent.STATUS_LABELS[status] ?? status;
     }
 
     formatRaceDate(dateString: string): string {

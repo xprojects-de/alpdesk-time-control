@@ -1,11 +1,13 @@
 package x.timecontrol.dto;
 
 import io.micronaut.core.annotation.Nullable;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Participant;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Serdeable
 @Schema(description = "Response object containing participant information")
@@ -51,7 +53,10 @@ public record ParticipantResponse(
 
         @Nullable
         @Schema(description = "Free-text comment/info about the participant", example = "Ski gebrochen", nullable = true)
-        String comment
+        String comment,
+
+        @Schema(description = "Disqualification/no-result status; NONE means a normal, rankable result", example = "NONE")
+        DisqualificationStatus status
 ) {
     public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
@@ -65,7 +70,8 @@ public record ParticipantResponse(
                 participant.durationMs(),
                 participant.penalty(),
                 participant.measuredAt(),
-                participant.comment()
+                participant.comment(),
+                Objects.requireNonNullElse(participant.status(), DisqualificationStatus.NONE)
         );
     }
 }

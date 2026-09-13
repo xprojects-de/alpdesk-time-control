@@ -9,21 +9,21 @@ CREATE TABLE age_group
 
 CREATE TABLE race
 (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    name                  TEXT NOT NULL UNIQUE,
-    date                  DATE NOT NULL,
-    organisation          TEXT,
-    referee               TEXT,
-    race_director         TEXT,
-    time_control          TEXT,
-    route_name            TEXT,
-    elevation_difference  TEXT,
-    route_length          TEXT,
-    course_setter         TEXT,
-    weather               TEXT,
-    result_unit           TEXT NOT NULL DEFAULT 'TIME' CHECK (result_unit IN ('TIME', 'POINTS')),
-    result_unit_label     TEXT,
-    sort_direction        TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC'))
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                 TEXT NOT NULL UNIQUE,
+    date                 DATE NOT NULL,
+    organisation         TEXT,
+    referee              TEXT,
+    race_director        TEXT,
+    time_control         TEXT,
+    route_name           TEXT,
+    elevation_difference TEXT,
+    route_length         TEXT,
+    course_setter        TEXT,
+    weather              TEXT,
+    result_unit          TEXT NOT NULL DEFAULT 'TIME' CHECK (result_unit IN ('TIME', 'POINTS')),
+    result_unit_label    TEXT,
+    sort_direction       TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC'))
 );
 
 CREATE TABLE team
@@ -60,6 +60,7 @@ CREATE TABLE participant
     penalty     INTEGER,
     measured_at TIMESTAMP,
     comment     TEXT,
+    status      TEXT    NOT NULL DEFAULT 'NONE' CHECK (status IN ('NONE', 'DNS', 'DNF', 'DSQ'),
 
     FOREIGN KEY (race_id)
         REFERENCES race (id)
@@ -67,7 +68,7 @@ CREATE TABLE participant
 
 );
 
-CREATE INDEX idx_participant_race_id ON participant(race_id);
+CREATE INDEX idx_participant_race_id ON participant (race_id);
 CREATE INDEX idx_participant_person_id ON participant (person_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
 CREATE INDEX idx_participant_category_id ON participant (category_id);
@@ -90,12 +91,12 @@ CREATE TABLE measurement
 
 CREATE TABLE race_measurement
 (
-    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    race_id                INTEGER   NOT NULL,
-    device_measurement_id  INTEGER   NOT NULL,
-    participant_id         INTEGER,
-    duration_ms            INTEGER   NOT NULL,
-    measured_at            TIMESTAMP NOT NULL,
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id               INTEGER   NOT NULL,
+    device_measurement_id INTEGER   NOT NULL,
+    participant_id        INTEGER,
+    duration_ms           INTEGER   NOT NULL,
+    measured_at           TIMESTAMP NOT NULL,
 
     FOREIGN KEY (race_id)
         REFERENCES race (id)
@@ -112,8 +113,8 @@ CREATE UNIQUE INDEX idx_race_measurement_race_device_unique ON race_measurement 
 CREATE TABLE points_scale
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL UNIQUE,
-    points_csv TEXT    NOT NULL
+    name       TEXT NOT NULL UNIQUE,
+    points_csv TEXT NOT NULL
 );
 
 INSERT INTO points_scale (name, points_csv)
@@ -122,11 +123,11 @@ VALUES ('FIS-Schema',
 
 CREATE TABLE gaudi_mode
 (
-    id              INTEGER   PRIMARY KEY AUTOINCREMENT,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     type            TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
     name            TEXT      NOT NULL,
     team_size       INTEGER,
-    points_scale_id INTEGER REFERENCES points_scale (id) ON DELETE SET NULL,
+    points_scale_id INTEGER   REFERENCES points_scale (id) ON DELETE SET NULL,
     created_at      TIMESTAMP NOT NULL
 );
 
@@ -151,10 +152,10 @@ CREATE INDEX idx_gaudi_mode_race_race_id ON gaudi_mode_race (race_id);
 
 CREATE TABLE gaudi_los_pairing
 (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    gaudi_mode_id    INTEGER NOT NULL,
-    participant1_id  INTEGER NOT NULL,
-    participant2_id  INTEGER,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    gaudi_mode_id   INTEGER NOT NULL,
+    participant1_id INTEGER NOT NULL,
+    participant2_id INTEGER,
 
     FOREIGN KEY (gaudi_mode_id)
         REFERENCES gaudi_mode (id)

@@ -1,6 +1,9 @@
 package x.timecontrol.services;
 
+import io.micronaut.transaction.TransactionOperations;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiModeRaceEntry;
 import x.timecontrol.dto.GaudiModeRequest;
@@ -19,6 +22,7 @@ import x.timecontrol.repositories.GaudiModeRaceRepository;
 import x.timecontrol.repositories.GaudiModeRepository;
 import x.timecontrol.services.gaudi.GaudiModeCalculator;
 
+import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +37,8 @@ import java.util.stream.StreamSupport;
 @Singleton
 public class GaudiModeService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(GaudiModeService.class);
+
     private final GaudiModeRepository repository;
     private final GaudiModeRaceRepository gaudiModeRaceRepository;
     private final GaudiLosPairingRepository pairingRepository;
@@ -41,6 +47,7 @@ public class GaudiModeService {
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
     private final Map<GaudiModeType, GaudiModeCalculator> calculatorsByType;
+    private final TransactionOperations<Connection> transactionOperations;
 
     public GaudiModeService(GaudiModeRepository repository,
                              GaudiModeRaceRepository gaudiModeRaceRepository,
@@ -49,7 +56,8 @@ public class GaudiModeService {
                              RaceService raceService,
                              PersonService personService,
                              AgeGroupService ageGroupService,
-                             List<GaudiModeCalculator> calculators) {
+                             List<GaudiModeCalculator> calculators,
+                             TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
         this.gaudiModeRaceRepository = gaudiModeRaceRepository;
         this.pairingRepository = pairingRepository;
@@ -61,13 +69,21 @@ public class GaudiModeService {
         for (GaudiModeCalculator calculator : calculators) {
             this.calculatorsByType.put(calculator.getType(), calculator);
         }
+        this.transactionOperations = transactionOperations;
     }
 
+    /**
+     * Wrapped in one transaction: without it, a failure partway through saveRaces() (e.g. a race
+     * referenced twice, or a real DataAccessException) would leave behind a GaudiMode row with an
+     * incomplete/missing set of gaudi_mode_race legs instead of rolling back the whole thing.
+     */
     public GaudiMode create(GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
         validate(gaudiMode.type(), gaudiMode.teamSize(), races);
-        GaudiMode created = repository.save(gaudiMode);
-        saveRaces(created.id(), races);
-        return created;
+        return transactionOperations.executeWrite(status -> {
+            GaudiMode created = repository.save(gaudiMode);
+            saveRaces(created.id(), races);
+            return created;
+        });
     }
 
     public Iterable<GaudiMode> findAll() {
@@ -93,6 +109,11 @@ public class GaudiModeService {
         return gaudiModeRaceRepository.findByGaudiModeIdOrderBySortOrder(gaudiModeId);
     }
 
+    /**
+     * Wrapped in one transaction for the same reason as {@link #create}: update() + the
+     * delete-then-recreate of the race legs must succeed or fail together, or a mid-way failure
+     * leaves a GaudiMode with its races deleted but not yet replaced.
+     */
     public Optional<GaudiMode> update(Long id, GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
         Optional<GaudiMode> existing = repository.findById(id);
         if (existing.isPresent()) {
@@ -105,9 +126,12 @@ public class GaudiModeService {
                     gaudiMode.pointsScaleId(),
                     existing.get().createdAt()
             );
-            GaudiMode result = repository.update(updated);
-            gaudiModeRaceRepository.deleteByGaudiModeId(id);
-            saveRaces(id, races);
+            GaudiMode result = transactionOperations.executeWrite(status -> {
+                GaudiMode saved = repository.update(updated);
+                gaudiModeRaceRepository.deleteByGaudiModeId(id);
+                saveRaces(id, races);
+                return saved;
+            });
             return Optional.of(result);
         }
         return Optional.empty();
@@ -137,6 +161,12 @@ public class GaudiModeService {
         for (GaudiModeRaceEntry entry : races) {
             if (entry.weight() != null && entry.weight() < 0) {
                 throw new IllegalArgumentException("Race weight must not be negative");
+            }
+            // Without this check a reference to an already-deleted (or never-existing) race would
+            // be silently dropped later by buildRaceParticipants() instead of being rejected here -
+            // letting a Gaudi-Modus be saved with fewer legs than the operator actually configured.
+            if (raceService.findById(entry.raceId()).isEmpty()) {
+                throw new IllegalArgumentException("Race with id " + entry.raceId() + " does not exist");
             }
         }
         switch (type) {
@@ -192,11 +222,12 @@ public class GaudiModeService {
      * with themselves.
      */
     public List<GaudiLosPairing> drawLosPairing(GaudiMode gaudiMode) {
-        pairingRepository.deleteByGaudiModeId(gaudiMode.id());
-
         List<GaudiModeRace> races = findRacesFor(gaudiMode.id());
         if (races.isEmpty()) {
-            return List.of();
+            return transactionOperations.executeWrite(status -> {
+                pairingRepository.deleteByGaudiModeId(gaudiMode.id());
+                return List.of();
+            });
         }
         Long raceId = races.getFirst().raceId();
 
@@ -209,21 +240,28 @@ public class GaudiModeService {
         List<Participant> firstHalf = participants.subList(0, half);
         List<Participant> secondHalf = participants.subList(half, half * 2);
 
-        List<GaudiLosPairing> created = new ArrayList<>();
-        for (int i = 0; i < half; i++) {
-            created.add(pairingRepository.save(
-                    new GaudiLosPairing(null, gaudiMode.id(), firstHalf.get(i).id(), secondHalf.get(i).id())
-            ));
-        }
+        // Wrapped in one transaction: without it, a failure partway through the save loop (e.g. a
+        // real DataAccessException on one row) would leave the previous pairing already deleted but
+        // the new one only half-drawn.
+        return transactionOperations.executeWrite(status -> {
+            pairingRepository.deleteByGaudiModeId(gaudiMode.id());
 
-        if (participants.size() % 2 != 0) {
-            Participant leftover = participants.getLast();
-            created.add(pairingRepository.save(
-                    new GaudiLosPairing(null, gaudiMode.id(), leftover.id(), null)
-            ));
-        }
+            List<GaudiLosPairing> created = new ArrayList<>();
+            for (int i = 0; i < half; i++) {
+                created.add(pairingRepository.save(
+                        new GaudiLosPairing(null, gaudiMode.id(), firstHalf.get(i).id(), secondHalf.get(i).id())
+                ));
+            }
 
-        return created;
+            if (participants.size() % 2 != 0) {
+                Participant leftover = participants.getLast();
+                created.add(pairingRepository.save(
+                        new GaudiLosPairing(null, gaudiMode.id(), leftover.id(), null)
+                ));
+            }
+
+            return created;
+        });
     }
 
     public List<GaudiLosPairing> findLosPairing(Long gaudiModeId) {
@@ -278,8 +316,9 @@ public class GaudiModeService {
     }
 
     private List<GaudiModeCalculator.RaceParticipants> buildRaceParticipants(GaudiMode gaudiMode, Set<Long> personIdFilter) {
+        List<GaudiModeRace> configuredRaces = findRacesFor(gaudiMode.id());
         List<GaudiModeCalculator.RaceParticipants> races = new ArrayList<>();
-        for (GaudiModeRace gmr : findRacesFor(gaudiMode.id())) {
+        for (GaudiModeRace gmr : configuredRaces) {
             Optional<Race> race = raceService.findById(gmr.raceId());
             if (race.isEmpty()) {
                 continue;
@@ -289,6 +328,14 @@ public class GaudiModeService {
                     .filter(p -> personIdFilter == null || personIdFilter.contains(p.personId()))
                     .toList();
             races.add(new GaudiModeCalculator.RaceParticipants(gmr.raceId(), race.get(), gmr.weight(), participants));
+        }
+        // validate() rejects a reference to a race that doesn't exist yet at save time, but a race
+        // can still be deleted afterwards (ON DELETE CASCADE removes its gaudi_mode_race row with
+        // it) - that can't be prevented here, only surfaced, since the join row is already gone.
+        if (races.size() < configuredRaces.size()) {
+            LOG.warn("Gaudi-Modus {} ('{}') is missing {} of its {} configured race(s) (deleted since); " +
+                            "ranking is computed from the remaining {} race(s)",
+                    gaudiMode.id(), gaudiMode.name(), configuredRaces.size() - races.size(), configuredRaces.size(), races.size());
         }
         return races;
     }

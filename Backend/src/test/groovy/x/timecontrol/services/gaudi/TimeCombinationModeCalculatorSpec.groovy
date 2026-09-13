@@ -64,6 +64,22 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking[0].diffMs() == null
     }
 
+    def "each leg's adjusted time is multiplied by that race's weight before summing"() {
+        given:
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.5d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 2.0d, [participant(2L, 1L, 10000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "0.5*60000 + 2.0*10000 = 50000"
+        ranking.size() == 1
+        ranking[0].valueMs() == 50000
+    }
+
     def "a person missing a result in any leg is excluded from the combined ranking"() {
         given:
         personService.findById(1L) >> Optional.of(person(1L, "Anna"))

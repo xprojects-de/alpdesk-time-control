@@ -1,6 +1,7 @@
 package x.timecontrol.services;
 
 import jakarta.inject.Singleton;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
@@ -25,7 +26,10 @@ public class RankingService {
      * A penalty always makes the result worse, regardless of sort direction. Null if no result was measured.
      */
     public Integer adjustedValue(Race race, Participant participant) {
-        if (participant.durationMs() == null) {
+        // A DSQ/DNF/DNS participant may well have a measured durationMs (e.g. disqualified after
+        // crossing the finish line) - that result must never count towards a ranking/place.
+        if (participant.durationMs() == null
+                || (participant.status() != null && participant.status() != DisqualificationStatus.NONE)) {
             return null;
         }
         int penalty = participant.penalty() != null ? participant.penalty() : 0;

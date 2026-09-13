@@ -110,4 +110,25 @@ class PointsCombinationModeCalculatorSpec extends Specification {
         and: "Ben: 80 (2nd in race1) + 50 (0.5 * 100 for 1st in race2) = 130"
         byPersonPoints["Ben"] == 130
     }
+
+    def "the total is rounded once, not per leg - avoiding compounded rounding error"() {
+        given: "two legs weighted 0.5 each, both award Anna 33 points (3rd place); rounding each leg " +
+                "separately (round(16.5)=17 twice = 34) would overstate the correct total of round(16.5+16.5)=33"
+        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        pointsScaleService.pointsForPlace(_ as List, 3) >> 33
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.5d,
+                        [participant(10L, 2L, 10000), participant(11L, 3L, 20000), participant(1L, 1L, 30000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 0.5d,
+                        [participant(20L, 4L, 10000), participant(21L, 5L, 20000), participant(2L, 1L, 30000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(pointsMode(), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].label() == "Anna"
+        ranking[0].totalPoints() == 33
+    }
 }
