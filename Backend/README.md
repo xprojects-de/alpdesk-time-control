@@ -22,6 +22,22 @@ Zertifikat signiert. Deshalb meldet sich beim ersten Start jeweils der Betriebss
 (Gatekeeper unter macOS, SmartScreen unter Windows) – siehe unten, wie man das einmalig
 bestätigt. Unter Linux gibt es keine vergleichbare Warnung.
 
+## Fallback: TimeControl.jar
+
+Zusätzlich liegt an jedem Release ein plattformunabhängiges `TimeControl.jar` bei. Keine
+Installer-Verpackung, kein Gatekeeper/SmartScreen (läuft nur über die Kommandozeile, nie über
+Doppelklick/LaunchServices), aber es muss selbst eine **Java-25-Laufzeitumgebung** installiert
+sein (z. B. [Eclipse Temurin](https://adoptium.net/) oder Amazon Corretto – jeder Hersteller
+geht, GraalVM wird nur zum *Bauen* gebraucht, nicht zum Ausführen). Start:
+
+```bash
+java -jar TimeControl.jar
+```
+
+Die Datenbank landet dabei relativ zum Verzeichnis, aus dem der Befehl gestartet wird (siehe
+[Wo liegt die Datenbank?](#wo-liegt-die-datenbank)) – am besten immer aus demselben Ordner
+starten.
+
 ## macOS
 
 Betrifft **beide** Varianten (`.dmg`) gleichermaßen, da beide unsigniert sind.
