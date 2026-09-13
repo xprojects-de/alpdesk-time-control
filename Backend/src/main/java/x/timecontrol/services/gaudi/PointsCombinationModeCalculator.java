@@ -6,6 +6,7 @@ import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.PointsScale;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.PersonService;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Punkte-Mischwertung: per race, each participant's place is looked up in a Punkteschema
@@ -64,7 +66,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         // Parsed once here rather than inside pointsForPlace() on every call below (person x race).
         List<Integer> scalePoints = pointsScaleService.parsePoints(scale);
 
-        record PersonResult(Long personId, String label, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
+        record PersonResult(Long personId, String label, String externalId, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -104,9 +106,11 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                 ));
             }
 
-            String label = personService.findById(personId).map(personService::displayName).orElse("Unbekannt");
+            Optional<Person> person = personService.findById(personId);
+            String label = person.map(personService::displayName).orElse("Unbekannt");
+            String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace);
-            results.add(new PersonResult(personId, label, totalPoints, legs, team));
+            results.add(new PersonResult(personId, label, externalId, totalPoints, legs, team));
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalPoints).reversed());
@@ -127,7 +131,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                     r.legs(),
                     r.team(),
                     null,
-                    r.personId()
+                    r.personId(),
+                    r.externalId()
             ));
         }
 

@@ -6,6 +6,7 @@ import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Zeit-Kombination: sums each participant's adjusted time (raw time + penalty, per race sort
@@ -48,7 +50,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
 
-        record PersonResult(String label, int totalMs, List<GaudiRankingLegResponse> legs, String team) {
+        record PersonResult(String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs, String team) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -82,9 +84,11 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                 ));
             }
 
-            String label = personService.findById(personId).map(personService::displayName).orElse("Unbekannt");
+            Optional<Person> person = personService.findById(personId);
+            String label = person.map(personService::displayName).orElse("Unbekannt");
+            String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace);
-            results.add(new PersonResult(label, total, legs, team));
+            results.add(new PersonResult(label, externalId, total, legs, team));
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalMs));
@@ -106,7 +110,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     r.legs(),
                     r.team(),
                     null,
-                    null
+                    null,
+                    r.externalId()
             ));
         }
 

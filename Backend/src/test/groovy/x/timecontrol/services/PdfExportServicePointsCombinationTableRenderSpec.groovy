@@ -25,7 +25,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
 
     private static GaudiRankingEntryResponse entry(int place, String label, String team, int totalPoints,
                                                      List<GaudiRankingLegResponse> legs) {
-        new GaudiRankingEntryResponse(place, label, null, null, null, null, null, totalPoints, legs, team, null, null)
+        new GaudiRankingEntryResponse(place, label, null, null, null, null, null, totalPoints, legs, team, null, null, null)
     }
 
     def "renders a Punkte-Mischwertung PDF with a per-race breakdown sub-table per participant"() {

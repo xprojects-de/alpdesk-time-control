@@ -60,9 +60,9 @@ public class PdfExportService {
         this.rankingService = rankingService;
     }
 
-    private record RankingEntry(int place, String name, String ageGroup, String team, String valueFormatted,
-                                 String penaltyFormatted, String totalFormatted, String diffFormatted,
-                                 boolean hasPenalty) {
+    private record RankingEntry(int place, String name, String externalId, String ageGroup, String team,
+                                 String valueFormatted, String penaltyFormatted, String totalFormatted,
+                                 String diffFormatted, boolean hasPenalty) {
     }
 
     private record StartListEntry(String raceNumber, String name, String birthYear, String gender,
@@ -75,6 +75,7 @@ public class PdfExportService {
     private static final List<PdfColumn<RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
             new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
+            new PdfColumn<>("Externe ID", 1.0f, e -> externalIdOrDash(e.externalId())),
             new PdfColumn<>("Alterskl.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.3f, e -> truncate(e.team(), 18)),
             new PdfColumn<>("Wert", 1.1f, RankingEntry::valueFormatted),
@@ -113,15 +114,33 @@ public class PdfExportService {
     /**
      * Drops the "Strafe" and "Gesamt" columns when none of the entries actually have a penalty,
      * instead of always reserving space for columns that would otherwise show "-"/zero for every
-     * row, or duplicate "Wert" verbatim since Gesamt == Wert when there is no penalty to add.
+     * row, or duplicate "Wert" verbatim since Gesamt == Wert when there is no penalty to add. Also
+     * drops "Externe ID" when no entry has one set, per {@link #hasExternalId}.
      */
     private List<PdfColumn<RankingEntry>> rankingColumns(List<RankingEntry> entries) {
-        if (entries.stream().anyMatch(RankingEntry::hasPenalty)) {
-            return RANKING_COLUMNS;
+        List<PdfColumn<RankingEntry>> columns = RANKING_COLUMNS;
+        if (entries.stream().noneMatch(RankingEntry::hasPenalty)) {
+            columns = columns.stream()
+                    .filter(c -> !c.header().equals("Strafe") && !c.header().equals("Gesamt"))
+                    .toList();
         }
-        return RANKING_COLUMNS.stream()
-                .filter(c -> !c.header().equals("Strafe") && !c.header().equals("Gesamt"))
-                .toList();
+        if (entries.stream().noneMatch(e -> hasExternalId(e.externalId()))) {
+            columns = columns.stream().filter(c -> !c.header().equals("Externe ID")).toList();
+        }
+        return columns;
+    }
+
+    /**
+     * Whether a Person's externalId is actually set - used to hide the "Externe ID" column in a
+     * ranking/results PDF export when nobody in it has one, instead of always reserving space for
+     * a column that would otherwise show "-" for every row.
+     */
+    private static boolean hasExternalId(String externalId) {
+        return externalId != null && !externalId.isBlank();
+    }
+
+    private static String externalIdOrDash(String externalId) {
+        return hasExternalId(externalId) ? externalId : "-";
     }
 
     private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
@@ -355,15 +374,20 @@ public class PdfExportService {
      */
     public byte[] generateTimeCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                   List<Race> legRaces, Race headerRace) throws IOException {
-        List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = List.of(
+        List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = new ArrayList<>(List.of(
                 new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.label(), 32)),
+                new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.label(), 32))
+        ));
+        if (anyHasExternalId(entries)) {
+            summaryColumns.add(new PdfColumn<>("Externe ID", 1.0f, e -> externalIdOrDash(e.externalId())));
+        }
+        summaryColumns.addAll(List.of(
                 new PdfColumn<>("Team", 1.6f, e -> truncate(e.team(), 20)),
                 // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
                 // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
                 new PdfColumn<>("Gesamt", 1.2f, e -> formatValue(headerRace, e.valueMs())),
                 new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-")
-        );
+        ));
 
         return renderDocument(headerRace, title, true,
                 ctx -> drawSectionWithDetails(ctx, summaryColumns, title, entries, "Teilnehmer", true,
@@ -391,7 +415,7 @@ public class PdfExportService {
                                                     List<Race> legRaces, Race headerRace) throws IOException {
         boolean showStrafe = anyLegHasPenalty(entries);
         return renderDocument(headerRace, title, true,
-                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), title, entries, "Teilnehmer", true,
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), title, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
@@ -409,7 +433,7 @@ public class PdfExportService {
         boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, title, true,
-                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
@@ -427,7 +451,7 @@ public class PdfExportService {
         boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, title, true,
-                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
+                ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
 
@@ -454,7 +478,7 @@ public class PdfExportService {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (!entries.isEmpty()) {
                         String sectionTitle = title + " - " + ageGroupName + " " + genderLabel(gender);
-                        drawSectionWithDetailTable(ctx, pointsCombinationColumns(), sectionTitle, entries, "Teilnehmer", false,
+                        drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), sectionTitle, entries, "Teilnehmer", false,
                                 pointsCombinationDetailColumns(anyLegHasPenalty(entries)), e -> pointsCombinationDetailRows(e, legRaces));
                     }
                 }
@@ -462,13 +486,21 @@ public class PdfExportService {
         });
     }
 
-    private static List<PdfColumn<GaudiRankingEntryResponse>> pointsCombinationColumns() {
-        return List.of(
+    /**
+     * Drops the "Externe ID" column when no entry in this section's ranking has a Person externalId
+     * set, mirroring how {@link #pointsCombinationDetailColumns} hides "Strafe".
+     */
+    private static List<PdfColumn<GaudiRankingEntryResponse>> pointsCombinationColumns(boolean showExternalId) {
+        List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>(List.of(
                 new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35)),
-                new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)),
-                new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-")
-        );
+                new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35))
+        ));
+        if (showExternalId) {
+            columns.add(new PdfColumn<>("Externe ID", 1.0f, e -> externalIdOrDash(e.externalId())));
+        }
+        columns.add(new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)));
+        columns.add(new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-"));
+        return columns;
     }
 
     private record PointsCombinationLegRow(String raceName, String wert, String strafe, String platz, String pkt) {
@@ -495,6 +527,14 @@ public class PdfExportService {
                 .filter(e -> e.legs() != null)
                 .flatMap(e -> e.legs().stream())
                 .anyMatch(leg -> leg.penalty() != null && leg.penalty() != 0);
+    }
+
+    /**
+     * Whether any entry carries a Person externalId - used to hide the "Externe ID" column in the
+     * Zeit-Kombination / Punkte-Mischwertung PDF exports when nobody in the ranking has one.
+     */
+    private static boolean anyHasExternalId(List<GaudiRankingEntryResponse> entries) {
+        return entries.stream().anyMatch(e -> hasExternalId(e.externalId()));
     }
 
     private List<PointsCombinationLegRow> pointsCombinationDetailRows(GaudiRankingEntryResponse entry, List<Race> legRaces) {
@@ -1005,6 +1045,7 @@ public class PdfExportService {
             entries.add(new RankingEntry(
                     places.get(p.id()),
                     name,
+                    person != null ? person.externalId() : null,
                     ageGroup,
                     team,
                     formatValue(race, p.durationMs()),

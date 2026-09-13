@@ -110,6 +110,7 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                     null,
                     null,
                     r.members(),
+                    null,
                     null
             ));
         }

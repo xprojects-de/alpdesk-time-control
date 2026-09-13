@@ -54,6 +54,10 @@ public record GaudiRankingEntryResponse(
 
         @Nullable
         @Schema(description = "The person this entry represents (Punkte-Mischwertung only), used to filter/group the ranking by gender or age group", example = "42", nullable = true)
-        Long personId
+        Long personId,
+
+        @Nullable
+        @Schema(description = "External ID of the person this entry represents, if set (Zeit-Kombination / Punkte-Mischwertung only)", example = "12345", nullable = true)
+        String externalId
 ) {
 }
