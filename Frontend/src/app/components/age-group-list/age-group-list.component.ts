@@ -19,6 +19,7 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {AgeGroup} from "../../models/age-group.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import * as AgeGroupActions from "../../store/age-group/age-group.actions";
@@ -41,6 +42,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatCardModule,
         MatTooltipModule,
         MatSortModule,
+        MatPaginatorModule,
     ],
     template: `
         <mat-card>
@@ -151,6 +153,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
                 </div>
+                <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
         </mat-card>
     `,
@@ -207,8 +210,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     ];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     private sortInitialized = false;
+    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
+    paginator = viewChild.required(MatPaginator);
 
     constructor() {
         this.ageGroups$ = this.store.select(
@@ -264,6 +269,16 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
                     this.sortInitialized = true;
+                }, 100);
+            }
+        });
+
+        effect(() => {
+            const paginatorInstance = this.paginator();
+            if (paginatorInstance && !this.paginatorInitialized) {
+                setTimeout(() => {
+                    this.dataSource.paginator = paginatorInstance;
+                    this.paginatorInitialized = true;
                 }, 100);
             }
         });

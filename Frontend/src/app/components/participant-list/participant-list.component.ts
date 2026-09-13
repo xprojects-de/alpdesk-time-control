@@ -19,6 +19,7 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatMenuModule} from "@angular/material/menu";
@@ -53,6 +54,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatCardModule,
         MatTooltipModule,
         MatSortModule,
+        MatPaginatorModule,
         MatSelectModule,
         MatFormFieldModule,
         MatMenuModule,
@@ -361,6 +363,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
                 </table>
                 </div>
+                <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
 
                 <div class="count-info" [class.hidden]="loading$ | async">
                     Anzahl der Teilnehmer: {{ dataSource.data.length }}
@@ -465,6 +468,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     // destroyed/recreated (as a fresh MatSort instance) each time the selection is cleared
     // and set again.
     sort = viewChild(MatSort);
+    paginator = viewChild(MatPaginator);
 
     constructor() {
         this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
@@ -585,6 +589,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             if (sortInstance && this.dataSource.sort !== sortInstance) {
                 setTimeout(() => {
                     this.dataSource.sort = sortInstance;
+                }, 100);
+            }
+        });
+
+        // Same re-attach logic as sort above: the table (and its MatPaginator) only exists once a
+        // race is selected, and is destroyed/recreated each time the selection is cleared and set again.
+        effect(() => {
+            const paginatorInstance = this.paginator();
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                setTimeout(() => {
+                    this.dataSource.paginator = paginatorInstance;
                 }, 100);
             }
         });
