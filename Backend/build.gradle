@@ -150,7 +150,7 @@ def jpackageExecutable = {
 }
 
 def jpackageArgs = { String type, File destDir ->
-    [
+    def argsList = [
             '--input', file('build/libs').absolutePath,
             '--main-jar', 'time-control.jar',
             '--main-class', 'x.timecontrol.Application',
@@ -160,9 +160,15 @@ def jpackageArgs = { String type, File destDir ->
             '--icon', jpackageIcon.absolutePath,
             '--type', type,
             '--dest', destDir.absolutePath,
-            // Only the jpackage build shows the status window - see DesktopWindowStartupListener.
             '--java-options', '-Dapp.showWindow=true',
     ]
+
+    if (jpackagePlatform == 'macos') {
+        argsList += ['--java-options', '-XstartOnFirstThread']
+        argsList += ['--java-options', '-Djava.awt.headless=false']
+    }
+
+    return argsList
 }
 
 // Fast, no extra OS tooling required (no WiX/dpkg) - good for local iteration.
