@@ -1,6 +1,7 @@
 package x.timecontrol.services;
 
 import jakarta.inject.Singleton;
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiModeRaceEntry;
 import x.timecontrol.dto.GaudiModeRequest;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
@@ -247,7 +248,36 @@ public class GaudiModeService {
         if (calculator == null) {
             return List.of();
         }
+        return calculator.computeRanking(gaudiMode, buildRaceParticipants(gaudiMode, personIdFilter));
+    }
 
+    /**
+     * Punkte-Mischwertung recomputed strictly within one gender/age-group category (see
+     * {@link #computeRanking(GaudiMode, Set)}): resolves which persons among the gaudiMode's
+     * participants match the given gender and/or age-group name, then reruns the whole ranking
+     * using only that subset. Either filter may be null to leave that dimension unrestricted.
+     */
+    public List<GaudiRankingEntryResponse> computeRankingForCategory(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
+        return computeRanking(gaudiMode, resolveMatchingPersonIds(gaudiMode, filterGender, filterAgeGroup));
+    }
+
+    /**
+     * Persons excluded from the ranking for missing a valid result in at least one combined race -
+     * see {@link GaudiModeCalculator#computeDnsEntries}. Only meaningful for Zeit-Kombination/
+     * Punkte-Mischwertung; other types return an empty list via that method's default implementation.
+     * Deliberately not scoped by gender/age-group the way {@link #computeRankingForCategory} is: the
+     * same, unfiltered DNS list is used on every one of a Gaudi-Modus's PDF exports, regardless of
+     * which category that particular export ranks.
+     */
+    public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode) {
+        GaudiModeCalculator calculator = calculatorsByType.get(gaudiMode.type());
+        if (calculator == null) {
+            return List.of();
+        }
+        return calculator.computeDnsEntries(gaudiMode, buildRaceParticipants(gaudiMode, null));
+    }
+
+    private List<GaudiModeCalculator.RaceParticipants> buildRaceParticipants(GaudiMode gaudiMode, Set<Long> personIdFilter) {
         List<GaudiModeCalculator.RaceParticipants> races = new ArrayList<>();
         for (GaudiModeRace gmr : findRacesFor(gaudiMode.id())) {
             Optional<Race> race = raceService.findById(gmr.raceId());
@@ -260,18 +290,7 @@ public class GaudiModeService {
                     .toList();
             races.add(new GaudiModeCalculator.RaceParticipants(gmr.raceId(), race.get(), gmr.weight(), participants));
         }
-
-        return calculator.computeRanking(gaudiMode, races);
-    }
-
-    /**
-     * Punkte-Mischwertung recomputed strictly within one gender/age-group category (see
-     * {@link #computeRanking(GaudiMode, Set)}): resolves which persons among the gaudiMode's
-     * participants match the given gender and/or age-group name, then reruns the whole ranking
-     * using only that subset. Either filter may be null to leave that dimension unrestricted.
-     */
-    public List<GaudiRankingEntryResponse> computeRankingForCategory(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
-        return computeRanking(gaudiMode, resolveMatchingPersonIds(gaudiMode, filterGender, filterAgeGroup));
+        return races;
     }
 
     private Set<Long> resolveMatchingPersonIds(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {

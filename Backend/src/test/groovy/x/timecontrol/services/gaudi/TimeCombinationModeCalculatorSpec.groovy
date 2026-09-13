@@ -9,6 +9,7 @@ import x.timecontrol.entities.Person
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.services.AgeGroupService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
 import x.timecontrol.services.TeamService
@@ -20,7 +21,10 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     PersonService personService = Mock()
     TeamService teamService = Mock()
-    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(), personService, teamService)
+    AgeGroupService ageGroupService = Mock() {
+        findAll() >> []
+    }
+    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(), personService, teamService, ageGroupService)
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,

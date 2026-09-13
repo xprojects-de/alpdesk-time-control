@@ -10,6 +10,7 @@ import x.timecontrol.entities.PointsScale
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.services.AgeGroupService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.PointsScaleService
 import x.timecontrol.services.RankingService
@@ -23,8 +24,11 @@ class PointsCombinationModeCalculatorSpec extends Specification {
     PersonService personService = Mock()
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
+    AgeGroupService ageGroupService = Mock() {
+        findAll() >> []
+    }
     PointsCombinationModeCalculator calculator =
-            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService)
+            new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService, ageGroupService)
 
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60")
 

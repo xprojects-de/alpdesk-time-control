@@ -1,14 +1,17 @@
 package x.timecontrol.services.gaudi;
 
 import jakarta.inject.Singleton;
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.PointsScale;
 import x.timecontrol.entities.Team;
+import x.timecontrol.services.AgeGroupService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.PointsScaleService;
 import x.timecontrol.services.RankingService;
@@ -19,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 
 /**
  * Punkte-Mischwertung: per race, each participant's place is looked up in a Punkteschema
@@ -35,12 +39,16 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
     private final PersonService personService;
     private final PointsScaleService pointsScaleService;
     private final TeamService teamService;
+    private final AgeGroupService ageGroupService;
 
-    public PointsCombinationModeCalculator(RankingService rankingService, PersonService personService, PointsScaleService pointsScaleService, TeamService teamService) {
+    public PointsCombinationModeCalculator(RankingService rankingService, PersonService personService,
+                                            PointsScaleService pointsScaleService, TeamService teamService,
+                                            AgeGroupService ageGroupService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.pointsScaleService = pointsScaleService;
         this.teamService = teamService;
+        this.ageGroupService = ageGroupService;
     }
 
     @Override
@@ -137,6 +145,49 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         return entries;
+    }
+
+    /**
+     * The complement of {@link #computeRanking}'s completeness filter: every person referenced by at
+     * least one leg race who lacks a placed result in at least one other required (non-zero-weight)
+     * leg, so they never made it into the combined ranking - reported as "nicht gewertet" (DNS)
+     * instead of silently dropped.
+     */
+    @Override
+    public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        if (races.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
+        Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
+        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+
+        List<GaudiDnsEntryResponse> dns = new ArrayList<>();
+        for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
+            Map<Long, Participant> byRace = entry.getValue();
+
+            boolean completeRequiredLegs = races.stream()
+                    .filter(race -> race.weight() != 0)
+                    .allMatch(race -> {
+                        Participant p = byRace.get(race.raceId());
+                        return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
+                    });
+            if (completeRequiredLegs) {
+                continue;
+            }
+
+            Optional<Person> person = personService.findById(entry.getKey());
+            String lastName = person.map(Person::lastName).orElse("Unbekannt");
+            String firstName = person.map(Person::firstName).orElse("");
+            String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), ageGroups)).orElse("Unbekannt");
+            String externalId = person.map(Person::externalId).orElse(null);
+            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace), ageGroup, externalId));
+        }
+
+        dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(GaudiDnsEntryResponse::firstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
+        return dns;
     }
 
     /**

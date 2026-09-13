@@ -46,7 +46,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first())
+        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
@@ -62,7 +62,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first())
+        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
@@ -82,7 +82,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         }
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first())
+        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
