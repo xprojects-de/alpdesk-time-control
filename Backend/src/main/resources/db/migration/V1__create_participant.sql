@@ -60,7 +60,7 @@ CREATE TABLE participant
     penalty     INTEGER,
     measured_at TIMESTAMP,
     comment     TEXT,
-    status      TEXT    NOT NULL DEFAULT 'NONE' CHECK (status IN ('NONE', 'DNS', 'DNF', 'DSQ'),
+    status      TEXT    NOT NULL DEFAULT 'NONE' CHECK (status IN ('NONE', 'DNS', 'DNF', 'DSQ')),
 
     FOREIGN KEY (race_id)
         REFERENCES race (id)
