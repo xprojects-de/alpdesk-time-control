@@ -311,7 +311,7 @@ public class PdfExportService {
                 new PdfColumn<>("Ø-Wert Gesamt", 1f, e -> formatValue(race, e.referenceMs())),
                 new PdfColumn<>("Abweichung", 1f, e -> formatValue(race, e.diffMs()))
         );
-        return renderDocument(race, true,
+        return renderDocument(race, title, true,
                 ctx -> drawSection(ctx, columns, title, entries, "Paare", true));
     }
 
@@ -327,7 +327,7 @@ public class PdfExportService {
                 new PdfColumn<>("Mannschaft", 2.5f, e -> truncate(e.label(), 40)),
                 new PdfColumn<>("Gesamtwert", 1f, e -> formatValue(race, e.valueMs()))
         );
-        return renderDocument(race, false,
+        return renderDocument(race, title, false,
                 ctx -> drawSectionWithDetails(ctx, columns, title, entries, "Mannschaften", true,
                         e -> teamMemberDetailBlocks(e, race)));
     }
@@ -365,7 +365,7 @@ public class PdfExportService {
                 new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-")
         );
 
-        return renderDocument(headerRace, true,
+        return renderDocument(headerRace, title, true,
                 ctx -> drawSectionWithDetails(ctx, summaryColumns, title, entries, "Teilnehmer", true,
                         e -> timeCombinationDetailBlocks(e, legRaces)));
     }
@@ -390,7 +390,7 @@ public class PdfExportService {
     public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace) throws IOException {
         boolean showStrafe = anyLegHasPenalty(entries);
-        return renderDocument(headerRace, true,
+        return renderDocument(headerRace, title, true,
                 ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), title, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
@@ -408,7 +408,7 @@ public class PdfExportService {
         String fullTitle = title + " - " + genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
-        return renderDocument(headerRace, true,
+        return renderDocument(headerRace, title, true,
                 ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
@@ -426,7 +426,7 @@ public class PdfExportService {
         String fullTitle = title + " - " + ageGroup + " " + genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
-        return renderDocument(headerRace, true,
+        return renderDocument(headerRace, title, true,
                 ctx -> drawSectionWithDetailTable(ctx, pointsCombinationColumns(), fullTitle, entries, "Teilnehmer", true,
                         pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces)));
     }
@@ -448,7 +448,7 @@ public class PdfExportService {
                 .distinct()
                 .toList();
 
-        return renderDocument(headerRace, true, ctx -> {
+        return renderDocument(headerRace, title, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
@@ -541,15 +541,17 @@ public class PdfExportService {
     private final class PdfContext {
         private final PDDocument document;
         private final Race race;
+        private final String headerName;
         private final PDRectangle pageSize;
         private PDPage page;
         private PDPageContentStream stream;
         private float y;
         private boolean firstPage = true;
 
-        PdfContext(PDDocument document, Race race, PDRectangle pageSize) throws IOException {
+        PdfContext(PDDocument document, Race race, String headerName, PDRectangle pageSize) throws IOException {
             this.document = document;
             this.race = race;
+            this.headerName = headerName;
             this.pageSize = pageSize;
             newPage();
         }
@@ -562,7 +564,7 @@ public class PdfExportService {
             page = new PDPage(pageSize);
             document.addPage(page);
             stream = new PDPageContentStream(document, page);
-            y = drawPageHeader(stream, race, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
+            y = drawPageHeader(stream, race, headerName, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
             if (firstPage) {
                 y = drawRaceInfoBlock(stream, race, y, page.getMediaBox().getWidth());
                 firstPage = false;
@@ -626,12 +628,21 @@ public class PdfExportService {
     }
 
     private byte[] renderDocument(Race race, boolean landscape, PdfBody body) throws IOException {
+        return renderDocument(race, race.name(), landscape, body);
+    }
+
+    /**
+     * @param headerName the title drawn in the page header - normally {@code race.name()}, but for
+     *                    Gaudi-Modus exports the Gaudi-Modus's own name so the header doesn't show
+     *                    one arbitrary underlying leg race's name instead.
+     */
+    private byte[] renderDocument(Race race, String headerName, boolean landscape, PdfBody body) throws IOException {
         PDRectangle pageSize = landscape
                 ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth())
                 : PDRectangle.A4;
 
         try (PDDocument document = new PDDocument()) {
-            PdfContext ctx = new PdfContext(document, race, pageSize);
+            PdfContext ctx = new PdfContext(document, race, headerName, pageSize);
             try {
                 body.write(ctx);
                 ctx.close();
@@ -1107,7 +1118,7 @@ public class PdfExportService {
      * Draws a header with the race name and date at the top of the page.
      * @return the Y position after the header
      */
-    private float drawPageHeader(PDPageContentStream contentStream, Race race, float pageWidth, float pageHeight) throws IOException {
+    private float drawPageHeader(PDPageContentStream contentStream, Race race, String headerName, float pageWidth, float pageHeight) throws IOException {
         float headerY = pageHeight - 22;
 
         String formattedDate = "";
@@ -1118,7 +1129,7 @@ public class PdfExportService {
                 race.date().getYear());
         }
 
-        String headerText = race.name();
+        String headerText = headerName;
         if (!formattedDate.isEmpty()) {
             headerText += " - " + formattedDate;
         }
