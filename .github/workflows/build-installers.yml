@@ -256,6 +256,9 @@ jobs:
     needs: [ build-native-installer, build-jpackage-installer ]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download all Build Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -266,11 +269,15 @@ jobs:
           mkdir -p final-assets
           cp release-assets/*-installer/* final-assets/
 
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: release-${{ github.run_number }}
-          name: Release v0.1.${{ github.run_number }}
+          name: Release v${{ steps.read_version.outputs.version }} (Build ${{ github.run_number }})
           draft: false
           prerelease: false
           files: final-assets/*
