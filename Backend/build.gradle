@@ -160,7 +160,13 @@ def jpackageArgs = { String type, File destDir ->
             '--icon', jpackageIcon.absolutePath,
             '--type', type,
             '--dest', destDir.absolutePath,
-            '--java-options', '-Dapp.showWindow=true',
+            // Tells the app it's running from a jpackage bundle: it anchors its data directory
+            // (SQLite DB, JWT secret) to the user's home directory instead of the process's
+            // working directory - the latter is unreliable for double-clicked apps (e.g. "/" on
+            // macOS when launched via Finder/LaunchServices, which is read-only) - and it shows
+            // the Swing status window (DesktopWindowStartupListener) instead of relying on a
+            // console the user won't have when double-clicking the app.
+            '--java-options', '-Dapp.packaged=true',
     ]
 
     if (jpackagePlatform == 'macos') {

@@ -15,11 +15,11 @@ import java.awt.GraphicsEnvironment;
 /**
  * Shows a small always-on control window (name, version, link, quit button) instead of a
  * console. Off by default: only the jpackage installers enable it (via
- * --java-options -Dapp.showWindow=true), because the GraalVM native-image build launches from a
+ * --java-options -Dapp.packaged=true), because the GraalVM native-image build launches from a
  * terminal and its reachability analysis should not have to deal with AWT/Swing.
  */
 @Singleton
-@Requires(property = "app.showWindow", value = "true", defaultValue = "false")
+@Requires(property = "app.packaged", value = "true", defaultValue = "false")
 public class DesktopWindowStartupListener implements ApplicationEventListener<ServerStartupEvent> {
 
     private static final Logger LOG = LoggerFactory.getLogger(DesktopWindowStartupListener.class);
@@ -36,7 +36,7 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
     @Override
     public void onApplicationEvent(@NonNull ServerStartupEvent event) {
         if (GraphicsEnvironment.isHeadless()) {
-            LOG.warn("app.showWindow is enabled but this environment is headless - skipping status window");
+            LOG.warn("app.packaged is enabled but this environment is headless - skipping status window");
             return;
         }
 
