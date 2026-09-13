@@ -493,7 +493,7 @@ public class ParticipantService {
             String externalId = parts.length > 5 ? parts[5].trim() : "";
             importRow(raceId, lineNumber, line,
                     new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
-                            null, null, null, null, null, null),
+                            null, null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -538,7 +538,8 @@ public class ParticipantService {
                             valueFor(row, effectiveMapping, "ageGroup"),
                             valueFor(row, effectiveMapping, "durationMs"),
                             valueFor(row, effectiveMapping, "penalty"),
-                            valueFor(row, effectiveMapping, "measuredAt")),
+                            valueFor(row, effectiveMapping, "measuredAt"),
+                            valueFor(row, effectiveMapping, "comment")),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -604,7 +605,8 @@ public class ParticipantService {
                     p.raceNumber() != null ? p.raceNumber().toString() : "",
                     p.durationMs() != null ? p.durationMs().toString() : "",
                     p.penalty() != null ? p.penalty().toString() : "",
-                    p.measuredAt() != null ? p.measuredAt().toString() : ""
+                    p.measuredAt() != null ? p.measuredAt().toString() : "",
+                    sanitizeForExport(p.comment())
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
@@ -648,7 +650,7 @@ public class ParticipantService {
     private record ImportRowFields(
             String lastName, String firstName, String birthDate, String team, String gender,
             String externalId, String raceNumber, String category, String ageGroup,
-            String durationMs, String penalty, String measuredAt) {
+            String durationMs, String penalty, String measuredAt, String comment) {
     }
 
     /**
@@ -701,6 +703,7 @@ public class ParticipantService {
         Integer durationMs = parseOptionalInt(fields.durationMs());
         Integer penalty = parseOptionalInt(fields.penalty());
         LocalDateTime measuredAt = parseMeasuredAt(fields.measuredAt());
+        String comment = fields.comment() != null && !fields.comment().trim().isEmpty() ? fields.comment().trim() : null;
 
         // Each row is its own transaction: a failure saving the participant rolls back a
         // just-created person for that row too (no orphan Person left behind), and does not
@@ -732,7 +735,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, null);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment);
                 return repository.save(participant);
             });
             imported.add(saved);

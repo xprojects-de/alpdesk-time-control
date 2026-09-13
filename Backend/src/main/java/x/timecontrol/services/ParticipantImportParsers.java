@@ -38,7 +38,7 @@ public final class ParticipantImportParsers {
     // exported ourselves round-trips with zero manual mapping (see ParticipantController#exportCsv).
     public static final List<String> TARGET_FIELDS = List.of(
             "lastName", "firstName", "birthDate", "gender", "ageGroup", "team", "category", "externalId",
-            "raceNumber", "durationMs", "penalty", "measuredAt");
+            "raceNumber", "durationMs", "penalty", "measuredAt", "comment");
 
     // "Klasse" (DSV-Wettkampfdatei, RaceEngine, ...) names an age+gender class like "U14m" - an
     // AgeGroup, not our free-text Category - so it's aliased to ageGroup, not category. "Kategorie"
@@ -55,7 +55,8 @@ public final class ParticipantImportParsers {
             Map.entry("raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber")),
             Map.entry("durationMs", List.of("durationms", "zeit", "zeitms", "time", "result", "ergebnis")),
             Map.entry("penalty", List.of("penalty", "strafe", "strafzeit")),
-            Map.entry("measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp")));
+            Map.entry("measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp")),
+            Map.entry("comment", List.of("comment", "kommentar", "info", "bemerkung")));
 
     private static final char[] CSV_DELIMITER_CANDIDATES = {';', ',', '\t', '|'};
 
