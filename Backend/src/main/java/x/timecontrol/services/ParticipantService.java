@@ -488,7 +488,7 @@ public class ParticipantService {
             }
 
             String externalId = parts.length > 5 ? parts[5].trim() : "";
-            importRow(raceId, lineNumber, line, parts[0], parts[1], parts[2], parts[3], parts[4], externalId, null, null,
+            importRow(raceId, lineNumber, line, parts[0], parts[1], parts[2], parts[3], parts[4], externalId, null, null, null,
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -529,6 +529,7 @@ public class ParticipantService {
                     valueFor(row, effectiveMapping, "externalId"),
                     valueFor(row, effectiveMapping, "raceNumber"),
                     valueFor(row, effectiveMapping, "category"),
+                    valueFor(row, effectiveMapping, "ageGroup"),
                     existingNameBirthDateKeys, imported, errors);
         }
 
@@ -591,11 +592,13 @@ public class ParticipantService {
     private void importRow(Long raceId, int rowNumber, String rawRowDescription,
                             String lastNameRaw, String firstNameRaw, String birthDateRaw, String teamNameRaw,
                             String genderRaw, String externalIdRaw, String raceNumberRaw, String categoryNameRaw,
+                            String ageGroupNameRaw,
                             Set<String> existingNameBirthDateKeys, List<Participant> imported, List<ParticipantImportRowError> errors) {
         String lastName = lastNameRaw != null ? lastNameRaw.trim() : "";
         String firstName = firstNameRaw != null ? firstNameRaw.trim() : "";
         String teamName = teamNameRaw != null ? teamNameRaw.trim() : "";
         String categoryName = categoryNameRaw != null ? categoryNameRaw.trim() : "";
+        String ageGroupName = ageGroupNameRaw != null ? ageGroupNameRaw.trim() : "";
         String externalId = externalIdRaw != null ? externalIdRaw.trim() : "";
 
         if (lastName.isEmpty() || firstName.isEmpty()) {
@@ -635,6 +638,12 @@ public class ParticipantService {
             Participant saved = transactionOperations.executeWrite(status -> {
                 Long teamId = teamName.isEmpty() ? null : teamService.findOrCreateByName(teamName).id();
                 Long categoryId = categoryName.isEmpty() ? null : categoryService.findOrCreateByName(categoryName).id();
+                // AgeGroup isn't a participant FK - it's computed from birthDate/gender at read time
+                // (findMatchingAgeGroup) - so importing "Klasse" just needs a matching AgeGroup row to
+                // exist, not anything set on the Participant itself.
+                if (!ageGroupName.isEmpty()) {
+                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender);
+                }
 
                 Person person;
                 if (!externalId.isEmpty()) {

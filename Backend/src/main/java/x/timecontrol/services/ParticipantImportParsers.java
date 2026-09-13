@@ -33,15 +33,19 @@ public final class ParticipantImportParsers {
     }
 
     public static final List<String> TARGET_FIELDS = List.of(
-            "lastName", "firstName", "birthDate", "gender", "team", "category", "externalId", "raceNumber");
+            "lastName", "firstName", "birthDate", "gender", "ageGroup", "team", "category", "externalId", "raceNumber");
 
+    // "Klasse" (DSV-Wettkampfdatei, RaceEngine, ...) names an age+gender class like "U14m" - an
+    // AgeGroup, not our free-text Category - so it's aliased to ageGroup, not category. "Kategorie"
+    // is kept on category since that's the more generic/neutral term for an actual free-text category.
     private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.of(
             "lastName", List.of("nachname", "lastname", "name"),
             "firstName", List.of("vorname", "firstname"),
             "birthDate", List.of("geburtsdatum", "birthdate", "jahrgang", "jg", "geburtsjahr", "birthyear"),
             "gender", List.of("geschlecht", "gender", "sex"),
+            "ageGroup", List.of("klasse", "altersklasse", "altersgruppe", "agegroup"),
             "team", List.of("verein", "vereinsname", "team", "club"),
-            "category", List.of("klasse", "kategorie", "category"),
+            "category", List.of("kategorie", "category"),
             "externalId", List.of("dsvcode", "dsvid", "externalid"),
             "raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber"));
 

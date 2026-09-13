@@ -3,6 +3,7 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.AgeGroupRequest;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.repositories.AgeGroupRepository;
 
 import java.time.LocalDate;
@@ -85,6 +86,30 @@ public class AgeGroupService {
             }
         }
         return "Unbekannt";
+    }
+
+    /**
+     * Find-or-create for participant import: an import's "Klasse"/age-class column (DSV-Wettkampfdatei,
+     * RaceEngine, ...) names an age+gender class such as "U14m" - an AgeGroup, not a free-text
+     * Category. Resolved by name (case-insensitive), like Team/Category's findOrCreateByName. A newly
+     * created group starts as a single birth year (this row's); an existing group's range is widened
+     * to include this row's birth year when it falls outside it, since one sample row never tells us
+     * a class's full range up front. An existing group's gender is left as-is - age_group.name is
+     * globally unique, so real exports already bake gender into the name (U14m vs U14w).
+     */
+    public AgeGroup findOrCreateForImport(String rawLabel, int birthYear, Gender gender) {
+        String normalized = rawLabel.trim().toUpperCase();
+        Optional<AgeGroup> existing = repository.findByNameIgnoreCase(normalized);
+        if (existing.isEmpty()) {
+            return repository.save(new AgeGroup(null, normalized, birthYear, birthYear, gender));
+        }
+        AgeGroup match = existing.get();
+        int widenedFrom = Math.min(match.birthYearFrom(), birthYear);
+        int widenedTo = Math.max(match.birthYearTo(), birthYear);
+        if (widenedFrom == match.birthYearFrom() && widenedTo == match.birthYearTo()) {
+            return match;
+        }
+        return repository.update(new AgeGroup(match.id(), match.name(), widenedFrom, widenedTo, match.gender()));
     }
 
     /**

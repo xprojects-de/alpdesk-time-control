@@ -3,6 +3,9 @@ package x.timecontrol.services
 import io.micronaut.data.exceptions.DataAccessException
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
+import x.timecontrol.dto.ParticipantImportFormat
+import x.timecontrol.entities.AgeGroup
+import x.timecontrol.entities.Category
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Person
@@ -347,5 +350,28 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 1
         result.errors()[0].reason().contains("already in this race")
+    }
+
+    def "mapped import resolves the ageGroup column via AgeGroupService instead of Category, independently of an actual category column"() {
+        given: "a semicolon CSV whose Klasse column is mapped to ageGroup and whose separate Kategorie column is mapped to category"
+        repository.findByRaceId(5L) >> []
+        teamService.findOrCreateByName("SC Oberstdorf") >> new Team(1L, "SC OBERSTDORF")
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.save(_) >> { Participant p -> new Participant(1L, 5L, 1L, p.raceNumber(), p.teamId(), p.categoryId(), null, null, null) }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Verein;Klasse;Kategorie\n" +
+                "Müller;Maximilian;2012;M;SC Oberstdorf;U14m;Ski Alpin\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht",
+                 team: "Verein", ageGroup: "Klasse", category: "Kategorie"])
+
+        then: "the AgeGroup is resolved (not treated as the free-text category) and the real category column still goes through categoryService"
+        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE) >> new AgeGroup(1L, "U14M", 2012, 2012, Gender.MALE)
+        1 * categoryService.findOrCreateByName("Ski Alpin") >> new Category(1L, "SKI ALPIN")
+        result.imported().size() == 1
+        result.errors().isEmpty()
     }
 }

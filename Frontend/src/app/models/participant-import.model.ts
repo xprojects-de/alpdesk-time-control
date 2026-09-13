@@ -28,13 +28,17 @@ export interface ParticipantImportTargetField {
 
 // Our participant fields the user can map a source column/element onto. Order here is the order
 // shown in the mapping UI.
+// "ageGroup" (e.g. "U14m") isn't a field stored on the participant - it just ensures a matching
+// AgeGroup exists (created or widened as needed); actual assignment happens automatically from
+// birth date + gender. "category" is a separate, genuinely free-text field.
 export const PARTICIPANT_IMPORT_TARGET_FIELDS: ParticipantImportTargetField[] = [
     {key: 'lastName', label: 'Nachname', required: true},
     {key: 'firstName', label: 'Vorname', required: true},
     {key: 'birthDate', label: 'Geburtsdatum / Jahrgang', required: true},
     {key: 'gender', label: 'Geschlecht', required: true},
+    {key: 'ageGroup', label: 'Altersgruppe (z.B. U14m)', required: false},
     {key: 'team', label: 'Verein / Team', required: false},
-    {key: 'category', label: 'Kategorie / Klasse', required: false},
+    {key: 'category', label: 'Kategorie', required: false},
     {key: 'externalId', label: 'Externe ID (z.B. DSV-Code)', required: false},
     {key: 'raceNumber', label: 'Startnummer', required: false},
 ];
