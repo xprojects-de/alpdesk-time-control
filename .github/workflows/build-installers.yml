@@ -260,11 +260,12 @@ jobs:
 
       - name: Rename macOS DMG
         run: |
-          dmg_file=$(ls Backend/dist/*.dmg 2>/dev/null | head -n 1)
+          dmg_file=$(ls dist/*.dmg 2>/dev/null | head -n 1)
           if [ -n "$dmg_file" ]; then
-            mv "$dmg_file" "Backend/dist/TimeControl-macOS-arm64.dmg"
+            mv "$dmg_file" "dist/${{ matrix.artifact-name }}"
           else
-            echo "Error: No .dmg file found in Backend/dist/"
+            echo "Error: No .dmg file found in dist/"
+            ls -la dist/
             exit 1
           fi
 
