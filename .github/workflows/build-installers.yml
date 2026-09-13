@@ -258,10 +258,15 @@ jobs:
             ./gradlew jpackageInstaller --no-daemon
           fi
 
-      - name: Rename macOS DMG with Architecture
-        if: matrix.platform == 'macos'
+      - name: Rename macOS DMG
         run: |
-          mv Backend/dist/*.dmg "Backend/dist/${{ matrix.artifact-name }}"
+          dmg_file=$(ls Backend/dist/*.dmg 2>/dev/null | head -n 1)
+          if [ -n "$dmg_file" ]; then
+            mv "$dmg_file" "Backend/dist/TimeControl-macOS-arm64.dmg"
+          else
+            echo "Error: No .dmg file found in Backend/dist/"
+            exit 1
+          fi
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
