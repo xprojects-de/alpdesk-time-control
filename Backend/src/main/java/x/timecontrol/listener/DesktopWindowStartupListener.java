@@ -30,8 +30,8 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
     @Value("${app.version}")
     private String version;
 
-    @Value("${micronaut.application.name}")
-    private String appName;
+    @Value("${app.launcher.title}")
+    private String appTitle;
 
     @Override
     public void onApplicationEvent(@NonNull ServerStartupEvent event) {
@@ -41,6 +41,6 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
         }
 
         String url = "http://localhost:" + serverPort;
-        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appName, version, url));
+        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appTitle, version, url));
     }
 }
