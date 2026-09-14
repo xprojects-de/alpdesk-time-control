@@ -25,19 +25,19 @@ dependencies {
     testImplementation("io.micronaut:micronaut-http-client")
     // Needed for Spock's Mock() to mock concrete classes (e.g. the service classes under test),
     // not just interfaces - Spock's built-in java-proxy mocker only handles interfaces.
-    testImplementation("net.bytebuddy:byte-buddy:1.17.5")
-    testImplementation("org.objenesis:objenesis:3.4")
+    testImplementation("net.bytebuddy:byte-buddy:1.18.13")
+    testImplementation("org.objenesis:objenesis:3.6")
     annotationProcessor("io.micronaut.security:micronaut-security-processor")
     annotationProcessor("io.micronaut.security:micronaut-security-annotations")
     implementation("io.micronaut.security:micronaut-security")
     implementation("io.micronaut.security:micronaut-security-jwt")
-    aotPlugins platform("io.micronaut.platform:micronaut-platform:5.1.0")
+    aotPlugins platform("io.micronaut.platform:micronaut-platform:5.1.4")
     aotPlugins("io.micronaut.security:micronaut-security-aot")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
-    runtimeOnly("io.micronaut.sql:micronaut-jdbc-sqlite:7.1.0")
-    implementation("io.micronaut.flyway:micronaut-flyway:8.1.0")
-    implementation("io.micronaut.data:micronaut-data-jdbc:5.1.1")
-    runtimeOnly("io.micronaut.sql:micronaut-jdbc-hikari:7.1.0")
+    runtimeOnly("io.micronaut.sql:micronaut-jdbc-sqlite:7.1.2")
+    implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
+    implementation("io.micronaut.data:micronaut-data-jdbc:5.1.4")
+    runtimeOnly("io.micronaut.sql:micronaut-jdbc-hikari:7.1.2")
     implementation("org.apache.pdfbox:pdfbox:3.0.8")
 }
 
@@ -50,7 +50,10 @@ java {
     targetCompatibility = JavaVersion.toVersion("25")
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
-        vendor = JvmVendorSpec.GRAAL_VM
+        // GraalVM native-image build is currently disabled (see build-installers.yml) - any
+        // JDK 25 works for the jpackage/shadowJar builds. Re-enable to pin the toolchain to
+        // GraalVM again (needed for the `nativeCompile` task).
+        // vendor = JvmVendorSpec.GRAAL_VM
     }
 }
 
@@ -61,6 +64,10 @@ graalvmNative {
             buildArgs.add("-H:+SharedArenaSupport")
             // Optional für SQLite JNI-Support:
             buildArgs.add("--enable-native-access=ALL-UNNAMED")
+            // Baked-in runtime property so DesktopWindowStartupListener skips the Swing status
+            // window for this build - AWT/Swing should stay out of the native-image reachability
+            // analysis.
+            buildArgs.add("-Dapp.graalPackage=true")
         }
     }
 }
@@ -163,9 +170,7 @@ def jpackageArgs = { String type, File destDir ->
             // Tells the app it's running from a jpackage bundle: it anchors its data directory
             // (SQLite DB, JWT secret) to the user's home directory instead of the process's
             // working directory - the latter is unreliable for double-clicked apps (e.g. "/" on
-            // macOS when launched via Finder/LaunchServices, which is read-only) - and it shows
-            // the Swing status window (DesktopWindowStartupListener) instead of relying on a
-            // console the user won't have when double-clicking the app.
+            // macOS when launched via Finder/LaunchServices, which is read-only).
             '--java-options', '-Dapp.packaged=true',
     ]
 

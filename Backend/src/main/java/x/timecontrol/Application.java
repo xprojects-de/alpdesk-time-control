@@ -29,6 +29,9 @@ public class Application {
 
     private static final Logger LOG = LoggerFactory.getLogger(Application.class);
     private static final String JWT_SECRET_ENV_KEY = "JWT_GENERATOR_SIGNATURE_SECRET";
+    private static final String APP_USERNAME_ENV_KEY = "APP_USERNAME";
+    private static final String APP_PASSWORD_ENV_KEY = "APP_PASSWORD";
+    private static final String DEFAULT_APP_USERNAME = "time-control";
 
     // When launched as a jpackage app bundle (double-click on macOS/Windows/Linux), the
     // process's working directory is unreliable - e.g. macOS sets it to "/" for apps started
@@ -42,6 +45,7 @@ public class Application {
             ? Path.of(System.getProperty("user.home"), "database")
             : Path.of("database");
     private static final Path JWT_SECRET_FILE = APP_DATA_DIR.resolve("jwt-secret.txt");
+    private static final Path APP_PASSWORD_FILE = APP_DATA_DIR.resolve("app-password.txt");
 
     static void main(String[] args) {
         if (PACKAGED) {
@@ -50,27 +54,18 @@ public class Application {
                     + "?foreign_keys=true&journal_mode=WAL&busy_timeout=5000");
         }
         ensureJwtSecret();
-        warnIfDefaultCredentials();
+        String appPassword = ensureAppPassword();
+        String appUsername = resolvedAppUsername();
+        LOG.info("Login-Zugangsdaten: Benutzer='{}', Passwort='{}'", appUsername, appPassword);
         Micronaut.run(Application.class, args);
     }
 
-    /**
-     * Warns loudly at startup if the login still uses the example credentials from
-     * application.properties (time-control/time-control) - anyone who can reach this server
-     * on the network could otherwise log in with them.
-     */
-    private static void warnIfDefaultCredentials() {
-        boolean usingDefaultUsername = isUnset("APP_USERNAME");
-        boolean usingDefaultPassword = isUnset("APP_PASSWORD");
-        if (usingDefaultUsername && usingDefaultPassword) {
-            LOG.warn("APP_USERNAME/APP_PASSWORD are not set - login is using the default credentials " +
-                    "'time-control'/'time-control' from application.properties. Set both environment " +
-                    "variables before exposing this server beyond localhost.");
+    private static String resolvedAppUsername() {
+        String username = System.getenv(APP_USERNAME_ENV_KEY);
+        if (username == null) {
+            username = System.getProperty(APP_USERNAME_ENV_KEY);
         }
-    }
-
-    private static boolean isUnset(String envKey) {
-        return System.getenv(envKey) == null && System.getProperty(envKey) == null;
+        return username != null ? username : DEFAULT_APP_USERNAME;
     }
 
     /**
@@ -102,5 +97,50 @@ public class Application {
         byte[] bytes = new byte[64];
         new SecureRandom().nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * The login password must never silently fall back to the public example value that ships
+     * in application.properties (time-control/time-control). If no explicit override is
+     * configured, generate a random password once and persist it next to the SQLite database
+     * so it survives restarts - it is also logged and shown in the desktop status window so an
+     * on-site operator can actually use it to log in.
+     */
+    private static String ensureAppPassword() {
+        String existing = System.getenv(APP_PASSWORD_ENV_KEY);
+        if (existing == null) {
+            existing = System.getProperty(APP_PASSWORD_ENV_KEY);
+        }
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            String password;
+            if (Files.exists(APP_PASSWORD_FILE)) {
+                password = Files.readString(APP_PASSWORD_FILE).trim();
+            } else {
+                password = generatePassword();
+                Files.createDirectories(APP_PASSWORD_FILE.getParent());
+                Files.writeString(APP_PASSWORD_FILE, password);
+            }
+            System.setProperty(APP_PASSWORD_ENV_KEY, password);
+            return password;
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not initialize app password", e);
+        }
+    }
+
+    private static String generatePassword() {
+        String letters = "abcdefghijklmnopqrstuvwxyz";
+        String digits = "0123456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder(8);
+        for (int i = 0; i < 4; i++) {
+            password.append(letters.charAt(random.nextInt(letters.length())));
+        }
+        for (int i = 0; i < 4; i++) {
+            password.append(digits.charAt(random.nextInt(digits.length())));
+        }
+        return password.toString();
     }
 }

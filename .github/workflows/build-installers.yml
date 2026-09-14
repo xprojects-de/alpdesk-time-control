@@ -45,6 +45,9 @@ jobs:
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
     needs: build-frontend
+    # GraalVM native-image build disabled for now - we rely on the jpackage build instead.
+    # Set this back to `true` (or remove the condition) to re-enable.
+    if: false
     runs-on: ${{ matrix.os }}
 
     defaults:
@@ -218,13 +221,14 @@ jobs:
       - name: Rename Shadow JAR for release
         run: |
           mkdir -p dist
-          cp build/libs/time-control.jar dist/TimeControl.jar
+          version=$(grep '^app.version=' src/main/resources/application.properties | cut -d'=' -f2)
+          cp build/libs/time-control.jar "dist/Time-Control-java-v${version}.jar"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: shadow-jar
-          path: Backend/dist/TimeControl.jar
+          path: Backend/dist/Time-Control-java-v*.jar
           retention-days: 14
 
   build-jpackage-installer:
@@ -289,6 +293,15 @@ jobs:
             ./gradlew jpackageInstaller --no-daemon
           fi
 
+      - name: Rename Installer for Release
+        shell: bash
+        run: |
+          version=$(grep '^app.version=' src/main/resources/application.properties | cut -d'=' -f2)
+          for f in dist/*.dmg dist/*.exe dist/*.deb; do
+            [ -e "$f" ] || continue
+            mv "$f" "dist/Time-Control-java-v${version}.${f##*.}"
+          done
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -301,7 +314,9 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [ build-native-installer, build-jpackage-installer, build-shadow-jar ]
+    # build-native-installer is currently skipped (see above) - not listed here, otherwise
+    # this job would be skipped too since a skipped dependency doesn't count as successful.
+    needs: [ build-jpackage-installer, build-shadow-jar ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

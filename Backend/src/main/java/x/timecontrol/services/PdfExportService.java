@@ -1133,7 +1133,7 @@ public class PdfExportService {
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
             Integer adjustedValue = rankingService.adjustedValue(race, p);
-            Integer diff = (i > 0) ? Math.abs(adjustedValue - leaderValue) : null;
+            Integer diff = (i > 0) ? adjustedValue - leaderValue : null;
 
             entries.add(new RankingEntry(
                     places.get(p.id()),
@@ -1144,7 +1144,7 @@ public class PdfExportService {
                     formatValue(race, p.durationMs()),
                     formatValue(race, p.penalty()),
                     formatValue(race, adjustedValue),
-                    diff != null ? "+" + formatValue(race, diff) : "-",
+                    diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
                     p.penalty() != null && p.penalty() != 0
             ));
         }
