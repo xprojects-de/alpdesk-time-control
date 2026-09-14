@@ -48,13 +48,21 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         new GaudiMode(1L, GaudiModeType.TIME_COMBINATION, "Zeit-Kombination", null, null, LocalDateTime.now())
     }
 
+    // Backing maps for the findByIds() stubs below - populated per-test via given:. A single
+    // closure-based interaction per mock method (reading the map at call time) avoids the
+    // ambiguity of multiple equally-generic `_` interactions on the same method.
+    def knownPersons = [:]
+    def knownTeams = [:]
+
     def setup() {
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
+        personService.findByIds(_) >> { knownPersons }
+        teamService.findByIds(_) >> { knownTeams }
     }
 
     def "a person's adjusted time (including penalty) is summed across both legs"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000, 2000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 70000)]),
@@ -71,7 +79,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     def "each leg's adjusted time is multiplied by that race's weight before summing"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.5d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 2.0d, [participant(2L, 1L, 10000)]),
@@ -87,7 +95,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     def "a person missing a result in any leg is excluded from the combined ranking"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
@@ -102,7 +110,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     def "computeDnsEntries reports the explicit DSQ status of the leg that carries it"() {
         given: "Anna is DSQ in leg 1 (despite having a measured time there) and has a normal result in leg 2"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participantWithStatus(1L, 1L, 60000, DisqualificationStatus.DSQ)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 70000)]),
@@ -118,7 +126,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     def "computeDnsEntries falls back to the generic DNS label when nobody has an explicit status"() {
         given: "Anna simply has no result at all in leg 2"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
@@ -134,8 +142,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
 
     def "a combined total tied with the leader shows no gap instead of +0"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
-        personService.findById(2L) >> Optional.of(person(2L, "Ben"))
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d,
                         [participant(1L, 1L, 60000), participant(2L, 2L, 60000)]),
@@ -147,5 +154,21 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         then:
         ranking.every { it.diffMs() == null }
         ranking*.place() == [1, 1]
+    }
+
+    def "a person missing a result only in a zero-weighted leg is still ranked"() {
+        given: "person 1 has no result in leg 2, which is weighted 0 and must not disqualify them"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 0.0d, []),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].valueMs() == 60000
     }
 }

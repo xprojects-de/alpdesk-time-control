@@ -10,18 +10,18 @@ import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.Team
-import x.timecontrol.repositories.TeamRepository
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 class TeamModeCalculatorSpec extends Specification {
 
-    TeamRepository teamRepository = Mock()
+    TeamService teamService = Mock()
     PersonService personService = Mock()
-    TeamModeCalculator calculator = new TeamModeCalculator(teamRepository, new RankingService(), personService)
+    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(), personService)
 
     private static Race race(SortDirection direction) {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -40,14 +40,22 @@ class TeamModeCalculatorSpec extends Specification {
         new Person(id, firstName, "Test", LocalDate.of(1990, 1, 1), Gender.MALE, null)
     }
 
+    // Backing maps for the findByIds() stubs below - populated per-test via given:. A single
+    // closure-based interaction per mock method (reading the map at call time) avoids the
+    // ambiguity of multiple equally-generic `_` interactions on the same method, where Spock's
+    // "last declared wins" tie-break does not reliably apply.
+    def knownPersons = [:]
+    def knownTeams = [:]
+
     def setup() {
-        personService.findById(_ as Long) >> Optional.empty()
+        personService.findByIds(_) >> { knownPersons }
+        teamService.findByIds(_) >> { knownTeams }
+        personService.displayName(_ as Person) >> { Person p -> p.firstName() }
     }
 
     def "team totals include each member's penalty, not just the raw time"() {
         given: "team 1 has a faster raw time but a penalty that should push it behind team 2"
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 60000, 10000), // adjusted 70000
                 participant(2L, 2L, 65000),        // adjusted 65000
@@ -66,8 +74,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "team ranking is reversed for a DESC (points-style) race"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 100), // higher value should win in DESC
                 participant(2L, 2L, 50),
@@ -84,7 +91,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "teams with fewer members than the configured team size do not qualify"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
         def participants = [participant(1L, 1L, 60000)]
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
 
@@ -97,7 +104,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "only the fastest teamSize members of a larger team count towards the total"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 1L, 65000),
@@ -114,11 +121,8 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "team members are listed individually, marking which ones counted towards the total"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
-        personService.findById(2L) >> Optional.of(person(2L, "Ben"))
-        personService.findById(3L) >> Optional.of(person(3L, "Chris"))
-        personService.displayName(_ as Person) >> { Person p -> p.firstName() }
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 1L, 65000),
@@ -137,8 +141,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "tied team totals share the same place"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 2L, 60000),
