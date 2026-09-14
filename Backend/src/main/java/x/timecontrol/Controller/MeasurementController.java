@@ -9,10 +9,10 @@ import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.AutoAssignService;
 import x.timecontrol.services.DataImportScheduler;
-import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TimingProviderRegistry;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
@@ -45,7 +45,7 @@ public class MeasurementController {
     MeasurementService service;
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     DataImportScheduler dataImportScheduler;
@@ -202,8 +202,9 @@ public class MeasurementController {
                     // device recorded since the last scheduled poll before wiping it, or that data
                     // is silently lost - resetDevice() only sends the reset command, it never reads
                     // data itself.
-                    dataImportService.importDataFromDevice();
-                    boolean deviceReset = dataImportService.resetDevice();
+                    var importer = timingProviderRegistry.getActiveImporter();
+                    importer.importDataFromDevice();
+                    boolean deviceReset = importer.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()
                                 .body(new ErrorResponse("Failed to reset device. Database was not modified."));
@@ -235,7 +236,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
     public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
         try {
-            boolean success = dataImportService.continuousMode(enable);
+            boolean success = timingProviderRegistry.getActiveImporter().continuousMode(enable);
             if (!success) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Failed to set continuous mode on device"));
@@ -260,7 +261,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to get device status")
     public HttpResponse<?> getDeviceStatus() {
         try {
-            String status = dataImportService.getDeviceStatus();
+            String status = timingProviderRegistry.getActiveImporter().getDeviceStatus();
             if (status == null) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Failed to get device status"));
@@ -281,7 +282,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Error checking device connection")
     public HttpResponse<Void> checkDeviceConnection() {
         try {
-            boolean isConnected = dataImportService.isDeviceConnected();
+            boolean isConnected = timingProviderRegistry.getActiveImporter().isDeviceConnected();
             if (isConnected) {
                 return HttpResponse.ok();
             } else {
@@ -301,7 +302,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
     public HttpResponse<?> discardOldestStart() {
         try {
-            boolean success = dataImportService.discardOldestStart();
+            boolean success = timingProviderRegistry.getActiveImporter().discardOldestStart();
             if (!success) {
                 return HttpResponse.badRequest()
                         .body(new ErrorResponse("Failed to discard oldest start. Queue may be empty or device is in continuous mode."));
@@ -332,7 +333,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Import failed")
     public HttpResponse<List<MeasurementResponse>> importFromDevice() {
         try {
-            List<Measurement> imported = dataImportService.importDataFromDevice();
+            List<Measurement> imported = timingProviderRegistry.getActiveImporter().importDataFromDevice();
             List<MeasurementResponse> response = imported.stream()
                     .map(MeasurementResponse::from)
                     .toList();

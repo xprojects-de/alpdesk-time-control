@@ -1,6 +1,5 @@
 package x.timecontrol.services;
 
-import io.micronaut.context.annotation.Property;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
@@ -10,36 +9,27 @@ import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import x.timecontrol.entities.Measurement;
+import x.timecontrol.entities.TimingProviderType;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Singleton
-public class DataImportService {
+public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DataImportService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AlpdeskTimeControlDataImportService.class);
 
-    @Property(name = "data-import.url", defaultValue = "http://192.168.4.1/data")
-    String dataUrl;
+    private static final String DEFAULT_BASE_URL = "http://192.168.4.1";
 
-    @Property(name = "data-import.reset-url", defaultValue = "http://192.168.4.1/reset")
-    String resetUrl;
-
-    @Property(name = "data-import.enable-continuous-mode", defaultValue = "http://192.168.4.1/enableContinuousMode")
-    String enableContinuousModeUrl;
-
-    @Property(name = "data-import.disable-continuous-mode", defaultValue = "http://192.168.4.1/disableContinuousMode")
-    String disableContinuousModeUrl;
-
-    @Property(name = "data-import.status-url", defaultValue = "http://192.168.4.1/status")
-    String statusUrl;
-
-    @Property(name = "data-import.ping-url", defaultValue = "http://192.168.4.1/ping")
-    String pingUrl;
-
-    @Property(name = "data-import.discard-url", defaultValue = "http://192.168.4.1/discard")
-    String discardUrl;
+    private static final String DATA_PATH = "/data";
+    private static final String RESET_PATH = "/reset";
+    private static final String STATUS_PATH = "/status";
+    private static final String PING_PATH = "/ping";
+    private static final String DISCARD_PATH = "/discard";
+    private static final String ENABLE_CONTINUOUS_MODE_PATH = "/enableContinuousMode";
+    private static final String DISABLE_CONTINUOUS_MODE_PATH = "/disableContinuousMode";
 
     @Inject
     @Client("/")
@@ -51,8 +41,57 @@ public class DataImportService {
     @Inject
     MeasurementTableLock measurementTableLock;
 
+    private volatile String baseUrl = DEFAULT_BASE_URL;
+
+    @Override
+    public TimingProviderType type() {
+        return TimingProviderType.ALPDESK_TIMECONTROL;
+    }
+
+    @Override
+    public void configure(Map<String, String> config) {
+        String configured = config != null ? config.get("baseUrl") : null;
+        if (configured != null && !configured.isBlank()) {
+            // Strip trailing slash(es) so baseUrl + "/data" never ends up with a double slash
+            // regardless of whether the saved value has one.
+            this.baseUrl = configured.trim().replaceAll("/+$", "");
+        } else {
+            this.baseUrl = DEFAULT_BASE_URL;
+        }
+    }
+
+    private String dataUrl() {
+        return baseUrl + DATA_PATH;
+    }
+
+    private String resetUrl() {
+        return baseUrl + RESET_PATH;
+    }
+
+    private String statusUrl() {
+        return baseUrl + STATUS_PATH;
+    }
+
+    private String pingUrl() {
+        return baseUrl + PING_PATH;
+    }
+
+    private String discardUrl() {
+        return baseUrl + DISCARD_PATH;
+    }
+
+    private String enableContinuousModeUrl() {
+        return baseUrl + ENABLE_CONTINUOUS_MODE_PATH;
+    }
+
+    private String disableContinuousModeUrl() {
+        return baseUrl + DISABLE_CONTINUOUS_MODE_PATH;
+    }
+
+    @Override
     public List<Measurement> importDataFromDevice() {
         List<Measurement> createdMeasurements = new ArrayList<>();
+        String dataUrl = dataUrl();
 
         try {
 
@@ -127,7 +166,10 @@ public class DataImportService {
         return createdMeasurements;
     }
 
+    @Override
     public boolean resetDevice() {
+
+        String resetUrl = resetUrl();
 
         try {
 
@@ -151,6 +193,7 @@ public class DataImportService {
 
     }
 
+    @Override
     public boolean continuousMode(boolean enableContinuousMode) {
 
         try {
@@ -158,9 +201,9 @@ public class DataImportService {
             LOG.info("set continuousMode: {}", enableContinuousMode);
 
             if (enableContinuousMode) {
-                httpClient.toBlocking().exchange(HttpRequest.GET(enableContinuousModeUrl));
+                httpClient.toBlocking().exchange(HttpRequest.GET(enableContinuousModeUrl()));
             } else {
-                httpClient.toBlocking().exchange(HttpRequest.GET(disableContinuousModeUrl));
+                httpClient.toBlocking().exchange(HttpRequest.GET(disableContinuousModeUrl()));
             }
 
             LOG.info("Successfully set continuousMode");
@@ -180,7 +223,10 @@ public class DataImportService {
         }
     }
 
+    @Override
     public String getDeviceStatus() {
+
+        String statusUrl = statusUrl();
 
         try {
 
@@ -203,7 +249,10 @@ public class DataImportService {
         }
     }
 
+    @Override
     public boolean discardOldestStart() {
+
+        String discardUrl = discardUrl();
 
         try {
 
@@ -226,7 +275,10 @@ public class DataImportService {
         }
     }
 
+    @Override
     public boolean isDeviceConnected() {
+
+        String pingUrl = pingUrl();
 
         try {
 
@@ -249,7 +301,3 @@ public class DataImportService {
         }
     }
 }
-
-
-
-

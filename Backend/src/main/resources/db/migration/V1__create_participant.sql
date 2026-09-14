@@ -169,3 +169,17 @@ CREATE TABLE gaudi_los_pairing
 );
 
 CREATE INDEX idx_gaudi_los_pairing_mode_id ON gaudi_los_pairing (gaudi_mode_id);
+
+CREATE TABLE app_settings
+(
+    id                     INTEGER PRIMARY KEY,
+    timing_provider_type   TEXT NOT NULL DEFAULT 'ALPDESK_TIMECONTROL' CHECK (timing_provider_type IN ('ALPDESK_TIMECONTROL')),
+    timing_provider_config TEXT
+);
+
+-- Single settings row, always id=1. SettingsService reads/writes this row only; a fresh install
+-- needs it seeded here rather than lazily created, since TimingProviderRegistry expects it to
+-- always exist. Config carries the Alpdesk importer's device base URL - see
+-- AlpdeskTimeControlDataImportService.
+INSERT INTO app_settings (id, timing_provider_type, timing_provider_config)
+VALUES (1, 'ALPDESK_TIMECONTROL', '{"baseUrl":"http://192.168.4.1"}');

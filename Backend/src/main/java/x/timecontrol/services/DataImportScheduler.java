@@ -19,7 +19,7 @@ public class DataImportScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(DataImportScheduler.class);
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     AutoAssignService autoAssignService;
@@ -98,7 +98,7 @@ public class DataImportScheduler {
         LOG.debug("Starting scheduled data import...");
 
         try {
-            List<Measurement> imported = dataImportService.importDataFromDevice();
+            List<Measurement> imported = timingProviderRegistry.getActiveImporter().importDataFromDevice();
 
             if (!imported.isEmpty()) {
                 LOG.info("Scheduled import completed: {} measurements imported", imported.size());

@@ -20,9 +20,9 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.DataImportScheduler;
-import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TimingProviderRegistry;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +41,7 @@ public class RaceController {
     RaceMeasurementService raceMeasurementService;
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     DataImportScheduler dataImportScheduler;
@@ -182,8 +182,9 @@ public class RaceController {
                     // this, a finish/start that arrived in that last window is deleted from the
                     // device by the reset below and never makes it into the local measurement table
                     // at all - permanent, silent data loss on the primary archive workflow.
-                    dataImportService.importDataFromDevice();
-                    boolean deviceReset = dataImportService.resetDevice();
+                    var importer = timingProviderRegistry.getActiveImporter();
+                    importer.importDataFromDevice();
+                    boolean deviceReset = importer.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()
                                 .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
