@@ -2,7 +2,8 @@ import {Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy} f
 import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
-import {Observable} from "rxjs";
+import {Observable, Subject} from "rxjs";
+import {filter, map, takeUntil} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
 import {MatToolbarModule} from "@angular/material/toolbar";
@@ -16,6 +17,8 @@ import * as MeasurementActions from "../../store/measurement/measurement.actions
 import * as MeasurementSelectors from "../../store/measurement/measurement.selectors";
 import * as VersionActions from "../../store/version/version.actions";
 import * as VersionSelectors from "../../store/version/version.selectors";
+import * as SettingsActions from "../../store/settings/settings.actions";
+import * as SettingsSelectors from "../../store/settings/settings.selectors";
 import {VersionInfo} from "../../models/version.model";
 
 interface NavItem {
@@ -48,27 +51,31 @@ interface NavItem {
             <span>Alpdesk TimeControl - Zeitnahme System</span>
             <span class="spacer"></span>
 
-            <!-- Device Connection Status -->
-            <div class="connection-status">
-                @if (deviceConnected$ | async; as connected) {
-                    @if (connected) {
-                        <mat-icon class="status-icon connected"
-                                  [matTooltip]="'Gerät verbunden'">
-                            wifi
-                        </mat-icon>
-                    } @else if (connected === false) {
-                        <mat-icon class="status-icon disconnected"
-                                  [matTooltip]="'Gerät nicht verbunden'">
-                            wifi_off
+            <!-- Device Connection Status - hidden entirely when no timing device is configured
+                 (TimingProviderType.NONE), since "disconnected" would misleadingly read as an
+                 error for a deliberate evaluation-only setup rather than a device problem. -->
+            @if (timingProviderActive$ | async) {
+                <div class="connection-status">
+                    @if (deviceConnected$ | async; as connected) {
+                        @if (connected) {
+                            <mat-icon class="status-icon connected"
+                                      [matTooltip]="'Gerät verbunden'">
+                                wifi
+                            </mat-icon>
+                        } @else if (connected === false) {
+                            <mat-icon class="status-icon disconnected"
+                                      [matTooltip]="'Gerät nicht verbunden'">
+                                wifi_off
+                            </mat-icon>
+                        }
+                    } @else {
+                        <mat-icon class="status-icon unknown"
+                                  [matTooltip]="'Verbindungsstatus unbekannt'">
+                            help_outline
                         </mat-icon>
                     }
-                } @else {
-                    <mat-icon class="status-icon unknown"
-                              [matTooltip]="'Verbindungsstatus unbekannt'">
-                        help_outline
-                    </mat-icon>
-                }
-            </div>
+                </div>
+            }
 
             <button mat-icon-button [matMenuTriggerFor]="menu">
                 <mat-icon>account_circle</mat-icon>
@@ -187,9 +194,12 @@ interface NavItem {
 })
 export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
+    private destroy$ = new Subject<void>();
     username$: Observable<string | null>;
     deviceConnected$: Observable<boolean | null>;
     version$: Observable<VersionInfo | null>;
+    // null while settings haven't loaded yet, so the icon/polling stay off until we actually know.
+    timingProviderActive$: Observable<boolean | null>;
 
     readonly navItems: NavItem[] = [
         {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
@@ -211,6 +221,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
         this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
         this.version$ = this.store.select(VersionSelectors.selectVersion);
+        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderSettings).pipe(
+            map(settings => settings ? settings.type !== 'NONE' : null)
+        );
     }
 
     toggleNav(): void {
@@ -234,14 +247,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit(): void {
-        // Start polling device connection every 5 seconds
-        this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
-        // Trigger immediate check
-        this.store.dispatch(MeasurementActions.checkDeviceConnection());
         this.store.dispatch(VersionActions.loadVersion());
+        this.store.dispatch(SettingsActions.loadTimingProvider());
+
+        // Only poll device connection while a timing device is actually configured - starting
+        // polling dispatches again on every change is safe (the effect's switchMap cancels the
+        // previous interval), so this also picks up a provider switch made on the Settings page
+        // without needing a dashboard reload.
+        this.timingProviderActive$.pipe(
+            filter((active): active is boolean => active !== null),
+            takeUntil(this.destroy$),
+        ).subscribe(active => {
+            if (active) {
+                this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
+                this.store.dispatch(MeasurementActions.checkDeviceConnection());
+            } else {
+                this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
+            }
+        });
     }
 
     ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
         // Stop polling when component is destroyed
         this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
     }

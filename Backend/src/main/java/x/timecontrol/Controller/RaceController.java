@@ -22,6 +22,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TimingDataImporter;
 import x.timecontrol.services.TimingProviderRegistry;
 
 import java.util.List;
@@ -182,7 +183,12 @@ public class RaceController {
                     // this, a finish/start that arrived in that last window is deleted from the
                     // device by the reset below and never makes it into the local measurement table
                     // at all - permanent, silent data loss on the primary archive workflow.
-                    var importer = timingProviderRegistry.getActiveImporter();
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    if (importerOpt.isEmpty()) {
+                        return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                                .body(new ErrorResponse("Keine Zeitmessung konfiguriert"));
+                    }
+                    TimingDataImporter importer = importerOpt.get();
                     importer.importDataFromDevice();
                     boolean deviceReset = importer.resetDevice();
                     if (!deviceReset) {

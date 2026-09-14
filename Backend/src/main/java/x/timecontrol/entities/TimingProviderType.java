@@ -7,5 +7,11 @@ package x.timecontrol.entities;
  * migration.
  */
 public enum TimingProviderType {
+    /**
+     * No timing device configured - the app is used for evaluation/results only. Not backed by a
+     * {@link x.timecontrol.services.TimingDataImporter} bean; handled explicitly in
+     * {@link x.timecontrol.services.TimingProviderRegistry#getActiveImporter()}.
+     */
+    NONE,
     ALPDESK_TIMECONTROL
 }

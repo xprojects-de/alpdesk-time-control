@@ -138,11 +138,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
     saving$: Observable<boolean>;
     timingProviderSettings$: Observable<TimingProviderSettings | null>;
 
-    availableTypes: TimingProviderType[] = ["ALPDESK_TIMECONTROL"];
+    availableTypes: TimingProviderType[] = ["NONE", "ALPDESK_TIMECONTROL"];
     alpdeskFields = ALPDESK_CONFIG_FIELDS;
 
     form: FormGroup = this.fb.group({
-        type: ["ALPDESK_TIMECONTROL", Validators.required],
+        type: ["NONE", Validators.required],
         config: this.fb.group(
             Object.fromEntries(ALPDESK_CONFIG_FIELDS.map(f => [f.key, [""]]))
         ),

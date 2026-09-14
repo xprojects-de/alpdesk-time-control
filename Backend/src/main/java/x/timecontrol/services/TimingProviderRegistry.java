@@ -4,8 +4,10 @@ import jakarta.inject.Singleton;
 import x.timecontrol.entities.AppSettings;
 import x.timecontrol.entities.TimingProviderType;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Singleton
 public class TimingProviderRegistry {
@@ -19,8 +21,16 @@ public class TimingProviderRegistry {
         this.settingsService = settingsService;
     }
 
+    /**
+     * @return every selectable provider type: {@link TimingProviderType#NONE} (always selectable,
+     * not backed by a bean) plus every {@link TimingProviderType} with a registered
+     * {@link TimingDataImporter} bean.
+     */
     public List<TimingProviderType> availableTypes() {
-        return List.copyOf(importersByType.keySet());
+        List<TimingProviderType> types = new ArrayList<>();
+        types.add(TimingProviderType.NONE);
+        types.addAll(importersByType.keySet());
+        return types;
     }
 
     /**
@@ -29,18 +39,24 @@ public class TimingProviderRegistry {
      * second (scheduler tick, or a manual controller action) and it keeps a settings change
      * effective immediately without needing separate cache-invalidation logic.
      *
-     * @throws IllegalStateException if app_settings selects a provider type with no matching
-     *                                {@link TimingDataImporter} bean (should not happen in
-     *                                practice: {@link SettingsService} only accepts types
-     *                                present in {@link #availableTypes()})
+     * @return empty if no timing device is configured ({@link TimingProviderType#NONE})
+     * @throws IllegalStateException if app_settings selects a provider type other than NONE with
+     *                                no matching {@link TimingDataImporter} bean (should not
+     *                                happen in practice: {@link SettingsService} only accepts
+     *                                types present in {@link #availableTypes()} - this indicates a
+     *                                provider was added without registering its importer bean)
      */
-    public TimingDataImporter getActiveImporter() {
+    public Optional<TimingDataImporter> getActiveImporter() {
         AppSettings settings = settingsService.getSettings();
-        TimingDataImporter importer = importersByType.get(settings.timingProviderType());
+        TimingProviderType type = settings.timingProviderType();
+        if (type == TimingProviderType.NONE) {
+            return Optional.empty();
+        }
+        TimingDataImporter importer = importersByType.get(type);
         if (importer == null) {
-            throw new IllegalStateException("No TimingDataImporter registered for provider type " + settings.timingProviderType());
+            throw new IllegalStateException("No TimingDataImporter registered for provider type " + type);
         }
         importer.configure(settingsService.getProviderConfig(settings));
-        return importer;
+        return Optional.of(importer);
     }
 }

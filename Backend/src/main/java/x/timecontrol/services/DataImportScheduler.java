@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import x.timecontrol.entities.Measurement;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 @Singleton
@@ -95,10 +96,16 @@ public class DataImportScheduler {
             return;
         }
 
+        Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
+        if (importer.isEmpty()) {
+            LOG.trace("No timing provider configured, skipping scheduled import");
+            return;
+        }
+
         LOG.debug("Starting scheduled data import...");
 
         try {
-            List<Measurement> imported = timingProviderRegistry.getActiveImporter().importDataFromDevice();
+            List<Measurement> imported = importer.get().importDataFromDevice();
 
             if (!imported.isEmpty()) {
                 LOG.info("Scheduled import completed: {} measurements imported", imported.size());

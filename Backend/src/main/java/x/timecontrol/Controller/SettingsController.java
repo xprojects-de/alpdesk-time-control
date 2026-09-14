@@ -39,9 +39,13 @@ public class SettingsController {
     @Get("/timing-provider")
     @Operation(summary = "Get the active timing provider and its config", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Active timing provider", content = @Content(schema = @Schema(implementation = TimingProviderSettingsResponse.class)))
-    public HttpResponse<TimingProviderSettingsResponse> getTimingProvider() {
-        AppSettings settings = settingsService.getSettings();
-        return HttpResponse.ok(toResponse(settings));
+    public HttpResponse<?> getTimingProvider() {
+        try {
+            AppSettings settings = settingsService.getSettings();
+            return HttpResponse.ok(toResponse(settings));
+        } catch (IllegalStateException e) {
+            return HttpResponse.serverError(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -60,8 +64,12 @@ public class SettingsController {
             return HttpResponse.badRequest(new ErrorResponse("Unknown timing provider type: " + request.type()));
         }
         Map<String, String> config = request.config() != null ? request.config() : Map.of();
-        AppSettings updated = settingsService.updateTimingProvider(request.type(), config);
-        return HttpResponse.ok(toResponse(updated));
+        try {
+            AppSettings updated = settingsService.updateTimingProvider(request.type(), config);
+            return HttpResponse.ok(toResponse(updated));
+        } catch (IllegalStateException e) {
+            return HttpResponse.serverError(new ErrorResponse(e.getMessage()));
+        }
     }
 
     private TimingProviderSettingsResponse toResponse(AppSettings settings) {
