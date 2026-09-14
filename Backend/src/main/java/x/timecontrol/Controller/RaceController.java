@@ -175,6 +175,14 @@ public class RaceController {
         return dataImportScheduler.pauseDuring(() -> {
             try {
                 if (resetDevice) {
+                    // Pulls in anything the device recorded since the last scheduled poll (up to a
+                    // few seconds' worth) before wiping it - resetDevice() only sends the reset
+                    // command, it never reads data itself, and pausing the scheduler above stops
+                    // future polls but doesn't retroactively catch up on the last cycle. Without
+                    // this, a finish/start that arrived in that last window is deleted from the
+                    // device by the reset below and never makes it into the local measurement table
+                    // at all - permanent, silent data loss on the primary archive workflow.
+                    dataImportService.importDataFromDevice();
                     boolean deviceReset = dataImportService.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()

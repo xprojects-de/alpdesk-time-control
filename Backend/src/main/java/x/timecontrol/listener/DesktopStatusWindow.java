@@ -2,6 +2,7 @@ package x.timecontrol.listener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import x.timecontrol.services.MeasurementTableLock;
 import x.timecontrol.util.BrowserLauncher;
 
 import javax.swing.BorderFactory;
@@ -9,7 +10,9 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -22,6 +25,7 @@ import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Small always-visible control window for the packaged desktop app (jpackage build only, see
@@ -35,7 +39,8 @@ final class DesktopStatusWindow {
     private DesktopStatusWindow() {
     }
 
-    static void show(String appName, String version, String url, String username, String password) {
+    static void show(String appName, String version, String url, String username, String password,
+                      MeasurementTableLock measurementTableLock) {
         JFrame frame = new JFrame(appName);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
@@ -94,8 +99,8 @@ final class DesktopStatusWindow {
         JButton quitButton = new JButton("Beenden");
         quitButton.addActionListener(_ -> {
             LOG.info("Shutdown requested from status window");
-            frame.dispose();
-            System.exit(0);
+            quitButton.setEnabled(false);
+            shutdown(frame, quitButton, measurementTableLock);
         });
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(quitButton);
@@ -108,6 +113,55 @@ final class DesktopStatusWindow {
         frame.setLocationRelativeTo(null);
         frame.setAlwaysOnTop(false);
         frame.setVisible(true);
+    }
+
+    /**
+     * A bare System.exit(0) from the quit button could land while an archive/reset is mid-flight
+     * (device already told to reset, measurements not yet copied into the DB - see
+     * RaceController#archiveMeasurements) - a fast, non-blocking check covers the overwhelming
+     * common case (nothing in progress) with no UI disruption; only when something actually is
+     * running does this wait briefly in the background (off the EDT) before exiting regardless,
+     * rather than making the app permanently unquittable if the device is stuck unreachable.
+     */
+    private static void shutdown(JFrame frame, JButton quitButton, MeasurementTableLock measurementTableLock) {
+        boolean idle;
+        try {
+            idle = measurementTableLock.awaitIdle(0, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            idle = true;
+        }
+        if (idle) {
+            frame.dispose();
+            System.exit(0);
+            return;
+        }
+
+        quitButton.setText("Warte auf laufenden Vorgang...");
+        new SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() throws InterruptedException {
+                return measurementTableLock.awaitIdle(10, TimeUnit.SECONDS);
+            }
+
+            @Override
+            protected void done() {
+                boolean finishedInTime;
+                try {
+                    finishedInTime = get();
+                } catch (Exception e) {
+                    finishedInTime = false;
+                }
+                if (!finishedInTime) {
+                    LOG.warn("Archive/reset still in progress after 10s wait - quitting anyway");
+                    JOptionPane.showMessageDialog(frame,
+                            "Ein Vorgang läuft ungewöhnlich lange. Die Anwendung wird trotzdem beendet.",
+                            "Beenden", JOptionPane.WARNING_MESSAGE);
+                }
+                frame.dispose();
+                System.exit(0);
+            }
+        }.execute();
     }
 
     private static java.util.Optional<Image> loadIcon() {

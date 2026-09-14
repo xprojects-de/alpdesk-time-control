@@ -198,6 +198,11 @@ public class MeasurementController {
             try {
                 // If device reset is requested, do it first before deleting database
                 if (resetDevice) {
+                    // Same reasoning as RaceController#archiveMeasurements: pull in anything the
+                    // device recorded since the last scheduled poll before wiping it, or that data
+                    // is silently lost - resetDevice() only sends the reset command, it never reads
+                    // data itself.
+                    dataImportService.importDataFromDevice();
                     boolean deviceReset = dataImportService.resetDevice();
                     if (!deviceReset) {
                         return HttpResponse.serverError()

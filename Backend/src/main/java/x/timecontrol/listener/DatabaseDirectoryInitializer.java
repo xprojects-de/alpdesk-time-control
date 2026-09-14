@@ -2,6 +2,8 @@ package x.timecontrol.listener;
 
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Value;
+import io.micronaut.core.annotation.Order;
+import io.micronaut.core.order.Ordered;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,9 +12,18 @@ import java.io.File;
 
 /**
  * Initializes the database directory before the DataSource is created.
- * Uses @Context to ensure this bean is created eagerly at startup.
+ * <p>
+ * Uses @Context to ensure this bean is created eagerly at startup - Micronaut instantiates
+ * Context beans during ApplicationContext.start(), before request-scoped/lazy beans like the
+ * SQLite DataSource. @Order(HIGHEST_PRECEDENCE) additionally pins this bean first *among*
+ * Context beans specifically: without it, relative ordering between independent @Context beans
+ * is otherwise unspecified (works today only because this happens to be the only one), so any
+ * future @Context/eager bean added elsewhere could otherwise end up running before this one and
+ * hit a SQLite open failure on a machine where ~/database doesn't exist yet (e.g. first launch of
+ * the packaged app on a clean machine).
  */
 @Context
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class DatabaseDirectoryInitializer {
 
     private static final Logger LOG = LoggerFactory.getLogger(DatabaseDirectoryInitializer.class);
