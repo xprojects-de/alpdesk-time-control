@@ -45,6 +45,9 @@ jobs:
   build-native-installer:
     name: Build Installer on ${{ matrix.os }}
     needs: build-frontend
+    # GraalVM native-image build disabled for now - we rely on the jpackage build instead.
+    # Set this back to `true` (or remove the condition) to re-enable.
+    if: false
     runs-on: ${{ matrix.os }}
 
     defaults:
@@ -301,7 +304,9 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [ build-native-installer, build-jpackage-installer, build-shadow-jar ]
+    # build-native-installer is currently skipped (see above) - not listed here, otherwise
+    # this job would be skipped too since a skipped dependency doesn't count as successful.
+    needs: [ build-jpackage-installer, build-shadow-jar ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

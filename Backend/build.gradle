@@ -50,7 +50,10 @@ java {
     targetCompatibility = JavaVersion.toVersion("25")
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
-        vendor = JvmVendorSpec.GRAAL_VM
+        // GraalVM native-image build is currently disabled (see build-installers.yml) - any
+        // JDK 25 works for the jpackage/shadowJar builds. Re-enable to pin the toolchain to
+        // GraalVM again (needed for the `nativeCompile` task).
+        // vendor = JvmVendorSpec.GRAAL_VM
     }
 }
 
