@@ -64,6 +64,10 @@ graalvmNative {
             buildArgs.add("-H:+SharedArenaSupport")
             // Optional für SQLite JNI-Support:
             buildArgs.add("--enable-native-access=ALL-UNNAMED")
+            // Baked-in runtime property so DesktopWindowStartupListener skips the Swing status
+            // window for this build - AWT/Swing should stay out of the native-image reachability
+            // analysis.
+            buildArgs.add("-Dapp.graalPackage=true")
         }
     }
 }
@@ -166,9 +170,7 @@ def jpackageArgs = { String type, File destDir ->
             // Tells the app it's running from a jpackage bundle: it anchors its data directory
             // (SQLite DB, JWT secret) to the user's home directory instead of the process's
             // working directory - the latter is unreliable for double-clicked apps (e.g. "/" on
-            // macOS when launched via Finder/LaunchServices, which is read-only) - and it shows
-            // the Swing status window (DesktopWindowStartupListener) instead of relying on a
-            // console the user won't have when double-clicking the app.
+            // macOS when launched via Finder/LaunchServices, which is read-only).
             '--java-options', '-Dapp.packaged=true',
     ]
 
