@@ -1,0 +1,1 @@
+import{En as rx,W as Op}from"./chunk-BMmqvhgo.js";var r=rx(`category`);var c=Op(r,e=>e.categories);var s=Op(r,e=>e.loading);Op(r,e=>e.error);export{s as n,c as t};
