@@ -520,8 +520,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
-    private lastResetDevice = false;
-    private lastArchiveResetDevice = false;
     private lastArchiveClearAfterArchive = true;
 
     jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
@@ -645,12 +643,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful reset and show success message
+        // Listen for successful reset and show success message. Read whether the device was
+        // actually reset from the backend's own response message rather than echoing back what
+        // was merely requested - resetAll() silently skips the device step when none is
+        // configured (see MeasurementController#resetAll), so "what the user asked for" and
+        // "what actually happened" can differ.
         this.actions$.pipe(
             ofType(MeasurementActions.resetMeasurementsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            const successMsg = this.lastResetDevice
+        ).subscribe(({message}) => {
+            const deviceWasReset = message.toLowerCase().includes('device reset');
+            const successMsg = deviceWasReset
                 ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
                 : 'Alle Messungen wurden gelöscht (nur Datenbank)';
             this.snackBar.open(successMsg, 'OK', {
@@ -717,14 +720,18 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful archive and show success message
+        // Listen for successful archive and show success message. Same reasoning as the reset
+        // handler above: read whether the device was actually reset from the backend's response,
+        // not from what was requested - archiveMeasurements() silently skips the device step when
+        // none is configured (see RaceController#archiveMeasurements).
         this.actions$.pipe(
             ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
+        ).subscribe(({message}) => {
+            const deviceWasReset = message.toLowerCase().includes('device reset');
             const successMsg = !this.lastArchiveClearAfterArchive
                 ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
-                : this.lastArchiveResetDevice
+                : deviceWasReset
                     ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
                     : 'Messungen archiviert. Bereit für das nächste Rennen.';
             this.snackBar.open(successMsg, 'OK', {
@@ -824,6 +831,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 panelClass: 'error-snackbar'
             });
         });
+
+        // Loads device status once a timing provider is confirmed active. Stays subscribed for
+        // the component's lifetime (not take(1)) so it reacts correctly once the real settings
+        // value arrives - the first emission is only a "default to true until loaded" placeholder
+        // (see timingProviderActive$ above), and a take(1) here would capture that stale default
+        // and never re-check once NONE is confirmed.
+        this.timingProviderActive$.pipe(takeUntil(this.destroy$)).subscribe(active => {
+            if (active) {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            }
+        });
     }
 
     ngAfterViewInit(): void {
@@ -835,11 +853,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         // this view is open.
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
-        this.timingProviderActive$.pipe(take(1)).subscribe(active => {
-            if (active) {
-                this.store.dispatch(MeasurementActions.loadDeviceStatus());
-            }
-        });
 
         this.autoRefresh$
             .pipe(
@@ -1010,7 +1023,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
 
         if (confirm(message)) {
-            this.lastResetDevice = resetDevice;
             this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
         }
     }
@@ -1042,7 +1054,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     if (!result) {
                         return;
                     }
-                    this.lastArchiveResetDevice = result.resetDevice;
                     this.lastArchiveClearAfterArchive = result.clearAfterArchive;
                     this.store.dispatch(MeasurementActions.archiveMeasurements(result));
                 });

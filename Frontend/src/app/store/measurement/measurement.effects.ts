@@ -104,7 +104,7 @@ export class MeasurementEffects {
             ofType(MeasurementActions.resetMeasurements),
             mergeMap(({resetDevice}) =>
                 this.measurementService.reset(resetDevice).pipe(
-                    map(() => MeasurementActions.resetMeasurementsSuccess()),
+                    map(message => MeasurementActions.resetMeasurementsSuccess({message})),
                     catchError(error => of(MeasurementActions.resetMeasurementsFailure({
                         error: extractErrorMessage(error, 'Failed to reset measurements')
                     })))
@@ -168,7 +168,7 @@ export class MeasurementEffects {
             ofType(MeasurementActions.archiveMeasurements),
             mergeMap(({raceId, resetDevice, clearAfterArchive}) =>
                 this.measurementService.archive(raceId, resetDevice, clearAfterArchive).pipe(
-                    map(() => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive})),
+                    map(message => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive, message})),
                     catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
                         error: extractErrorMessage(error, 'Failed to archive measurements')
                     })))

@@ -95,7 +95,8 @@ export const resetMeasurements = createAction(
     props<{ resetDevice: boolean }>()
 );
 export const resetMeasurementsSuccess = createAction(
-    '[Measurement] Reset Measurements Success'
+    '[Measurement] Reset Measurements Success',
+    props<{ message: string }>()
 );
 export const resetMeasurementsFailure = createAction(
     '[Measurement] Reset Measurements Failure',
@@ -150,7 +151,7 @@ export const archiveMeasurements = createAction(
 );
 export const archiveMeasurementsSuccess = createAction(
     '[Measurement] Archive Measurements Success',
-    props<{ clearAfterArchive: boolean }>()
+    props<{ clearAfterArchive: boolean; message: string }>()
 );
 export const archiveMeasurementsFailure = createAction(
     '[Measurement] Archive Measurements Failure',
