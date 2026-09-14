@@ -79,7 +79,7 @@ public class GaudiModeService {
      */
     public GaudiMode create(GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
         validate(gaudiMode.type(), gaudiMode.teamSize(), races);
-        return transactionOperations.executeWrite(status -> {
+        return transactionOperations.executeWrite(_ -> {
             GaudiMode created = repository.save(gaudiMode);
             saveRaces(created.id(), races);
             return created;
@@ -126,7 +126,7 @@ public class GaudiModeService {
                     gaudiMode.pointsScaleId(),
                     existing.get().createdAt()
             );
-            GaudiMode result = transactionOperations.executeWrite(status -> {
+            GaudiMode result = transactionOperations.executeWrite(_ -> {
                 GaudiMode saved = repository.update(updated);
                 gaudiModeRaceRepository.deleteByGaudiModeId(id);
                 saveRaces(id, races);
@@ -224,7 +224,7 @@ public class GaudiModeService {
     public List<GaudiLosPairing> drawLosPairing(GaudiMode gaudiMode) {
         List<GaudiModeRace> races = findRacesFor(gaudiMode.id());
         if (races.isEmpty()) {
-            return transactionOperations.executeWrite(status -> {
+            return transactionOperations.executeWrite(_ -> {
                 pairingRepository.deleteByGaudiModeId(gaudiMode.id());
                 return List.of();
             });
@@ -243,7 +243,7 @@ public class GaudiModeService {
         // Wrapped in one transaction: without it, a failure partway through the save loop (e.g. a
         // real DataAccessException on one row) would leave the previous pairing already deleted but
         // the new one only half-drawn.
-        return transactionOperations.executeWrite(status -> {
+        return transactionOperations.executeWrite(_ -> {
             pairingRepository.deleteByGaudiModeId(gaudiMode.id());
 
             List<GaudiLosPairing> created = new ArrayList<>();
