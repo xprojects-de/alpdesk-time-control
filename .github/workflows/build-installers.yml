@@ -292,6 +292,15 @@ jobs:
             ./gradlew jpackageInstaller --no-daemon
           fi
 
+      - name: Rename Installer for Release
+        shell: bash
+        run: |
+          version=$(grep '^app.version=' src/main/resources/application.properties | cut -d'=' -f2)
+          for f in dist/*.dmg dist/*.exe dist/*.deb; do
+            [ -e "$f" ] || continue
+            mv "$f" "dist/Time-Control-java-v${version}.${f##*.}"
+          done
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
