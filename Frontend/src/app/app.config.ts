@@ -45,6 +45,7 @@ import {categoryReducer} from "./store/category/category.reducer";
 import {personReducer} from "./store/person/person.reducer";
 import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
 import {versionReducer} from "./store/version/version.reducer";
+import {settingsReducer} from "./store/settings/settings.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {RaceMeasurementEffects} from "./store/race-measurement/race-measurement.effects";
@@ -56,6 +57,7 @@ import {CategoryEffects} from "./store/category/category.effects";
 import {PersonEffects} from "./store/person/person.effects";
 import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {VersionEffects} from "./store/version/version.effects";
+import {SettingsEffects} from "./store/settings/settings.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 
 registerLocaleData(localeDe);
@@ -95,8 +97,9 @@ export const appConfig: ApplicationConfig = {
             person: personReducer,
             gaudiMode: gaudiModeReducer,
             version: versionReducer,
+            settings: settingsReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
         ...(isDevMode() ? [provideStoreDevtools({

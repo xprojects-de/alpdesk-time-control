@@ -201,6 +201,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         {path: 'measurements', label: 'Messungen', icon: 'timer'},
         {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
         {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
+        {path: 'settings', label: 'Zeitmessung', icon: 'settings_input_antenna'},
     ];
 
     private static readonly NAV_OPEN_KEY = 'dashboard_nav_open';
