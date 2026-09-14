@@ -27,7 +27,7 @@ export class PointsScaleService {
         return this.http.put<PointsScale>(`${this.apiUrl}/${id}`, pointsScale);
     }
 
-    delete(id: number): Observable<void> {
-        return this.http.delete<void>(`${this.apiUrl}/${id}`);
+    delete(id: number, force = false): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/${id}`, {params: {force}});
     }
 }

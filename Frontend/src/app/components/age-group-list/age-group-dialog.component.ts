@@ -20,6 +20,7 @@ import {
     AgeGroupRequest,
 } from "../../models/age-group.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
+import {notBlank} from "../../utils/validators.util";
 
 @Component({
     selector: "app-age-group-dialog",
@@ -45,6 +46,9 @@ import {Gender, GenderLabels} from "../../models/gender.model";
                     @if (form.get("name")?.hasError("required") &&
                     form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
+                    }
+                    @if (form.get("name")?.hasError("blank")) {
+                        <mat-error>Name darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
                 </mat-form-field>
@@ -156,7 +160,7 @@ export class AgeGroupDialogComponent {
 
     constructor() {
         this.form = this.fb.group({
-            name: [this.data?.name || "", Validators.required],
+            name: [this.data?.name || "", [Validators.required, notBlank()]],
             gender: [this.data?.gender || "", Validators.required],
             birthYearFrom: [
                 this.data?.birthYearFrom || "",

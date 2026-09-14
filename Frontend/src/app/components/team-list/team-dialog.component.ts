@@ -15,6 +15,7 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {Team, TeamRequest} from "../../models/team.model";
+import {notBlank} from "../../utils/validators.util";
 
 @Component({
     selector: "app-team-dialog",
@@ -39,6 +40,9 @@ import {Team, TeamRequest} from "../../models/team.model";
                     @if (form.get("name")?.hasError("required") &&
                     form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
+                    }
+                    @if (form.get("name")?.hasError("blank")) {
+                        <mat-error>Name darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                     <mat-hint>z.B. "SC Musterhausen"</mat-hint>
                 </mat-form-field>
@@ -82,7 +86,7 @@ export class TeamDialogComponent {
 
     constructor() {
         this.form = this.fb.group({
-            name: [this.data?.name || "", Validators.required],
+            name: [this.data?.name || "", [Validators.required, notBlank()]],
         });
     }
 
