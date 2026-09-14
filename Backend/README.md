@@ -22,16 +22,17 @@ Zertifikat signiert. Deshalb meldet sich beim ersten Start jeweils der Betriebss
 (Gatekeeper unter macOS, SmartScreen unter Windows) – siehe unten, wie man das einmalig
 bestätigt. Unter Linux gibt es keine vergleichbare Warnung.
 
-## Fallback: TimeControl.jar
+## Fallback: Time-Control-java-v<Version>.jar
 
-Zusätzlich liegt an jedem Release ein plattformunabhängiges `TimeControl.jar` bei. Keine
-Installer-Verpackung, kein Gatekeeper/SmartScreen (läuft nur über die Kommandozeile, nie über
-Doppelklick/LaunchServices), aber es muss selbst eine **Java-25-Laufzeitumgebung** installiert
-sein (z. B. [Eclipse Temurin](https://adoptium.net/) oder Amazon Corretto – jeder Hersteller
-geht, GraalVM wird nur zum *Bauen* gebraucht, nicht zum Ausführen). Start:
+Zusätzlich liegt an jedem Release ein plattformunabhängiges `Time-Control-java-v<Version>.jar`
+(Shadow-Jar) bei. Keine Installer-Verpackung, kein Gatekeeper/SmartScreen (läuft nur über die
+Kommandozeile, nie über Doppelklick/LaunchServices), aber es muss selbst eine
+**Java-25-Laufzeitumgebung** installiert sein (z. B. [Eclipse Temurin](https://adoptium.net/)
+oder Amazon Corretto – jeder Hersteller geht, GraalVM wird nur zum *Bauen* gebraucht, nicht zum
+Ausführen). Start:
 
 ```bash
-java -jar TimeControl.jar
+java -jar Time-Control-java-v<Version>.jar
 ```
 
 Die Datenbank landet dabei relativ zum Verzeichnis, aus dem der Befehl gestartet wird (siehe
@@ -115,6 +116,7 @@ cd Backend
 
 # Java-Build (jpackage) - schnelle Variante ohne Installer-Verpackung
 ./gradlew shadowJar
+java -jar build/libs/time-control.jar   # das pure Shadow-Jar direkt ausführen
 ./gradlew jpackageAppImage      # Ergebnis in dist/
 
 # Java-Build - echter Installer (.dmg/.exe/.deb je nach OS)

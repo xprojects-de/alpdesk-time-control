@@ -221,13 +221,14 @@ jobs:
       - name: Rename Shadow JAR for release
         run: |
           mkdir -p dist
-          cp build/libs/time-control.jar dist/TimeControl.jar
+          version=$(grep '^app.version=' src/main/resources/application.properties | cut -d'=' -f2)
+          cp build/libs/time-control.jar "dist/Time-Control-java-v${version}.jar"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: shadow-jar
-          path: Backend/dist/TimeControl.jar
+          path: Backend/dist/Time-Control-java-v*.jar
           retention-days: 14
 
   build-jpackage-installer:
