@@ -21,7 +21,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /**
@@ -73,6 +76,10 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
         // Parsed once here rather than inside pointsForPlace() on every call below (person x race).
         List<Integer> scalePoints = pointsScaleService.parsePoints(scale);
+        // Batch-loaded once for all persons/teams referenced by any leg race, instead of one
+        // findById() per person and per race-x-person team lookup in the loop below.
+        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         record PersonResult(Long personId, String label, String externalId, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
         }
@@ -120,10 +127,10 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             }
             int totalPoints = (int) Math.round(weightedTotal);
 
-            Optional<Person> person = personService.findById(personId);
+            Optional<Person> person = Optional.ofNullable(personsById.get(personId));
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
-            String team = teamOf(races, byRace);
+            String team = teamOf(races, byRace, teamsById);
             results.add(new PersonResult(personId, label, externalId, totalPoints, legs, team));
         }
 
@@ -168,6 +175,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         List<GaudiDnsEntryResponse> dns = new ArrayList<>();
         for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
@@ -183,13 +192,13 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                 continue;
             }
 
-            Optional<Person> person = personService.findById(entry.getKey());
+            Optional<Person> person = Optional.ofNullable(personsById.get(entry.getKey()));
             String lastName = person.map(Person::lastName).orElse("Unbekannt");
             String firstName = person.map(Person::firstName).orElse("");
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String status = rankingService.dnsStatusLabel(byRace.values());
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace), ageGroup, externalId, status));
+            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
@@ -198,17 +207,29 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
     }
 
     /**
+     * All team ids referenced by any participant across any leg race, for a single batched
+     * {@link TeamService#findByIds} lookup instead of one findById() per race x person.
+     */
+    private Set<Long> collectTeamIds(Map<Long, Map<Long, Participant>> participantByPersonAndRace) {
+        return participantByPersonAndRace.values().stream()
+                .flatMap(byRace -> byRace.values().stream())
+                .map(Participant::teamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
      * A person's team is expected to stay the same across the referenced races; picks the first
      * race (in the given order) where the person has a resolvable team, rather than requiring it
      * to be repeated identically on every leg.
      */
-    private String teamOf(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+    private String teamOf(List<RaceParticipants> races, Map<Long, Participant> byRace, Map<Long, Team> teamsById) {
         for (RaceParticipants race : races) {
             Participant p = byRace.get(race.raceId());
             if (p != null && p.teamId() != null) {
-                String name = teamService.findById(p.teamId()).map(Team::name).orElse(null);
-                if (name != null) {
-                    return name;
+                Team team = teamsById.get(p.teamId());
+                if (team != null) {
+                    return team.name();
                 }
             }
         }

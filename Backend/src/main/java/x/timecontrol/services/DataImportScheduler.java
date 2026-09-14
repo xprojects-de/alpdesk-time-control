@@ -27,14 +27,29 @@ public class DataImportScheduler {
     @Property(name = "data-import.enabled", defaultValue = "true")
     boolean enabled;
 
+    private final Object pauseLock = new Object();
     private volatile boolean scheduledImportActive = false;
+    // Guarded by pauseLock. pauseDepth counts concurrently in-flight pauseDuring() calls (e.g. two
+    // overlapping device-reset/archive requests); pausedTargetActive is the value scheduledImportActive
+    // should take once the *last* one finishes. Only the outermost call captures/restores it, so one
+    // reset finishing early can never re-enable scheduled import while another is still in flight.
+    private int pauseDepth = 0;
+    private boolean pausedTargetActive = false;
 
     public boolean isScheduledImportActive() {
         return scheduledImportActive;
     }
 
     public void setScheduledImportActive(boolean active) {
-        this.scheduledImportActive = active;
+        synchronized (pauseLock) {
+            if (pauseDepth > 0) {
+                // A reset/archive is currently pausing import; remember the requested state and apply
+                // it once that finishes instead of flipping the live flag mid-reset.
+                pausedTargetActive = active;
+            } else {
+                scheduledImportActive = active;
+            }
+        }
         LOG.info("Scheduled data import has been {} by user", active ? "enabled" : "disabled");
     }
 
@@ -44,18 +59,25 @@ public class DataImportScheduler {
      * already in flight when a device reset happens, would otherwise write stale pre-reset data
      * into the measurement table right after it was cleared - shared by every device-reset/archive
      * endpoint that needs this (previously duplicated verbatim in RaceController and
-     * MeasurementController).
+     * MeasurementController). Safe under concurrent callers (e.g. two nearly-simultaneous resets):
+     * see pauseDepth/pausedTargetActive above.
      */
     public <T> T pauseDuring(Supplier<T> action) {
-        boolean wasActive = isScheduledImportActive();
-        if (wasActive) {
-            setScheduledImportActive(false);
+        synchronized (pauseLock) {
+            if (pauseDepth == 0) {
+                pausedTargetActive = scheduledImportActive;
+                scheduledImportActive = false;
+            }
+            pauseDepth++;
         }
         try {
             return action.get();
         } finally {
-            if (wasActive) {
-                setScheduledImportActive(true);
+            synchronized (pauseLock) {
+                pauseDepth--;
+                if (pauseDepth == 0) {
+                    scheduledImportActive = pausedTargetActive;
+                }
             }
         }
     }

@@ -5,7 +5,21 @@ import * as MeasurementActions from './measurement.actions';
 export interface MeasurementState {
     measurements: Measurement[];
     selectedMeasurementId: number | null;
-    loading: boolean;
+    // Number of in-flight async flows (every user-triggered create/update/delete/reset/archive/...
+    // below) rather than a single boolean: with ~13 independent flows sharing one loading
+    // indicator, a plain boolean lets whichever response (e.g. a fast mutation) arrives first flip
+    // it back to false while a slower one is still in flight. The selector below only reports
+    // "not loading" once every flow that started has also finished.
+    //
+    // loadMeasurements is deliberately NOT part of this counter: its effect uses switchMap (see
+    // measurement.effects.ts), so a poll tick firing while a previous loadMeasurements is still in
+    // flight cancels that previous request outright - its success/failure action never arrives, so
+    // an increment/decrement counter would leak an unmatched +1 and get stuck "loading" forever
+    // after enough overlaps. switchMap guarantees at most one loadMeasurements in flight at a time,
+    // so a plain boolean (idempotently reset to true on every dispatch) is both correct and immune
+    // to that cancellation.
+    loadingCount: number;
+    measurementsLoading: boolean;
     error: string | null;
     continuousModeEnabled: boolean;
     scheduledImportEnabled: boolean;
@@ -18,7 +32,8 @@ export interface MeasurementState {
 export const initialState: MeasurementState = {
     measurements: [],
     selectedMeasurementId: null,
-    loading: false,
+    loadingCount: 0,
+    measurementsLoading: false,
     error: null,
     continuousModeEnabled: false,
     scheduledImportEnabled: false,
@@ -28,111 +43,101 @@ export const initialState: MeasurementState = {
     autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null}
 };
 
+const startLoading = (state: MeasurementState) => ({
+    ...state,
+    loadingCount: state.loadingCount + 1,
+    error: null
+});
+
+// Floored at 0 defensively; every startLoading() has exactly one matching success/failure action,
+// so this should never go negative in practice.
+const endLoading = (state: MeasurementState) => Math.max(0, state.loadingCount - 1);
+
 export const measurementReducer = createReducer(
     initialState,
 
-    // Load all measurements
+    // Load all measurements (switchMap-driven poll - see measurementsLoading's doc comment above)
     on(MeasurementActions.loadMeasurements, state => ({
         ...state,
-        loading: true,
+        measurementsLoading: true,
         error: null
     })),
     on(MeasurementActions.loadMeasurementsSuccess, (state, {measurements}) => ({
         ...state,
         measurements,
-        loading: false
+        measurementsLoading: false
     })),
     on(MeasurementActions.loadMeasurementsFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        measurementsLoading: false,
         error
     })),
 
     // Load measurements by participant
-    on(MeasurementActions.loadMeasurementsByParticipant, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.loadMeasurementsByParticipant, startLoading),
     on(MeasurementActions.loadMeasurementsByParticipantSuccess, (state, {measurements}) => ({
         ...state,
         measurements,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.loadMeasurementsByParticipantFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Load single measurement
-    on(MeasurementActions.loadMeasurement, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.loadMeasurement, startLoading),
     on(MeasurementActions.loadMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: state.measurements.some(m => m.id === measurement.id)
             ? state.measurements.map(m => m.id === measurement.id ? measurement : m)
             : [...state.measurements, measurement],
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.loadMeasurementFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Create measurement
-    on(MeasurementActions.createMeasurement, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.createMeasurement, startLoading),
     on(MeasurementActions.createMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: [...state.measurements, measurement],
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.createMeasurementFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Update measurement
-    on(MeasurementActions.updateMeasurement, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.updateMeasurement, startLoading),
     on(MeasurementActions.updateMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: state.measurements.map(m => m.id === measurement.id ? measurement : m),
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.updateMeasurementFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Delete measurement
-    on(MeasurementActions.deleteMeasurement, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.deleteMeasurement, startLoading),
     on(MeasurementActions.deleteMeasurementSuccess, (state, {id}) => ({
         ...state,
         measurements: state.measurements.filter(m => m.id !== id),
         selectedMeasurementId: state.selectedMeasurementId === id ? null : state.selectedMeasurementId,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.deleteMeasurementFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
@@ -143,155 +148,119 @@ export const measurementReducer = createReducer(
     })),
 
     // Reset measurements
-    on(MeasurementActions.resetMeasurements, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.resetMeasurements, startLoading),
     on(MeasurementActions.resetMeasurementsSuccess, state => ({
         ...state,
         measurements: [],
         selectedMeasurementId: null,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.resetMeasurementsFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Archive measurements
-    on(MeasurementActions.archiveMeasurements, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.archiveMeasurements, startLoading),
     on(MeasurementActions.archiveMeasurementsSuccess, (state, {clearAfterArchive}) => ({
         ...state,
         measurements: clearAfterArchive ? [] : state.measurements,
         selectedMeasurementId: clearAfterArchive ? null : state.selectedMeasurementId,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.archiveMeasurementsFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Continuous mode
-    on(MeasurementActions.setContinuousMode, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.setContinuousMode, startLoading),
     on(MeasurementActions.setContinuousModeSuccess, (state, {enabled}) => ({
         ...state,
         continuousModeEnabled: enabled,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.setContinuousModeFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Scheduled import
-    on(MeasurementActions.setScheduledImport, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.setScheduledImport, startLoading),
     on(MeasurementActions.setScheduledImportSuccess, (state, {enabled}) => ({
         ...state,
         scheduledImportEnabled: enabled,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.setScheduledImportFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Load scheduled import status
-    on(MeasurementActions.loadScheduledImportStatus, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.loadScheduledImportStatus, startLoading),
     on(MeasurementActions.loadScheduledImportStatusSuccess, (state, {enabled}) => ({
         ...state,
         scheduledImportEnabled: enabled,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.loadScheduledImportStatusFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Load device status
-    on(MeasurementActions.loadDeviceStatus, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.loadDeviceStatus, startLoading),
     on(MeasurementActions.loadDeviceStatusSuccess, (state, {status}) => ({
         ...state,
         deviceStatus: status,
         continuousModeEnabled: status === 'continuous',
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.loadDeviceStatusFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Discard oldest start
-    on(MeasurementActions.discardOldestStart, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.discardOldestStart, startLoading),
     on(MeasurementActions.discardOldestStartSuccess, state => ({
         ...state,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.discardOldestStartFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Export measurements
-    on(MeasurementActions.exportMeasurements, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.exportMeasurements, startLoading),
     on(MeasurementActions.exportMeasurementsSuccess, state => ({
         ...state,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.exportMeasurementsFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Import measurements from JSON
-    on(MeasurementActions.importMeasurementsFromJson, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(MeasurementActions.importMeasurementsFromJson, startLoading),
     on(MeasurementActions.importMeasurementsFromJsonSuccess, state => ({
         ...state,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(MeasurementActions.importMeasurementsFromJsonFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
@@ -342,4 +311,3 @@ export const measurementReducer = createReducer(
         })
     )
 );
-

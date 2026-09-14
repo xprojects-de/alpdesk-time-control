@@ -6,12 +6,13 @@ import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
-import x.timecontrol.repositories.TeamRepository;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
+import x.timecontrol.services.TeamService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,12 +28,12 @@ import java.util.stream.Collectors;
 @Singleton
 public class TeamModeCalculator implements GaudiModeCalculator {
 
-    private final TeamRepository teamRepository;
+    private final TeamService teamService;
     private final RankingService rankingService;
     private final PersonService personService;
 
-    public TeamModeCalculator(TeamRepository teamRepository, RankingService rankingService, PersonService personService) {
-        this.teamRepository = teamRepository;
+    public TeamModeCalculator(TeamService teamService, RankingService rankingService, PersonService personService) {
+        this.teamService = teamService;
         this.rankingService = rankingService;
         this.personService = personService;
     }
@@ -54,6 +55,11 @@ public class TeamModeCalculator implements GaudiModeCalculator {
         Map<Long, List<Participant>> membersByTeam = raceParticipants.stream()
                 .filter(p -> p.teamId() != null && rankingService.adjustedValue(race, p) != null)
                 .collect(Collectors.groupingBy(Participant::teamId));
+
+        // Batch-loaded once for the whole race instead of one findById() per team member / per team.
+        Map<Long, Person> personsById = personService.findByIds(
+                raceParticipants.stream().map(Participant::personId).collect(Collectors.toSet()));
+        Map<Long, Team> teamsById = teamService.findByIds(membersByTeam.keySet());
 
         record TeamResult(String label, long totalValue, List<GaudiTeamMemberResponse> members) {
         }
@@ -78,15 +84,14 @@ public class TeamModeCalculator implements GaudiModeCalculator {
             for (int i = 0; i < sortedMembers.size(); i++) {
                 Participant p = sortedMembers.get(i);
                 memberResponses.add(new GaudiTeamMemberResponse(
-                        formatName(p),
+                        formatName(p, personsById),
                         rankingService.adjustedValue(race, p),
                         i < teamSize
                 ));
             }
 
-            String teamName = teamRepository.findById(entry.getKey())
-                    .map(Team::name)
-                    .orElse("Team " + entry.getKey());
+            Team team = teamsById.get(entry.getKey());
+            String teamName = team != null ? team.name() : "Team " + entry.getKey();
 
             results.add(new TeamResult(teamName, totalValue, memberResponses));
         }
@@ -118,9 +123,8 @@ public class TeamModeCalculator implements GaudiModeCalculator {
         return ranking;
     }
 
-    private String formatName(Participant p) {
-        return personService.findById(p.personId())
-                .map(personService::displayName)
-                .orElse("Unbekannt");
+    private String formatName(Participant p, Map<Long, Person> personsById) {
+        Person person = personsById.get(p.personId());
+        return person != null ? personService.displayName(person) : "Unbekannt";
     }
 }

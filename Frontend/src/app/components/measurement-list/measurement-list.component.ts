@@ -31,6 +31,7 @@ import {MatMenuModule} from "@angular/material/menu";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
+import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {Race} from "../../models/race.model";
 import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -283,6 +284,7 @@ interface MeasurementWithParticipant extends Measurement {
                 <table
                         mat-table
                         [dataSource]="(measurementsWithParticipants$ | async) || []"
+                        [trackBy]="trackById"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                 >
@@ -494,6 +496,11 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private autoRefresh$ = new Subject<boolean>();
 
+    // Each poll tick emits a freshly-deserialized array, so the CDK table's default identity-based
+    // diffing would otherwise tear down and rebuild every row on every refresh instead of only the
+    // ones that actually changed.
+    trackById = (_index: number, measurement: MeasurementWithParticipant) => measurement.id;
+
     measurements$: Observable<Measurement[]>;
     races$: Observable<Race[]>;
     participants$: Observable<Participant[]>;
@@ -536,9 +543,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                         : undefined,
                 })),
             ),
-            distinctUntilChanged(
-                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
-            ),
+            distinctUntilChanged(shallowArrayEqual),
         );
         this.scheduledImportEnabled$ = this.store.select(
             MeasurementSelectors.selectScheduledImportEnabled,
@@ -828,7 +833,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 takeUntil(this.destroy$),
             )
             .subscribe(() => {
-                this.loadData();
+                this.loadMeasurementData();
             });
 
         this.autoRefresh$.next(this.autoRefreshEnabled);
@@ -854,10 +859,20 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     private loadData(): void {
-        this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(RaceActions.loadRaces());
-        // Piggy-backs on the same manual/auto refresh as everything else on this screen, so the
-        // "next expected number" and the auto-assigned Teilnehmer column stay in step with it too.
+        this.loadMeasurementData();
+    }
+
+    /**
+     * The subset of loadData() that needs to stay live while a race is running: measurements and
+     * auto-assign status (kept together so the "next expected number" and the auto-assigned
+     * Teilnehmer column stay in step with the measurements they're derived from). Used for every
+     * 2s auto-refresh tick. Races are a collection that practically never changes mid-run, so
+     * they're only (re-)loaded on mount and on an explicit manual refresh via loadData(), not on
+     * every tick.
+     */
+    private loadMeasurementData(): void {
+        this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
         this.updateLastUpdateTime();
     }

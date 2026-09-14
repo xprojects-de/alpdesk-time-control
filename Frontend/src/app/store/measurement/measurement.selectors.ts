@@ -12,7 +12,7 @@ export const selectAllMeasurements = createSelector(
 
 export const selectMeasurementLoading = createSelector(
     selectMeasurementState,
-    state => state.loading
+    state => state.loadingCount > 0 || state.measurementsLoading
 );
 
 export const selectMeasurementError = createSelector(

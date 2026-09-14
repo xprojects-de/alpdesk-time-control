@@ -19,14 +19,18 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /**
  * Zeit-Kombination: sums each participant's adjusted time (raw time + penalty, per race sort
  * direction), multiplied by that race's configured weight, across all referenced races.
- * Participants are matched across races by Person; only a person with a valid result in EVERY
- * referenced race is included in the combined ranking.
+ * Participants are matched across races by Person; a race weighted 0 is treated as optional (it
+ * contributes nothing to the total), so only a person with a valid result in every race weighted
+ * non-zero is included in the combined ranking.
  */
 @Singleton
 public class TimeCombinationModeCalculator implements GaudiModeCalculator {
@@ -57,6 +61,10 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
 
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
+        // Batch-loaded once for all persons/teams referenced by any leg race, instead of one
+        // findById() per person and per race-x-person team lookup in the loop below.
+        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         record PersonResult(String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs, String team) {
         }
@@ -67,11 +75,15 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             Long personId = entry.getKey();
             Map<Long, Participant> byRace = entry.getValue();
 
-            boolean completeAllLegs = races.stream().allMatch(race -> {
-                Participant p = byRace.get(race.raceId());
-                return p != null && rankingService.adjustedValue(race.race(), p) != null;
-            });
-            if (!completeAllLegs) {
+            // A race weighted 0 is meant to be ignored, not to disqualify a person who has no
+            // result there - only races that actually count towards the total require completeness.
+            boolean completeRequiredLegs = races.stream()
+                    .filter(race -> race.weight() != 0)
+                    .allMatch(race -> {
+                        Participant p = byRace.get(race.raceId());
+                        return p != null && rankingService.adjustedValue(race.race(), p) != null;
+                    });
+            if (!completeRequiredLegs) {
                 continue;
             }
 
@@ -82,24 +94,26 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             double weightedTotal = 0;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
-                Integer adjusted = rankingService.adjustedValue(race.race(), p);
-                weightedTotal += adjusted * race.weight();
+                Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
+                if (adjusted != null) {
+                    weightedTotal += adjusted * race.weight();
+                }
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
                         race.race().name(),
-                        p.durationMs(),
-                        p.penalty(),
+                        p != null ? p.durationMs() : null,
+                        p != null ? p.penalty() : null,
                         adjusted,
-                        placesByRace.get(race.raceId()).get(p.id()),
+                        p != null ? placesByRace.get(race.raceId()).get(p.id()) : null,
                         null
                 ));
             }
             int total = (int) Math.round(weightedTotal);
 
-            Optional<Person> person = personService.findById(personId);
+            Optional<Person> person = Optional.ofNullable(personsById.get(personId));
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
-            String team = teamOf(races, byRace);
+            String team = teamOf(races, byRace, teamsById);
             results.add(new PersonResult(label, externalId, total, legs, team));
         }
 
@@ -132,8 +146,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
 
     /**
      * The complement of {@link #computeRanking}'s completeness filter: every person referenced by at
-     * least one leg race who is missing a valid result in at least one other leg, so they never made
-     * it into the combined ranking - reported as "nicht gewertet" (DNS) instead of silently dropped.
+     * least one leg race who lacks a valid result in at least one other required (non-zero-weight)
+     * leg, so they never made it into the combined ranking - reported as "nicht gewertet" (DNS)
+     * instead of silently dropped.
      */
     @Override
     public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
@@ -143,26 +158,30 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
 
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
         List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         List<GaudiDnsEntryResponse> dns = new ArrayList<>();
         for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
             Map<Long, Participant> byRace = entry.getValue();
 
-            boolean completeAllLegs = races.stream().allMatch(race -> {
-                Participant p = byRace.get(race.raceId());
-                return p != null && rankingService.adjustedValue(race.race(), p) != null;
-            });
-            if (completeAllLegs) {
+            boolean completeRequiredLegs = races.stream()
+                    .filter(race -> race.weight() != 0)
+                    .allMatch(race -> {
+                        Participant p = byRace.get(race.raceId());
+                        return p != null && rankingService.adjustedValue(race.race(), p) != null;
+                    });
+            if (completeRequiredLegs) {
                 continue;
             }
 
-            Optional<Person> person = personService.findById(entry.getKey());
+            Optional<Person> person = Optional.ofNullable(personsById.get(entry.getKey()));
             String lastName = person.map(Person::lastName).orElse("Unbekannt");
             String firstName = person.map(Person::firstName).orElse("");
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String status = rankingService.dnsStatusLabel(byRace.values());
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace), ageGroup, externalId, status));
+            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
@@ -171,17 +190,29 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
     }
 
     /**
+     * All team ids referenced by any participant across any leg race, for a single batched
+     * {@link TeamService#findByIds} lookup instead of one findById() per race x person.
+     */
+    private Set<Long> collectTeamIds(Map<Long, Map<Long, Participant>> participantByPersonAndRace) {
+        return participantByPersonAndRace.values().stream()
+                .flatMap(byRace -> byRace.values().stream())
+                .map(Participant::teamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
      * A person's team is expected to stay the same across the referenced races; picks the first
      * race (in the given order) where the person has a resolvable team, rather than requiring it
      * to be repeated identically on every leg.
      */
-    private String teamOf(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+    private String teamOf(List<RaceParticipants> races, Map<Long, Participant> byRace, Map<Long, Team> teamsById) {
         for (RaceParticipants race : races) {
             Participant p = byRace.get(race.raceId());
             if (p != null && p.teamId() != null) {
-                String name = teamService.findById(p.teamId()).map(Team::name).orElse(null);
-                if (name != null) {
-                    return name;
+                Team team = teamsById.get(p.teamId());
+                if (team != null) {
+                    return team.name();
                 }
             }
         }

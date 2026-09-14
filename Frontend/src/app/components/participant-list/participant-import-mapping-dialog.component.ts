@@ -225,6 +225,12 @@ export class ParticipantImportMappingDialogComponent {
         if (selected) {
             this.format.set(selected.name.toLowerCase().endsWith('.xml') ? 'DSV_XML' : 'CSV');
             this.analyze();
+        } else {
+            // No file (re-opened the picker and canceled): bump the request id on its own so a
+            // still-in-flight analyze() for the previously selected file can no longer pass the
+            // staleness check and repopulate preview/previewLoading for a file that's now cleared.
+            this.analyzeRequestId++;
+            this.previewLoading.set(false);
         }
     }
 
@@ -238,15 +244,25 @@ export class ParticipantImportMappingDialogComponent {
         this.analyze();
     }
 
+    // Guards against a stale response overwriting newer state: analyze() is re-triggered on every
+    // file/format/delimiter change with no request cancellation, so rapidly switching format while
+    // a slower earlier request is still in flight could otherwise let that late response's preview
+    // and suggested mapping silently apply to the now-different selection.
+    private analyzeRequestId = 0;
+
     private analyze(): void {
         const file = this.file();
         if (!file) {
             return;
         }
+        const requestId = ++this.analyzeRequestId;
         this.previewLoading.set(true);
         this.previewError.set(null);
         this.participantService.previewImport(file, this.format(), this.delimiter() || undefined).subscribe({
             next: (response) => {
+                if (requestId !== this.analyzeRequestId) {
+                    return;
+                }
                 this.previewLoading.set(false);
                 this.preview.set(response);
                 const patch: Record<string, string> = {};
@@ -256,6 +272,9 @@ export class ParticipantImportMappingDialogComponent {
                 this.mappingForm.patchValue(patch);
             },
             error: (err) => {
+                if (requestId !== this.analyzeRequestId) {
+                    return;
+                }
                 this.previewLoading.set(false);
                 this.preview.set(null);
                 this.previewError.set(err?.error?.message ?? 'Datei konnte nicht gelesen/analysiert werden.');

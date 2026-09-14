@@ -233,6 +233,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="participant-table"
                         [class.hidden]="loading$ | async"
@@ -515,6 +516,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
+
+    // Each 2s poll/reload replaces dataSource.data with freshly-deserialized objects, so the CDK
+    // table's default identity-based diffing would otherwise tear down and rebuild every row on
+    // every refresh instead of only the ones that actually changed.
+    trackById = (_index: number, participant: Participant) => participant.id;
 
     // Optional, not required: the table (and its matSort) only renders once a race is
     // selected - see the @if in the template - so it may genuinely not exist yet, and is

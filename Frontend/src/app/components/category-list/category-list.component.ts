@@ -78,6 +78,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="category-table"
                         [class.hidden]="loading$ | async"
@@ -168,6 +169,7 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     displayedColumns = ["id", "name", "actions"];
     dataSource = new MatTableDataSource<Category>([]);
+    trackById = (_index: number, category: Category) => category.id;
     private sortInitialized = false;
     private paginatorInitialized = false;
 

@@ -78,6 +78,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="team-table"
                         [class.hidden]="loading$ | async"
@@ -168,6 +169,7 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     displayedColumns = ["id", "name", "actions"];
     dataSource = new MatTableDataSource<Team>([]);
+    trackById = (_index: number, team: Team) => team.id;
     private sortInitialized = false;
     private paginatorInitialized = false;
 
