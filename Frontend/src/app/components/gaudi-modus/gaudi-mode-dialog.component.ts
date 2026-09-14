@@ -18,6 +18,7 @@ import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
 import {MatIconModule} from "@angular/material/icon";
 import {MatTooltipModule} from "@angular/material/tooltip";
+import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
 import {take, takeUntil} from "rxjs/operators";
@@ -32,6 +33,7 @@ import {
 import {PointsScale} from "../../models/points-scale.model";
 import {PointsScaleService} from "../../services/points-scale.service";
 import {PointsScaleDialogComponent} from "./points-scale-dialog.component";
+import {extractErrorMessage} from "../../utils/http-error.util";
 
 export interface GaudiModeDialogData {
     raceId: number | null;
@@ -50,6 +52,7 @@ export interface GaudiModeDialogData {
         MatSelectModule,
         MatIconModule,
         MatTooltipModule,
+        MatSnackBarModule,
     ],
     template: `
         <h2 mat-dialog-title>Neuer Gaudi-Modus</h2>
@@ -207,6 +210,7 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     private pointsScaleService = inject(PointsScaleService);
     private dialog = inject(MatDialog);
+    private snackBar = inject(MatSnackBar);
     public data = inject<GaudiModeDialogData | null>(MAT_DIALOG_DATA);
     private destroy$ = new Subject<void>();
 
@@ -293,9 +297,18 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
             .afterClosed()
             .subscribe(result => {
                 if (result) {
-                    this.pointsScaleService.create(result).subscribe(created => {
-                        this.pointsScales = [...this.pointsScales, created];
-                        this.form.patchValue({pointsScaleId: created.id});
+                    this.pointsScaleService.create(result).subscribe({
+                        next: created => {
+                            this.pointsScales = [...this.pointsScales, created];
+                            this.form.patchValue({pointsScaleId: created.id});
+                        },
+                        error: err => {
+                            this.snackBar.open(
+                                extractErrorMessage(err, "Punkteschema konnte nicht erstellt werden"),
+                                "OK",
+                                {duration: 5000, panelClass: "error-snackbar"},
+                            );
+                        },
                     });
                 }
             });
@@ -326,12 +339,21 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     }
 
     private loadPointsScales(): void {
-        this.pointsScaleService.getAll().subscribe(scales => {
-            this.pointsScales = scales;
-            const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
-            if (defaultScale) {
-                this.form.patchValue({pointsScaleId: defaultScale.id});
-            }
+        this.pointsScaleService.getAll().subscribe({
+            next: scales => {
+                this.pointsScales = scales;
+                const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
+                if (defaultScale) {
+                    this.form.patchValue({pointsScaleId: defaultScale.id});
+                }
+            },
+            error: err => {
+                this.snackBar.open(
+                    extractErrorMessage(err, "Punkteschemata konnten nicht geladen werden"),
+                    "OK",
+                    {duration: 5000, panelClass: "error-snackbar"},
+                );
+            },
         });
     }
 }

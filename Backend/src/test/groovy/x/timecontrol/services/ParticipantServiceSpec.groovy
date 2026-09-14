@@ -457,4 +457,24 @@ class ParticipantServiceSpec extends Specification {
         result.imported().size() == 1
         result.errors().isEmpty()
     }
+
+    def "mapped import rejects a negative durationMs or penalty instead of silently ranking the row first"() {
+        given: "importRow bypasses ParticipantService.validate() entirely, so this must be re-checked inline"
+        repository.findByRaceId(5L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+
+        def csv = "lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment\n" +
+                "Mustermann;Max;1990-01-01;MALE;;;;;42;-1;0;2026-08-18T10:30:00;\n" +
+                "Musterfrau;Erika;1991-01-01;FEMALE;;;;;43;120000;-500;2026-08-18T10:31:00;\n"
+
+        when:
+        def result = service.importMapped(5L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null, null)
+
+        then: "neither row is saved, and each is reported as a row error rather than silently accepted"
+        0 * repository.save(_)
+        result.imported().isEmpty()
+        result.errors().size() == 2
+        result.errors()*.reason().every { it.contains("must not be negative") }
+    }
 }

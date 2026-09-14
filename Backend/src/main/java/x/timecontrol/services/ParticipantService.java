@@ -747,6 +747,18 @@ public class ParticipantService {
         // best-effort like raceNumber, an unparsable value is simply left unset rather than failing the row.
         Integer durationMs = parseOptionalInt(fields.durationMs());
         Integer penalty = parseOptionalInt(fields.penalty());
+        // Mirrors validate()'s non-negative checks, which this row-by-row import path bypasses
+        // entirely (see the same-person-per-race comment below) - without this, a negative value
+        // from a hand-edited or malformed export floors to 0 in RankingService.adjustedValue() and
+        // wins the ranking outright, silently and with no error surfaced anywhere.
+        if (penalty != null && penalty < 0) {
+            errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription, "penalty must not be negative, row skipped"));
+            return;
+        }
+        if (durationMs != null && durationMs < 0) {
+            errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription, "durationMs must not be negative, row skipped"));
+            return;
+        }
         LocalDateTime measuredAt = parseMeasuredAt(fields.measuredAt());
         String comment = fields.comment() != null && !fields.comment().trim().isEmpty() ? fields.comment().trim() : null;
         DisqualificationStatus participantStatus = parseStatus(fields.status());
