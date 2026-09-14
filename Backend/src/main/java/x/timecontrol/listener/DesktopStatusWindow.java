@@ -35,7 +35,7 @@ final class DesktopStatusWindow {
     private DesktopStatusWindow() {
     }
 
-    static void show(String appName, String version, String url) {
+    static void show(String appName, String version, String url, String username, String password) {
         JFrame frame = new JFrame(appName);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
@@ -82,6 +82,12 @@ final class DesktopStatusWindow {
         gbc.gridy = 2;
         gbc.insets = new Insets(10, 0, 2, 0);
         textPanel.add(linkLabel, gbc);
+
+        JLabel loginLabel = new JLabel("Login: " + username + " / " + password);
+        loginLabel.setFont(loginLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        gbc.gridy = 3;
+        gbc.insets = new Insets(6, 0, 2, 0);
+        textPanel.add(loginLabel, gbc);
 
         content.add(textPanel, BorderLayout.CENTER);
 

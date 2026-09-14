@@ -33,6 +33,12 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
     @Value("${app.launcher.title}")
     private String appTitle;
 
+    @Value("${app.username}")
+    private String appUsername;
+
+    @Value("${app.password}")
+    private String appPassword;
+
     @Override
     public void onApplicationEvent(@NonNull ServerStartupEvent event) {
         if (GraphicsEnvironment.isHeadless()) {
@@ -41,6 +47,6 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
         }
 
         String url = "http://localhost:" + serverPort;
-        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appTitle, version, url));
+        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appTitle, version, url, appUsername, appPassword));
     }
 }
