@@ -3,6 +3,7 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.PointsScaleRequest;
 import x.timecontrol.entities.PointsScale;
+import x.timecontrol.repositories.GaudiModeRepository;
 import x.timecontrol.repositories.PointsScaleRepository;
 
 import java.util.ArrayList;
@@ -14,9 +15,11 @@ import java.util.stream.Collectors;
 public class PointsScaleService {
 
     private final PointsScaleRepository repository;
+    private final GaudiModeRepository gaudiModeRepository;
 
-    public PointsScaleService(PointsScaleRepository repository) {
+    public PointsScaleService(PointsScaleRepository repository, GaudiModeRepository gaudiModeRepository) {
         this.repository = repository;
+        this.gaudiModeRepository = gaudiModeRepository;
     }
 
     public PointsScale create(PointsScale pointsScale) {
@@ -46,7 +49,21 @@ public class PointsScaleService {
         return Optional.empty();
     }
 
-    public void delete(Long id) {
+    /**
+     * @throws IllegalStateException if {@code force} is false and at least one Gaudi-Modus still
+     * references this scale - deleting it out from under them doesn't fail loudly (gaudi_mode.points_scale_id
+     * is ON DELETE SET NULL), it silently falls back to the default FIS-Schema on their next ranking
+     * computation (see PointsCombinationModeCalculator), which is a surprising change of scoring
+     * mid-event if that wasn't the intent.
+     */
+    public void delete(Long id, boolean force) {
+        if (!force) {
+            long inUse = gaudiModeRepository.countByPointsScaleId(id);
+            if (inUse > 0) {
+                throw new IllegalStateException(inUse + " Gaudi-Modus/-Modi verwenden dieses Punkteschema. " +
+                        "Beim Löschen fällt die Wertung dort automatisch auf das Standard-Schema (FIS-Schema) zurück. Trotzdem löschen?");
+            }
+        }
         repository.deleteById(id);
     }
 

@@ -10,4 +10,6 @@ import java.util.List;
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface GaudiModeRepository extends CrudRepository<GaudiMode, Long> {
     List<GaudiMode> findByIdIn(Iterable<Long> ids);
+
+    long countByPointsScaleId(Long pointsScaleId);
 }

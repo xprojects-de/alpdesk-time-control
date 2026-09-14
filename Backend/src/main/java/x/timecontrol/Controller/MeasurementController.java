@@ -106,6 +106,10 @@ public class MeasurementController {
         if (validationError != null) {
             return validationError;
         }
+        validationError = validateDurationMs(request.durationMs());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -131,6 +135,10 @@ public class MeasurementController {
         if (validationError != null) {
             return validationError;
         }
+        validationError = validateDurationMs(request.durationMs());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -149,6 +157,19 @@ public class MeasurementController {
     private HttpResponse<?> validateParticipantId(Long participantId) {
         if (participantId != null && participantService.findById(participantId).isEmpty()) {
             return HttpResponse.badRequest(new ErrorResponse("Participant with id " + participantId + " does not exist"));
+        }
+        return null;
+    }
+
+    /**
+     * @return a 400 HttpResponse if durationMs is negative, otherwise null. Without this, a
+     * negative value floors to 0 in RankingService.adjustedValue() and ranks that participant
+     * first once synced - the same class of bug ParticipantService.validate()/importRow() already
+     * guard against on the participant side.
+     */
+    private HttpResponse<?> validateDurationMs(Integer durationMs) {
+        if (durationMs != null && durationMs < 0) {
+            return HttpResponse.badRequest(new ErrorResponse("durationMs must not be negative"));
         }
         return null;
     }
@@ -368,6 +389,14 @@ public class MeasurementController {
     public HttpResponse<?> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("A non-empty list of measurements is required"));
+        }
+        // Validated up front, before any service.create() call below, so a bad entry anywhere in
+        // the batch rejects the whole import instead of partially creating earlier rows.
+        for (MeasurementRequest req : requests) {
+            HttpResponse<?> validationError = validateDurationMs(req.durationMs());
+            if (validationError != null) {
+                return validationError;
+            }
         }
         List<MeasurementResponse> created = requests.stream()
                 .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))

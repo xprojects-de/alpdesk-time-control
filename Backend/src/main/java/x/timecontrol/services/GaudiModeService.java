@@ -362,7 +362,7 @@ public class GaudiModeService {
                 continue;
             }
             if (filterAgeGroup != null) {
-                String ageGroup = person != null ? ageGroupService.calculateAgeGroupName(person.birthDate(), ageGroups) : "Unbekannt";
+                String ageGroup = person != null ? ageGroupService.calculateAgeGroupName(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
                 if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
                     continue;
                 }

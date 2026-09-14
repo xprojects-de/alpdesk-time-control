@@ -189,7 +189,7 @@ public class PdfExportService {
             String name = formatName(person);
             String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
             String gender = person != null ? genderLabel(person.gender()) : "-";
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             String team = p.teamId() != null
                     ? Optional.ofNullable(teamsById.get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
@@ -1128,7 +1128,7 @@ public class PdfExportService {
             Person person = sortedParticipants.get(i).person();
 
             String name = formatName(person);
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             String team = p.teamId() != null
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
@@ -1167,7 +1167,7 @@ public class PdfExportService {
         }
 
         if (filterAgeGroup != null) {
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             if (!filterAgeGroup.equalsIgnoreCase(ageGroup)) {
                 return false;
             }
@@ -1213,7 +1213,7 @@ public class PdfExportService {
             String team = p.teamId() != null
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
-            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), ageGroups) : "Unbekannt";
+            String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             rows.add(new DnsRow(i + 1, formatName(person), person != null ? person.externalId() : null, ageGroup, team,
                     rankingService.dnsStatusLabel(p)));
         }
@@ -1236,8 +1236,8 @@ public class PdfExportService {
         return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
     }
 
-    private String calculateAgeGroup(LocalDate birthDate, List<AgeGroup> ageGroups) {
-        return ageGroupService.calculateAgeGroupName(birthDate, ageGroups);
+    private String calculateAgeGroup(LocalDate birthDate, Gender gender, List<AgeGroup> ageGroups) {
+        return ageGroupService.calculateAgeGroupName(birthDate, gender, ageGroups);
     }
 
     private String genderLabel(Gender gender) {
@@ -1280,6 +1280,29 @@ public class PdfExportService {
     private static String truncate(String str, int maxLength) {
         if (str == null) return "";
         return str.length() > maxLength ? str.substring(0, maxLength - 3) + "..." : str;
+    }
+
+    /**
+     * Truncates by actual rendered text width rather than a fixed character count - unlike the
+     * table columns elsewhere in this file (which use {@link #truncate(String, int)} with a
+     * character count hand-tuned to roughly fit each column's computed pixel width), a value here
+     * has no such per-caller tuning, so a value long enough to exceed maxWidth at this font/size
+     * must be measured directly instead of guessing a character count that may not match the
+     * available space (portrait vs. landscape, or a future column-width change).
+     */
+    private static String truncateToWidth(PDFont font, float fontSize, String str, float maxWidth) throws IOException {
+        if (str == null) {
+            return "";
+        }
+        if (stringWidth(font, fontSize, str) <= maxWidth) {
+            return str;
+        }
+        String ellipsis = "...";
+        int len = str.length();
+        while (len > 0 && stringWidth(font, fontSize, str.substring(0, len) + ellipsis) > maxWidth) {
+            len--;
+        }
+        return len > 0 ? str.substring(0, len) + ellipsis : ellipsis;
     }
 
     private static void drawText(PDPageContentStream stream, PDFont font, float size, float x, float y, String text) throws IOException {
@@ -1394,7 +1417,12 @@ public class PdfExportService {
                 String[] field = fields.get(idx);
                 float x = MARGIN + col * colWidth;
                 drawText(contentStream, FONT_BOLD, fontSize, x, rowY, field[0] + ":");
-                drawText(contentStream, FONT_REGULAR, fontSize, x + labelWidth, rowY, truncate(field[1], 45));
+                // Available width is this column's own width minus the label, not a hardcoded
+                // character count - a fixed count either overflows into the next column (long
+                // portrait values) or truncates too early (landscape, where columns are wider).
+                float availableWidth = colWidth - labelWidth;
+                String value = truncateToWidth(FONT_REGULAR, fontSize, field[1], availableWidth);
+                drawText(contentStream, FONT_REGULAR, fontSize, x + labelWidth, rowY, value);
             }
         }
         y -= rows * lineHeight + 6;

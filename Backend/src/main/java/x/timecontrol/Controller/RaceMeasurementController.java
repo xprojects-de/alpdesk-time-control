@@ -81,6 +81,11 @@ public class RaceMeasurementController {
                 return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("Participant does not belong to this race"));
             }
         }
+        if (request.durationMs() != null && request.durationMs() < 0) {
+            // Mirrors MeasurementController's check - a negative value floors to 0 in
+            // RankingService.adjustedValue() and would rank this row first once synced.
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("durationMs must not be negative"));
+        }
         RaceMeasurement raceMeasurement = new RaceMeasurement(
                 null,
                 null,

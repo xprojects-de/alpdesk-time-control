@@ -94,4 +94,25 @@ class AgeGroupServiceSpec extends Specification {
                 { AgeGroup ag -> new AgeGroup(4L, ag.name(), ag.birthYearFrom(), ag.birthYearTo(), ag.gender()) }
         result.name() == "U14M"
     }
+
+    def "calculateAgeGroupName picks the group matching both the birth year AND the gender, not just the year"() {
+        given: "two gender-specific groups with the identical year range, as real DSV exports commonly have"
+        def ageGroups = [
+                new AgeGroup(1L, "U14m", 2012, 2013, Gender.MALE),
+                new AgeGroup(2L, "U14w", 2012, 2013, Gender.FEMALE),
+        ]
+
+        expect: "each gender resolves to its own group, not the first one in the list"
+        service.calculateAgeGroupName(java.time.LocalDate.of(2012, 1, 1), Gender.MALE, ageGroups) == "U14m"
+        service.calculateAgeGroupName(java.time.LocalDate.of(2012, 1, 1), Gender.FEMALE, ageGroups) == "U14w"
+    }
+
+    def "calculateAgeGroupName matches a BOTH-gender group for either gender"() {
+        given:
+        def ageGroups = [new AgeGroup(1L, "Offene Klasse", 1980, 2020, Gender.BOTH)]
+
+        expect:
+        service.calculateAgeGroupName(java.time.LocalDate.of(1990, 1, 1), Gender.MALE, ageGroups) == "Offene Klasse"
+        service.calculateAgeGroupName(java.time.LocalDate.of(1990, 1, 1), Gender.FEMALE, ageGroups) == "Offene Klasse"
+    }
 }

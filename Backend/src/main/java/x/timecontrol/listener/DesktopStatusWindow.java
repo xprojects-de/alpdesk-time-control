@@ -92,7 +92,7 @@ final class DesktopStatusWindow {
         content.add(textPanel, BorderLayout.CENTER);
 
         JButton quitButton = new JButton("Beenden");
-        quitButton.addActionListener(e -> {
+        quitButton.addActionListener(_ -> {
             LOG.info("Shutdown requested from status window");
             frame.dispose();
             System.exit(0);

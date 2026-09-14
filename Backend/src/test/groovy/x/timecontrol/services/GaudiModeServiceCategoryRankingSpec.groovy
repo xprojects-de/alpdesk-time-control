@@ -133,9 +133,11 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
                 participant(204L, 4L, 150), // U16
         ]
         participantService.findByRaceId(10L) >> participants
+        // gender: BOTH, not null - age_group.gender is NOT NULL in the schema (default 'BOTH'),
+        // this test's point is the age filter, not gender, so it deliberately matches either.
         def ageGroups = [
-                new AgeGroup(1L, "U14", 2012, 2013, null),
-                new AgeGroup(2L, "U16", 2010, 2011, null),
+                new AgeGroup(1L, "U14", 2012, 2013, Gender.BOTH),
+                new AgeGroup(2L, "U16", 2010, 2011, Gender.BOTH),
         ]
         ageGroupService.findAll() >> ageGroups
         def persons = [
