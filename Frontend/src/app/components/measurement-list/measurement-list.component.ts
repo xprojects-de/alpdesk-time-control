@@ -40,6 +40,7 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
+import * as SettingsSelectors from "../../store/settings/settings.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {
     ArchiveMeasurementsDialogComponent,
@@ -151,38 +152,40 @@ interface MeasurementWithParticipant extends Measurement {
                             (change)="onJsonFileSelected($event)"
                     />
 
-                    @if ((deviceStatus$ | async) === 'continuous') {
-                        <button
-                                mat-raised-button
-                                color="accent"
-                                class="active-mode"
-                                (click)="toggleContinuousMode(false)"
-                                matTooltip="Kontinuierlichen Modus deaktivieren"
-                        >
-                            <mat-icon>stop</mat-icon>
-                            Kontinuierlich AUS
-                        </button>
-                    } @else {
-                        <button
-                                mat-raised-button
-                                (click)="toggleContinuousMode(true)"
-                                matTooltip="Kontinuierlichen Modus aktivieren"
-                        >
-                            <mat-icon>play_arrow</mat-icon>
-                            Kontinuierlich AN
-                        </button>
-                    }
+                    @if (timingProviderActive$ | async) {
+                        @if ((deviceStatus$ | async) === 'continuous') {
+                            <button
+                                    mat-raised-button
+                                    color="accent"
+                                    class="active-mode"
+                                    (click)="toggleContinuousMode(false)"
+                                    matTooltip="Kontinuierlichen Modus deaktivieren"
+                            >
+                                <mat-icon>stop</mat-icon>
+                                Kontinuierlich AUS
+                            </button>
+                        } @else {
+                            <button
+                                    mat-raised-button
+                                    (click)="toggleContinuousMode(true)"
+                                    matTooltip="Kontinuierlichen Modus aktivieren"
+                            >
+                                <mat-icon>play_arrow</mat-icon>
+                                Kontinuierlich AN
+                            </button>
+                        }
 
-                    @if ((deviceStatus$ | async) === 'normal') {
-                        <button
-                                mat-raised-button
-                                color="warn"
-                                (click)="discardOldestStart()"
-                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
-                        >
-                            <mat-icon>person_off</mat-icon>
-                            Sturz signalisieren
-                        </button>
+                        @if ((deviceStatus$ | async) === 'normal') {
+                            <button
+                                    mat-raised-button
+                                    color="warn"
+                                    (click)="discardOldestStart()"
+                                    matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                            >
+                                <mat-icon>person_off</mat-icon>
+                                Sturz signalisieren
+                            </button>
+                        }
                     }
 
                     @if (scheduledImportEnabled$ | async) {
@@ -510,6 +513,10 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
+    // Defaults to true until settings actually load and say otherwise (see DashboardComponent for
+    // the same pattern/rationale) - hides the continuous-mode/discard-start controls and skips
+    // loading device status once a timing device is confirmed not configured (NONE).
+    timingProviderActive$: Observable<boolean>;
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
@@ -529,6 +536,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
+        );
+        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderSettings).pipe(
+            map(settings => settings ? settings.type !== 'NONE' : true)
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -825,7 +835,11 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         // this view is open.
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
-        this.store.dispatch(MeasurementActions.loadDeviceStatus());
+        this.timingProviderActive$.pipe(take(1)).subscribe(active => {
+            if (active) {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            }
+        });
 
         this.autoRefresh$
             .pipe(

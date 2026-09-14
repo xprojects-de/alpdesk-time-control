@@ -177,7 +177,7 @@ public class MeasurementController {
 
     private static HttpResponse<ErrorResponse> noTimingProviderConfigured() {
         return HttpResponse.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse("Keine Zeitmessung konfiguriert"));
+                .body(new ErrorResponse(TimingDataImporter.NOT_CONFIGURED_MESSAGE));
     }
 
     @Delete("/{id}")
@@ -202,29 +202,33 @@ public class MeasurementController {
     public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
         return dataImportScheduler.pauseDuring(() -> {
             try {
-                // If device reset is requested, do it first before deleting database
+                // If device reset is requested AND a timing device is actually configured, do it
+                // first before deleting the database. No configured device just means there's
+                // nothing to reset - deleting measurements is a pure local-DB operation and must
+                // keep working in evaluation-only (NONE) mode, so this is not an error condition.
+                boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    // Same reasoning as RaceController#archiveMeasurements: pull in anything the
-                    // device recorded since the last scheduled poll before wiping it, or that data
-                    // is silently lost - resetDevice() only sends the reset command, it never reads
-                    // data itself.
                     Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-                    if (importerOpt.isEmpty()) {
-                        return noTimingProviderConfigured();
-                    }
-                    TimingDataImporter importer = importerOpt.get();
-                    importer.importDataFromDevice();
-                    boolean deviceReset = importer.resetDevice();
-                    if (!deviceReset) {
-                        return HttpResponse.serverError()
-                                .body(new ErrorResponse("Failed to reset device. Database was not modified."));
+                    if (importerOpt.isPresent()) {
+                        // Same reasoning as RaceController#archiveMeasurements: pull in anything the
+                        // device recorded since the last scheduled poll before wiping it, or that data
+                        // is silently lost - resetDevice() only sends the reset command, it never reads
+                        // data itself.
+                        TimingDataImporter importer = importerOpt.get();
+                        importer.importDataFromDevice();
+                        boolean deviceReset = importer.resetDevice();
+                        if (!deviceReset) {
+                            return HttpResponse.serverError()
+                                    .body(new ErrorResponse("Failed to reset device. Database was not modified."));
+                        }
+                        deviceResetPerformed = true;
                     }
                 }
 
-                // Only delete database if device reset was successful (or not requested)
+                // Only delete database if device reset was successful (or not requested/not applicable)
                 service.deleteAll();
 
-                if (resetDevice) {
+                if (deviceResetPerformed) {
                     return HttpResponse.ok("Device reset and all measurements deleted successfully");
                 } else {
                     return HttpResponse.ok("All measurements deleted successfully");
@@ -245,11 +249,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Continuous mode set successfully")
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
     public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
-        Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-        if (importerOpt.isEmpty()) {
-            return noTimingProviderConfigured();
-        }
         try {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
             boolean success = importerOpt.get().continuousMode(enable);
             if (!success) {
                 return HttpResponse.serverError()
@@ -274,11 +278,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Device status retrieved successfully")
     @ApiResponse(responseCode = "500", description = "Failed to get device status")
     public HttpResponse<?> getDeviceStatus() {
-        Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-        if (importerOpt.isEmpty()) {
-            return noTimingProviderConfigured();
-        }
         try {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
             String status = importerOpt.get().getDeviceStatus();
             if (status == null) {
                 return HttpResponse.serverError()
@@ -299,12 +303,12 @@ public class MeasurementController {
     @ApiResponse(responseCode = "503", description = "Device is not connected")
     @ApiResponse(responseCode = "409", description = "No timing device configured")
     @ApiResponse(responseCode = "500", description = "Error checking device connection")
-    public HttpResponse<Void> checkDeviceConnection() {
-        Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-        if (importerOpt.isEmpty()) {
-            return HttpResponse.status(HttpStatus.CONFLICT);
-        }
+    public HttpResponse<?> checkDeviceConnection() {
         try {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
             boolean isConnected = importerOpt.get().isDeviceConnected();
             if (isConnected) {
                 return HttpResponse.ok();
@@ -324,11 +328,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "400", description = "Queue empty or not applicable in continuous mode")
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
     public HttpResponse<?> discardOldestStart() {
-        Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-        if (importerOpt.isEmpty()) {
-            return noTimingProviderConfigured();
-        }
         try {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
             boolean success = importerOpt.get().discardOldestStart();
             if (!success) {
                 return HttpResponse.badRequest()
@@ -359,11 +363,11 @@ public class MeasurementController {
             content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "500", description = "Import failed")
     public HttpResponse<?> importFromDevice() {
-        Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-        if (importerOpt.isEmpty()) {
-            return noTimingProviderConfigured();
-        }
         try {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
             List<Measurement> imported = importerOpt.get().importDataFromDevice();
             List<MeasurementResponse> response = imported.stream()
                     .map(MeasurementResponse::from)

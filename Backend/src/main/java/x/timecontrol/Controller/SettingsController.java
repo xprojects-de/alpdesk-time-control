@@ -29,6 +29,13 @@ import java.util.Map;
 @Tag(name = "Settings")
 public class SettingsController {
 
+    // Generic bounds on the config map, since it has no per-provider schema at this layer (only
+    // each TimingDataImporter knows which keys it actually reads) - just enough to stop arbitrary
+    // junk/oversized values from being persisted unbounded now that the DB has no CHECK constraint
+    // to fall back on either.
+    private static final int MAX_CONFIG_ENTRIES = 20;
+    private static final int MAX_CONFIG_VALUE_LENGTH = 2000;
+
     @Inject
     SettingsService settingsService;
 
@@ -64,6 +71,14 @@ public class SettingsController {
             return HttpResponse.badRequest(new ErrorResponse("Unknown timing provider type: " + request.type()));
         }
         Map<String, String> config = request.config() != null ? request.config() : Map.of();
+        if (config.size() > MAX_CONFIG_ENTRIES) {
+            return HttpResponse.badRequest(new ErrorResponse("Too many config entries (max " + MAX_CONFIG_ENTRIES + ")"));
+        }
+        for (String value : config.values()) {
+            if (value != null && value.length() > MAX_CONFIG_VALUE_LENGTH) {
+                return HttpResponse.badRequest(new ErrorResponse("Config value too long (max " + MAX_CONFIG_VALUE_LENGTH + " characters)"));
+            }
+        }
         try {
             AppSettings updated = settingsService.updateTimingProvider(request.type(), config);
             return HttpResponse.ok(toResponse(updated));

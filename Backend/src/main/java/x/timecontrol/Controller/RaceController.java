@@ -175,30 +175,29 @@ public class RaceController {
 
         return dataImportScheduler.pauseDuring(() -> {
             try {
+                // If device reset is requested AND a timing device is actually configured, pull in
+                // anything the device recorded since the last scheduled poll before wiping it -
+                // resetDevice() only sends the reset command, it never reads data itself, and
+                // pausing the scheduler above stops future polls but doesn't retroactively catch up
+                // on the last cycle. No configured device just means there's nothing to reset -
+                // archiving must keep working in evaluation-only (NONE) mode.
+                boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    // Pulls in anything the device recorded since the last scheduled poll (up to a
-                    // few seconds' worth) before wiping it - resetDevice() only sends the reset
-                    // command, it never reads data itself, and pausing the scheduler above stops
-                    // future polls but doesn't retroactively catch up on the last cycle. Without
-                    // this, a finish/start that arrived in that last window is deleted from the
-                    // device by the reset below and never makes it into the local measurement table
-                    // at all - permanent, silent data loss on the primary archive workflow.
                     Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-                    if (importerOpt.isEmpty()) {
-                        return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
-                                .body(new ErrorResponse("Keine Zeitmessung konfiguriert"));
-                    }
-                    TimingDataImporter importer = importerOpt.get();
-                    importer.importDataFromDevice();
-                    boolean deviceReset = importer.resetDevice();
-                    if (!deviceReset) {
-                        return HttpResponse.serverError()
-                                .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
+                    if (importerOpt.isPresent()) {
+                        TimingDataImporter importer = importerOpt.get();
+                        importer.importDataFromDevice();
+                        boolean deviceReset = importer.resetDevice();
+                        if (!deviceReset) {
+                            return HttpResponse.serverError()
+                                    .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
+                        }
+                        deviceResetPerformed = true;
                     }
                 }
 
                 raceMeasurementService.archiveMeasurements(raceId);
-                if (resetDevice) {
+                if (deviceResetPerformed) {
                     return HttpResponse.ok("Measurements archived and device reset successfully");
                 } else {
                     return HttpResponse.ok("Measurements archived successfully");

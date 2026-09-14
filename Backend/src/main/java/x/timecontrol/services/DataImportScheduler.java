@@ -96,15 +96,15 @@ public class DataImportScheduler {
             return;
         }
 
-        Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
-        if (importer.isEmpty()) {
-            LOG.trace("No timing provider configured, skipping scheduled import");
-            return;
-        }
-
-        LOG.debug("Starting scheduled data import...");
-
         try {
+            Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
+            if (importer.isEmpty()) {
+                LOG.trace("No timing provider configured, skipping scheduled import");
+                return;
+            }
+
+            LOG.debug("Starting scheduled data import...");
+
             List<Measurement> imported = importer.get().importDataFromDevice();
 
             if (!imported.isEmpty()) {

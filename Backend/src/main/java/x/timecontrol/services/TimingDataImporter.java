@@ -14,6 +14,12 @@ import java.util.Map;
  */
 public interface TimingDataImporter {
 
+    /**
+     * Shared message for the 409 controllers return when {@link TimingProviderRegistry#getActiveImporter()}
+     * is empty (no timing device configured) - one place so it can't drift between endpoints/controllers.
+     */
+    String NOT_CONFIGURED_MESSAGE = "Keine Zeitmessung konfiguriert";
+
     TimingProviderType type();
 
     /**
