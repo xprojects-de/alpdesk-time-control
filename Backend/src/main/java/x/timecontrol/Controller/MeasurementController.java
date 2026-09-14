@@ -424,12 +424,16 @@ public class MeasurementController {
     @Post("/auto-assign/enable")
     @Operation(summary = "Enable live auto-assign mode for a race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Auto-assign mode enabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Race does not exist")
+    @ApiResponse(responseCode = "400", description = "Race does not exist, or startRaceNumber does not belong to any participant in it")
     public HttpResponse<?> enableAutoAssign(@Body AutoAssignEnableRequest request) {
         if (request.raceId() == null || raceService.findById(request.raceId()).isEmpty()) {
             return HttpResponse.badRequest(new ErrorResponse("Race with id " + request.raceId() + " does not exist"));
         }
-        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+        try {
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -458,11 +462,11 @@ public class MeasurementController {
     @Post("/auto-assign/set-next")
     @Operation(summary = "Manually set the next expected race number (e.g. after a correction)", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Next race number updated", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active, or raceNumber does not belong to any participant in the active race")
     public HttpResponse<?> setNextAutoAssignRaceNumber(@Body AutoAssignSetNextRequest request) {
         try {
             return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.setNextRaceNumber(request.raceNumber())));
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
         }
     }

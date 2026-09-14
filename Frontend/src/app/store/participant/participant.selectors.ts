@@ -11,7 +11,7 @@ export const selectAllParticipants = createSelector(
 
 export const selectParticipantLoading = createSelector(
     selectParticipantState,
-    state => state.loading
+    state => state.loadingCount > 0
 );
 
 export const selectPdfExportLoading = createSelector(

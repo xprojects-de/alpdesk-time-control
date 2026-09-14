@@ -166,12 +166,17 @@ public class ParticipantController {
     @Operation(summary = "Randomly assign race numbers for a race", description = "Assigns race numbers 1..n to all participants of a race, randomized within each age group; participants without a matching age group are assigned last, ordered by ascending age", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
     public HttpResponse<?> assignRaceNumbers(@PathVariable Long raceId) {
         if (raceService.findById(raceId).isEmpty()) {
             return HttpResponse.notFound();
         }
-        List<Participant> updated = service.assignRaceNumbers(raceId);
-        return HttpResponse.ok(service.toResponses(updated));
+        try {
+            List<Participant> updated = service.assignRaceNumbers(raceId);
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)

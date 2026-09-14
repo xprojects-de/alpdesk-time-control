@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.PersonRequest;
 import x.timecontrol.dto.PersonResponse;
+import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Person;
 import x.timecontrol.services.PersonService;
 
@@ -79,6 +80,9 @@ public class PersonController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
         }
+        if (request.gender() == Gender.BOTH) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("gender must be MALE or FEMALE for a person"));
+        }
         Person person = service.createFromRequest(request);
         try {
             Person created = service.create(person);
@@ -99,6 +103,9 @@ public class PersonController {
     public HttpResponse<?> update(@PathVariable Long id, @Body PersonRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("firstName, lastName, birthDate and gender are required"));
+        }
+        if (request.gender() == Gender.BOTH) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("gender must be MALE or FEMALE for a person"));
         }
         Person person = service.createFromRequest(request);
         Optional<Person> updated;

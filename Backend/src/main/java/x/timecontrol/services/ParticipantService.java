@@ -62,15 +62,17 @@ public class ParticipantService {
     private final TeamService teamService;
     private final CategoryService categoryService;
     private final PersonService personService;
+    private final AutoAssignService autoAssignService;
     private final TransactionOperations<Connection> transactionOperations;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, TransactionOperations<Connection> transactionOperations) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
         this.teamService = teamService;
         this.categoryService = categoryService;
         this.personService = personService;
+        this.autoAssignService = autoAssignService;
         this.transactionOperations = transactionOperations;
     }
 
@@ -406,8 +408,14 @@ public class ParticipantService {
      * Randomly assigns race numbers 1..n to all participants of a race, shuffled
      * within each age group; participants without a matching age group are appended
      * at the end, ordered by ascending age (youngest first).
+     *
+     * @throws IllegalStateException if live auto-assign mode is currently active for this race -
+     * see {@link AutoAssignService#isActiveFor}.
      */
     public List<Participant> assignRaceNumbers(Long raceId) {
+        if (autoAssignService.isActiveFor(raceId)) {
+            throw new IllegalStateException("Auto-assign mode is active for this race. Disable it before reassigning race numbers.");
+        }
         List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());

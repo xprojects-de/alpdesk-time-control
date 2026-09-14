@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.GaudiModeType
@@ -137,6 +138,49 @@ class TeamModeCalculatorSpec extends Specification {
         ranking[0].members().size() == 3
         ranking[0].members()*.valueMs() == [60000, 65000, 999999]
         ranking[0].members()*.counted() == [true, true, false]
+    }
+
+    def "a not-yet-finished or DSQ/DNF/DNS teammate is excluded from the member list entirely"() {
+        given: "team A has 2 finishers (teamSize) plus a third member still out on course and a fourth who was disqualified"
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris"), 4L: person(4L, "Dora")])
+        def stillRacing = new Participant(3L, 1L, 3L, null, 1L, null, null, null, null, null)
+        // Disqualified despite having crossed the finish line with a time - that time must not
+        // count, and DSQ/DNF/DNS participants are reported elsewhere, not in this team's roster.
+        def dsqMember = new Participant(4L, 1L, 4L, null, 1L, null, 70000, null, null, null, DisqualificationStatus.DSQ)
+        def participants = [
+                participant(1L, 1L, 60000),
+                participant(2L, 1L, 65000),
+                stillRacing,
+                dsqMember,
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then: "only the 2 finishers are listed - neither the still-racing nor the DSQ member appear"
+        ranking.size() == 1
+        ranking[0].members().size() == 2
+        ranking[0].members()*.label() == ["Anna", "Ben"]
+    }
+
+    def "a team with fewer finishers than teamSize does not qualify even if it has enough total members"() {
+        given: "3 registered members, but only 1 has finished - teamSize 2 requires 2 finishers"
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris")])
+        def participants = [
+                participant(1L, 1L, 60000),
+                new Participant(2L, 1L, 2L, null, 1L, null, null, null, null, null),
+                new Participant(3L, 1L, 3L, null, 1L, null, null, null, null, null),
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then:
+        ranking.isEmpty()
     }
 
     def "tied team totals share the same place"() {

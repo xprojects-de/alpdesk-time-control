@@ -52,6 +52,7 @@ class AutoAssignServiceSpec extends Specification {
 
     def "enable honors an explicit start race number even if it is already assigned"() {
         given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 2)]
         measurementRepository.findAll() >> [measurement(101L, 10L, 5000)]
 
         when:
@@ -60,6 +61,17 @@ class AutoAssignServiceSpec extends Specification {
         then:
         status.raceId() == 1L
         status.nextRaceNumber() == 1
+    }
+
+    def "enable rejects an explicit start race number that no participant in the race has"() {
+        given: "race number 99 doesn't exist in this race's roster"
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 2)]
+
+        when:
+        service.enable(1L, 99)
+
+        then: "rejected up front instead of silently stalling every future processNewMeasurements() cycle"
+        thrown(IllegalArgumentException)
     }
 
     def "enable skips a default race number that already has a measurement"() {
@@ -76,6 +88,7 @@ class AutoAssignServiceSpec extends Specification {
 
     def "disable clears the active race and cursor"() {
         given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 3)]
         measurementRepository.findAll() >> []
         service.enable(1L, 3)
 
@@ -94,6 +107,33 @@ class AutoAssignServiceSpec extends Specification {
 
         then:
         thrown(IllegalStateException)
+    }
+
+    def "setNextRaceNumber rejects a race number no participant in the active race has"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1)]
+        measurementRepository.findAll() >> []
+        service.enable(1L, 1)
+
+        when:
+        service.setNextRaceNumber(42)
+
+        then:
+        thrown(IllegalArgumentException)
+        service.getStatus().nextRaceNumber() == 1
+    }
+
+    def "setNextRaceNumber honors a valid race number exactly as given"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
+        measurementRepository.findAll() >> []
+        service.enable(1L, 1)
+
+        when:
+        def status = service.setNextRaceNumber(5)
+
+        then:
+        status.nextRaceNumber() == 5
     }
 
     def "skip advances the cursor to the next existing, unassigned race number"() {
@@ -158,18 +198,18 @@ class AutoAssignServiceSpec extends Specification {
         0 * measurementRepository.update(_)
     }
 
-    def "processNewMeasurements leaves everything unassigned when the next race number has no participant"() {
-        given:
+    def "processNewMeasurements leaves everything unassigned when the queue is empty"() {
+        given: "no participant in the race has a race number at all"
         participantRepository.findByRaceId(1L) >> []
         measurementRepository.findAll() >> [measurement(101L, null, 5000)]
-        service.enable(1L, 99)
+        service.enable(1L, null)
 
         when:
         service.processNewMeasurements()
 
         then:
         0 * measurementRepository.update(_)
-        service.getStatus().nextRaceNumber() == 99
+        service.getStatus().nextRaceNumber() == null
     }
 
     def "processNewMeasurements re-checks the cursor against a race number assigned manually since the last cycle"() {

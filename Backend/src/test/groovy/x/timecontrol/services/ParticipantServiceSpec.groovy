@@ -28,13 +28,21 @@ class ParticipantServiceSpec extends Specification {
     TeamService teamService = Mock()
     CategoryService categoryService = Mock()
     PersonService personService = Mock()
+    AutoAssignService autoAssignService = Mock()
     TransactionOperations<Connection> transactionOperations = Mock()
 
     ParticipantService service = new ParticipantService(
-            repository, ageGroupService, raceService, teamService, categoryService, personService, transactionOperations)
+            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, transactionOperations)
+
+    // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_) with a
+    // more specific argument matcher - a single closure-based interaction per mock method avoids
+    // the ambiguity of two equally-plausible interactions on the same method (see the identical
+    // pattern/reasoning in the gaudi calculator specs' knownPersons/knownTeams maps).
+    boolean autoAssignActiveForRace = false
 
     def setup() {
         ageGroupService.findAll() >> []
+        autoAssignService.isActiveFor(_) >> { autoAssignActiveForRace }
         // executeWrite just runs the given callback immediately, as the real JDBC transaction manager would
         transactionOperations.executeWrite(_) >> { args -> args[0].call(null) }
     }
@@ -198,6 +206,18 @@ class ParticipantServiceSpec extends Specification {
         noExceptionThrown()
         result*.id() == [1L, 2L, 3L]
         result*.raceNumber() == [1, 2, 3]
+    }
+
+    def "assignRaceNumbers refuses to run while live auto-assign is active for this race"() {
+        given: "reshuffling numbers underneath an in-flight auto-assign cursor could mismatch a finish to the wrong participant"
+        autoAssignActiveForRace = true
+
+        when:
+        service.assignRaceNumbers(5L)
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.update(_)
     }
 
     def "CSV import reports a row-level error instead of aborting the whole import"() {

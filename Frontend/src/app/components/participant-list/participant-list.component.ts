@@ -639,6 +639,57 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Vergeben der Startnummern: ${error}`, "OK", {duration: 5000});
         });
 
+        // Import/Copy/PDF-Export failures previously had no feedback at all: the loading spinner
+        // just stopped with nothing telling the operator the roster wasn't actually there.
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsCsvSuccess, ParticipantActions.importParticipantsMappedSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                : `Import abgeschlossen: ${result.importedCount} importiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Importieren: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyParticipantsSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen`
+                : `Kopieren abgeschlossen: ${result.copiedCount} kopiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyParticipantsFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Kopieren: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        // PDF export success is already visible to the operator via the browser's own download -
+        // only the failure case (a stopped spinner with nothing to show for it) needs a snackbar.
+        this.actions$.pipe(
+            ofType(
+                ParticipantActions.exportAllPdfFailure,
+                ParticipantActions.exportByGenderPdfFailure,
+                ParticipantActions.exportAllAgeGroupsPdfFailure,
+                ParticipantActions.exportAllByCategoryPdfFailure,
+                ParticipantActions.exportByGenderByCategoryPdfFailure,
+                ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure,
+                ParticipantActions.exportStartListPdfFailure,
+            ),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
         // Setup sort when signal changes - re-attaches whenever a *new* MatSort instance
         // appears (initial render, or the table being recreated after the race filter is
         // cleared and set again), not just once, since sortInstance !== a stale destroyed
