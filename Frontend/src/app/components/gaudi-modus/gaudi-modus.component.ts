@@ -77,7 +77,7 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                 }
 
                 <div class="table-container">
-                <table mat-table [dataSource]="(filteredGaudiModes$ | async) || []" class="gaudi-mode-table">
+                <table mat-table [dataSource]="(filteredGaudiModes$ | async) || []" [trackBy]="trackById" class="gaudi-mode-table">
                     <ng-container matColumnDef="name">
                         <th mat-header-cell *matHeaderCellDef>Name</th>
                         <td mat-cell *matCellDef="let gm">{{ gm.name }}</td>
@@ -164,6 +164,8 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
 
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
+    trackById = (_index: number, gaudiMode: GaudiMode) => gaudiMode.id;
+
     filteredGaudiModes$: Observable<GaudiMode[]>;
     selectedGaudiMode$: Observable<GaudiMode | null>;
     selectedGaudiModeId$: Observable<number | null>;
