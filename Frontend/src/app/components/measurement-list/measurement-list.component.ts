@@ -16,6 +16,7 @@ import {
     takeUntil,
     switchMap,
     map,
+    filter,
     distinctUntilChanged,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
@@ -32,6 +33,7 @@ import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
+import {deviceWasResetFromMessage} from "../../utils/device-reset.util";
 import {Race} from "../../models/race.model";
 import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -513,14 +515,13 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
-    // Defaults to true until settings actually load and say otherwise (see DashboardComponent for
-    // the same pattern/rationale) - hides the continuous-mode/discard-start controls and skips
-    // loading device status once a timing device is confirmed not configured (NONE).
+    // Emits only once the real value is known (see constructor / selectTimingProviderActive) -
+    // hides the continuous-mode/discard-start controls and skips loading device status once a
+    // timing device is confirmed not configured (NONE).
     timingProviderActive$: Observable<boolean>;
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
-    private lastArchiveClearAfterArchive = true;
 
     jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
@@ -535,8 +536,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
         );
-        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderSettings).pipe(
-            map(settings => settings ? settings.type !== 'NONE' : true)
+        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderActive).pipe(
+            filter((active): active is boolean => active !== null),
+            distinctUntilChanged(),
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -652,7 +654,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ofType(MeasurementActions.resetMeasurementsSuccess),
             takeUntil(this.destroy$)
         ).subscribe(({message}) => {
-            const deviceWasReset = message.toLowerCase().includes('device reset');
+            const deviceWasReset = deviceWasResetFromMessage(message);
             const successMsg = deviceWasReset
                 ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
                 : 'Alle Messungen wurden gelöscht (nur Datenbank)';
@@ -727,9 +729,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.actions$.pipe(
             ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(({message}) => {
-            const deviceWasReset = message.toLowerCase().includes('device reset');
-            const successMsg = !this.lastArchiveClearAfterArchive
+        ).subscribe(({clearAfterArchive, message}) => {
+            const deviceWasReset = deviceWasResetFromMessage(message);
+            const successMsg = !clearAfterArchive
                 ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
                 : deviceWasReset
                     ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
@@ -832,11 +834,10 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Loads device status once a timing provider is confirmed active. Stays subscribed for
-        // the component's lifetime (not take(1)) so it reacts correctly once the real settings
-        // value arrives - the first emission is only a "default to true until loaded" placeholder
-        // (see timingProviderActive$ above), and a take(1) here would capture that stale default
-        // and never re-check once NONE is confirmed.
+        // Loads device status once a timing provider is confirmed active. Deliberately not grouped
+        // with the other one-shot dispatches in ngAfterViewInit below: this one needs to react
+        // again if the provider is switched on/off from the Settings page while this view stays
+        // mounted, so it stays subscribed for the component's lifetime instead of firing once.
         this.timingProviderActive$.pipe(takeUntil(this.destroy$)).subscribe(active => {
             if (active) {
                 this.store.dispatch(MeasurementActions.loadDeviceStatus());
@@ -1054,7 +1055,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     if (!result) {
                         return;
                     }
-                    this.lastArchiveClearAfterArchive = result.clearAfterArchive;
                     this.store.dispatch(MeasurementActions.archiveMeasurements(result));
                 });
         });

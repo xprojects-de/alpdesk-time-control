@@ -198,6 +198,9 @@ public class RaceController {
 
                 raceMeasurementService.archiveMeasurements(raceId);
                 if (deviceResetPerformed) {
+                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                    // decides which confirmation to show by checking this message for the phrase
+                    // "device reset" (case-insensitive) - keep it if rewording this string.
                     return HttpResponse.ok("Measurements archived and device reset successfully");
                 } else {
                     return HttpResponse.ok("Measurements archived successfully");

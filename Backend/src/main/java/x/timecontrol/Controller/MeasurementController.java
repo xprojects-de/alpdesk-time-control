@@ -229,6 +229,9 @@ public class MeasurementController {
                 service.deleteAll();
 
                 if (deviceResetPerformed) {
+                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                    // decides which confirmation to show by checking this message for the phrase
+                    // "device reset" (case-insensitive) - keep it if rewording this string.
                     return HttpResponse.ok("Device reset and all measurements deleted successfully");
                 } else {
                     return HttpResponse.ok("All measurements deleted successfully");

@@ -3,7 +3,7 @@ import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
-import {map, takeUntil} from "rxjs/operators";
+import {distinctUntilChanged, filter, takeUntil} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
 import {MatToolbarModule} from "@angular/material/toolbar";
@@ -198,7 +198,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     username$: Observable<string | null>;
     deviceConnected$: Observable<boolean | null>;
     version$: Observable<VersionInfo | null>;
-    // Defaults to true (see constructor) until settings load and confirm otherwise.
+    // Emits only once the real value is known (see constructor / selectTimingProviderActive).
     timingProviderActive$: Observable<boolean>;
 
     readonly navItems: NavItem[] = [
@@ -221,11 +221,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
         this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
         this.version$ = this.store.select(VersionSelectors.selectVersion);
-        // Defaults to "active" (poll) until settings actually load and say otherwise - matches the
-        // pre-NONE behavior of always polling, so a failed/slow settings fetch degrades to "poll
-        // anyway" instead of silently leaving connection polling off for the rest of the session.
-        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderSettings).pipe(
-            map(settings => settings ? settings.type !== 'NONE' : true)
+        // Waits for the real settings value (or a load failure, which falls back to "active" so
+        // connection polling isn't silently disabled forever) instead of guessing while loading -
+        // avoids firing a spurious device-connection check before a NONE provider is confirmed.
+        // See SettingsSelectors.selectTimingProviderActive.
+        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderActive).pipe(
+            filter((active): active is boolean => active !== null),
+            distinctUntilChanged(),
         );
     }
 
@@ -253,11 +255,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.store.dispatch(VersionActions.loadVersion());
         this.store.dispatch(SettingsActions.loadTimingProvider());
 
-        // Only poll device connection while a timing device is actually configured (defaults to
-        // polling until settings load, see the field's constructor) - starting polling dispatches
-        // again on every change is safe (the effect's switchMap cancels the previous interval), so
-        // this also picks up a provider switch made on the Settings page without needing a
-        // dashboard reload.
+        // Only poll device connection while a timing device is actually configured - starting
+        // polling dispatches again on every change is safe (the effect's switchMap cancels the
+        // previous interval), so this also picks up a provider switch made on the Settings page
+        // without needing a dashboard reload.
         this.timingProviderActive$.pipe(
             takeUntil(this.destroy$),
         ).subscribe(active => {

@@ -22,3 +22,19 @@ export const selectSettingsError = createSelector(
     selectSettingsState,
     state => state.error
 );
+
+// Whether a timing device is configured (type !== NONE). null while settings are still loading -
+// consumers should wait for a real value rather than guessing, so a NONE provider never causes a
+// spurious device request before the real answer arrives. Only falls back to true (poll/show
+// device UI) once loading has actually failed, matching the pre-NONE behavior instead of silently
+// disabling device features forever on a transient error.
+export const selectTimingProviderActive = createSelector(
+    selectTimingProviderSettings,
+    selectSettingsError,
+    (settings, error): boolean | null => {
+        if (settings) {
+            return settings.type !== 'NONE';
+        }
+        return error ? true : null;
+    }
+);
