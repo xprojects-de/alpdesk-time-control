@@ -65,7 +65,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        PointsScale scale = (gaudiMode.pointsScaleId() != null ? pointsScaleService.findById(gaudiMode.pointsScaleId()) : null)
+        PointsScale scale = Optional.ofNullable(gaudiMode.pointsScaleId())
+                .flatMap(pointsScaleService::findById)
                 .or(() -> pointsScaleService.findByName(DEFAULT_SCALE_NAME))
                 .orElse(null);
         if (scale == null) {
