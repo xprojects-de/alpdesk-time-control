@@ -2,8 +2,8 @@ import {Component, inject, OnDestroy, OnInit, ChangeDetectionStrategy} from "@an
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
-import {takeUntil} from "rxjs/operators";
+import {Observable, Subject, combineLatest} from "rxjs";
+import {map, takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 import {MatCardModule} from "@angular/material/card";
 import {MatFormFieldModule} from "@angular/material/form-field";
@@ -74,7 +74,7 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
 
                         <div class="actions">
                             <button mat-raised-button color="primary" type="button"
-                                    [disabled]="saving$ | async" (click)="save()">
+                                    [disabled]="!(canSave$ | async)" (click)="save()">
                                 @if (saving$ | async) {
                                     Speichern...
                                 } @else {
@@ -137,6 +137,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
     loading$: Observable<boolean>;
     saving$: Observable<boolean>;
     timingProviderSettings$: Observable<TimingProviderSettings | null>;
+    // Blocks saving until the real settings have actually loaded at least once - without this, a
+    // failed initial load leaves the form showing its hardcoded NONE/blank defaults (see the
+    // subscription below), and clicking Speichern would silently overwrite a real, working
+    // configuration (e.g. a live race's device settings) with those defaults.
+    canSave$: Observable<boolean>;
 
     availableTypes: TimingProviderType[] = ["NONE", "ALPDESK_TIMECONTROL"];
     alpdeskFields = ALPDESK_CONFIG_FIELDS;
@@ -152,6 +157,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
         this.loading$ = this.store.select(SettingsSelectors.selectSettingsLoading);
         this.saving$ = this.store.select(SettingsSelectors.selectSettingsSaving);
         this.timingProviderSettings$ = this.store.select(SettingsSelectors.selectTimingProviderSettings);
+        this.canSave$ = combineLatest([this.saving$, this.timingProviderSettings$]).pipe(
+            map(([saving, settings]) => !saving && settings !== null)
+        );
 
         this.timingProviderSettings$.pipe(takeUntil(this.destroy$)).subscribe(settings => {
             if (!settings) {

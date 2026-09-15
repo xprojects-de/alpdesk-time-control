@@ -98,25 +98,30 @@ public class DataImportScheduler {
 
         try {
             Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
-            if (importer.isEmpty()) {
-                LOG.trace("No timing provider configured, skipping scheduled import");
-                return;
-            }
+            if (importer.isPresent()) {
+                LOG.debug("Starting scheduled data import...");
 
-            LOG.debug("Starting scheduled data import...");
+                List<Measurement> imported = importer.get().importDataFromDevice();
 
-            List<Measurement> imported = importer.get().importDataFromDevice();
-
-            if (!imported.isEmpty()) {
-                LOG.info("Scheduled import completed: {} measurements imported", imported.size());
+                if (!imported.isEmpty()) {
+                    LOG.info("Scheduled import completed: {} measurements imported", imported.size());
+                } else {
+                    LOG.debug("Scheduled import completed: no new measurements");
+                }
             } else {
-                LOG.debug("Scheduled import completed: no new measurements");
+                LOG.trace("No timing provider configured, skipping device import");
             }
 
-            // Runs every cycle regardless of whether this cycle imported anything new, so a race
-            // stays caught up even if a previous cycle's measurements weren't matched yet. Only
-            // updates participantId on still-unassigned raw measurements - no-ops immediately if no
-            // race currently has auto-assign mode active, and never touches race_measurement itself.
+            // Runs every cycle regardless of whether a device is configured or whether this cycle
+            // imported anything new. Deliberately NOT inside the `if (importer.isPresent())` branch
+            // above: processNewMeasurements() matches ANY still-unassigned measurement row
+            // (manually entered, JSON-imported, or device-imported) purely by querying the
+            // measurement table - it has nothing to do with polling a device. Gating it on a
+            // configured provider would silently kill live auto-assign for manually-entered times
+            // in evaluation-only (NONE) mode, which is exactly the use case NONE exists to support.
+            // Only updates participantId on still-unassigned raw measurements - no-ops immediately
+            // if no race currently has auto-assign mode active, and never touches race_measurement
+            // itself.
             autoAssignService.processNewMeasurements();
 
         } catch (Exception e) {
