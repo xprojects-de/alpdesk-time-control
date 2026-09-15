@@ -7,8 +7,14 @@ import {
     ParticipantImportPreviewResponse,
     ParticipantImportResponse
 } from '../models/participant-import.model';
+import {
+    ParticipantResultImportPreviewResponse,
+    ParticipantResultImportResponse,
+    ResultTimeFormat
+} from '../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../models/participant-copy.model';
 import {environment} from '../../environments/environment';
+import {buildImportFormData} from '../utils/import-form-data.util';
 
 @Injectable({
     providedIn: 'root'
@@ -47,9 +53,7 @@ export class ParticipantService {
     }
 
     importCsv(raceId: number, file: File): Observable<ParticipantImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, formData);
+        return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, buildImportFormData(file));
     }
 
     /**
@@ -58,12 +62,7 @@ export class ParticipantService {
      * the column-mapping UI.
      */
     previewImport(file: File, format: ParticipantImportFileFormat, delimiter?: string): Observable<ParticipantImportPreviewResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('format', format);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {format, delimiter});
         return this.http.post<ParticipantImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
     }
 
@@ -73,16 +72,36 @@ export class ParticipantService {
      * left out of mapping is simply not imported for any row.
      */
     importMapped(raceId: number, file: File, format: ParticipantImportFileFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('format', format);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {format, delimiter});
         if (mapping && Object.keys(mapping).length > 0) {
             formData.append('mapping', JSON.stringify(mapping));
         }
         return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import-mapped/${raceId}`, formData);
+    }
+
+    /**
+     * Parses a result-import file (without saving anything) and returns the detected source fields,
+     * a best-effort suggested mapping onto our result fields, and a few sample rows - for
+     * building/pre-filling the column-mapping UI.
+     */
+    previewResultsImport(file: File, delimiter?: string): Observable<ParticipantResultImportPreviewResponse> {
+        const formData = buildImportFormData(file, {delimiter});
+        return this.http.post<ParticipantResultImportPreviewResponse>(`${this.apiUrl}/import-results-preview`, formData);
+    }
+
+    /**
+     * Imports results (time/status) for existing participants, matched by race number - never
+     * creates a participant, never touches identity data. See
+     * PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS for the mappable fields and ResultTimeFormat for how
+     * the "time" column is interpreted. `mapping` is always sent, even when empty - the backend
+     * treats an explicitly empty mapping as "map nothing" and only falls back to the auto-suggested
+     * mapping when the part is omitted entirely, so a deliberately cleared mapping (every dropdown
+     * set to "nicht importieren") must not be silently dropped here.
+     */
+    importResultsMapped(raceId: number, file: File, timeFormat: ResultTimeFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantResultImportResponse> {
+        const formData = buildImportFormData(file, {timeFormat, delimiter});
+        formData.append('mapping', JSON.stringify(mapping ?? {}));
+        return this.http.post<ParticipantResultImportResponse>(`${this.apiUrl}/import-results-mapped/${raceId}`, formData);
     }
 
     /**
@@ -91,6 +110,18 @@ export class ParticipantService {
      */
     exportCsv(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/csv/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
+    /**
+     * Results-only export (raceNumber/time/measuredAt/comment/status, no identity data) - the
+     * counterpart to importResultsMapped, for sharing results between two instances that already
+     * have the same roster. "time" is written as raw milliseconds, so re-importing this file needs
+     * ResultTimeFormat 'MILLISECONDS' selected.
+     */
+    exportResultsCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/results-csv/${raceId}`, {
             responseType: 'blob'
         });
     }

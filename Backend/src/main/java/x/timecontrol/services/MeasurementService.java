@@ -95,14 +95,18 @@ public class MeasurementService {
      * Generic counterpart to the plain create(): parses a CSV (any delimiter) into raw
      * {@code {sourceField: value}} rows via {@link MeasurementImportParsers}, then applies
      * {@code mapping} (our field name -> source field name) to pull out the values for each new
-     * measurement. A field left out of {@code mapping} (or {@code mapping} entirely null/empty, in
-     * which case the auto-suggested mapping is used) is simply not imported for any row. Rows that
-     * fail validation (missing/invalid durationMs, unparseable measuredAt/participantId) are skipped
-     * and reported rather than rejecting the whole file.
+     * measurement. A field left out of {@code mapping} is simply not imported for any row - since
+     * durationMs is required, an explicitly empty {@code mapping} just reports "durationMs fehlt" for
+     * every row rather than silently importing anything. {@code mapping} is used as given - including
+     * an explicitly empty map, meaning "map nothing" - and only falls back to the auto-suggested
+     * mapping when it's entirely omitted ({@code null}), mirroring
+     * {@link ParticipantService#importResultsByRaceNumber}. Rows that fail validation (missing/
+     * invalid durationMs, unparseable measuredAt/participantId) are skipped and reported rather than
+     * rejecting the whole file.
      */
     public MeasurementImportResult importMapped(byte[] fileBytes, Character delimiter, Map<String, String> mapping) {
         MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
-        Map<String, String> effectiveMapping = (mapping == null || mapping.isEmpty())
+        Map<String, String> effectiveMapping = (mapping == null)
                 ? MeasurementImportParsers.suggestMapping(parsed.fields())
                 : mapping;
 
@@ -128,7 +132,7 @@ public class MeasurementService {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs ist keine gültige Zahl"));
                 continue;
             }
-            if (durationMs < 0) {
+            if (ValidationUtils.isNegative(durationMs)) {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs darf nicht negativ sein"));
                 continue;
             }

@@ -1298,11 +1298,20 @@ public class PdfExportService {
             return str;
         }
         String ellipsis = "...";
-        int len = str.length();
-        while (len > 0 && stringWidth(font, fontSize, str.substring(0, len) + ellipsis) > maxWidth) {
-            len--;
+        // stringWidth() is monotonic in the substring length, so the longest fitting prefix can be
+        // found with a binary search instead of shrinking one character at a time - O(log n)
+        // measurements instead of O(n) (each of which itself scans every remaining character).
+        int lo = 0;
+        int hi = str.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (stringWidth(font, fontSize, str.substring(0, mid) + ellipsis) <= maxWidth) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
         }
-        return len > 0 ? str.substring(0, len) + ellipsis : ellipsis;
+        return lo > 0 ? str.substring(0, lo) + ellipsis : ellipsis;
     }
 
     private static void drawText(PDPageContentStream stream, PDFont font, float size, float x, float y, String text) throws IOException {

@@ -4,6 +4,7 @@ import io.micronaut.data.exceptions.DataAccessException
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
 import x.timecontrol.dto.ParticipantImportFormat
+import x.timecontrol.dto.ResultTimeFormat
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
@@ -496,5 +497,183 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 2
         result.errors()*.reason().every { it.contains("must not be negative") }
+    }
+
+    def "importResultsByRaceNumber matches rows onto existing participants by race number, never creates one, and leaves identity data untouched"() {
+        given: "a file shaped like a real export (Alpenhunde): the race-number column is mislabeled 'Name', times use CLOCK format with a comma decimal, and DNF appears instead of a time"
+        def existing61 = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        def existing63 = new Participant(101L, 5L, 2L, 63, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing61, existing63]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "IDX;Name;Team;End Time\n" +
+                "1;61;;01:23,68\n" +
+                "2;63;;DNF\n" +
+                "3;999;;00:10,00\n"
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
+                [raceNumber: "Name", time: "End Time"], ResultTimeFormat.CLOCK)
+
+        then: "the two known race numbers are updated with a parsed duration / DNF status, the unknown one is reported instead of creating a participant"
+        0 * repository.save(_)
+        result.updated().size() == 2
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("999")
+
+        def updated61 = result.updated().find { it.raceNumber() == 61 }
+        updated61.durationMs() == 83680
+        updated61.status() == DisqualificationStatus.NONE
+
+        def updated63 = result.updated().find { it.raceNumber() == 63 }
+        updated63.durationMs() == null
+        updated63.status() == DisqualificationStatus.DNF
+    }
+
+    def "importResultsByRaceNumber parses SECONDS and MILLISECONDS time formats"() {
+        given:
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        expect:
+        def resultSeconds = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83.68\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+        resultSeconds.updated().first().durationMs() == 83680
+        resultSeconds.errors().isEmpty()
+
+        def resultMillis = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83680\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.MILLISECONDS)
+        resultMillis.updated().first().durationMs() == 83680
+        resultMillis.errors().isEmpty()
+    }
+
+    def "importResultsByRaceNumber's SECONDS format keeps millisecond precision on long durations (no float rounding)"() {
+        given: "a duration past the point where 32-bit float precision would already start dropping digits (~10h)"
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;35999.99\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().durationMs() == 35999990
+    }
+
+    def "importResultsByRaceNumber reports a missing race number or time instead of guessing"() {
+        given: "row 2's race number does exist, so the row reaches (and fails) the time check rather than the race-number lookup"
+        def existing62 = new Participant(100L, 5L, 1L, 62, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing62]
+        def csv = "StNr;Zeit\n;01:00,00\n62;\n"
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.CLOCK)
+
+        then:
+        0 * repository.updateAll(_)
+        result.updated().isEmpty()
+        result.errors().size() == 2
+        result.errors()[0].reason().contains("Startnummer")
+        result.errors()[1].reason().contains("Zeit")
+    }
+
+    def "importResultsByRaceNumber treats an explicitly empty mapping as 'map nothing', not as 'use the auto-suggested mapping'"() {
+        given: "a header that would auto-suggest raceNumber/time on its own - but the caller passes an empty (not null) mapping"
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, "raceNumber;time\n61;83680\n".getBytes("UTF-8"), null,
+                [:], ResultTimeFormat.MILLISECONDS)
+
+        then: "every row fails for lack of a raceNumber mapping instead of silently using the auto-suggested one"
+        0 * repository.updateAll(_)
+        result.updated().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("Startnummer")
+    }
+
+    def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
+        given: "one participant with a full result, plus one with no result at all"
+        def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
+        def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [withResult, withoutResult]
+
+        when:
+        def lines = service.exportResultsCsv(5L).readLines()
+
+        then: "the header carries only raceNumber/time/penalty/measuredAt/comment/status - never name/team/category/etc."
+        lines[0] == "raceNumber;time;penalty;measuredAt;comment;status"
+        lines[1] == "42;125000;5000;2026-08-18T10:30;Ski gebrochen;NONE"
+        lines[2] == ";;;;;NONE"
+    }
+
+    def "exportResultsCsv does not NPE on a participant with a null status"() {
+        given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
+        def noStatus = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [noStatus]
+
+        expect:
+        service.exportResultsCsv(5L).readLines()[1] == "42;;;;;NONE"
+    }
+
+    def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
+        given: "the header exportResultsCsv would produce, reimported with the auto-suggested mapping"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time;penalty;measuredAt;comment;status\n" +
+                "42;125000;5000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"
+
+        when: "no mapping is passed - it must be derivable from the header alone"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.MILLISECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().size() == 1
+        result.updated().first().durationMs() == 125000
+        result.updated().first().penalty() == 5000
+        result.updated().first().measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0)
+        result.updated().first().comment() == "Ski gebrochen"
+    }
+
+    def "importResultsByRaceNumber rejects a negative penalty instead of letting it floor to 0 in ranking"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, 1000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+
+        def csv = "raceNumber;time;penalty\n42;120000;-500\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+
+        then: "the row is rejected and the participant's existing penalty is left untouched"
+        result.updated().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("Strafzeit")
+        0 * repository.updateAll(_)
+    }
+
+    def "importResultsByRaceNumber leaves penalty unchanged when the column isn't mapped"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, 1500, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time\n42;120000\n"
+        def mapping = [raceNumber: "raceNumber", time: "time"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().penalty() == 1500
     }
 }

@@ -4,6 +4,7 @@ import {Observable} from 'rxjs';
 import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../models/measurement.model';
 import {MeasurementImportPreviewResponse, MeasurementImportResponse} from '../models/measurement-import.model';
 import {environment} from '../../environments/environment';
+import {buildImportFormData} from '../utils/import-form-data.util';
 
 
 @Injectable({
@@ -88,23 +89,17 @@ export class MeasurementService {
     }
 
     previewImport(file: File, delimiter?: string): Observable<MeasurementImportPreviewResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {delimiter});
         return this.http.post<MeasurementImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
     }
 
+    // `mapping` is always sent, even when empty - the backend treats an explicitly empty mapping as
+    // "map nothing" and only falls back to the auto-suggested mapping when the part is omitted
+    // entirely, so a deliberately cleared mapping (every dropdown set to "nicht importieren") must
+    // not be silently dropped here (see ParticipantService#importResultsMapped for the same pattern).
     importMapped(file: File, delimiter: string | undefined, mapping: Record<string, string>): Observable<MeasurementImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
-        if (mapping && Object.keys(mapping).length > 0) {
-            formData.append('mapping', JSON.stringify(mapping));
-        }
+        const formData = buildImportFormData(file, {delimiter});
+        formData.append('mapping', JSON.stringify(mapping ?? {}));
         return this.http.post<MeasurementImportResponse>(`${this.apiUrl}/import-mapped`, formData);
     }
 

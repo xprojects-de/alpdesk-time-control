@@ -37,6 +37,10 @@ import {
     ParticipantImportMappingDialogComponent,
     ParticipantImportMappingDialogResult
 } from "./participant-import-mapping-dialog.component";
+import {
+    ParticipantResultImportMappingDialogComponent,
+    ParticipantResultImportMappingDialogResult
+} from "./participant-result-import-mapping-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -141,6 +145,36 @@ import {Actions, ofType} from "@ngrx/effects";
                             }
                             Teilnehmer importieren
                         </button>
+
+                        <button
+                                mat-raised-button
+                                [matMenuTriggerFor]="resultsMenu"
+                                [disabled]="resultImportLoading$ | async"
+                                matTooltip="Ergebnisse per Startnummer importieren oder als CSV exportieren"
+                        >
+                            @if (resultImportLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>update</mat-icon>
+                            }
+                            Ergebnisse
+                            <mat-icon>arrow_drop_down</mat-icon>
+                        </button>
+
+                        <mat-menu #resultsMenu="matMenu">
+                            <button mat-menu-item (click)="openResultImportDialog()"
+                                    matTooltip="Ergebnisse (Zeit/Status) für bereits vorhandene Teilnehmer per Startnummer importieren - legt keine neuen Teilnehmer an"
+                                    matTooltipPosition="left">
+                                <mat-icon>upload_file</mat-icon>
+                                <span>Ergebnisse importieren</span>
+                            </button>
+                            <button mat-menu-item (click)="exportResults()"
+                                    matTooltip="Ergebnisse (Startnummer/Zeit/Status) dieses Rennens als CSV exportieren - zum Teilen mit einer anderen Instanz, die dieselben Teilnehmer schon hat"
+                                    matTooltipPosition="left">
+                                <mat-icon>download</mat-icon>
+                                <span>Ergebnisse exportieren</span>
+                            </button>
+                        </mat-menu>
 
                         <button
                                 mat-raised-button
@@ -497,6 +531,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
     importLoading$: Observable<boolean>;
+    resultImportLoading$: Observable<boolean>;
     copyLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
@@ -569,6 +604,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         );
         this.importLoading$ = this.store.select(
             ParticipantSelectors.selectImportLoading,
+        );
+        this.resultImportLoading$ = this.store.select(
+            ParticipantSelectors.selectResultImportLoading,
         );
         this.copyLoading$ = this.store.select(
             ParticipantSelectors.selectCopyLoading,
@@ -655,6 +693,22 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Importieren: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMappedSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Ergebnis-Import abgeschlossen: ${result.updatedCount} aktualisiert, ${result.skippedCount} übersprungen`
+                : `Ergebnis-Import abgeschlossen: ${result.updatedCount} aktualisiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMappedFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Ergebnis-Import: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
         });
 
         this.actions$.pipe(
@@ -933,6 +987,54 @@ async openImportDialog(): Promise<void> {
                     this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
             });
+    }
+
+    async openResultImportDialog(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+
+        const dialogRef = this.dialog.open(ParticipantResultImportMappingDialogComponent, {
+            width: '900px',
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantResultImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(ParticipantActions.importParticipantResultsMapped({
+                        raceId,
+                        file: result.file,
+                        timeFormat: result.timeFormat,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
+                }
+            });
+    }
+
+    async exportResults(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+        const race = races.find(r => r.id === raceId);
+        this.store.dispatch(ParticipantActions.exportParticipantResultsCsv({
+            raceId,
+            filename: `ergebnisse_${race?.name ?? raceId}.csv`,
+        }));
     }
 
     async openCopyDialog(): Promise<void> {
