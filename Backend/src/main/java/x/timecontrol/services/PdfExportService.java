@@ -1,7 +1,11 @@
 package x.timecontrol.services;
 
 import jakarta.inject.Singleton;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
@@ -13,6 +17,7 @@ import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
+import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.dto.GaudiRankingLegResponse;
 import x.timecontrol.entities.Participant;
@@ -33,6 +38,8 @@ import java.util.stream.StreamSupport;
 
 @Singleton
 public class PdfExportService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PdfExportService.class);
 
     private static final float MARGIN = 50;
     private static final float PAGE_BREAK_THRESHOLD = 50;
@@ -124,9 +131,40 @@ public class PdfExportService {
             new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20))
     );
 
+    /**
+     * Prepends a race's/Gaudi-Modus's uploaded cover page (see {@code Race#coverPagePdf}/
+     * {@code GaudiMode#coverPagePdf}) to a generated PDF via {@link PDFMergerUtility}, rather than
+     * drawing it as part of the page-by-page rendering - it's an arbitrary, already-laid-out PDF
+     * with no relation to our own page-drawing code. Called from {@link #renderDocument} only, so
+     * every export automatically carries its cover page with no controller involvement. Returns
+     * {@code contentPdf} unchanged when there is no cover page (the common case) and also - rather
+     * than failing the whole export - when the stored cover page turns out not to be mergeable
+     * (e.g. corrupted bytes); upload-time validation already rejects invalid PDFs, but the export
+     * itself must never break because of a bad cover page.
+     */
+    private byte[] withCoverPage(byte[] coverPagePdf, byte[] contentPdf) {
+        if (coverPagePdf == null) {
+            return contentPdf;
+        }
+        try (PDDocument cover = Loader.loadPDF(coverPagePdf);
+             PDDocument content = Loader.loadPDF(contentPdf)) {
+            new PDFMergerUtility().appendDocument(cover, content);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            cover.save(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            LOG.warn("Could not prepend cover page, exporting without it: {}", e.getMessage());
+            return contentPdf;
+        }
+    }
+
+    /**
+     * No cover page on the start list - only on the rankings/results exports below, which
+     * {@link #renderDocument(Race, boolean, PdfBody)} prepends it to automatically.
+     */
     public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
         List<StartListEntry> entries = createStartListEntries(participants);
-        return renderDocument(race, false,
+        return renderDocument(race, race.name(), null, false,
                 ctx -> drawSection(ctx, startListColumns(entries), "Startliste", entries, true));
     }
 
@@ -373,7 +411,7 @@ public class PdfExportService {
         return categories;
     }
 
-    public byte[] generateLosModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+    public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Paarung", 2.2f, e -> truncate(e.label(), 40)),
@@ -384,8 +422,8 @@ public class PdfExportService {
                 new PdfColumn<>("Ø-Wert Gesamt", 1f, e -> formatValue(race, e.referenceMs())),
                 new PdfColumn<>("Abweichung", 1f, e -> formatValue(race, e.diffMs()))
         );
-        return renderDocument(race, title, true,
-                ctx -> drawSection(ctx, columns, title, entries, true));
+        return renderDocument(race, gaudiMode, true,
+                ctx -> drawSection(ctx, columns, gaudiMode.name(), entries, true));
     }
 
     /**
@@ -394,14 +432,14 @@ public class PdfExportService {
      * only the counted teamSize best members of each qualifying team, never an excluded extra
      * member or a DSQ/DNF/DNS teammate (see {@link x.timecontrol.services.gaudi.TeamModeCalculator}).
      */
-    public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+    public byte[] generateTeamModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Mannschaft", 2.5f, e -> truncate(e.label(), 40)),
                 new PdfColumn<>("Gesamtwert", 1f, e -> formatValue(race, e.valueMs()))
         );
-        return renderDocument(race, title, false,
-                ctx -> drawSectionWithDetails(ctx, columns, title, entries, true,
+        return renderDocument(race, gaudiMode, false,
+                ctx -> drawSectionWithDetails(ctx, columns, gaudiMode.name(), entries, true,
                         e -> teamMemberDetailBlocks(e, race)));
     }
 
@@ -425,7 +463,7 @@ public class PdfExportService {
      * supplies the PDF's header/info block (organisation, weather, ...); the ranking itself covers
      * all {@code legRaces}.
      */
-    public byte[] generateTimeCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+    public byte[] generateTimeCombinationRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                   List<Race> legRaces, Race headerRace,
                                                   List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = new ArrayList<>(List.of(
@@ -443,8 +481,8 @@ public class PdfExportService {
                 new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + formatValue(headerRace, e.diffMs()) : "-")
         ));
 
-        return renderDocument(headerRace, title, true, ctx -> {
-            drawSectionWithDetails(ctx, summaryColumns, title, entries, true, e -> timeCombinationDetailBlocks(e, legRaces));
+        return renderDocument(headerRace, gaudiMode, true, ctx -> {
+            drawSectionWithDetails(ctx, summaryColumns, gaudiMode.name(), entries, true, e -> timeCombinationDetailBlocks(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
     }
@@ -466,12 +504,12 @@ public class PdfExportService {
      * per-race Wert/Platz/Pkt. breakdown drawn as a small indented sub-table below it instead of one
      * column group per race - see {@link #generateTimeCombinationRanking} for why not the latter.
      */
-    public byte[] generatePointsCombinationRanking(String title, List<GaudiRankingEntryResponse> entries,
+    public byte[] generatePointsCombinationRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace,
                                                     List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         boolean showStrafe = anyLegHasPenalty(entries);
-        return renderDocument(headerRace, title, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), title, entries, true,
+        return renderDocument(headerRace, gaudiMode, true, ctx -> {
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), gaudiMode.name(), entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries));
         });
@@ -484,14 +522,14 @@ public class PdfExportService {
      * a ranking recomputed from scratch using only that gender's participants in each leg race - so
      * "Platz" and the per-leg breakdown are relative to that gender, not the whole field.
      */
-    public byte[] generatePointsCombinationGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
+    public byte[] generatePointsCombinationGenderRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                           List<Race> legRaces, Race headerRace, String genderStr,
                                                           List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         String fullTitle = "Wertung " + genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
-        return renderDocument(headerRace, title, true, ctx -> {
+        return renderDocument(headerRace, gaudiMode, true, ctx -> {
             drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries));
@@ -504,7 +542,7 @@ public class PdfExportService {
      * {@link #generatePointsCombinationGenderRanking}, {@code entries} is expected to already be
      * scoped to that category via {@code GaudiModeService.computeRankingForCategory}.
      */
-    public byte[] generatePointsCombinationAgeGroupGenderRanking(String title, List<GaudiRankingEntryResponse> entries,
+    public byte[] generatePointsCombinationAgeGroupGenderRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                                   List<Race> legRaces, Race headerRace,
                                                                   String ageGroup, String genderStr,
                                                                   List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
@@ -512,7 +550,7 @@ public class PdfExportService {
         String fullTitle = "Wertung " + ageGroup + " " + genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
-        return renderDocument(headerRace, title, true, ctx -> {
+        return renderDocument(headerRace, gaudiMode, true, ctx -> {
             drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries));
@@ -527,7 +565,7 @@ public class PdfExportService {
      * so every section is a from-scratch recompute scoped to just that age group and gender.
      */
     public byte[] generatePointsCombinationAllAgeGroupsRanking(
-            String title, List<Race> legRaces, Race headerRace,
+            GaudiMode gaudiMode, List<Race> legRaces, Race headerRace,
             BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher,
             List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         List<AgeGroup> ageGroups = loadAgeGroups();
@@ -537,7 +575,7 @@ public class PdfExportService {
                 .distinct()
                 .toList();
 
-        return renderDocument(headerRace, title, true, ctx -> {
+        return renderDocument(headerRace, gaudiMode, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
                 for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
@@ -748,8 +786,22 @@ public class PdfExportService {
         }
     }
 
+    /**
+     * Plain race exports (start list, all rankings): the race's own cover page (if any) is
+     * prepended automatically - see {@link #withCoverPage}.
+     */
     private byte[] renderDocument(Race race, boolean landscape, PdfBody body) throws IOException {
-        return renderDocument(race, race.name(), landscape, body);
+        return renderDocument(race, race.name(), race.coverPagePdf(), landscape, body);
+    }
+
+    /**
+     * Gaudi-Modus exports: {@code headerRace} supplies only the page header's info block
+     * (organisation, weather, ...) - the cover page prepended automatically is the Gaudi-Modus
+     * instance's own, never {@code headerRace}'s, since that's just one arbitrary combined leg and
+     * its personal cover page has nothing to do with the combined ranking. See {@link #withCoverPage}.
+     */
+    private byte[] renderDocument(Race headerRace, GaudiMode gaudiMode, boolean landscape, PdfBody body) throws IOException {
+        return renderDocument(headerRace, gaudiMode.name(), gaudiMode.coverPagePdf(), landscape, body);
     }
 
     /**
@@ -757,7 +809,7 @@ public class PdfExportService {
      *                    Gaudi-Modus exports the Gaudi-Modus's own name so the header doesn't show
      *                    one arbitrary underlying leg race's name instead.
      */
-    private byte[] renderDocument(Race race, String headerName, boolean landscape, PdfBody body) throws IOException {
+    private byte[] renderDocument(Race race, String headerName, byte[] coverPagePdf, boolean landscape, PdfBody body) throws IOException {
         PDRectangle pageSize = landscape
                 ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth())
                 : PDRectangle.A4;
@@ -775,7 +827,7 @@ public class PdfExportService {
 
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             document.save(outputStream);
-            return outputStream.toByteArray();
+            return withCoverPage(coverPagePdf, outputStream.toByteArray());
         }
     }
 
@@ -1229,7 +1281,7 @@ public class PdfExportService {
     /**
      * Loads all age groups once per PDF export so per-participant age-group lookups
      * (potentially thousands for a large by-age-group/category export) don't each hit the
-     * database - see {@link #calculateAgeGroup(LocalDate, List)}.
+     * database - see calculateAgeGroup(LocalDate, List)}.
      */
     private List<AgeGroup> loadAgeGroups() {
         return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();

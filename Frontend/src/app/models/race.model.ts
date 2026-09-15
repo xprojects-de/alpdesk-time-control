@@ -34,6 +34,8 @@ export interface Race {
     resultUnit: ResultUnit;
     resultUnitLabel?: string;
     sortDirection: SortDirection;
+    /** Whether a cover page PDF is set for this race - the PDF content itself is never included here. */
+    hasCoverPage: boolean;
 }
 
 export interface RaceRequest {
@@ -51,4 +53,8 @@ export interface RaceRequest {
     resultUnit?: ResultUnit;
     resultUnitLabel?: string;
     sortDirection?: SortDirection;
+    /** Base64-encoded PDF content (prepended to every ranking/results PDF, not the start list). Omit to leave the current cover page (if any) unchanged. */
+    coverPagePdf?: string;
+    /** Removes the current cover page (if any); takes precedence over coverPagePdf. */
+    removeCoverPage?: boolean;
 }

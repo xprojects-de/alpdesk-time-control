@@ -92,10 +92,12 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
-        Race race = service.createFromRequest(request);
         try {
+            Race race = service.createFromRequest(request);
             Race created = service.create(race);
             return HttpResponse.created(RaceResponse.from(created));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
@@ -117,10 +119,12 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
-        Race race = service.createFromRequest(request);
         Optional<Race> updated;
         try {
-            updated = service.update(id, race);
+            Race race = service.createFromRequest(request);
+            updated = service.update(id, race, Boolean.TRUE.equals(request.removeCoverPage()));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }

@@ -2,6 +2,7 @@ package x.timecontrol.services;
 
 import io.micronaut.transaction.TransactionOperations;
 import jakarta.inject.Singleton;
+import org.apache.pdfbox.Loader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
@@ -22,6 +23,7 @@ import x.timecontrol.repositories.GaudiModeRaceRepository;
 import x.timecontrol.repositories.GaudiModeRepository;
 import x.timecontrol.services.gaudi.GaudiModeCalculator;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -113,18 +115,27 @@ public class GaudiModeService {
      * Wrapped in one transaction for the same reason as {@link #create}: update() + the
      * delete-then-recreate of the race legs must succeed or fail together, or a mid-way failure
      * leaves a GaudiMode with its races deleted but not yet replaced.
+     *
+     * @param removeCoverPage if true, clears the cover page regardless of {@code gaudiMode.coverPagePdf()};
+     *                        otherwise a null {@code gaudiMode.coverPagePdf()} leaves the existing cover
+     *                        page (if any) untouched instead of wiping it on every unrelated edit -
+     *                        the frontend only ever sends a non-null one when the user picks a new file.
      */
-    public Optional<GaudiMode> update(Long id, GaudiMode gaudiMode, List<GaudiModeRaceEntry> races) {
+    public Optional<GaudiMode> update(Long id, GaudiMode gaudiMode, List<GaudiModeRaceEntry> races, boolean removeCoverPage) {
         Optional<GaudiMode> existing = repository.findById(id);
         if (existing.isPresent()) {
             validate(gaudiMode.type(), gaudiMode.teamSize(), races);
+            byte[] coverPagePdf = removeCoverPage ? null
+                    : gaudiMode.coverPagePdf() != null ? gaudiMode.coverPagePdf()
+                    : existing.get().coverPagePdf();
             GaudiMode updated = new GaudiMode(
                     id,
                     gaudiMode.type(),
                     gaudiMode.name(),
                     gaudiMode.teamSize(),
                     gaudiMode.pointsScaleId(),
-                    existing.get().createdAt()
+                    existing.get().createdAt(),
+                    coverPagePdf
             );
             GaudiMode result = transactionOperations.executeWrite(_ -> {
                 GaudiMode saved = repository.update(updated);
@@ -142,8 +153,23 @@ public class GaudiModeService {
         repository.deleteById(id);
     }
 
+    /**
+     * @throws IllegalArgumentException if {@code request.coverPagePdf()} is set but isn't a parseable PDF
+     */
     public GaudiMode createFromRequest(GaudiModeRequest request) {
-        return new GaudiMode(null, request.type(), request.name(), request.teamSize(), request.pointsScaleId(), LocalDateTime.now());
+        if (request.coverPagePdf() != null) {
+            validateCoverPagePdf(request.coverPagePdf());
+        }
+        return new GaudiMode(null, request.type(), request.name(), request.teamSize(), request.pointsScaleId(),
+                LocalDateTime.now(), request.coverPagePdf());
+    }
+
+    private static void validateCoverPagePdf(byte[] pdfBytes) {
+        try (var ignored = Loader.loadPDF(pdfBytes)) {
+            // Parsed only to validate - if it doesn't throw, the file is a real PDF.
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Die hochgeladene Datei ist keine gültige PDF-Datei");
+        }
     }
 
     /**

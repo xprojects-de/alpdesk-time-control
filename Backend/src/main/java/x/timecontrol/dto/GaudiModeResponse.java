@@ -33,7 +33,10 @@ public record GaudiModeResponse(
         Long pointsScaleId,
 
         @Schema(description = "Timestamp when this Gaudi-Modus instance was created")
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+
+        @Schema(description = "Whether a cover page PDF is set for this Gaudi-Modus instance. The PDF content itself is never included here - upload via coverPagePdf on update to replace it.")
+        boolean hasCoverPage
 ) {
     public static GaudiModeResponse from(GaudiMode gaudiMode, List<GaudiModeRaceResponse> races) {
         return new GaudiModeResponse(
@@ -43,7 +46,8 @@ public record GaudiModeResponse(
                 gaudiMode.name(),
                 gaudiMode.teamSize(),
                 gaudiMode.pointsScaleId(),
-                gaudiMode.createdAt()
+                gaudiMode.createdAt(),
+                gaudiMode.coverPagePdf() != null
         );
     }
 }

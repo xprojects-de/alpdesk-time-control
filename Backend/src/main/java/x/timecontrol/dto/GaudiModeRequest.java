@@ -25,6 +25,14 @@ public record GaudiModeRequest(
 
         @Nullable
         @Schema(description = "Points scale to use (only relevant for type POINTS_COMBINATION); falls back to the default \"FIS-Schema\" if omitted", example = "1", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        Long pointsScaleId
+        Long pointsScaleId,
+
+        @Nullable
+        @Schema(description = "Cover page PDF content (prepended to every PDF generated for this Gaudi-Modus instance), base64-encoded. Omit/null to leave the current cover page (if any) unchanged.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        byte[] coverPagePdf,
+
+        @Nullable
+        @Schema(description = "Set to true to remove the current cover page (if any); takes precedence over coverPagePdf.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Boolean removeCoverPage
 ) {
 }

@@ -14,6 +14,7 @@ import {
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
 import {MatButtonModule} from '@angular/material/button';
+import {MatIconModule} from '@angular/material/icon';
 import {MatDatepickerModule} from '@angular/material/datepicker';
 import {MatNativeDateModule} from '@angular/material/core';
 import {MatSelectModule} from '@angular/material/select';
@@ -25,6 +26,7 @@ import {
     SortDirection,
     SortDirectionLabels,
 } from '../../models/race.model';
+import {readFileAsBase64} from '../../utils/file-base64.util';
 
 @Component({
     selector: 'app-race-dialog',
@@ -39,6 +41,7 @@ import {
         MatDatepickerModule,
         MatNativeDateModule,
         MatSelectModule,
+        MatIconModule,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -151,6 +154,29 @@ import {
                         <input matInput formControlName="weather"/>
                     </mat-form-field>
                 </div>
+
+                <h3 class="section-title">Deckblatt (optional)</h3>
+                <p class="hint">
+                    Wird jeder generierten Ergebnisliste dieses Rennens vorangestellt (nicht der Startliste).
+                </p>
+                <div class="cover-page-row">
+                    @if (coverPageActive) {
+                        <span class="cover-page-name">
+                            <mat-icon inline="true">picture_as_pdf</mat-icon>
+                            Deckblatt aktiv
+                        </span>
+                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
+                            Entfernen
+                        </button>
+                    } @else {
+                        <span class="hint">Kein Deckblatt ausgewählt.</span>
+                    }
+                    <button mat-stroked-button type="button" (click)="coverPageInput.click()">
+                        {{ coverPageActive ? 'Ersetzen' : 'PDF auswählen' }}
+                    </button>
+                    <input #coverPageInput type="file" accept="application/pdf" hidden
+                           (change)="onCoverPageFileSelected($event)"/>
+                </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -192,6 +218,25 @@ import {
              grid-template-columns: 1fr 1fr;
              gap: 0 16px;
            }
+
+           .hint {
+             margin: 0;
+             font-size: 12px;
+             color: rgba(0, 0, 0, 0.6);
+           }
+
+           .cover-page-row {
+             display: flex;
+             align-items: center;
+             gap: 12px;
+             flex-wrap: wrap;
+           }
+
+           .cover-page-name {
+             display: flex;
+             align-items: center;
+             gap: 4px;
+           }
          `,
      ],
 })
@@ -210,6 +255,12 @@ export class RaceDialogComponent {
         {value: SortDirection.ASC, label: SortDirectionLabels[SortDirection.ASC]},
         {value: SortDirection.DESC, label: SortDirectionLabels[SortDirection.DESC]},
     ];
+
+    /** Whether a cover page is (or will be, after saving) set for this race. */
+    coverPageActive = false;
+    /** Set only when the user picks a new file this session; sent as coverPagePdf on save. */
+    private coverPagePdfBase64?: string;
+    private removeCoverPage = false;
 
     constructor() {
         let date: Date | string = this.data?.date || '';
@@ -240,10 +291,30 @@ export class RaceDialogComponent {
             resultUnitLabel: [this.data?.resultUnitLabel || ''],
             sortDirection: [this.data?.sortDirection || SortDirection.ASC],
         });
+
+        this.coverPageActive = this.data?.hasCoverPage ?? false;
     }
 
     onCancel(): void {
         this.dialogRef.close();
+    }
+
+    async onCoverPageFileSelected(event: Event): Promise<void> {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) {
+            return;
+        }
+        this.coverPagePdfBase64 = await readFileAsBase64(file);
+        this.coverPageActive = true;
+        this.removeCoverPage = false;
+    }
+
+    onRemoveCoverPage(): void {
+        this.coverPageActive = false;
+        this.coverPagePdfBase64 = undefined;
+        this.removeCoverPage = true;
     }
 
     onSave(): void {
@@ -264,6 +335,8 @@ export class RaceDialogComponent {
                 resultUnit: formValue.resultUnit,
                 resultUnitLabel: formValue.resultUnit === ResultUnit.POINTS ? (formValue.resultUnitLabel || undefined) : undefined,
                 sortDirection: formValue.sortDirection,
+                coverPagePdf: this.coverPagePdfBase64,
+                removeCoverPage: this.removeCoverPage || undefined,
             };
             this.dialogRef.close(race);
         }
@@ -280,4 +353,3 @@ export class RaceDialogComponent {
         return `${year}-${month}-${day}`;
     }
 }
-

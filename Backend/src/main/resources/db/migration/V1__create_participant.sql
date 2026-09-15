@@ -23,7 +23,11 @@ CREATE TABLE race
     weather              TEXT,
     result_unit          TEXT NOT NULL DEFAULT 'TIME' CHECK (result_unit IN ('TIME', 'POINTS')),
     result_unit_label    TEXT,
-    sort_direction       TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC'))
+    sort_direction       TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC')),
+
+    -- Optional cover page prepended to every ranking/results PDF generated for this race (not the
+    -- start list) - see PdfExportService.renderDocument/generateStartList.
+    cover_page_pdf       BLOB
 );
 
 CREATE TABLE team
@@ -123,12 +127,16 @@ VALUES ('FIS-Schema',
 
 CREATE TABLE gaudi_mode
 (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    type            TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
-    name            TEXT      NOT NULL,
-    team_size       INTEGER,
-    points_scale_id INTEGER   REFERENCES points_scale (id) ON DELETE SET NULL,
-    created_at      TIMESTAMP NOT NULL
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    type                TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
+    name                TEXT      NOT NULL,
+    team_size           INTEGER,
+    points_scale_id     INTEGER   REFERENCES points_scale (id) ON DELETE SET NULL,
+    created_at          TIMESTAMP NOT NULL,
+
+    -- Optional cover page prepended to every PDF generated for this Gaudi-Modus instance - separate
+    -- from any of its leg races' own cover page (see PdfExportService.renderDocument).
+    cover_page_pdf      BLOB
 );
 
 CREATE TABLE gaudi_mode_race

@@ -23,6 +23,10 @@ public record GaudiMode(
         @Nullable
         Long pointsScaleId,
 
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+
+        // Optional cover page prepended to every PDF generated for this Gaudi-Modus instance -
+        // separate from any of its leg races' own cover page (see PdfExportService.renderDocument).
+        @Nullable byte[] coverPagePdf
 ) {
 }
