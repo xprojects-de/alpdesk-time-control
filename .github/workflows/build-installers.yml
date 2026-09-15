@@ -312,11 +312,94 @@ jobs:
             Backend/dist/*.deb
           retention-days: 14
 
+  build-macos-intel-bundle:
+    name: Build macOS Intel (x64) App Bundle
+    # Companion to the shadow JAR for Intel Macs: jpackage/nativeCompile can only target the
+    # architecture of the runner they execute on, and GitHub's macOS runners are arm64 now
+    # (macos-13, the last Intel-hosted one, is being phased out) - so there's no practical way
+    # to jpackage-build for x64 macOS here. Instead this downloads a prebuilt x64 JRE (never
+    # executed, just unpacked - no macOS/x64 runner needed) and wraps it with the shadow JAR in
+    # a plain .app bundle, giving Intel Mac users a double-clickable app without a separate
+    # Java install. It's unsigned, so Gatekeeper will require a one-time right-click > Open.
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS x64 JRE (Temurin, Java 25)
+        run: |
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/mac/x64/jre/hotspot/normal/eclipse" -o jre-mac-x64.tar.gz
+          mkdir -p TimeControl.app/Contents/PlugIns/jre
+          tar xzf jre-mac-x64.tar.gz -C TimeControl.app/Contents/PlugIns/jre --strip-components=1
+
+      - name: Assemble TimeControl.app Bundle
+        env:
+          APP_VERSION: ${{ steps.read_version.outputs.version }}
+        run: |
+          APP=TimeControl.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp shadow-jar/Time-Control-java-v*.jar "$APP/Contents/Resources/app.jar"
+          cp Backend/packaging/icons/app.icns "$APP/Contents/Resources/app.icns"
+
+          # Mirrors the jpackage build's --java-options (see build.gradle jpackageArgs): keeps
+          # the data directory (SQLite DB, JWT secret) anchored to the user's home instead of
+          # the app bundle's own location, and enables the AWT/Swing startup status window.
+          cat > "$APP/Contents/MacOS/TimeControl" <<'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")/.." && pwd)"
+          exec "$DIR/PlugIns/jre/Contents/Home/bin/java" -Dapp.packaged=true -Djava.awt.headless=false -jar "$DIR/Resources/app.jar"
+          SCRIPT
+          chmod +x "$APP/Contents/MacOS/TimeControl"
+
+          cat > "$APP/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>TimeControl</string>
+              <key>CFBundleIconFile</key>
+              <string>app.icns</string>
+              <key>CFBundleIdentifier</key>
+              <string>de.alpdesk.timecontrol</string>
+              <key>CFBundleName</key>
+              <string>Time Control</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${APP_VERSION}</string>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Zip App Bundle
+        run: |
+          mkdir -p dist
+          zip -r -X -y "dist/Time-Control-macOS-Intel-v${{ steps.read_version.outputs.version }}.zip" TimeControl.app
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-bundle
+          path: dist/Time-Control-macOS-Intel-v*.zip
+          retention-days: 14
+
   create-release:
     name: Create GitHub Release
     # build-native-installer is currently skipped (see above) - not listed here, otherwise
     # this job would be skipped too since a skipped dependency doesn't count as successful.
-    needs: [ build-jpackage-installer, build-shadow-jar ]
+    needs: [ build-jpackage-installer, build-shadow-jar, build-macos-intel-bundle ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -332,6 +415,7 @@ jobs:
           mkdir -p final-assets
           cp release-assets/*-installer/* final-assets/
           cp release-assets/shadow-jar/* final-assets/
+          cp release-assets/macos-intel-bundle/* final-assets/
 
       - name: Read App Version
         id: read_version

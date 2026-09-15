@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import x.timecontrol.services.MeasurementTableLock;
 import x.timecontrol.util.BrowserLauncher;
+import x.timecontrol.util.SwingLogAppender;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -12,6 +13,8 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -26,6 +29,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Small always-visible control window for the packaged desktop app (jpackage build only, see
@@ -96,23 +100,81 @@ final class DesktopStatusWindow {
 
         content.add(textPanel, BorderLayout.CENTER);
 
+        JTextArea logArea = new JTextArea();
+        logArea.setEditable(false);
+        logArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        logScrollPane.setPreferredSize(new Dimension(640, 320));
+        Consumer<String> logListener = line -> {
+            logArea.append(line);
+            trimLines(logArea);
+            logArea.setCaretPosition(logArea.getDocument().getLength());
+        };
+
+        Dimension collapsedSize = new Dimension(360, 180);
+
+        JButton logsButton = new JButton("Logs anzeigen");
+        logsButton.addActionListener(_ -> {
+            boolean showingLogs = logScrollPane.getParent() == frame.getContentPane();
+            if (showingLogs) {
+                SwingLogAppender.removeListener(logListener);
+                frame.remove(logScrollPane);
+                logsButton.setText("Logs anzeigen");
+                frame.setResizable(false);
+                frame.setMinimumSize(collapsedSize);
+                frame.pack();
+            } else {
+                logArea.setText(SwingLogAppender.bufferedContent());
+                trimLines(logArea);
+                SwingLogAppender.addListener(logListener);
+                frame.add(logScrollPane, BorderLayout.CENTER);
+                logsButton.setText("Logs ausblenden");
+                frame.setResizable(true);
+                frame.setMinimumSize(new Dimension(480, 360));
+                frame.pack();
+                logArea.setCaretPosition(logArea.getDocument().getLength());
+            }
+            frame.setLocationRelativeTo(null);
+        });
+
         JButton quitButton = new JButton("Beenden");
         quitButton.addActionListener(_ -> {
             LOG.info("Shutdown requested from status window");
             quitButton.setEnabled(false);
+            SwingLogAppender.removeListener(logListener);
             shutdown(frame, quitButton, measurementTableLock);
         });
         JPanel buttonPanel = new JPanel();
+        buttonPanel.add(logsButton);
         buttonPanel.add(quitButton);
 
-        frame.add(content, BorderLayout.CENTER);
+        frame.add(content, BorderLayout.NORTH);
         frame.add(buttonPanel, BorderLayout.SOUTH);
 
-        frame.setMinimumSize(new Dimension(360, 180));
+        frame.setMinimumSize(collapsedSize);
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setAlwaysOnTop(false);
         frame.setVisible(true);
+    }
+
+    /**
+     * Bounds the log view's own displayed text - SwingLogAppender's ring buffer already caps
+     * what it hands out, but without this the JTextArea would keep growing for as long as the
+     * window stays open with the log view expanded.
+     */
+    private static void trimLines(JTextArea logArea) {
+        int maxLines = 2000;
+        int excess = logArea.getLineCount() - maxLines;
+        if (excess <= 0) {
+            return;
+        }
+        try {
+            int cutOffset = logArea.getLineStartOffset(excess);
+            logArea.replaceRange("", 0, cutOffset);
+        } catch (javax.swing.text.BadLocationException e) {
+            // ignore - best-effort trimming
+        }
     }
 
     /**

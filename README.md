@@ -39,9 +39,27 @@ Die Datenbank landet dabei relativ zum Verzeichnis, aus dem der Befehl gestartet
 [Wo liegt die Datenbank?](#wo-liegt-die-datenbank)) – am besten immer aus demselben Ordner
 starten.
 
+## macOS (Intel/x64): Time-Control-macOS-Intel-v\<Version\>.zip
+
+Die `.dmg`-Varianten oben (GraalVM- und jpackage-Build) werden von GitHub-gehosteten
+macOS-Runnern gebaut, die inzwischen ausschließlich Apple Silicon (arm64) sind – ein
+plattformübergreifendes Bauen für Intel-Macs ist mit jpackage/GraalVM nicht möglich. Für
+ältere Intel-Macs liegt deshalb zusätzlich `Time-Control-macOS-Intel-v<Version>.zip` bei: ein
+fertiges `TimeControl.app`-Bundle mit eingebauter Java-25-Laufzeit (Eclipse Temurin, x64) –
+kein separat installiertes Java nötig, kein `java -jar` auf der Kommandozeile wie beim
+Shadow-Jar-Fallback.
+
+Installation: ZIP entpacken, `TimeControl.app` nach `Programme`/`Applications` ziehen, dann
+wie im nächsten Abschnitt beschrieben einmalig von Gatekeeper freigeben (auch dieses Bundle
+ist unsigniert).
+
+Auf Apple-Silicon-Macs bitte weiterhin eine der `.dmg`-Varianten verwenden – die laufen dort
+nativ (arm64) und sind kleiner/schneller als dieses x64-Bundle unter Rosetta.
+
 ## macOS
 
-Betrifft **beide** Varianten (`.dmg`) gleichermaßen, da beide unsigniert sind.
+Betrifft **alle drei** Varianten (`.dmg` und das Intel-`.zip`-Bundle) gleichermaßen, da alle
+unsigniert sind.
 
 1. `.dmg` öffnen und die App nach `Programme`/`Applications` ziehen.
 2. Beim ersten Start meldet macOS *"Apple konnte nicht überprüfen, ob … frei von
@@ -97,6 +115,9 @@ Keine Sicherheitswarnung, kein Zusatzschritt nötig.
   bekommt aber `-Dapp.packaged=true` bisher **nicht** gesetzt (das Binary wird ohne
   jpackage-Wrapper direkt in die DMG/das Archiv gepackt). Das gleiche Crash-Muster ist hier
   beim Doppelklick auf macOS zu erwarten, wurde aber noch nicht separat gefixt/getestet.
+- **macOS-Intel-Bundle** (`TimeControl.app` aus dem `.zip`): das Start-Skript im Bundle setzt
+  `-Dapp.packaged=true` fest mit, verhält sich also wie der jpackage-Installer – Datenbank und
+  JWT-Secret landen ebenfalls unter `<Home-Verzeichnis>/alpdesk-time-control/`.
 
 Gilt entsprechend für die JWT-Secret-Datei (`database/jwt-secret.txt` bzw.
 `<Home>/alpdesk-time-control/jwt-secret.txt`), die im selben Ordner liegt.
