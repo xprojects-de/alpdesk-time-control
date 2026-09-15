@@ -640,11 +640,20 @@ public class ParticipantService {
      * onto an *existing* participant via raceNumber - deliberately never creates a participant.
      * A raceNumber that matches nobody in the race, or that's missing/unparsable, is reported as a
      * row error instead. Only the result fields (durationMs/measuredAt/status/comment) are touched;
-     * identity data (name, team, category, ...) is left exactly as it was, via
-     * {@link #update(Long, Participant)}'s "omitted means unchanged" convention for durationMs/
-     * measuredAt/status - raceId/personId/raceNumber/teamId/categoryId are carried over from the
-     * existing row explicitly since update() takes those from the passed-in Participant directly
-     * (no fallback), unlike durationMs/measuredAt/status.
+     * identity data (name, team, category, ...) is left exactly as it was - raceId/personId/
+     * raceNumber/teamId/categoryId are always carried over unchanged from the existing row.
+     * <p>
+     * The race's full roster is loaded once up front (like {@link #syncMeasurementsToParticipants})
+     * and matched in memory, and every row's update is applied in one {@code repository.updateAll}
+     * at the end, instead of one {@link #update(Long, Participant)} call per row - that would re-run
+     * {@code validate()}'s race/person/team/category/uniqueness checks on every row for values that
+     * are, by construction, always carried over unchanged from an already-valid persisted row, i.e.
+     * always no-ops. If the file lists the same raceNumber twice, both rows are computed against the
+     * same pre-import snapshot (not chained), and the later row wins in the final batch - the same
+     * per-key-independent semantics {@link #syncMeasurementsToParticipants} already has.
+     * <p>
+     * {@code mapping} is used as given - including an explicitly empty map, meaning "map nothing" -
+     * and only falls back to the auto-suggested mapping when it's entirely omitted ({@code null}).
      * <p>
      * {@code timeFormat} says how to read the mapped "time" column: raw milliseconds, decimal
      * seconds, or a "[[hh:]mm:]ss[.,fraction]" race-clock string - different timing providers export
@@ -655,11 +664,18 @@ public class ParticipantService {
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat) {
         ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
-        Map<String, String> effectiveMapping = (mapping == null || mapping.isEmpty())
+        Map<String, String> effectiveMapping = (mapping == null)
                 ? ParticipantResultImportParsers.suggestMapping(parsed.fields())
                 : mapping;
 
-        List<Participant> updated = new ArrayList<>();
+        Map<Integer, Participant> existingByRaceNumber = new HashMap<>();
+        for (Participant participant : repository.findByRaceId(raceId)) {
+            if (participant.raceNumber() != null) {
+                existingByRaceNumber.put(participant.raceNumber(), participant);
+            }
+        }
+
+        List<Participant> toUpdate = new ArrayList<>();
         List<ParticipantResultImportRowError> errors = new ArrayList<>();
 
         int rowNumber = 1;
@@ -680,12 +696,11 @@ public class ParticipantService {
                 continue;
             }
 
-            Optional<Participant> existingOpt = repository.findByRaceIdAndRaceNumber(raceId, raceNumber);
-            if (existingOpt.isEmpty()) {
+            Participant existing = existingByRaceNumber.get(raceNumber);
+            if (existing == null) {
                 errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
                 continue;
             }
-            Participant existing = existingOpt.get();
 
             String timeRaw = valueFor(row, effectiveMapping, "time");
             String statusRaw = valueFor(row, effectiveMapping, "status");
@@ -729,20 +744,22 @@ public class ParticipantService {
             String commentRaw = valueFor(row, effectiveMapping, "comment");
             String comment = (commentRaw != null && !commentRaw.trim().isEmpty()) ? commentRaw.trim() : existing.comment();
 
-            Participant toUpdate = new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
-                    existing.teamId(), existing.categoryId(), durationMs, existing.penalty(), measuredAt, comment, status);
-            try {
-                update(existing.id(), toUpdate).ifPresent(updated::add);
-            } catch (Exception e) {
-                String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                LOG.warn("Failed to import result row {} for race {}: {}", rowNumber, raceId, reason);
-                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Speichern fehlgeschlagen: " + reason));
-            }
+            toUpdate.add(new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
+                    existing.teamId(), existing.categoryId(),
+                    durationMs != null ? durationMs : existing.durationMs(),
+                    existing.penalty(),
+                    measuredAt != null ? measuredAt : existing.measuredAt(),
+                    comment,
+                    status != null ? status : existing.status()));
         }
 
-        LOG.info("Result import for race {} finished: {} updated, {} skipped", raceId, updated.size(), errors.size());
+        if (!toUpdate.isEmpty()) {
+            repository.updateAll(toUpdate);
+        }
 
-        return new ParticipantResultImportResult(updated, errors);
+        LOG.info("Result import for race {} finished: {} updated, {} skipped", raceId, toUpdate.size(), errors.size());
+
+        return new ParticipantResultImportResult(toUpdate, errors);
     }
 
     /**
@@ -752,10 +769,19 @@ public class ParticipantService {
      * time, which must not overwrite whatever status the participant already had).
      */
     private static DisqualificationStatus parseExplicitStatus(String rawStatus) {
-        if (rawStatus == null || rawStatus.isBlank()) {
+        return matchStatusKeyword(rawStatus);
+    }
+
+    /**
+     * The DSQ/DNF/DNS/NONE keyword list shared by {@link #parseStatus} and
+     * {@link #parseExplicitStatus} - kept as one method so the two callers, which each default
+     * differently for an unrecognized value, can't end up recognizing different keywords.
+     */
+    private static DisqualificationStatus matchStatusKeyword(String raw) {
+        if (raw == null || raw.isBlank()) {
             return null;
         }
-        return switch (rawStatus.trim().toUpperCase()) {
+        return switch (raw.trim().toUpperCase()) {
             case "DSQ", "DISQUALIFIZIERT", "DISQUALIFIED" -> DisqualificationStatus.DSQ;
             case "DNF", "AUFGEGEBEN" -> DisqualificationStatus.DNF;
             case "DNS", "NICHT GESTARTET", "NICHT_GESTARTET" -> DisqualificationStatus.DNS;
@@ -776,7 +802,7 @@ public class ParticipantService {
         try {
             return switch (format) {
                 case MILLISECONDS -> Integer.parseInt(raw);
-                case SECONDS -> Math.round(Float.parseFloat(raw.replace(',', '.')) * 1000f);
+                case SECONDS -> (int) Math.round(Double.parseDouble(raw.replace(',', '.')) * 1000.0);
                 case CLOCK -> parseClock(raw);
             };
         } catch (NumberFormatException e) {
@@ -874,7 +900,7 @@ public class ParticipantService {
                     p.durationMs() != null ? p.durationMs().toString() : "",
                     p.measuredAt() != null ? p.measuredAt().toString() : "",
                     sanitizeForExport(p.comment()),
-                    p.status().name()
+                    Objects.requireNonNullElse(p.status(), DisqualificationStatus.NONE).name()
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
@@ -1047,19 +1073,12 @@ public class ParticipantService {
      * Best-effort like {@link #parseOptionalInt}: blank/unrecognized values default to NONE (a
      * normal, rankable result) instead of failing the row - the safe direction to fail in, since a
      * value nobody meant as a disqualification marker can only leave someone wrongly rankable, not
-     * wrongly excluded. Recognizes our own enum names plus the German terms used on export/reports.
+     * wrongly excluded. Recognizes our own enum names plus the German terms used on export/reports -
+     * the actual keyword list lives in {@link #matchStatusKeyword} so it can't drift out of sync
+     * with {@link #parseExplicitStatus}'s identical list.
      */
     private DisqualificationStatus parseStatus(String rawStatus) {
-        if (rawStatus == null) {
-            return DisqualificationStatus.NONE;
-        }
-        String normalized = rawStatus.trim().toUpperCase();
-        return switch (normalized) {
-            case "DSQ", "DISQUALIFIZIERT", "DISQUALIFIED" -> DisqualificationStatus.DSQ;
-            case "DNF", "AUFGEGEBEN" -> DisqualificationStatus.DNF;
-            case "DNS", "NICHT GESTARTET", "NICHT_GESTARTET" -> DisqualificationStatus.DNS;
-            default -> DisqualificationStatus.NONE;
-        };
+        return Objects.requireNonNullElse(matchStatusKeyword(rawStatus), DisqualificationStatus.NONE);
     }
 
     /**

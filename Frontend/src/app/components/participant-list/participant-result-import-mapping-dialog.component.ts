@@ -1,6 +1,6 @@
 import {Component, inject, signal, ChangeDetectionStrategy} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {FormBuilder, FormGroup, ReactiveFormsModule} from "@angular/forms";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {MatDialogRef, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatButtonModule} from "@angular/material/button";
@@ -135,7 +135,7 @@ export interface ParticipantResultImportMappingDialogResult {
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button mat-raised-button color="primary" [disabled]="!preview() || previewLoading()" (click)="onImport()">
+            <button mat-raised-button color="primary" [disabled]="!preview() || previewLoading() || mappingForm.invalid" (click)="onImport()">
                 Importieren
             </button>
         </mat-dialog-actions>
@@ -220,8 +220,12 @@ export class ParticipantResultImportMappingDialogComponent {
     previewError = signal<string | null>(null);
     preview = signal<ParticipantResultImportPreviewResponse | null>(null);
 
+    // raceNumber/time are marked required in PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS - without a
+    // Validators.required here, the '*' next to their label in the template is just decoration and
+    // the Import button stays enabled even with no column mapped for them, letting every row fail
+    // server-side ("Startnummer fehlt"/"Zeit fehlt") instead of catching it before the round trip.
     mappingForm: FormGroup = this.fb.group(
-        Object.fromEntries(this.targetFields.map(field => [field.key, ['']]))
+        Object.fromEntries(this.targetFields.map(field => [field.key, ['', field.required ? Validators.required : []]]))
     );
 
     onFileSelected(event: Event): void {

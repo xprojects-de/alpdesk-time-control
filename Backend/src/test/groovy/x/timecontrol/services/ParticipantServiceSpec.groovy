@@ -503,15 +503,8 @@ class ParticipantServiceSpec extends Specification {
         given: "a file shaped like a real export (Alpenhunde): the race-number column is mislabeled 'Name', times use CLOCK format with a comma decimal, and DNF appears instead of a time"
         def existing61 = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
         def existing63 = new Participant(101L, 5L, 2L, 63, null, null, null, null, null, null, DisqualificationStatus.NONE)
-        repository.findByRaceIdAndRaceNumber(5L, 61) >> Optional.of(existing61)
-        repository.findByRaceIdAndRaceNumber(5L, 63) >> Optional.of(existing63)
-        repository.findByRaceIdAndRaceNumber(5L, 999) >> Optional.empty()
-        repository.findById(100L) >> Optional.of(existing61)
-        repository.findById(101L) >> Optional.of(existing63)
-        raceService.findById(5L) >> Optional.of(race())
-        personService.findById(_) >> Optional.of(person())
-        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
-        repository.update(_) >> { Participant p -> p }
+        repository.findByRaceId(5L) >> [existing61, existing63]
+        repository.updateAll(_) >> { List<Participant> list -> list }
 
         def csv = "IDX;Name;Team;End Time\n" +
                 "1;61;;01:23,68\n" +
@@ -540,12 +533,8 @@ class ParticipantServiceSpec extends Specification {
     def "importResultsByRaceNumber parses SECONDS and MILLISECONDS time formats"() {
         given:
         def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
-        repository.findByRaceIdAndRaceNumber(5L, 61) >> Optional.of(existing)
-        repository.findById(100L) >> Optional.of(existing)
-        raceService.findById(5L) >> Optional.of(race())
-        personService.findById(_) >> Optional.of(person())
-        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
-        repository.update(_) >> { Participant p -> p }
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
 
         expect:
         def resultSeconds = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83.68\n".getBytes("UTF-8"), null,
@@ -559,10 +548,25 @@ class ParticipantServiceSpec extends Specification {
         resultMillis.errors().isEmpty()
     }
 
+    def "importResultsByRaceNumber's SECONDS format keeps millisecond precision on long durations (no float rounding)"() {
+        given: "a duration past the point where 32-bit float precision would already start dropping digits (~10h)"
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;35999.99\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().durationMs() == 35999990
+    }
+
     def "importResultsByRaceNumber reports a missing race number or time instead of guessing"() {
         given: "row 2's race number does exist, so the row reaches (and fails) the time check rather than the race-number lookup"
         def existing62 = new Participant(100L, 5L, 1L, 62, null, null, null, null, null, null, DisqualificationStatus.NONE)
-        repository.findByRaceIdAndRaceNumber(5L, 62) >> Optional.of(existing62)
+        repository.findByRaceId(5L) >> [existing62]
         def csv = "StNr;Zeit\n;01:00,00\n62;\n"
 
         when:
@@ -570,11 +574,27 @@ class ParticipantServiceSpec extends Specification {
                 [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.CLOCK)
 
         then:
-        0 * repository.update(_)
+        0 * repository.updateAll(_)
         result.updated().isEmpty()
         result.errors().size() == 2
         result.errors()[0].reason().contains("Startnummer")
         result.errors()[1].reason().contains("Zeit")
+    }
+
+    def "importResultsByRaceNumber treats an explicitly empty mapping as 'map nothing', not as 'use the auto-suggested mapping'"() {
+        given: "a header that would auto-suggest raceNumber/time on its own - but the caller passes an empty (not null) mapping"
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, "raceNumber;time\n61;83680\n".getBytes("UTF-8"), null,
+                [:], ResultTimeFormat.MILLISECONDS)
+
+        then: "every row fails for lack of a raceNumber mapping instead of silently using the auto-suggested one"
+        0 * repository.updateAll(_)
+        result.updated().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("Startnummer")
     }
 
     def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
@@ -592,15 +612,20 @@ class ParticipantServiceSpec extends Specification {
         lines[2] == ";;;;NONE"
     }
 
+    def "exportResultsCsv does not NPE on a participant with a null status"() {
+        given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
+        def noStatus = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [noStatus]
+
+        expect:
+        service.exportResultsCsv(5L).readLines()[1] == "42;;;;NONE"
+    }
+
     def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
         given: "the header exportResultsCsv would produce, reimported with the auto-suggested mapping"
         def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, null, null, null, DisqualificationStatus.NONE)
-        repository.findByRaceIdAndRaceNumber(5L, 42) >> Optional.of(existing)
-        repository.findById(10L) >> Optional.of(existing)
-        raceService.findById(5L) >> Optional.of(race())
-        personService.findById(_) >> Optional.of(person())
-        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
-        repository.update(_) >> { Participant p -> p }
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
 
         def csv = "raceNumber;time;measuredAt;comment;status\n" +
                 "42;125000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"

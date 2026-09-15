@@ -108,7 +108,10 @@ export class ParticipantService {
      * Imports results (time/status) for existing participants, matched by race number - never
      * creates a participant, never touches identity data. See
      * PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS for the mappable fields and ResultTimeFormat for how
-     * the "time" column is interpreted.
+     * the "time" column is interpreted. `mapping` is always sent, even when empty - the backend
+     * treats an explicitly empty mapping as "map nothing" and only falls back to the auto-suggested
+     * mapping when the part is omitted entirely, so a deliberately cleared mapping (every dropdown
+     * set to "nicht importieren") must not be silently dropped here.
      */
     importResultsMapped(raceId: number, file: File, timeFormat: ResultTimeFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantResultImportResponse> {
         const formData = new FormData();
@@ -117,9 +120,7 @@ export class ParticipantService {
         if (delimiter) {
             formData.append('delimiter', delimiter);
         }
-        if (mapping && Object.keys(mapping).length > 0) {
-            formData.append('mapping', JSON.stringify(mapping));
-        }
+        formData.append('mapping', JSON.stringify(mapping ?? {}));
         return this.http.post<ParticipantResultImportResponse>(`${this.apiUrl}/import-results-mapped/${raceId}`, formData);
     }
 
