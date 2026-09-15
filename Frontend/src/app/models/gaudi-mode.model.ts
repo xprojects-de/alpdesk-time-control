@@ -32,6 +32,8 @@ export interface GaudiMode {
     teamSize?: number;
     pointsScaleId?: number;
     createdAt: string;
+    /** Whether a cover page PDF is set for this Gaudi-Modus instance - the PDF content itself is never included here. */
+    hasCoverPage: boolean;
 }
 
 export interface GaudiModeRequest {
@@ -40,6 +42,10 @@ export interface GaudiModeRequest {
     name: string;
     teamSize?: number;
     pointsScaleId?: number;
+    /** Base64-encoded PDF content (prepended to every PDF generated for this instance). Omit to leave the current cover page (if any) unchanged. */
+    coverPagePdf?: string;
+    /** Removes the current cover page (if any); takes precedence over coverPagePdf. */
+    removeCoverPage?: boolean;
 }
 
 export interface GaudiLosPairing {
@@ -63,7 +69,6 @@ export interface GaudiRankingLeg {
 export interface GaudiTeamMember {
     label: string;
     valueMs?: number;
-    counted: boolean;
 }
 
 export interface GaudiRankingEntry {

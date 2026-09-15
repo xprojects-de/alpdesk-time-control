@@ -79,5 +79,20 @@ export const personReducer = createReducer(
         ...state,
         loading: false,
         error
+    })),
+
+    on(PersonActions.deleteUnusedPersons, state => ({
+        ...state,
+        loading: true,
+        error: null
+    })),
+    on(PersonActions.deleteUnusedPersonsSuccess, state => ({
+        ...state,
+        loading: false
+    })),
+    on(PersonActions.deleteUnusedPersonsFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error
     }))
 );

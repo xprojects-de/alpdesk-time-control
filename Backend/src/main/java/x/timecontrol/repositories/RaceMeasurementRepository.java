@@ -25,6 +25,11 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
     // the wrong participant before archiving. p.id only matches when that participant actually
     // belongs to :raceId, so a cross-race participantId is copied over as NULL instead of silently
     // attaching the wrong race's finisher to this race's result.
+    // participant_id is only ever filled in from the raw measurement while it is still unset
+    // (COALESCE keeps the existing value on conflict): once a row has a participant_id - whether set
+    // here on first copy or corrected manually via PUT /race-measurements/{id} - re-archiving the same
+    // race (e.g. a non-clearing preview archive followed by a later real one) must not silently revert
+    // that assignment back to whatever the raw measurement still points to.
     // The "WHERE true" is required: SQLite's grammar otherwise parses the ON in "ON CONFLICT" as a
     // join condition on the FROM clause rather than the start of the upsert clause (a documented
     // SQLite ambiguity - see the "Parsing Ambiguity" note in the UPSERT documentation). Verified this
@@ -35,7 +40,7 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
             "LEFT JOIN participant p ON p.id = m.participant_id AND p.race_id = :raceId " +
             "WHERE true " +
             "ON CONFLICT (race_id, device_measurement_id) DO UPDATE SET " +
-            "participant_id = excluded.participant_id, " +
+            "participant_id = COALESCE(participant_id, excluded.participant_id), " +
             "duration_ms = excluded.duration_ms, " +
             "measured_at = excluded.measured_at", nativeQuery = true)
     void copyFromMeasurements(Long raceId);

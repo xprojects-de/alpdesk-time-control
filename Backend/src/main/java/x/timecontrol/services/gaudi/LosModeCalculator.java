@@ -6,6 +6,7 @@ import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
@@ -19,6 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /**
@@ -57,6 +60,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
         for (Participant p : raceParticipants) {
             participantsById.put(p.id(), p);
         }
+
+        // Batch-loaded once for the whole race instead of one findById() per pairing member in the
+        // formatName()/teamNameOf() calls below.
+        Set<Long> personIds = raceParticipants.stream().map(Participant::personId).collect(Collectors.toSet());
+        Set<Long> teamIds = raceParticipants.stream().map(Participant::teamId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Person> personsById = personService.findByIds(personIds);
+        Map<Long, Team> teamsById = teamService.findByIds(teamIds);
 
         List<GaudiLosPairing> pairings = StreamSupport
                 .stream(pairingRepository.findByGaudiModeId(gaudiMode.id()).spliterator(), false)
@@ -97,8 +107,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     : value1;
 
             String label = (value2 != null)
-                    ? formatName(p1) + " & " + formatName(p2)
-                    : formatName(p1) + " (Einzel)";
+                    ? formatName(p1, personsById) + " & " + formatName(p2, personsById)
+                    : formatName(p1, personsById) + " (Einzel)";
 
             results.add(new PairResult(
                     label,
@@ -106,7 +116,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     value2,
                     pairAverage,
                     Math.abs(pairAverage - overallAverage),
-                    formatTeam(p1, p2)
+                    formatTeam(p1, p2, teamsById)
             ));
         }
 
@@ -136,19 +146,18 @@ public class LosModeCalculator implements GaudiModeCalculator {
         return entries;
     }
 
-    private String formatName(Participant p) {
-        return personService.findById(p.personId())
-                .map(personService::displayName)
-                .orElse("Unbekannt");
+    private String formatName(Participant p, Map<Long, Person> personsById) {
+        Person person = personsById.get(p.personId());
+        return person != null ? personService.displayName(person) : "Unbekannt";
     }
 
     /**
      * Combines both pairing members' teams into one label; when they share a team (or the second
      * member doesn't exist, e.g. a self-paired leftover), that single team name is used instead.
      */
-    private String formatTeam(Participant p1, Participant p2) {
-        String team1 = teamNameOf(p1);
-        String team2 = p2 != null ? teamNameOf(p2) : null;
+    private String formatTeam(Participant p1, Participant p2, Map<Long, Team> teamsById) {
+        String team1 = teamNameOf(p1, teamsById);
+        String team2 = p2 != null ? teamNameOf(p2, teamsById) : null;
         if (p2 == null || Objects.equals(p1.teamId(), p2.teamId())) {
             return team1;
         }
@@ -161,7 +170,11 @@ public class LosModeCalculator implements GaudiModeCalculator {
         return team1 + " / " + team2;
     }
 
-    private String teamNameOf(Participant p) {
-        return p.teamId() != null ? teamService.findById(p.teamId()).map(Team::name).orElse(null) : null;
+    private String teamNameOf(Participant p, Map<Long, Team> teamsById) {
+        if (p.teamId() == null) {
+            return null;
+        }
+        Team team = teamsById.get(p.teamId());
+        return team != null ? team.name() : null;
     }
 }

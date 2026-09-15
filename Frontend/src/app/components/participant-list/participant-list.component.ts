@@ -37,6 +37,10 @@ import {
     ParticipantImportMappingDialogComponent,
     ParticipantImportMappingDialogResult
 } from "./participant-import-mapping-dialog.component";
+import {
+    ParticipantResultImportMappingDialogComponent,
+    ParticipantResultImportMappingDialogResult
+} from "./participant-result-import-mapping-dialog.component";
 import {takeUntil, take} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -144,6 +148,36 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <button
                                 mat-raised-button
+                                [matMenuTriggerFor]="resultsMenu"
+                                [disabled]="resultImportLoading$ | async"
+                                matTooltip="Ergebnisse per Startnummer importieren oder als CSV exportieren"
+                        >
+                            @if (resultImportLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>update</mat-icon>
+                            }
+                            Ergebnisse
+                            <mat-icon>arrow_drop_down</mat-icon>
+                        </button>
+
+                        <mat-menu #resultsMenu="matMenu">
+                            <button mat-menu-item (click)="openResultImportDialog()"
+                                    matTooltip="Ergebnisse (Zeit/Status) für bereits vorhandene Teilnehmer per Startnummer importieren - legt keine neuen Teilnehmer an"
+                                    matTooltipPosition="left">
+                                <mat-icon>upload_file</mat-icon>
+                                <span>Ergebnisse importieren</span>
+                            </button>
+                            <button mat-menu-item (click)="exportResults()"
+                                    matTooltip="Ergebnisse (Startnummer/Zeit/Status) dieses Rennens als CSV exportieren - zum Teilen mit einer anderen Instanz, die dieselben Teilnehmer schon hat"
+                                    matTooltipPosition="left">
+                                <mat-icon>download</mat-icon>
+                                <span>Ergebnisse exportieren</span>
+                            </button>
+                        </mat-menu>
+
+                        <button
+                                mat-raised-button
                                 (click)="openCopyDialog()"
                                 [disabled]="copyLoading$ | async"
                                 matTooltip="Alle Teilnehmer dieses Rennens in andere Rennen kopieren"
@@ -233,6 +267,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="participant-table"
                         [class.hidden]="loading$ | async"
@@ -496,6 +531,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
     importLoading$: Observable<boolean>;
+    resultImportLoading$: Observable<boolean>;
     copyLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
@@ -515,6 +551,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
+
+    // Each 2s poll/reload replaces dataSource.data with freshly-deserialized objects, so the CDK
+    // table's default identity-based diffing would otherwise tear down and rebuild every row on
+    // every refresh instead of only the ones that actually changed.
+    trackById = (_index: number, participant: Participant) => participant.id;
 
     // Optional, not required: the table (and its matSort) only renders once a race is
     // selected - see the @if in the template - so it may genuinely not exist yet, and is
@@ -563,6 +604,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         );
         this.importLoading$ = this.store.select(
             ParticipantSelectors.selectImportLoading,
+        );
+        this.resultImportLoading$ = this.store.select(
+            ParticipantSelectors.selectResultImportLoading,
         );
         this.copyLoading$ = this.store.select(
             ParticipantSelectors.selectCopyLoading,
@@ -631,6 +675,73 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Vergeben der Startnummern: ${error}`, "OK", {duration: 5000});
+        });
+
+        // Import/Copy/PDF-Export failures previously had no feedback at all: the loading spinner
+        // just stopped with nothing telling the operator the roster wasn't actually there.
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsCsvSuccess, ParticipantActions.importParticipantsMappedSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                : `Import abgeschlossen: ${result.importedCount} importiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Importieren: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMappedSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Ergebnis-Import abgeschlossen: ${result.updatedCount} aktualisiert, ${result.skippedCount} übersprungen`
+                : `Ergebnis-Import abgeschlossen: ${result.updatedCount} aktualisiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMappedFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Ergebnis-Import: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyParticipantsSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen`
+                : `Kopieren abgeschlossen: ${result.copiedCount} kopiert`;
+            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyParticipantsFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Kopieren: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
+        // PDF export success is already visible to the operator via the browser's own download -
+        // only the failure case (a stopped spinner with nothing to show for it) needs a snackbar.
+        this.actions$.pipe(
+            ofType(
+                ParticipantActions.exportAllPdfFailure,
+                ParticipantActions.exportByGenderPdfFailure,
+                ParticipantActions.exportAllAgeGroupsPdfFailure,
+                ParticipantActions.exportAllByCategoryPdfFailure,
+                ParticipantActions.exportByGenderByCategoryPdfFailure,
+                ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure,
+                ParticipantActions.exportStartListPdfFailure,
+            ),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
         });
 
         // Setup sort when signal changes - re-attaches whenever a *new* MatSort instance
@@ -876,6 +987,54 @@ async openImportDialog(): Promise<void> {
                     this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
             });
+    }
+
+    async openResultImportDialog(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+
+        const dialogRef = this.dialog.open(ParticipantResultImportMappingDialogComponent, {
+            width: '900px',
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantResultImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(ParticipantActions.importParticipantResultsMapped({
+                        raceId,
+                        file: result.file,
+                        timeFormat: result.timeFormat,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
+                }
+            });
+    }
+
+    async exportResults(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+        const race = races.find(r => r.id === raceId);
+        this.store.dispatch(ParticipantActions.exportParticipantResultsCsv({
+            raceId,
+            filename: `ergebnisse_${race?.name ?? raceId}.csv`,
+        }));
     }
 
     async openCopyDialog(): Promise<void> {

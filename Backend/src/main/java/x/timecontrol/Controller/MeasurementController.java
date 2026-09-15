@@ -4,21 +4,25 @@ import x.timecontrol.dto.AutoAssignEnableRequest;
 import x.timecontrol.dto.AutoAssignSetNextRequest;
 import x.timecontrol.dto.AutoAssignStatusResponse;
 import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.MeasurementImportResponse;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.AutoAssignService;
 import x.timecontrol.services.DataImportScheduler;
-import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TimingDataImporter;
+import x.timecontrol.services.TimingProviderRegistry;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.http.multipart.CompletedFileUpload;
+import io.micronaut.json.JsonMapper;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -31,7 +35,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
@@ -45,7 +53,7 @@ public class MeasurementController {
     MeasurementService service;
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     DataImportScheduler dataImportScheduler;
@@ -58,6 +66,9 @@ public class MeasurementController {
 
     @Inject
     RaceService raceService;
+
+    @Inject
+    JsonMapper jsonMapper;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -106,6 +117,10 @@ public class MeasurementController {
         if (validationError != null) {
             return validationError;
         }
+        validationError = validateDurationMs(request.durationMs());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -131,6 +146,10 @@ public class MeasurementController {
         if (validationError != null) {
             return validationError;
         }
+        validationError = validateDurationMs(request.durationMs());
+        if (validationError != null) {
+            return validationError;
+        }
         Measurement measurement = new Measurement(
                 null,
                 request.participantId(),
@@ -151,6 +170,24 @@ public class MeasurementController {
             return HttpResponse.badRequest(new ErrorResponse("Participant with id " + participantId + " does not exist"));
         }
         return null;
+    }
+
+    /**
+     * @return a 400 HttpResponse if durationMs is negative, otherwise null. Without this, a
+     * negative value floors to 0 in RankingService.adjustedValue() and ranks that participant
+     * first once synced - the same class of bug ParticipantService.validate()/importRow() already
+     * guard against on the participant side.
+     */
+    private HttpResponse<?> validateDurationMs(Integer durationMs) {
+        if (durationMs != null && durationMs < 0) {
+            return HttpResponse.badRequest(new ErrorResponse("durationMs must not be negative"));
+        }
+        return null;
+    }
+
+    private static HttpResponse<ErrorResponse> noTimingProviderConfigured() {
+        return HttpResponse.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(TimingDataImporter.NOT_CONFIGURED_MESSAGE));
     }
 
     @Delete("/{id}")
@@ -175,19 +212,36 @@ public class MeasurementController {
     public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
         return dataImportScheduler.pauseDuring(() -> {
             try {
-                // If device reset is requested, do it first before deleting database
+                // If device reset is requested AND a timing device is actually configured, do it
+                // first before deleting the database. No configured device just means there's
+                // nothing to reset - deleting measurements is a pure local-DB operation and must
+                // keep working in evaluation-only (NONE) mode, so this is not an error condition.
+                boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    boolean deviceReset = dataImportService.resetDevice();
-                    if (!deviceReset) {
-                        return HttpResponse.serverError()
-                                .body(new ErrorResponse("Failed to reset device. Database was not modified."));
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    if (importerOpt.isPresent()) {
+                        // Same reasoning as RaceController#archiveMeasurements: pull in anything the
+                        // device recorded since the last scheduled poll before wiping it, or that data
+                        // is silently lost - resetDevice() only sends the reset command, it never reads
+                        // data itself.
+                        TimingDataImporter importer = importerOpt.get();
+                        importer.importDataFromDevice();
+                        boolean deviceReset = importer.resetDevice();
+                        if (!deviceReset) {
+                            return HttpResponse.serverError()
+                                    .body(new ErrorResponse("Failed to reset device. Database was not modified."));
+                        }
+                        deviceResetPerformed = true;
                     }
                 }
 
-                // Only delete database if device reset was successful (or not requested)
+                // Only delete database if device reset was successful (or not requested/not applicable)
                 service.deleteAll();
 
-                if (resetDevice) {
+                if (deviceResetPerformed) {
+                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                    // decides which confirmation to show by checking this message for the phrase
+                    // "device reset" (case-insensitive) - keep it if rewording this string.
                     return HttpResponse.ok("Device reset and all measurements deleted successfully");
                 } else {
                     return HttpResponse.ok("All measurements deleted successfully");
@@ -209,7 +263,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
     public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
         try {
-            boolean success = dataImportService.continuousMode(enable);
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
+            boolean success = importerOpt.get().continuousMode(enable);
             if (!success) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Failed to set continuous mode on device"));
@@ -234,7 +292,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to get device status")
     public HttpResponse<?> getDeviceStatus() {
         try {
-            String status = dataImportService.getDeviceStatus();
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
+            String status = importerOpt.get().getDeviceStatus();
             if (status == null) {
                 return HttpResponse.serverError()
                         .body(new ErrorResponse("Failed to get device status"));
@@ -252,10 +314,15 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Device is connected")
     @ApiResponse(responseCode = "503", description = "Device is not connected")
+    @ApiResponse(responseCode = "409", description = "No timing device configured")
     @ApiResponse(responseCode = "500", description = "Error checking device connection")
-    public HttpResponse<Void> checkDeviceConnection() {
+    public HttpResponse<?> checkDeviceConnection() {
         try {
-            boolean isConnected = dataImportService.isDeviceConnected();
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
+            boolean isConnected = importerOpt.get().isDeviceConnected();
             if (isConnected) {
                 return HttpResponse.ok();
             } else {
@@ -275,7 +342,11 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
     public HttpResponse<?> discardOldestStart() {
         try {
-            boolean success = dataImportService.discardOldestStart();
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
+            boolean success = importerOpt.get().discardOldestStart();
             if (!success) {
                 return HttpResponse.badRequest()
                         .body(new ErrorResponse("Failed to discard oldest start. Queue may be empty or device is in continuous mode."));
@@ -304,9 +375,13 @@ public class MeasurementController {
     @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
             content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "500", description = "Import failed")
-    public HttpResponse<List<MeasurementResponse>> importFromDevice() {
+    public HttpResponse<?> importFromDevice() {
         try {
-            List<Measurement> imported = dataImportService.importDataFromDevice();
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
+                return noTimingProviderConfigured();
+            }
+            List<Measurement> imported = importerOpt.get().importDataFromDevice();
             List<MeasurementResponse> response = imported.stream()
                     .map(MeasurementResponse::from)
                     .toList();
@@ -341,40 +416,70 @@ public class MeasurementController {
     }
 
 
-    @Produces(MediaType.APPLICATION_JSON)
-    @Get("/export")
-    @Operation(summary = "Export all measurements as JSON download",
-            description = "Returns all measurements as a JSON file download (without IDs, suitable for re-import)",
+    @Produces("text/csv")
+    @Get("/export/csv")
+    @Operation(summary = "Export all measurements as CSV download",
+            description = "Exports every measurement as CSV, using our own field names (participantId, durationMs, measuredAt) as the header row, so re-importing it via import-mapped needs no manual mapping.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
-    public HttpResponse<List<MeasurementRequest>> exportMeasurements() {
-        Iterable<Measurement> measurements = service.findAll();
-        List<MeasurementRequest> response = StreamSupport.stream(measurements.spliterator(), false)
-                .map(m -> new MeasurementRequest(m.participantId(), m.durationMs(), m.measuredAt()))
-                .toList();
-        return HttpResponse.ok(response)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
+    public HttpResponse<?> exportMeasurementsCsv() {
+        String csv = service.exportCsv();
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.csv\"");
     }
 
     @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Post("/import-json")
-    @Operation(summary = "Import measurements from JSON",
-            description = "Imports a list of measurements from a JSON body. Existing measurements are kept; duplicates are inserted as new entries.",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
-            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid JSON input")
-    public HttpResponse<?> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
-        if (requests == null || requests.isEmpty()) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("A non-empty list of measurements is required"));
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-preview")
+    @Operation(summary = "Preview a measurement import file", description = "Parses a CSV (any delimiter) and returns the detected source fields, a best-effort suggested mapping onto our measurement fields, and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = x.timecontrol.dto.MeasurementImportPreviewResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unreadable file")
+    public HttpResponse<?> importPreview(@Part("file") CompletedFileUpload file,
+                                          @Part("delimiter") Optional<String> delimiter) {
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            return HttpResponse.ok(service.previewImport(bytes, delim));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
         }
-        List<MeasurementResponse> created = requests.stream()
-                .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))
-                .map(service::create)
-                .map(MeasurementResponse::from)
-                .toList();
-        return HttpResponse.created(created);
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-mapped")
+    @Operation(summary = "Import measurements with a custom column mapping", description = "Imports a CSV (any delimiter), using an explicit mapping from our fields (participantId, durationMs, measuredAt) onto the file's source columns. A field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-preview) is used. Existing measurements are kept; rows that fail validation are skipped and reported rather than rejecting the whole file.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = MeasurementImportResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid mapping JSON or unreadable file")
+    public HttpResponse<?> importMapped(@Part("file") CompletedFileUpload file,
+                                         @Part("delimiter") Optional<String> delimiter,
+                                         @Part("mapping") Optional<String> mappingJson) {
+        Map<String, String> mapping = null;
+        if (mappingJson.isPresent() && !mappingJson.get().isBlank()) {
+            try {
+                Map<?, ?> raw = jsonMapper.readValue(mappingJson.get(), Map.class);
+                mapping = new HashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getValue() != null) {
+                        mapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                    }
+                }
+            } catch (IOException e) {
+                return HttpResponse.badRequest(new ErrorResponse("Invalid mapping JSON: " + e.getMessage()));
+            }
+        }
+
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            MeasurementService.MeasurementImportResult result = service.importMapped(bytes, delim, mapping);
+            List<MeasurementResponse> imported = result.imported().stream().map(MeasurementResponse::from).toList();
+            return HttpResponse.ok(new MeasurementImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -390,12 +495,16 @@ public class MeasurementController {
     @Post("/auto-assign/enable")
     @Operation(summary = "Enable live auto-assign mode for a race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Auto-assign mode enabled", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Race does not exist")
+    @ApiResponse(responseCode = "400", description = "Race does not exist, or startRaceNumber does not belong to any participant in it")
     public HttpResponse<?> enableAutoAssign(@Body AutoAssignEnableRequest request) {
         if (request.raceId() == null || raceService.findById(request.raceId()).isEmpty()) {
             return HttpResponse.badRequest(new ErrorResponse("Race with id " + request.raceId() + " does not exist"));
         }
-        return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+        try {
+            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.enable(request.raceId(), request.startRaceNumber())));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -424,11 +533,11 @@ public class MeasurementController {
     @Post("/auto-assign/set-next")
     @Operation(summary = "Manually set the next expected race number (e.g. after a correction)", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Next race number updated", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active")
+    @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active, or raceNumber does not belong to any participant in the active race")
     public HttpResponse<?> setNextAutoAssignRaceNumber(@Body AutoAssignSetNextRequest request) {
         try {
             return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.setNextRaceNumber(request.raceNumber())));
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
         }
     }

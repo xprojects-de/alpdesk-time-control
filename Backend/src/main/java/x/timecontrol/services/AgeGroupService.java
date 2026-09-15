@@ -22,6 +22,7 @@ public class AgeGroupService {
 
     public AgeGroup create(AgeGroup ageGroup) {
         assertNameAvailable(ageGroup.name(), null);
+        assertNoOverlap(ageGroup, null);
         return repository.save(ageGroup);
     }
 
@@ -41,6 +42,7 @@ public class AgeGroupService {
         Optional<AgeGroup> existing = repository.findById(id);
         if (existing.isPresent()) {
             assertNameAvailable(ageGroup.name(), id);
+            assertNoOverlap(ageGroup, id);
             AgeGroup updated = new AgeGroup(
                     id,
                     ageGroup.name(),
@@ -72,17 +74,26 @@ public class AgeGroupService {
     }
 
     /**
-     * Resolves the age group name a birth date falls into, given a preloaded list of age groups -
-     * shared by every caller that needs to bucket a person by age (PDF exports, Punkte-Mischwertung
-     * category filtering) without each doing its own {@link #isYearInAgeGroup} loop.
+     * Resolves the age group name a birth date/gender falls into, given a preloaded list of age
+     * groups - shared by every caller that needs to bucket a person by age (PDF exports,
+     * Punkte-Mischwertung category filtering) without each doing its own {@link #isYearInAgeGroup}
+     * loop. Mirrors {@link x.timecontrol.services.ParticipantService}'s own
+     * findMatchingAgeGroup(person, ageGroups): year in range AND gender matches (a BOTH-gender
+     * group counts for either gender), first one wins. Without the gender check, a person could be
+     * matched against a same-year group configured for the other gender (real DSV exports commonly
+     * have gender-specific classes with identical year ranges, e.g. "U14m"/"U14w") - not just a
+     * wrong display label, but silently excluding that person from every by-gender PDF section and
+     * Gaudi-Modus category filter that checks the name they end up with here.
      */
-    public String calculateAgeGroupName(LocalDate birthDate, List<AgeGroup> ageGroups) {
+    public String calculateAgeGroupName(LocalDate birthDate, Gender gender, List<AgeGroup> ageGroups) {
         if (birthDate == null) {
             return "Unbekannt";
         }
         int birthYear = birthDate.getYear();
         for (AgeGroup ageGroup : ageGroups) {
-            if (isYearInAgeGroup(ageGroup, birthYear)) {
+            boolean yearMatches = isYearInAgeGroup(ageGroup, birthYear);
+            boolean genderMatches = ageGroup.gender() == gender || ageGroup.gender() == Gender.BOTH;
+            if (yearMatches && genderMatches) {
                 return ageGroup.name();
             }
         }
@@ -143,6 +154,32 @@ public class AgeGroupService {
         Optional<AgeGroup> conflict = repository.findByNameIgnoreCase(name);
         if (conflict.isPresent() && !conflict.get().id().equals(excludeId)) {
             throw new IllegalStateException("An age group named \"" + name + "\" already exists");
+        }
+    }
+
+    /**
+     * @throws IllegalStateException if another age group already covers an overlapping birth-year
+     *                                range for an overlapping gender (BOTH overlaps with every
+     *                                gender), e.g. creating "U14w" 2011-2012 while "U14" (BOTH)
+     *                                2011-2012 already exists
+     */
+    private void assertNoOverlap(AgeGroup ageGroup, Long excludeId) {
+        List<AgeGroup> existingGroups = StreamSupport.stream(repository.findAll().spliterator(), false).toList();
+        for (AgeGroup other : existingGroups) {
+            if (other.id().equals(excludeId)) {
+                continue;
+            }
+            boolean yearsOverlap = ageGroup.birthYearFrom() <= other.birthYearTo()
+                    && other.birthYearFrom() <= ageGroup.birthYearTo();
+            boolean gendersOverlap = ageGroup.gender() == other.gender()
+                    || ageGroup.gender() == Gender.BOTH
+                    || other.gender() == Gender.BOTH;
+            if (yearsOverlap && gendersOverlap) {
+                throw new IllegalStateException("An age group named \"" + other.name()
+                        + "\" already covers birth year(s) " + Math.max(ageGroup.birthYearFrom(), other.birthYearFrom())
+                        + "-" + Math.min(ageGroup.birthYearTo(), other.birthYearTo())
+                        + " for this gender");
+            }
         }
     }
 }

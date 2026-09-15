@@ -29,6 +29,10 @@ public record Race(
 
         ResultUnit resultUnit,
         @Nullable String resultUnitLabel,
-        SortDirection sortDirection
+        SortDirection sortDirection,
+
+        // Optional cover page prepended to every ranking/results PDF generated for this race (not
+        // the start list) - see PdfExportService.renderDocument/generateStartList.
+        @Nullable byte[] coverPagePdf
 ) {
 }

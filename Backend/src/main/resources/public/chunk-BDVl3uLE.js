@@ -1,0 +1,1 @@
+function n(){return t=>{let r=t.value;return typeof r==`string`&&r.length>0&&r.trim().length===0?{blank:!0}:null}}export{n as t};

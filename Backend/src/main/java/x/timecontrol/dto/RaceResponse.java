@@ -56,7 +56,10 @@ public record RaceResponse(
         String resultUnitLabel,
 
         @Schema(description = "Whether a lower (ASC) or higher (DESC) result is better", example = "ASC")
-        SortDirection sortDirection
+        SortDirection sortDirection,
+
+        @Schema(description = "Whether a cover page PDF is set for this race. The PDF content itself is never included here - upload via coverPagePdf on update to replace it.")
+        boolean hasCoverPage
 ) {
     public static RaceResponse from(Race race) {
         return new RaceResponse(
@@ -74,7 +77,8 @@ public record RaceResponse(
                 race.weather(),
                 race.resultUnit(),
                 race.resultUnitLabel(),
-                race.sortDirection()
+                race.sortDirection(),
+                race.coverPagePdf() != null
         );
     }
 }

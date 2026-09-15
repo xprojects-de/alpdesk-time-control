@@ -116,12 +116,17 @@ public class PointsScaleController {
     @Operation(summary = "Delete a points scale", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Points scale deleted")
     @ApiResponse(responseCode = "404", description = "Points scale not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Points scale is still used by a Gaudi-Modus; retry with force=true to proceed")
+    public HttpResponse<?> delete(@PathVariable Long id, @QueryValue(defaultValue = "false") boolean force) {
         Optional<PointsScale> pointsScale = service.findById(id);
-        if (pointsScale.isPresent()) {
-            service.delete(id);
-            return HttpResponse.noContent();
+        if (pointsScale.isEmpty()) {
+            return HttpResponse.notFound();
         }
-        return HttpResponse.notFound();
+        try {
+            service.delete(id, force);
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+        return HttpResponse.noContent();
     }
 }

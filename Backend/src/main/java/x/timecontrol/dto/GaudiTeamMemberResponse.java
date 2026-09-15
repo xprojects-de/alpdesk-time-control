@@ -12,9 +12,6 @@ public record GaudiTeamMemberResponse(
 
         @Nullable
         @Schema(description = "Member's individual adjusted result in milliseconds", example = "65000", nullable = true)
-        Integer valueMs,
-
-        @Schema(description = "Whether this member's result counted towards the team's total (the fastest teamSize members of the team count)", example = "true")
-        boolean counted
+        Integer valueMs
 ) {
 }

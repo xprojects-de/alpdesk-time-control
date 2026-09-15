@@ -93,6 +93,15 @@ public class PersonService {
         repository.deleteById(id);
     }
 
+    /**
+     * @return number of persons deleted
+     */
+    public int deleteUnused() {
+        List<Person> unused = repository.findUnused();
+        repository.deleteAll(unused);
+        return unused.size();
+    }
+
     public Person createFromRequest(PersonRequest request) {
         return new Person(null, request.firstName(), request.lastName(), request.birthDate(), request.gender(), request.externalId());
     }

@@ -12,7 +12,7 @@ export const selectAllMeasurements = createSelector(
 
 export const selectMeasurementLoading = createSelector(
     selectMeasurementState,
-    state => state.loading
+    state => state.loadingCount > 0 || state.measurementsLoading
 );
 
 export const selectMeasurementError = createSelector(
@@ -86,5 +86,15 @@ export const selectIsPollingDeviceConnection = createSelector(
 export const selectAutoAssignStatus = createSelector(
     selectMeasurementState,
     state => state.autoAssignStatus
+);
+
+export const selectImportLoading = createSelector(
+    selectMeasurementState,
+    state => state.importLoading
+);
+
+export const selectImportResult = createSelector(
+    selectMeasurementState,
+    state => state.importResult
 );
 

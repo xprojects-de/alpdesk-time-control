@@ -19,6 +19,7 @@ import {MatNativeDateModule} from '@angular/material/core';
 import {MatSelectModule} from '@angular/material/select';
 import {Person, PersonRequest} from '../../models/person.model';
 import {Gender, GenderLabels} from '../../models/gender.model';
+import {notBlank} from '../../utils/validators.util';
 
 @Component({
     selector: 'app-person-dialog',
@@ -47,6 +48,9 @@ import {Gender, GenderLabels} from '../../models/gender.model';
                     form.get('firstName')?.touched) {
                         <mat-error>Vorname ist erforderlich</mat-error>
                     }
+                    @if (form.get('firstName')?.hasError('blank')) {
+                        <mat-error>Vorname darf nicht nur aus Leerzeichen bestehen</mat-error>
+                    }
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
@@ -55,6 +59,9 @@ import {Gender, GenderLabels} from '../../models/gender.model';
                     @if (form.get('lastName')?.hasError('required') &&
                     form.get('lastName')?.touched) {
                         <mat-error>Nachname ist erforderlich</mat-error>
+                    }
+                    @if (form.get('lastName')?.hasError('blank')) {
+                        <mat-error>Nachname darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                 </mat-form-field>
 
@@ -66,6 +73,8 @@ import {Gender, GenderLabels} from '../../models/gender.model';
                             formControlName="birthDate"
                             placeholder="TT.MM.JJJJ"
                             required
+                            [min]="minBirthDate"
+                            [max]="maxBirthDate"
                     />
                     <mat-datepicker-toggle
                             matSuffix
@@ -76,6 +85,10 @@ import {Gender, GenderLabels} from '../../models/gender.model';
                     @if (form.get('birthDate')?.hasError('required') &&
                     form.get('birthDate')?.touched) {
                         <mat-error>Geburtsdatum ist erforderlich</mat-error>
+                    }
+                    @if (form.get('birthDate')?.hasError('matDatepickerMin') ||
+                    form.get('birthDate')?.hasError('matDatepickerMax')) {
+                        <mat-error>Geburtsdatum muss zwischen 1900 und heute liegen</mat-error>
                     }
                 </mat-form-field>
 
@@ -130,6 +143,13 @@ import {Gender, GenderLabels} from '../../models/gender.model';
 })
 export class PersonDialogComponent {
     private fb = inject(FormBuilder);
+
+    // Mirrors age-group-dialog's 1900-2100 sanity bound; upper end is "today" rather than 2100
+    // since a birth date can never be in the future. Without this, a mis-click or a bad CSV
+    // import mapping can silently produce a birth date that matches no configured age group,
+    // dropping that person out of every age-group PDF export and Gaudi-Modus category filter.
+    readonly minBirthDate = new Date(1900, 0, 1);
+    readonly maxBirthDate = new Date();
     private dialogRef = inject(MatDialogRef<PersonDialogComponent>);
     public data = inject<Person | null>(MAT_DIALOG_DATA);
 
@@ -153,8 +173,8 @@ export class PersonDialogComponent {
         }
 
         this.form = this.fb.group({
-            firstName: [this.data?.firstName || '', Validators.required],
-            lastName: [this.data?.lastName || '', Validators.required],
+            firstName: [this.data?.firstName || '', [Validators.required, notBlank()]],
+            lastName: [this.data?.lastName || '', [Validators.required, notBlank()]],
             birthDate: [birthDate, Validators.required],
             gender: [this.data?.gender || '', Validators.required],
             externalId: [this.data?.externalId || ''],

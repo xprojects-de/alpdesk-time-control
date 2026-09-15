@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import x.timecontrol.entities.Measurement;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 @Singleton
@@ -19,7 +20,7 @@ public class DataImportScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(DataImportScheduler.class);
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     AutoAssignService autoAssignService;
@@ -27,14 +28,29 @@ public class DataImportScheduler {
     @Property(name = "data-import.enabled", defaultValue = "true")
     boolean enabled;
 
+    private final Object pauseLock = new Object();
     private volatile boolean scheduledImportActive = false;
+    // Guarded by pauseLock. pauseDepth counts concurrently in-flight pauseDuring() calls (e.g. two
+    // overlapping device-reset/archive requests); pausedTargetActive is the value scheduledImportActive
+    // should take once the *last* one finishes. Only the outermost call captures/restores it, so one
+    // reset finishing early can never re-enable scheduled import while another is still in flight.
+    private int pauseDepth = 0;
+    private boolean pausedTargetActive = false;
 
     public boolean isScheduledImportActive() {
         return scheduledImportActive;
     }
 
     public void setScheduledImportActive(boolean active) {
-        this.scheduledImportActive = active;
+        synchronized (pauseLock) {
+            if (pauseDepth > 0) {
+                // A reset/archive is currently pausing import; remember the requested state and apply
+                // it once that finishes instead of flipping the live flag mid-reset.
+                pausedTargetActive = active;
+            } else {
+                scheduledImportActive = active;
+            }
+        }
         LOG.info("Scheduled data import has been {} by user", active ? "enabled" : "disabled");
     }
 
@@ -44,18 +60,25 @@ public class DataImportScheduler {
      * already in flight when a device reset happens, would otherwise write stale pre-reset data
      * into the measurement table right after it was cleared - shared by every device-reset/archive
      * endpoint that needs this (previously duplicated verbatim in RaceController and
-     * MeasurementController).
+     * MeasurementController). Safe under concurrent callers (e.g. two nearly-simultaneous resets):
+     * see pauseDepth/pausedTargetActive above.
      */
     public <T> T pauseDuring(Supplier<T> action) {
-        boolean wasActive = isScheduledImportActive();
-        if (wasActive) {
-            setScheduledImportActive(false);
+        synchronized (pauseLock) {
+            if (pauseDepth == 0) {
+                pausedTargetActive = scheduledImportActive;
+                scheduledImportActive = false;
+            }
+            pauseDepth++;
         }
         try {
             return action.get();
         } finally {
-            if (wasActive) {
-                setScheduledImportActive(true);
+            synchronized (pauseLock) {
+                pauseDepth--;
+                if (pauseDepth == 0) {
+                    scheduledImportActive = pausedTargetActive;
+                }
             }
         }
     }
@@ -73,21 +96,32 @@ public class DataImportScheduler {
             return;
         }
 
-        LOG.debug("Starting scheduled data import...");
-
         try {
-            List<Measurement> imported = dataImportService.importDataFromDevice();
+            Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
+            if (importer.isPresent()) {
+                LOG.debug("Starting scheduled data import...");
 
-            if (!imported.isEmpty()) {
-                LOG.info("Scheduled import completed: {} measurements imported", imported.size());
+                List<Measurement> imported = importer.get().importDataFromDevice();
+
+                if (!imported.isEmpty()) {
+                    LOG.info("Scheduled import completed: {} measurements imported", imported.size());
+                } else {
+                    LOG.debug("Scheduled import completed: no new measurements");
+                }
             } else {
-                LOG.debug("Scheduled import completed: no new measurements");
+                LOG.trace("No timing provider configured, skipping device import");
             }
 
-            // Runs every cycle regardless of whether this cycle imported anything new, so a race
-            // stays caught up even if a previous cycle's measurements weren't matched yet. Only
-            // updates participantId on still-unassigned raw measurements - no-ops immediately if no
-            // race currently has auto-assign mode active, and never touches race_measurement itself.
+            // Runs every cycle regardless of whether a device is configured or whether this cycle
+            // imported anything new. Deliberately NOT inside the `if (importer.isPresent())` branch
+            // above: processNewMeasurements() matches ANY still-unassigned measurement row
+            // (manually entered, JSON-imported, or device-imported) purely by querying the
+            // measurement table - it has nothing to do with polling a device. Gating it on a
+            // configured provider would silently kill live auto-assign for manually-entered times
+            // in evaluation-only (NONE) mode, which is exactly the use case NONE exists to support.
+            // Only updates participantId on still-unassigned raw measurements - no-ops immediately
+            // if no race currently has auto-assign mode active, and never touches race_measurement
+            // itself.
             autoAssignService.processNewMeasurements();
 
         } catch (Exception e) {

@@ -62,11 +62,19 @@ class PointsCombinationModeCalculatorSpec extends Specification {
         pointsScaleService.pointsForPlace(_ as List, 1) >> 100
         pointsScaleService.pointsForPlace(_ as List, 2) >> 80
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
+        // Backing maps for the findByIds() stubs - populated per-test via given:. A single
+        // closure-based interaction per mock method (reading the map at call time) avoids the
+        // ambiguity of multiple equally-generic `_` interactions on the same method.
+        personService.findByIds(_) >> { knownPersons }
+        teamService.findByIds(_) >> { knownTeams }
     }
+
+    def knownPersons = [:]
+    def knownTeams = [:]
 
     def "a person missing a result only in a zero-weighted race is still ranked"() {
         given: "person 1 has no result in race 2, which is weighted 0 and must not disqualify them"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 0.0d, []),
@@ -82,7 +90,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     def "a person missing a result in a race that actually counts is excluded"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
@@ -97,7 +105,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     def "computeDnsEntries reports the explicit DSQ status of the leg that carries it"() {
         given: "Anna is DSQ in race 1 (despite having a measured time there) and has a normal result in race 2"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participantWithStatus(1L, 1L, 60000, DisqualificationStatus.DSQ)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 65000)]),
@@ -113,7 +121,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     def "computeDnsEntries falls back to the generic DNS label when nobody has an explicit status"() {
         given: "Anna simply has no result at all in race 2, which actually counts (weight 1.0)"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
                 new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
@@ -129,8 +137,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     def "points from each race are weighted before summing"() {
         given:
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
-        personService.findById(2L) >> Optional.of(person(2L, "Ben"))
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben")])
         def participants1 = [participant(1L, 1L, 60000), participant(2L, 2L, 65000)]
         def participants2 = [participant(3L, 1L, 65000), participant(4L, 2L, 60000)]
         def races = [
@@ -151,7 +158,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
     def "the total is rounded once, not per leg - avoiding compounded rounding error"() {
         given: "two legs weighted 0.5 each, both award Anna 33 points (3rd place); rounding each leg " +
                 "separately (round(16.5)=17 twice = 34) would overstate the correct total of round(16.5+16.5)=33"
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
+        knownPersons.putAll([1L: person(1L, "Anna")])
         pointsScaleService.pointsForPlace(_ as List, 3) >> 33
         def races = [
                 new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.5d,

@@ -18,6 +18,7 @@ import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
 import {MatIconModule} from "@angular/material/icon";
 import {MatTooltipModule} from "@angular/material/tooltip";
+import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
 import {take, takeUntil} from "rxjs/operators";
@@ -32,6 +33,8 @@ import {
 import {PointsScale} from "../../models/points-scale.model";
 import {PointsScaleService} from "../../services/points-scale.service";
 import {PointsScaleDialogComponent} from "./points-scale-dialog.component";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {readFileAsBase64} from "../../utils/file-base64.util";
 
 export interface GaudiModeDialogData {
     raceId: number | null;
@@ -50,6 +53,7 @@ export interface GaudiModeDialogData {
         MatSelectModule,
         MatIconModule,
         MatTooltipModule,
+        MatSnackBarModule,
     ],
     template: `
         <h2 mat-dialog-title>Neuer Gaudi-Modus</h2>
@@ -136,6 +140,30 @@ export interface GaudiModeDialogData {
                         <mat-hint>Anzahl der schnellsten Teammitglieder, die gewertet werden</mat-hint>
                     </mat-form-field>
                 }
+
+                <h3 class="section-title">Deckblatt (optional)</h3>
+                <p class="hint">
+                    Wird jeder generierten PDF-Wertung dieses Gaudi-Modus vorangestellt - unabhängig
+                    vom Deckblatt der zugrunde liegenden Rennen.
+                </p>
+                <div class="cover-page-row">
+                    @if (coverPageActive) {
+                        <span class="cover-page-name">
+                            <mat-icon inline="true">picture_as_pdf</mat-icon>
+                            Deckblatt aktiv
+                        </span>
+                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
+                            Entfernen
+                        </button>
+                    } @else {
+                        <span class="hint">Kein Deckblatt ausgewählt.</span>
+                    }
+                    <button mat-stroked-button type="button" (click)="coverPageInput.click()">
+                        {{ coverPageActive ? 'Ersetzen' : 'PDF auswählen' }}
+                    </button>
+                    <input #coverPageInput type="file" accept="application/pdf" hidden
+                           (change)="onCoverPageFileSelected($event)"/>
+                </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -198,6 +226,32 @@ export interface GaudiModeDialogData {
           .points-scale-row mat-form-field {
             flex: 1;
           }
+
+          .section-title {
+            margin: 0 0 -8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.6);
+          }
+
+          .hint {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.6);
+          }
+
+          .cover-page-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+
+          .cover-page-name {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
         `,
     ],
 })
@@ -207,6 +261,7 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     private pointsScaleService = inject(PointsScaleService);
     private dialog = inject(MatDialog);
+    private snackBar = inject(MatSnackBar);
     public data = inject<GaudiModeDialogData | null>(MAT_DIALOG_DATA);
     private destroy$ = new Subject<void>();
 
@@ -223,6 +278,10 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     weights: Record<number, number> = {};
     allRaces: Race[] = [];
     pointsScales: PointsScale[] = [];
+
+    coverPageActive = false;
+    private coverPagePdfBase64?: string;
+    private removeCoverPage = false;
 
     form: FormGroup = this.fb.group({
         type: [GaudiModeType.LOS, Validators.required],
@@ -293,9 +352,18 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
             .afterClosed()
             .subscribe(result => {
                 if (result) {
-                    this.pointsScaleService.create(result).subscribe(created => {
-                        this.pointsScales = [...this.pointsScales, created];
-                        this.form.patchValue({pointsScaleId: created.id});
+                    this.pointsScaleService.create(result).subscribe({
+                        next: created => {
+                            this.pointsScales = [...this.pointsScales, created];
+                            this.form.patchValue({pointsScaleId: created.id});
+                        },
+                        error: err => {
+                            this.snackBar.open(
+                                extractErrorMessage(err, "Punkteschema konnte nicht erstellt werden"),
+                                "OK",
+                                {duration: 5000, panelClass: "error-snackbar"},
+                            );
+                        },
                     });
                 }
             });
@@ -303,6 +371,24 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
 
     onCancel(): void {
         this.dialogRef.close();
+    }
+
+    async onCoverPageFileSelected(event: Event): Promise<void> {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) {
+            return;
+        }
+        this.coverPagePdfBase64 = await readFileAsBase64(file);
+        this.coverPageActive = true;
+        this.removeCoverPage = false;
+    }
+
+    onRemoveCoverPage(): void {
+        this.coverPageActive = false;
+        this.coverPagePdfBase64 = undefined;
+        this.removeCoverPage = true;
     }
 
     onSave(): void {
@@ -321,17 +407,28 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
             name: formValue.name,
             teamSize: formValue.type === GaudiModeType.TEAM ? Number(formValue.teamSize) : undefined,
             pointsScaleId: formValue.type === GaudiModeType.POINTS_COMBINATION ? Number(formValue.pointsScaleId) : undefined,
+            coverPagePdf: this.coverPagePdfBase64,
+            removeCoverPage: this.removeCoverPage || undefined,
         };
         this.dialogRef.close(request);
     }
 
     private loadPointsScales(): void {
-        this.pointsScaleService.getAll().subscribe(scales => {
-            this.pointsScales = scales;
-            const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
-            if (defaultScale) {
-                this.form.patchValue({pointsScaleId: defaultScale.id});
-            }
+        this.pointsScaleService.getAll().subscribe({
+            next: scales => {
+                this.pointsScales = scales;
+                const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
+                if (defaultScale) {
+                    this.form.patchValue({pointsScaleId: defaultScale.id});
+                }
+            },
+            error: err => {
+                this.snackBar.open(
+                    extractErrorMessage(err, "Punkteschemata konnten nicht geladen werden"),
+                    "OK",
+                    {duration: 5000, panelClass: "error-snackbar"},
+                );
+            },
         });
     }
 }

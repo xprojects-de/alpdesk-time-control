@@ -40,8 +40,17 @@ class LosModeCalculatorSpec extends Specification {
         new GaudiMode(1L, GaudiModeType.LOS, "Los-Modus", null, null, LocalDateTime.now())
     }
 
+    // Backing maps for the findByIds() stubs below - populated per-test via given:. A single
+    // closure-based interaction per mock method (reading the map at call time) avoids the
+    // ambiguity of multiple equally-generic `_` interactions on the same method, where Spock's
+    // "last declared wins" tie-break does not reliably apply.
+    def knownPersons = [:]
+    def knownTeams = [:]
+
     def setup() {
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
+        personService.findByIds(_) >> { knownPersons }
+        teamService.findByIds(_) >> { knownTeams }
     }
 
     def "the pair closest to the overall average wins, ranked ahead of a farther pair"() {
@@ -54,10 +63,7 @@ class LosModeCalculatorSpec extends Specification {
                 new GaudiLosPairing(1L, 1L, 1L, 2L),
                 new GaudiLosPairing(2L, 1L, 3L, 4L),
         ]
-        personService.findById(1L) >> Optional.of(person(1L, "A"))
-        personService.findById(2L) >> Optional.of(person(2L, "B"))
-        personService.findById(3L) >> Optional.of(person(3L, "C"))
-        personService.findById(4L) >> Optional.of(person(4L, "D"))
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C"), 4L: person(4L, "D")])
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
 
         when:
@@ -85,7 +91,7 @@ class LosModeCalculatorSpec extends Specification {
         given:
         def participants = [participant(1L, 100000), participant(2L, 60000)]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, null)]
-        personService.findById(1L) >> Optional.of(person(1L, "A"))
+        knownPersons.putAll([1L: person(1L, "A")])
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
 
         when:
@@ -104,8 +110,7 @@ class LosModeCalculatorSpec extends Specification {
                 participant(2L, 80000),
         ]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
-        personService.findById(1L) >> Optional.of(person(1L, "A"))
-        personService.findById(2L) >> Optional.of(person(2L, "B"))
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
 
         when:

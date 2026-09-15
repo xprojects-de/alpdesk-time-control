@@ -66,7 +66,7 @@ public interface GaudiModeCalculator {
         for (RaceParticipants race : races) {
             for (Participant p : race.participants()) {
                 byPersonAndRace
-                        .computeIfAbsent(p.personId(), k -> new HashMap<>())
+                        .computeIfAbsent(p.personId(), _ -> new HashMap<>())
                         .put(race.raceId(), p);
             }
         }

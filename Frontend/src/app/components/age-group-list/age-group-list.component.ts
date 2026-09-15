@@ -79,6 +79,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="age-group-table"
                         [class.hidden]="loading$ | async"
@@ -209,6 +210,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         "actions",
     ];
     dataSource = new MatTableDataSource<AgeGroup>([]);
+    trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
     private sortInitialized = false;
     private paginatorInitialized = false;
 

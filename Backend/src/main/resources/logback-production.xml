@@ -7,8 +7,12 @@
         </encoder>
     </appender>
 
+    <!-- Feeds the desktop status window's inline log view - see SwingLogAppender. -->
+    <appender name="SWING" class="x.timecontrol.util.SwingLogAppender" />
+
     <root level="info">
         <appender-ref ref="STDOUT" />
+        <appender-ref ref="SWING" />
     </root>
 </configuration>
 

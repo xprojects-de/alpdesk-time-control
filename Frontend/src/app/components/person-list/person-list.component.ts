@@ -27,7 +27,7 @@ import * as PersonSelectors from "../../store/person/person.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import {PersonWithActiveRaces} from "../../store/person/person.selectors";
 import {PersonDialogComponent} from "./person-dialog.component";
-import {takeUntil} from "rxjs/operators";
+import {map, take, takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
@@ -70,6 +70,16 @@ import {Actions, ofType} from "@ngrx/effects";
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
+                    <button
+                            mat-raised-button
+                            color="warn"
+                            [disabled]="!(unusedPersonCount$ | async)"
+                            (click)="deleteUnusedPersons()"
+                            matTooltip="Löscht alle Personen, die keinem Rennen / Teilnehmer zugewiesen sind"
+                    >
+                        <mat-icon>delete_sweep</mat-icon>
+                        Ungenutzte Personen löschen ({{ unusedPersonCount$ | async }})
+                    </button>
                 </div>
 
                 @if (loading$ | async) {
@@ -82,6 +92,7 @@ import {Actions, ofType} from "@ngrx/effects";
                 <table
                         mat-table
                         [dataSource]="dataSource"
+                        [trackBy]="trackById"
                         matSort
                         class="person-table"
                         [class.hidden]="loading$ | async"
@@ -214,8 +225,10 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
 
     persons$: Observable<PersonWithActiveRaces[]>;
     loading$: Observable<boolean>;
+    unusedPersonCount$: Observable<number>;
     displayedColumns = ["id", "lastName", "firstName", "birthDate", "gender", "externalId", "activeRaces", "actions"];
     dataSource = new MatTableDataSource<PersonWithActiveRaces>([]);
+    trackById = (_index: number, person: PersonWithActiveRaces) => person.id;
     private sortInitialized = false;
     private paginatorInitialized = false;
 
@@ -225,6 +238,9 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     constructor() {
         this.persons$ = this.store.select(PersonSelectors.selectPersonsWithActiveRaces);
         this.loading$ = this.store.select(PersonSelectors.selectPersonLoading);
+        this.unusedPersonCount$ = this.persons$.pipe(
+            map(persons => persons.filter(p => p.activeRaces.length === 0).length)
+        );
 
         this.actions$.pipe(
             ofType(PersonActions.createPersonSuccess),
@@ -263,6 +279,20 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen der Person: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(PersonActions.deleteUnusedPersonsSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({deletedCount}) => {
+            this.snackBar.open(`${deletedCount} ungenutzte Person(en) gelöscht`, "OK", {duration: 3000});
+            this.store.dispatch(PersonActions.loadPersons());
+        });
+        this.actions$.pipe(
+            ofType(PersonActions.deleteUnusedPersonsFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen der ungenutzten Personen: ${error}`, "OK", {duration: 5000});
         });
 
         effect(() => {
@@ -343,6 +373,17 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         if (confirm(`Möchten Sie die Person "${person.lastName} ${person.firstName}" wirklich löschen?`)) {
             this.store.dispatch(PersonActions.deletePerson({id: person.id}));
         }
+    }
+
+    deleteUnusedPersons(): void {
+        this.unusedPersonCount$.pipe(take(1)).subscribe(count => {
+            if (count === 0) {
+                return;
+            }
+            if (confirm(`Möchten Sie wirklich alle ${count} Person(en) löschen, die keinem Rennen / Teilnehmer zugewiesen sind?`)) {
+                this.store.dispatch(PersonActions.deleteUnusedPersons());
+            }
+        });
     }
 
     refreshData(): void {

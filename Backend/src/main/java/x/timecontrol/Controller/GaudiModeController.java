@@ -106,10 +106,10 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
     public HttpResponse<?> update(@PathVariable Long id, @Body GaudiModeRequest request) {
-        GaudiMode gaudiMode = service.createFromRequest(request);
         Optional<GaudiMode> updated;
         try {
-            updated = service.update(id, gaudiMode, request.races());
+            GaudiMode gaudiMode = service.createFromRequest(request);
+            updated = service.update(id, gaudiMode, request.races(), Boolean.TRUE.equals(request.removeCoverPage()));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
@@ -209,13 +209,13 @@ public class GaudiModeController {
         try {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
             byte[] pdfBytes = switch (gaudiMode.type()) {
-                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode.name(), ranking, races.getFirst());
-                case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode.name(), ranking, races.getFirst());
+                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst());
+                case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode, ranking, races.getFirst());
                 case TIME_COMBINATION ->
-                        pdfExportService.generateTimeCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst(),
+                        pdfExportService.generateTimeCombinationRanking(gaudiMode, ranking, races, races.getFirst(),
                                 service.computeDnsEntries(gaudiMode));
                 case POINTS_COMBINATION ->
-                        pdfExportService.generatePointsCombinationRanking(gaudiMode.name(), ranking, races, races.getFirst(),
+                        pdfExportService.generatePointsCombinationRanking(gaudiMode, ranking, races, races.getFirst(),
                                 service.computeDnsEntries(gaudiMode));
             };
 
@@ -248,7 +248,7 @@ public class GaudiModeController {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
                     return pdfExportService.generatePointsCombinationGenderRanking(
-                            gaudiMode.name(), ranking, races, races.getFirst(), gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), gender, service.computeDnsEntries(gaudiMode));
                 });
     }
 
@@ -267,7 +267,7 @@ public class GaudiModeController {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
                     return pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                            gaudiMode.name(), ranking, races, races.getFirst(), ageGroup, gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), ageGroup, gender, service.computeDnsEntries(gaudiMode));
                 });
     }
 
@@ -283,7 +283,7 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfAllAgeGroups(@PathVariable Long id) {
         return exportPointsCombinationPdf(id, "altersklassen.pdf",
                 (gaudiMode, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
-                        gaudiMode.name(), races, races.getFirst(),
+                        gaudiMode, races, races.getFirst(),
                         (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName),
                         service.computeDnsEntries(gaudiMode)));
     }

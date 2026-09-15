@@ -137,6 +137,20 @@ export class ParticipantEffects {
         )
     );
 
+    importParticipantResultsMapped$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMapped),
+            mergeMap(({raceId, file, timeFormat, delimiter, mapping}) =>
+                this.participantService.importResultsMapped(raceId, file, timeFormat, delimiter, mapping).pipe(
+                    map(result => ParticipantActions.importParticipantResultsMappedSuccess({result})),
+                    catchError(error => of(ParticipantActions.importParticipantResultsMappedFailure({
+                        error: extractErrorMessage(error, 'Failed to import participant results')
+                    })))
+                )
+            )
+        )
+    );
+
     exportParticipantsCsv$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.exportParticipantsCsv),
@@ -145,6 +159,20 @@ export class ParticipantEffects {
                     map(blob => ParticipantActions.exportParticipantsCsvSuccess({blob, filename})),
                     catchError(error => of(ParticipantActions.exportParticipantsCsvFailure({
                         error: extractErrorMessage(error, 'Failed to export CSV')
+                    })))
+                )
+            )
+        )
+    );
+
+    exportParticipantResultsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportParticipantResultsCsv),
+            mergeMap(({raceId, filename}) =>
+                this.participantService.exportResultsCsv(raceId).pipe(
+                    map(blob => ParticipantActions.exportParticipantResultsCsvSuccess({blob, filename})),
+                    catchError(error => of(ParticipantActions.exportParticipantResultsCsvFailure({
+                        error: extractErrorMessage(error, 'Failed to export results CSV')
                     })))
                 )
             )
@@ -296,7 +324,8 @@ export class ParticipantEffects {
                 ParticipantActions.exportByGenderByCategoryPdfSuccess,
                 ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
                 ParticipantActions.exportStartListPdfSuccess,
-                ParticipantActions.exportParticipantsCsvSuccess
+                ParticipantActions.exportParticipantsCsvSuccess,
+                ParticipantActions.exportParticipantResultsCsvSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

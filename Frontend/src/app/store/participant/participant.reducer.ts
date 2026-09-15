@@ -1,16 +1,25 @@
 import {createReducer, on} from '@ngrx/store';
 import {Participant} from '../../models/participant.model';
 import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantResultImportResponse} from '../../models/participant-result-import.model';
 import {ParticipantCopyResponse} from '../../models/participant-copy.model';
 import * as ParticipantActions from './participant.actions';
 
 export interface ParticipantState {
     participants: Participant[];
     selectedParticipantId: number | null;
-    loading: boolean;
+    // Count of in-flight load/create/update/delete/assignRaceNumbers requests rather than a plain
+    // boolean: with 7 independent mergeMap-driven flows sharing one loading indicator, a boolean
+    // lets whichever response arrives first flip it back to false while another is still pending
+    // (e.g. an edit save landing while a bulk delete is still in flight). None of these effects use
+    // switchMap, so - unlike measurement.reducer.ts's poll-driven loadMeasurements - every
+    // increment here is guaranteed a matching decrement; no separate carve-out is needed.
+    loadingCount: number;
     pdfExportLoading: boolean;
     importLoading: boolean;
     importResult: ParticipantImportResponse | null;
+    resultImportLoading: boolean;
+    resultImportResult: ParticipantResultImportResponse | null;
     copyLoading: boolean;
     copyResult: ParticipantCopyResponse | null;
     error: string | null;
@@ -19,120 +28,106 @@ export interface ParticipantState {
 export const initialState: ParticipantState = {
     participants: [],
     selectedParticipantId: null,
-    loading: false,
+    loadingCount: 0,
     pdfExportLoading: false,
     importLoading: false,
     importResult: null,
+    resultImportLoading: false,
+    resultImportResult: null,
     copyLoading: false,
     copyResult: null,
     error: null
 };
 
+const startLoading = (state: ParticipantState) => ({
+    ...state,
+    loadingCount: state.loadingCount + 1,
+    error: null
+});
+
+const endLoading = (state: ParticipantState) => Math.max(0, state.loadingCount - 1);
+
 export const participantReducer = createReducer(
     initialState,
 
     // Load all participants
-    on(ParticipantActions.loadParticipants, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.loadParticipants, startLoading),
     on(ParticipantActions.loadParticipantsSuccess, (state, {participants}) => ({
         ...state,
         participants,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.loadParticipantsFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Load single participant
-    on(ParticipantActions.loadParticipant, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.loadParticipant, startLoading),
     on(ParticipantActions.loadParticipantSuccess, (state, {participant}) => ({
         ...state,
         participants: state.participants.some(p => p.id === participant.id)
             ? state.participants.map(p => p.id === participant.id ? participant : p)
             : [...state.participants, participant],
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.loadParticipantFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Create participant
-    on(ParticipantActions.createParticipant, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.createParticipant, startLoading),
     on(ParticipantActions.createParticipantSuccess, (state, {participant}) => ({
         ...state,
         participants: [...state.participants, participant],
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.createParticipantFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Update participant
-    on(ParticipantActions.updateParticipant, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.updateParticipant, startLoading),
     on(ParticipantActions.updateParticipantSuccess, (state, {participant}) => ({
         ...state,
         participants: state.participants.map(p => p.id === participant.id ? participant : p),
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.updateParticipantFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Delete participant
-    on(ParticipantActions.deleteParticipant, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.deleteParticipant, startLoading),
     on(ParticipantActions.deleteParticipantSuccess, (state, {id}) => ({
         ...state,
         participants: state.participants.filter(p => p.id !== id),
         selectedParticipantId: state.selectedParticipantId === id ? null : state.selectedParticipantId,
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.deleteParticipantFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
     // Delete participants by race
-    on(ParticipantActions.deleteParticipantsByRaceId, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.deleteParticipantsByRaceId, startLoading),
     on(ParticipantActions.deleteParticipantsByRaceIdSuccess, (state, {raceId}) => ({
         ...state,
         participants: state.participants.filter(p => p.race?.id !== raceId),
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.deleteParticipantsByRaceIdFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
@@ -143,19 +138,15 @@ export const participantReducer = createReducer(
     })),
 
     // Assign race numbers
-    on(ParticipantActions.assignRaceNumbers, state => ({
-        ...state,
-        loading: true,
-        error: null
-    })),
+    on(ParticipantActions.assignRaceNumbers, startLoading),
     on(ParticipantActions.assignRaceNumbersSuccess, (state, {participants}) => ({
         ...state,
         participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
-        loading: false
+        loadingCount: endLoading(state)
     })),
     on(ParticipantActions.assignRaceNumbersFailure, (state, {error}) => ({
         ...state,
-        loading: false,
+        loadingCount: endLoading(state),
         error
     })),
 
@@ -182,6 +173,33 @@ export const participantReducer = createReducer(
     on(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
+        error
+    })),
+
+    // Import results (time/status) for existing participants, matched by race number - unlike the
+    // roster import above this never adds participants, it merges the returned rows into the
+    // existing ones by id.
+    on(ParticipantActions.importParticipantResultsMapped, state => ({
+        ...state,
+        resultImportLoading: true,
+        resultImportResult: null,
+        error: null
+    })),
+    on(ParticipantActions.importParticipantResultsMappedSuccess, (state, {result}) => {
+        // The backend omits empty array fields from the JSON response entirely, so
+        // "updated"/"errors" can be undefined when there was nothing to report.
+        const updated = result.updated ?? [];
+        const errors = result.errors ?? [];
+        return {
+            ...state,
+            participants: state.participants.map(p => updated.find(u => u.id === p.id) ?? p),
+            resultImportLoading: false,
+            resultImportResult: {...result, updated, errors}
+        };
+    }),
+    on(ParticipantActions.importParticipantResultsMappedFailure, (state, {error}) => ({
+        ...state,
+        resultImportLoading: false,
         error
     })),
 

@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.GaudiModeType
@@ -10,18 +11,18 @@ import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.Team
-import x.timecontrol.repositories.TeamRepository
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 class TeamModeCalculatorSpec extends Specification {
 
-    TeamRepository teamRepository = Mock()
+    TeamService teamService = Mock()
     PersonService personService = Mock()
-    TeamModeCalculator calculator = new TeamModeCalculator(teamRepository, new RankingService(), personService)
+    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(), personService)
 
     private static Race race(SortDirection direction) {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -40,14 +41,22 @@ class TeamModeCalculatorSpec extends Specification {
         new Person(id, firstName, "Test", LocalDate.of(1990, 1, 1), Gender.MALE, null)
     }
 
+    // Backing maps for the findByIds() stubs below - populated per-test via given:. A single
+    // closure-based interaction per mock method (reading the map at call time) avoids the
+    // ambiguity of multiple equally-generic `_` interactions on the same method, where Spock's
+    // "last declared wins" tie-break does not reliably apply.
+    def knownPersons = [:]
+    def knownTeams = [:]
+
     def setup() {
-        personService.findById(_ as Long) >> Optional.empty()
+        personService.findByIds(_) >> { knownPersons }
+        teamService.findByIds(_) >> { knownTeams }
+        personService.displayName(_ as Person) >> { Person p -> p.firstName() }
     }
 
     def "team totals include each member's penalty, not just the raw time"() {
         given: "team 1 has a faster raw time but a penalty that should push it behind team 2"
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 60000, 10000), // adjusted 70000
                 participant(2L, 2L, 65000),        // adjusted 65000
@@ -66,8 +75,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "team ranking is reversed for a DESC (points-style) race"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 100), // higher value should win in DESC
                 participant(2L, 2L, 50),
@@ -84,7 +92,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "teams with fewer members than the configured team size do not qualify"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
         def participants = [participant(1L, 1L, 60000)]
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
 
@@ -97,7 +105,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     def "only the fastest teamSize members of a larger team count towards the total"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 1L, 65000),
@@ -112,33 +120,72 @@ class TeamModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 125000
     }
 
-    def "team members are listed individually, marking which ones counted towards the total"() {
+    def "only the counted teamSize members are listed - an extra, uncounted member is omitted entirely"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        personService.findById(1L) >> Optional.of(person(1L, "Anna"))
-        personService.findById(2L) >> Optional.of(person(2L, "Ben"))
-        personService.findById(3L) >> Optional.of(person(3L, "Chris"))
-        personService.displayName(_ as Person) >> { Person p -> p.firstName() }
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 1L, 65000),
-                participant(3L, 1L, 999999), // slowest, doesn't count towards the top-2 total
+                participant(3L, 1L, 999999), // slowest, doesn't count towards the top-2 total - must not appear at all
         ]
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
 
         when:
         def ranking = calculator.computeRanking(teamMode(2), races)
 
-        then: "all three members are listed, but only the fastest two are marked as counted"
-        ranking[0].members().size() == 3
-        ranking[0].members()*.valueMs() == [60000, 65000, 999999]
-        ranking[0].members()*.counted() == [true, true, false]
+        then: "only the fastest two members are listed - the third, uncounted member is not"
+        ranking[0].members().size() == 2
+        ranking[0].members()*.label() == ["Anna", "Ben"]
+        ranking[0].members()*.valueMs() == [60000, 65000]
+    }
+
+    def "a not-yet-finished or DSQ/DNF/DNS teammate is excluded from the member list entirely"() {
+        given: "team A has 2 finishers (teamSize) plus a third member still out on course and a fourth who was disqualified"
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris"), 4L: person(4L, "Dora")])
+        def stillRacing = new Participant(3L, 1L, 3L, null, 1L, null, null, null, null, null)
+        // Disqualified despite having crossed the finish line with a time - that time must not
+        // count, and DSQ/DNF/DNS participants are reported elsewhere, not in this team's roster.
+        def dsqMember = new Participant(4L, 1L, 4L, null, 1L, null, 70000, null, null, null, DisqualificationStatus.DSQ)
+        def participants = [
+                participant(1L, 1L, 60000),
+                participant(2L, 1L, 65000),
+                stillRacing,
+                dsqMember,
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then: "only the 2 finishers are listed - neither the still-racing nor the DSQ member appear"
+        ranking.size() == 1
+        ranking[0].members().size() == 2
+        ranking[0].members()*.label() == ["Anna", "Ben"]
+    }
+
+    def "a team with fewer finishers than teamSize does not qualify even if it has enough total members"() {
+        given: "3 registered members, but only 1 has finished - teamSize 2 requires 2 finishers"
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris")])
+        def participants = [
+                participant(1L, 1L, 60000),
+                new Participant(2L, 1L, 2L, null, 1L, null, null, null, null, null),
+                new Participant(3L, 1L, 3L, null, 1L, null, null, null, null, null),
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then:
+        ranking.isEmpty()
     }
 
     def "tied team totals share the same place"() {
         given:
-        teamRepository.findById(1L) >> Optional.of(new Team(1L, "Team A"))
-        teamRepository.findById(2L) >> Optional.of(new Team(2L, "Team B"))
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 2L, 60000),

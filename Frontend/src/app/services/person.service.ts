@@ -34,4 +34,8 @@ export class PersonService {
     delete(id: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
+
+    deleteUnused(): Observable<{ deletedCount: number }> {
+        return this.http.delete<{ deletedCount: number }>(`${this.apiUrl}/unused`);
+    }
 }

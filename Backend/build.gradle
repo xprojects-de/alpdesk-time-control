@@ -21,7 +21,9 @@ dependencies {
     compileOnly("io.micronaut.openapi:micronaut-openapi-annotations")
     implementation("io.micronaut:micronaut-http-client")
     implementation("org.slf4j:slf4j-api")
-    runtimeOnly("ch.qos.logback:logback-classic")
+    // implementation (not runtimeOnly) - SwingLogAppender compiles against logback-classic
+    // types directly (ILoggingEvent, PatternLayout) to feed the status window's inline log view.
+    implementation("ch.qos.logback:logback-classic")
     testImplementation("io.micronaut:micronaut-http-client")
     // Needed for Spock's Mock() to mock concrete classes (e.g. the service classes under test),
     // not just interfaces - Spock's built-in java-proxy mocker only handles interfaces.
@@ -161,6 +163,9 @@ def jpackageArgs = { String type, File destDir ->
             '--input', file('build/libs').absolutePath,
             '--main-jar', 'time-control.jar',
             '--main-class', 'x.timecontrol.Application',
+            // Cosmetic (installer/app display name + vendor) - independent of Application.APP_ID,
+            // which names the packaged build's *data* directory under the user's home. Renaming
+            // APP_ID (not these) is what orphans an existing install's data - see its javadoc.
             '--name', 'Time Control',
             '--app-version', jpackageVersion,
             '--vendor', 'Alpdesk',

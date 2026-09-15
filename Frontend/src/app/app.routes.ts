@@ -57,6 +57,11 @@ export const routes: Routes = [
                 loadComponent: () => import('./components/gaudi-modus/gaudi-modus.component')
                     .then(m => m.GaudiModusComponent)
             },
+            {
+                path: 'settings',
+                loadComponent: () => import('./components/settings/settings.component')
+                    .then(m => m.SettingsComponent)
+            },
         ]
     },
     {path: '**', redirectTo: '/login'}

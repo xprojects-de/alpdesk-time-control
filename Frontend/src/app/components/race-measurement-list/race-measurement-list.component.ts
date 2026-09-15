@@ -25,6 +25,7 @@ import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceMeasurement} from "../../models/race-measurement.model";
+import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as RaceMeasurementActions from "../../store/race-measurement/race-measurement.actions";
@@ -106,6 +107,7 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                     <table
                             mat-table
                             [dataSource]="(raceMeasurementsWithParticipants$ | async) || []"
+                            [trackBy]="trackById"
                             class="race-measurement-table"
                             [class.loading]="loading$ | async"
                     >
@@ -255,6 +257,11 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     private actions$ = inject(Actions);
     private destroy$ = new Subject<void>();
 
+    // Each poll tick emits a freshly-deserialized array, so the CDK table's default identity-based
+    // diffing would otherwise tear down and rebuild every row on every refresh instead of only the
+    // ones that actually changed.
+    trackById = (_index: number, measurement: RaceMeasurementWithParticipant) => measurement.id;
+
     raceMeasurements$: Observable<RaceMeasurement[]>;
     participants$: Observable<Participant[]>;
     races$: Observable<Race[]>;
@@ -288,9 +295,7 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
                         : undefined,
                 })),
             ),
-            distinctUntilChanged(
-                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
-            ),
+            distinctUntilChanged(shallowArrayEqual),
         );
 
         // Reload the archived measurements whenever the selected race changes

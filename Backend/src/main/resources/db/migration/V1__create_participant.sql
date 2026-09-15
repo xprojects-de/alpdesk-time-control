@@ -23,7 +23,11 @@ CREATE TABLE race
     weather              TEXT,
     result_unit          TEXT NOT NULL DEFAULT 'TIME' CHECK (result_unit IN ('TIME', 'POINTS')),
     result_unit_label    TEXT,
-    sort_direction       TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC'))
+    sort_direction       TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_direction IN ('ASC', 'DESC')),
+
+    -- Optional cover page prepended to every ranking/results PDF generated for this race (not the
+    -- start list) - see PdfExportService.renderDocument/generateStartList.
+    cover_page_pdf       BLOB
 );
 
 CREATE TABLE team
@@ -123,12 +127,16 @@ VALUES ('FIS-Schema',
 
 CREATE TABLE gaudi_mode
 (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    type            TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
-    name            TEXT      NOT NULL,
-    team_size       INTEGER,
-    points_scale_id INTEGER   REFERENCES points_scale (id) ON DELETE SET NULL,
-    created_at      TIMESTAMP NOT NULL
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    type                TEXT      NOT NULL CHECK (type IN ('LOS', 'TEAM', 'TIME_COMBINATION', 'POINTS_COMBINATION')),
+    name                TEXT      NOT NULL,
+    team_size           INTEGER,
+    points_scale_id     INTEGER   REFERENCES points_scale (id) ON DELETE SET NULL,
+    created_at          TIMESTAMP NOT NULL,
+
+    -- Optional cover page prepended to every PDF generated for this Gaudi-Modus instance - separate
+    -- from any of its leg races' own cover page (see PdfExportService.renderDocument).
+    cover_page_pdf      BLOB
 );
 
 CREATE TABLE gaudi_mode_race
@@ -169,3 +177,22 @@ CREATE TABLE gaudi_los_pairing
 );
 
 CREATE INDEX idx_gaudi_los_pairing_mode_id ON gaudi_los_pairing (gaudi_mode_id);
+
+-- No CHECK constraint on timing_provider_type: the set of valid values grows every time a new
+-- timing device is supported, and a DB-level allow-list would mean every new device needs a
+-- migration just to be selectable. Valid values are enforced in code instead - see
+-- TimingProviderType (the enum) and SettingsController (which only accepts values present in
+-- TimingProviderRegistry.availableTypes() before writing this column).
+CREATE TABLE app_settings
+(
+    id                     INTEGER PRIMARY KEY,
+    timing_provider_type   TEXT NOT NULL DEFAULT 'NONE',
+    timing_provider_config TEXT
+);
+
+-- Single settings row, always id=1. SettingsService reads/writes this row only; a fresh install
+-- needs it seeded here rather than lazily created, since TimingProviderRegistry expects it to
+-- always exist. Starts as NONE (no timing device configured) - the app is equally usable for
+-- evaluation/results only; select a device under Settings to enable device import.
+INSERT INTO app_settings (id, timing_provider_type, timing_provider_config)
+VALUES (1, 'NONE', NULL);

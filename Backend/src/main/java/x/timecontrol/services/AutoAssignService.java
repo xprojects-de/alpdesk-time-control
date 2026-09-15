@@ -5,6 +5,8 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.repositories.MeasurementRepository;
 import x.timecontrol.repositories.ParticipantRepository;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,6 +50,8 @@ import java.util.stream.StreamSupport;
 @Singleton
 public class AutoAssignService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AutoAssignService.class);
+
     private final MeasurementRepository measurementRepository;
     private final ParticipantRepository participantRepository;
     private final MeasurementTableLock measurementTableLock;
@@ -74,16 +78,35 @@ public class AutoAssignService {
     }
 
     /**
+     * Used by {@link ParticipantService#assignRaceNumbers} to refuse reassigning race numbers
+     * while auto-assign is live for this race: the in-flight nextRaceNumber cursor and the
+     * "already assigned" bookkeeping are both keyed on race numbers, so renumbering underneath
+     * them can point the cursor at a different participant than the operator intended, silently
+     * crediting a finish to the wrong person.
+     */
+    public boolean isActiveFor(Long raceId) {
+        return measurementTableLock.get(() -> Objects.equals(activeRaceId, raceId));
+    }
+
+    /**
      * An explicit startRaceNumber is always honored exactly as given (e.g. deliberately re-matching
      * from a specific number). The default (none given) skips forward past any race number whose
      * participant already has a measurement, so "next expected" never points at someone already done.
+     *
+     * @throws IllegalArgumentException if startRaceNumber is given but no participant in this race
+     * has that race number - without this check, {@link #processNewMeasurements()} would find no
+     * matching participant for it and stop matching entirely, silently stalling auto-assign for
+     * every subsequent scheduler cycle with no error surfaced anywhere.
      */
     public Status enable(Long raceId, Integer startRaceNumber) {
         return measurementTableLock.get(() -> {
+            RaceRoster roster = loadRoster(raceId);
             if (startRaceNumber != null) {
+                if (!roster.byRaceNumber().containsKey(startRaceNumber)) {
+                    throw new IllegalArgumentException("No participant in this race has race number " + startRaceNumber);
+                }
                 nextRaceNumber = startRaceNumber;
             } else {
-                RaceRoster roster = loadRoster(raceId);
                 nextRaceNumber = skipAlreadyAssigned(roster, roster.raceNumbers().stream().findFirst().orElse(null), assignedParticipantIds());
             }
             activeRaceId = raceId;
@@ -116,10 +139,15 @@ public class AutoAssignService {
      * the queue somewhere, e.g. to redo a specific race number.
      *
      * @throws IllegalStateException if auto-assign mode is not currently active
+     * @throws IllegalArgumentException if raceNumber is given but no participant in the active race
+     * has that race number - see {@link #enable} for why this must be rejected up front.
      */
     public Status setNextRaceNumber(Integer raceNumber) {
         return measurementTableLock.get(() -> {
-            requireActive();
+            Long raceId = requireActive();
+            if (raceNumber != null && !loadRoster(raceId).byRaceNumber().containsKey(raceNumber)) {
+                throw new IllegalArgumentException("No participant in this race has race number " + raceNumber);
+            }
             nextRaceNumber = raceNumber;
             return currentStatus();
         });
@@ -183,7 +211,8 @@ public class AutoAssignService {
                 }
                 Participant participant = roster.byRaceNumber().get(nextRaceNumber);
                 if (participant == null) {
-                    break; // shouldn't happen: nextRaceNumber is always sourced from the roster
+                    LOG.warn("Auto-assign cursor {} has no participant in race {} - stopping", nextRaceNumber, raceId);
+                    break;
                 }
                 measurementRepository.update(new Measurement(
                         measurement.id(), participant.id(), measurement.durationMs(), measurement.measuredAt()
@@ -224,7 +253,7 @@ public class AutoAssignService {
     private Integer skipAlreadyAssigned(RaceRoster roster, Integer candidate, Set<Long> assignedParticipantIds) {
         while (candidate != null) {
             Participant participant = roster.byRaceNumber().get(candidate);
-            if (participant == null || !assignedParticipantIds.contains(participant.id())) {
+            if (participant != null && !assignedParticipantIds.contains(participant.id())) {
                 return candidate;
             }
             candidate = firstGreaterThan(roster.raceNumbers(), candidate);

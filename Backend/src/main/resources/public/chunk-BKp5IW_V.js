@@ -1,1 +1,0 @@
-import{Ft as eN,k as Jp}from"./chunk-DY9kXS9g.js";var r=eN(`category`);var c=Jp(r,e=>e.categories);var s=Jp(r,e=>e.loading);Jp(r,e=>e.error);export{s as n,c as t};

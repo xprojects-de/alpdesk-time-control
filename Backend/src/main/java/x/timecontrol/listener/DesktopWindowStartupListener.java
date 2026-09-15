@@ -3,10 +3,12 @@ package x.timecontrol.listener;
 import io.micronaut.context.annotation.Value;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import x.timecontrol.services.MeasurementTableLock;
 
 import javax.swing.SwingUtilities;
 import java.awt.GraphicsEnvironment;
@@ -41,6 +43,9 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
     @Value("${app.graalPackage:false}")
     private boolean graalPackage;
 
+    @Inject
+    MeasurementTableLock measurementTableLock;
+
     @Override
     public void onApplicationEvent(@NonNull ServerStartupEvent event) {
         if (graalPackage) {
@@ -54,6 +59,6 @@ public class DesktopWindowStartupListener implements ApplicationEventListener<Se
         }
 
         String url = "http://localhost:" + serverPort;
-        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appTitle, version, url, appUsername, appPassword));
+        SwingUtilities.invokeLater(() -> DesktopStatusWindow.show(appTitle, version, url, appUsername, appPassword, measurementTableLock));
     }
 }

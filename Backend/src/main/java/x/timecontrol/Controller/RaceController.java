@@ -20,9 +20,10 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.DataImportScheduler;
-import x.timecontrol.services.DataImportService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TimingDataImporter;
+import x.timecontrol.services.TimingProviderRegistry;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +42,7 @@ public class RaceController {
     RaceMeasurementService raceMeasurementService;
 
     @Inject
-    DataImportService dataImportService;
+    TimingProviderRegistry timingProviderRegistry;
 
     @Inject
     DataImportScheduler dataImportScheduler;
@@ -91,10 +92,12 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
-        Race race = service.createFromRequest(request);
         try {
+            Race race = service.createFromRequest(request);
             Race created = service.create(race);
             return HttpResponse.created(RaceResponse.from(created));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
@@ -116,10 +119,12 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
-        Race race = service.createFromRequest(request);
         Optional<Race> updated;
         try {
-            updated = service.update(id, race);
+            Race race = service.createFromRequest(request);
+            updated = service.update(id, race, Boolean.TRUE.equals(request.removeCoverPage()));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
@@ -174,16 +179,32 @@ public class RaceController {
 
         return dataImportScheduler.pauseDuring(() -> {
             try {
+                // If device reset is requested AND a timing device is actually configured, pull in
+                // anything the device recorded since the last scheduled poll before wiping it -
+                // resetDevice() only sends the reset command, it never reads data itself, and
+                // pausing the scheduler above stops future polls but doesn't retroactively catch up
+                // on the last cycle. No configured device just means there's nothing to reset -
+                // archiving must keep working in evaluation-only (NONE) mode.
+                boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    boolean deviceReset = dataImportService.resetDevice();
-                    if (!deviceReset) {
-                        return HttpResponse.serverError()
-                                .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    if (importerOpt.isPresent()) {
+                        TimingDataImporter importer = importerOpt.get();
+                        importer.importDataFromDevice();
+                        boolean deviceReset = importer.resetDevice();
+                        if (!deviceReset) {
+                            return HttpResponse.serverError()
+                                    .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
+                        }
+                        deviceResetPerformed = true;
                     }
                 }
 
                 raceMeasurementService.archiveMeasurements(raceId);
-                if (resetDevice) {
+                if (deviceResetPerformed) {
+                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                    // decides which confirmation to show by checking this message for the phrase
+                    // "device reset" (case-insensitive) - keep it if rewording this string.
                     return HttpResponse.ok("Measurements archived and device reset successfully");
                 } else {
                     return HttpResponse.ok("Measurements archived successfully");

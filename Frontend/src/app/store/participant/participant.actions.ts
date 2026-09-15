@@ -1,6 +1,7 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
 import {ParticipantImportFileFormat, ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantResultImportResponse, ResultTimeFormat} from '../../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
 
 // Load all participants
@@ -139,6 +140,28 @@ export const importParticipantsMappedFailure = createAction(
     props<{ error: string }>()
 );
 
+// Import results (time/status) for existing participants, matched by race number - never creates a
+// participant. Kept entirely separate from the roster import above (different response shape,
+// different state slice) so it can't regress it.
+export const importParticipantResultsMapped = createAction(
+    '[Participant] Import Participant Results Mapped',
+    props<{
+        raceId: number;
+        file: File;
+        timeFormat: ResultTimeFormat;
+        delimiter?: string;
+        mapping: Record<string, string>;
+    }>()
+);
+export const importParticipantResultsMappedSuccess = createAction(
+    '[Participant] Import Participant Results Mapped Success',
+    props<{ result: ParticipantResultImportResponse }>()
+);
+export const importParticipantResultsMappedFailure = createAction(
+    '[Participant] Import Participant Results Mapped Failure',
+    props<{ error: string }>()
+);
+
 // Full race export (roster + results) as CSV
 export const exportParticipantsCsv = createAction(
     '[Participant] Export Participants CSV',
@@ -150,6 +173,21 @@ export const exportParticipantsCsvSuccess = createAction(
 );
 export const exportParticipantsCsvFailure = createAction(
     '[Participant] Export Participants CSV Failure',
+    props<{ error: string }>()
+);
+
+// Results-only export (no identity data) - counterpart to importParticipantResultsMapped, for
+// sharing results between two instances that already have the same roster.
+export const exportParticipantResultsCsv = createAction(
+    '[Participant] Export Participant Results CSV',
+    props<{ raceId: number; filename: string }>()
+);
+export const exportParticipantResultsCsvSuccess = createAction(
+    '[Participant] Export Participant Results CSV Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportParticipantResultsCsvFailure = createAction(
+    '[Participant] Export Participant Results CSV Failure',
     props<{ error: string }>()
 );
 

@@ -54,6 +54,14 @@ public record RaceRequest(
 
         @Nullable
         @Schema(description = "Whether a lower (ASC) or higher (DESC) result is better (defaults to ASC if omitted)", example = "ASC", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        SortDirection sortDirection
+        SortDirection sortDirection,
+
+        @Nullable
+        @Schema(description = "Cover page PDF content (prepended to every ranking/results PDF generated for this race, not the start list), base64-encoded. Omit/null to leave the current cover page (if any) unchanged.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        byte[] coverPagePdf,
+
+        @Nullable
+        @Schema(description = "Set to true to remove the current cover page (if any); takes precedence over coverPagePdf.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Boolean removeCoverPage
 ) {
 }

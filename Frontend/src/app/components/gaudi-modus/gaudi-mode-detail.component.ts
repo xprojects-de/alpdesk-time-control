@@ -79,7 +79,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
                     @if ((pairing$ | async)?.length) {
                         <div class="table-container">
-                        <table mat-table [dataSource]="(pairing$ | async) || []" class="detail-table">
+                        <table mat-table [dataSource]="(pairing$ | async) || []" [trackBy]="trackByPairingId" class="detail-table">
                             <ng-container matColumnDef="participant1">
                                 <th mat-header-cell *matHeaderCellDef>Teilnehmer 1</th>
                                 <td mat-cell *matCellDef="let p">{{ p.participant1Name }}</td>
@@ -164,7 +164,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 @if ((ranking$ | async)?.length) {
                     <div class="table-container">
                     @if (isCombinationType()) {
-                        <table mat-table [dataSource]="(ranking$ | async) || []" class="detail-table">
+                        <table mat-table [dataSource]="(ranking$ | async) || []" [trackBy]="trackByRankingEntry" class="detail-table">
                             <ng-container matColumnDef="place">
                                 <th mat-header-cell *matHeaderCellDef>Platz</th>
                                 <td mat-cell *matCellDef="let r">{{ r.place }}</td>
@@ -197,7 +197,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                             <tr mat-row *matRowDef="let row; columns: combinationColumns"></tr>
                         </table>
                     } @else {
-                        <table mat-table [dataSource]="(ranking$ | async) || []" class="detail-table">
+                        <table mat-table [dataSource]="(ranking$ | async) || []" [trackBy]="trackByRankingEntry" class="detail-table">
                             <ng-container matColumnDef="place">
                                 <th mat-header-cell *matHeaderCellDef>Platz</th>
                                 <td mat-cell *matCellDef="let r">{{ r.place }}</td>
@@ -296,6 +296,21 @@ export class GaudiModeDetailComponent implements OnDestroy {
 
     pairing$: Observable<GaudiLosPairing[]> = this.store.select(GaudiModeSelectors.selectPairing);
     ranking$: Observable<GaudiRankingEntry[]> = this.store.select(GaudiModeSelectors.selectRanking);
+
+    trackByPairingId = (_index: number, pairing: GaudiLosPairing) => pairing.id;
+
+    // GaudiRankingEntry has no stable unique id: personId is only ever populated for
+    // POINTS_COMBINATION (TIME_COMBINATION/LOS/TEAM always send it as null - see the respective
+    // backend calculators). Without it, place+label is NOT a safe fallback key on its own: place
+    // is not unique under a tie (RankingService.assignStandardPlaces), and label is just
+    // "Lastname Firstname" with no disambiguator, so two different people who happen to share a
+    // name and a tied place would collide - the CDK table's row diffing has undefined behavior for
+    // duplicate trackBy keys (can misrender/reuse the wrong row's DOM), not just a missed
+    // optimization. The row index is folded in as a guaranteed-unique tiebreaker; this table isn't
+    // on a polling refresh, so losing cross-emission identity stability for the non-personId cases
+    // costs nothing in practice.
+    trackByRankingEntry = (index: number, entry: GaudiRankingEntry) =>
+        entry.personId ?? `${index}|${entry.place}|${entry.label}`;
     pdfExportLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectGaudiModePdfExportLoading);
 
     private races: Race[] = [];
@@ -405,7 +420,7 @@ export class GaudiModeDetailComponent implements OnDestroy {
             return "-";
         }
         return entry.members
-            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)}${m.counted ? '' : ', nicht gewertet'})`)
+            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)})`)
             .join(', ');
     }
 

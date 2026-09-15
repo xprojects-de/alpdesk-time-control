@@ -4,8 +4,6 @@ import {
     OnDestroy,
     inject,
     ChangeDetectionStrategy,
-    viewChild,
-    ElementRef,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
@@ -16,6 +14,7 @@ import {
     takeUntil,
     switchMap,
     map,
+    filter,
     distinctUntilChanged,
 } from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
@@ -31,6 +30,8 @@ import {MatMenuModule} from "@angular/material/menu";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
+import {shallowArrayEqual} from "../../utils/shallow-equal.util";
+import {deviceWasResetFromMessage} from "../../utils/device-reset.util";
 import {Race} from "../../models/race.model";
 import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -39,11 +40,16 @@ import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
+import * as SettingsSelectors from "../../store/settings/settings.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
 import {
     ArchiveMeasurementsDialogComponent,
     ArchiveMeasurementsDialogResult,
 } from "./archive-measurements-dialog.component";
+import {
+    MeasurementImportMappingDialogComponent,
+    MeasurementImportMappingDialogResult,
+} from "./measurement-import-mapping-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
 interface MeasurementWithParticipant extends Measurement {
@@ -128,60 +134,60 @@ interface MeasurementWithParticipant extends Measurement {
 
                     <button
                             mat-raised-button
-                            (click)="exportMeasurements()"
-                            matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                            (click)="exportMeasurementsCsv()"
+                            matTooltip="Alle Messungen als CSV-Datei herunterladen"
                     >
                         <mat-icon>download</mat-icon>
-                        JSON Export
+                        CSV Export
                     </button>
                     <button
                             mat-raised-button
-                            (click)="triggerJsonImport()"
-                            matTooltip="Messungen aus JSON-Datei importieren"
+                            (click)="openImportDialog()"
+                            [disabled]="importLoading$ | async"
+                            matTooltip="Messungen aus CSV-Datei importieren (mit Spalten-Zuordnung)"
                     >
-                        <mat-icon>upload</mat-icon>
-                        JSON Import
+                        @if (importLoading$ | async) {
+                            <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                        } @else {
+                            <mat-icon>upload_file</mat-icon>
+                        }
+                        CSV Import
                     </button>
-                    <input
-                            #jsonImportInput
-                            type="file"
-                            accept=".json,application/json"
-                            style="display:none"
-                            (change)="onJsonFileSelected($event)"
-                    />
 
-                    @if ((deviceStatus$ | async) === 'continuous') {
-                        <button
-                                mat-raised-button
-                                color="accent"
-                                class="active-mode"
-                                (click)="toggleContinuousMode(false)"
-                                matTooltip="Kontinuierlichen Modus deaktivieren"
-                        >
-                            <mat-icon>stop</mat-icon>
-                            Kontinuierlich AUS
-                        </button>
-                    } @else {
-                        <button
-                                mat-raised-button
-                                (click)="toggleContinuousMode(true)"
-                                matTooltip="Kontinuierlichen Modus aktivieren"
-                        >
-                            <mat-icon>play_arrow</mat-icon>
-                            Kontinuierlich AN
-                        </button>
-                    }
+                    @if (timingProviderActive$ | async) {
+                        @if ((deviceStatus$ | async) === 'continuous') {
+                            <button
+                                    mat-raised-button
+                                    color="accent"
+                                    class="active-mode"
+                                    (click)="toggleContinuousMode(false)"
+                                    matTooltip="Kontinuierlichen Modus deaktivieren"
+                            >
+                                <mat-icon>stop</mat-icon>
+                                Kontinuierlich AUS
+                            </button>
+                        } @else {
+                            <button
+                                    mat-raised-button
+                                    (click)="toggleContinuousMode(true)"
+                                    matTooltip="Kontinuierlichen Modus aktivieren"
+                            >
+                                <mat-icon>play_arrow</mat-icon>
+                                Kontinuierlich AN
+                            </button>
+                        }
 
-                    @if ((deviceStatus$ | async) === 'normal') {
-                        <button
-                                mat-raised-button
-                                color="warn"
-                                (click)="discardOldestStart()"
-                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
-                        >
-                            <mat-icon>person_off</mat-icon>
-                            Sturz signalisieren
-                        </button>
+                        @if ((deviceStatus$ | async) === 'normal') {
+                            <button
+                                    mat-raised-button
+                                    color="warn"
+                                    (click)="discardOldestStart()"
+                                    matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                            >
+                                <mat-icon>person_off</mat-icon>
+                                Sturz signalisieren
+                            </button>
+                        }
                     }
 
                     @if (scheduledImportEnabled$ | async) {
@@ -283,6 +289,7 @@ interface MeasurementWithParticipant extends Measurement {
                 <table
                         mat-table
                         [dataSource]="(measurementsWithParticipants$ | async) || []"
+                        [trackBy]="trackById"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                 >
@@ -494,6 +501,11 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private autoRefresh$ = new Subject<boolean>();
 
+    // Each poll tick emits a freshly-deserialized array, so the CDK table's default identity-based
+    // diffing would otherwise tear down and rebuild every row on every refresh instead of only the
+    // ones that actually changed.
+    trackById = (_index: number, measurement: MeasurementWithParticipant) => measurement.id;
+
     measurements$: Observable<Measurement[]>;
     races$: Observable<Race[]>;
     participants$: Observable<Participant[]>;
@@ -503,14 +515,14 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
+    // Emits only once the real value is known (see constructor / selectTimingProviderActive) -
+    // hides the continuous-mode/discard-start controls and skips loading device status once a
+    // timing device is confirmed not configured (NONE).
+    timingProviderActive$: Observable<boolean>;
+    importLoading$: Observable<boolean>;
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
-    private lastResetDevice = false;
-    private lastArchiveResetDevice = false;
-    private lastArchiveClearAfterArchive = true;
-
-    jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
     constructor() {
         this.measurements$ = this.store.select(
@@ -522,6 +534,10 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         );
         this.loading$ = this.store.select(
             MeasurementSelectors.selectMeasurementLoading,
+        );
+        this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderActive).pipe(
+            filter((active): active is boolean => active !== null),
+            distinctUntilChanged(),
         );
 
         this.measurementsWithParticipants$ = combineLatest([
@@ -536,9 +552,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                         : undefined,
                 })),
             ),
-            distinctUntilChanged(
-                (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr),
-            ),
+            distinctUntilChanged(shallowArrayEqual),
         );
         this.scheduledImportEnabled$ = this.store.select(
             MeasurementSelectors.selectScheduledImportEnabled,
@@ -549,6 +563,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.autoAssignStatus$ = this.store.select(
             MeasurementSelectors.selectAutoAssignStatus,
+        );
+        this.importLoading$ = this.store.select(
+            MeasurementSelectors.selectImportLoading,
         );
 
         // Listen for successful auto-assign changes
@@ -630,12 +647,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful reset and show success message
+        // Listen for successful reset and show success message. Read whether the device was
+        // actually reset from the backend's own response message rather than echoing back what
+        // was merely requested - resetAll() silently skips the device step when none is
+        // configured (see MeasurementController#resetAll), so "what the user asked for" and
+        // "what actually happened" can differ.
         this.actions$.pipe(
             ofType(MeasurementActions.resetMeasurementsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            const successMsg = this.lastResetDevice
+        ).subscribe(({message}) => {
+            const deviceWasReset = deviceWasResetFromMessage(message);
+            const successMsg = deviceWasReset
                 ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
                 : 'Alle Messungen wurden gelöscht (nur Datenbank)';
             this.snackBar.open(successMsg, 'OK', {
@@ -702,14 +724,18 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful archive and show success message
+        // Listen for successful archive and show success message. Same reasoning as the reset
+        // handler above: read whether the device was actually reset from the backend's response,
+        // not from what was requested - archiveMeasurements() silently skips the device step when
+        // none is configured (see RaceController#archiveMeasurements).
         this.actions$.pipe(
             ofType(MeasurementActions.archiveMeasurementsSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            const successMsg = !this.lastArchiveClearAfterArchive
+        ).subscribe(({clearAfterArchive, message}) => {
+            const deviceWasReset = deviceWasResetFromMessage(message);
+            const successMsg = !clearAfterArchive
                 ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
-                : this.lastArchiveResetDevice
+                : deviceWasReset
                     ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
                     : 'Messungen archiviert. Bereit für das nächste Rennen.';
             this.snackBar.open(successMsg, 'OK', {
@@ -773,7 +799,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         // Listen for successful export
         this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsSuccess),
+            ofType(MeasurementActions.exportMeasurementsCsvSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
             this.snackBar.open('Messungen erfolgreich exportiert', 'OK', {duration: 3000});
@@ -781,7 +807,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         // Listen for failed export
         this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsFailure),
+            ofType(MeasurementActions.exportMeasurementsCsvFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
             this.snackBar.open('FEHLER beim Exportieren der Messungen', 'OK', {
@@ -790,24 +816,44 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful JSON import
+        // Listen for successful CSV import
         this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsFromJsonSuccess),
+            ofType(MeasurementActions.importMeasurementsMappedSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(({count}) => {
-            this.snackBar.open(`${count} Messung(en) erfolgreich importiert`, 'OK', {duration: 3000});
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                : `Import abgeschlossen: ${result.importedCount} importiert`;
+            this.snackBar.open(message, 'OK', {duration: result.skippedCount > 0 ? 8000 : 3000});
+            const errors = result.errors ?? [];
+            if (errors.length > 0) {
+                const details = errors
+                    .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
+                    .join('\n');
+                alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+            }
             this.loadData();
         });
 
-        // Listen for failed JSON import
+        // Listen for failed CSV import
         this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsFromJsonFailure),
+            ofType(MeasurementActions.importMeasurementsMappedFailure),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Importieren der Messungen', 'OK', {
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Importieren der Messungen: ${error}`, 'OK', {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
+        });
+
+        // Loads device status once a timing provider is confirmed active. Deliberately not grouped
+        // with the other one-shot dispatches in ngAfterViewInit below: this one needs to react
+        // again if the provider is switched on/off from the Settings page while this view stays
+        // mounted, so it stays subscribed for the component's lifetime instead of firing once.
+        this.timingProviderActive$.pipe(takeUntil(this.destroy$)).subscribe(active => {
+            if (active) {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            }
         });
     }
 
@@ -820,7 +866,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         // this view is open.
         this.store.dispatch(ParticipantActions.loadParticipants());
         this.store.dispatch(MeasurementActions.loadScheduledImportStatus());
-        this.store.dispatch(MeasurementActions.loadDeviceStatus());
 
         this.autoRefresh$
             .pipe(
@@ -828,7 +873,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 takeUntil(this.destroy$),
             )
             .subscribe(() => {
-                this.loadData();
+                this.loadMeasurementData();
             });
 
         this.autoRefresh$.next(this.autoRefreshEnabled);
@@ -854,10 +899,20 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     private loadData(): void {
-        this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(RaceActions.loadRaces());
-        // Piggy-backs on the same manual/auto refresh as everything else on this screen, so the
-        // "next expected number" and the auto-assigned Teilnehmer column stay in step with it too.
+        this.loadMeasurementData();
+    }
+
+    /**
+     * The subset of loadData() that needs to stay live while a race is running: measurements and
+     * auto-assign status (kept together so the "next expected number" and the auto-assigned
+     * Teilnehmer column stay in step with the measurements they're derived from). Used for every
+     * 2s auto-refresh tick. Races are a collection that practically never changes mid-run, so
+     * they're only (re-)loaded on mount and on an explicit manual refresh via loadData(), not on
+     * every tick.
+     */
+    private loadMeasurementData(): void {
+        this.store.dispatch(MeasurementActions.loadMeasurements());
         this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
         this.updateLastUpdateTime();
     }
@@ -981,7 +1036,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
 
         if (confirm(message)) {
-            this.lastResetDevice = resetDevice;
             this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
         }
     }
@@ -1013,8 +1067,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     if (!result) {
                         return;
                     }
-                    this.lastArchiveResetDevice = result.resetDevice;
-                    this.lastArchiveClearAfterArchive = result.clearAfterArchive;
                     this.store.dispatch(MeasurementActions.archiveMeasurements(result));
                 });
         });
@@ -1026,34 +1078,27 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    exportMeasurements(): void {
-        this.store.dispatch(MeasurementActions.exportMeasurements());
+    exportMeasurementsCsv(): void {
+        this.store.dispatch(MeasurementActions.exportMeasurementsCsv());
     }
 
-    triggerJsonImport(): void {
-        this.jsonImportInput().nativeElement.value = '';
-        this.jsonImportInput().nativeElement.click();
-    }
+    openImportDialog(): void {
+        const dialogRef = this.dialog.open(MeasurementImportMappingDialogComponent, {
+            width: '900px',
+        });
 
-    onJsonFileSelected(event: Event): void {
-        const input = event.target as HTMLInputElement;
-        const file = input.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target?.result as string;
-                const measurements = JSON.parse(content);
-                if (!Array.isArray(measurements)) {
-                    this.snackBar.open('Ungültiges JSON-Format: Array erwartet', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
-                    return;
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: MeasurementImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(MeasurementActions.importMeasurementsMapped({
+                        file: result.file,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
-                this.store.dispatch(MeasurementActions.importMeasurementsFromJson({measurements}));
-            } catch {
-                this.snackBar.open('Fehler beim Lesen der JSON-Datei', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
-            }
-        };
-        reader.readAsText(file);
+            });
     }
 }
