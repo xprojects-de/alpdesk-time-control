@@ -1,6 +1,7 @@
 import {createReducer, on} from '@ngrx/store';
 import {Participant} from '../../models/participant.model';
 import {ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantResultImportResponse} from '../../models/participant-result-import.model';
 import {ParticipantCopyResponse} from '../../models/participant-copy.model';
 import * as ParticipantActions from './participant.actions';
 
@@ -17,6 +18,8 @@ export interface ParticipantState {
     pdfExportLoading: boolean;
     importLoading: boolean;
     importResult: ParticipantImportResponse | null;
+    resultImportLoading: boolean;
+    resultImportResult: ParticipantResultImportResponse | null;
     copyLoading: boolean;
     copyResult: ParticipantCopyResponse | null;
     error: string | null;
@@ -29,6 +32,8 @@ export const initialState: ParticipantState = {
     pdfExportLoading: false,
     importLoading: false,
     importResult: null,
+    resultImportLoading: false,
+    resultImportResult: null,
     copyLoading: false,
     copyResult: null,
     error: null
@@ -168,6 +173,33 @@ export const participantReducer = createReducer(
     on(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
+        error
+    })),
+
+    // Import results (time/status) for existing participants, matched by race number - unlike the
+    // roster import above this never adds participants, it merges the returned rows into the
+    // existing ones by id.
+    on(ParticipantActions.importParticipantResultsMapped, state => ({
+        ...state,
+        resultImportLoading: true,
+        resultImportResult: null,
+        error: null
+    })),
+    on(ParticipantActions.importParticipantResultsMappedSuccess, (state, {result}) => {
+        // The backend omits empty array fields from the JSON response entirely, so
+        // "updated"/"errors" can be undefined when there was nothing to report.
+        const updated = result.updated ?? [];
+        const errors = result.errors ?? [];
+        return {
+            ...state,
+            participants: state.participants.map(p => updated.find(u => u.id === p.id) ?? p),
+            resultImportLoading: false,
+            resultImportResult: {...result, updated, errors}
+        };
+    }),
+    on(ParticipantActions.importParticipantResultsMappedFailure, (state, {error}) => ({
+        ...state,
+        resultImportLoading: false,
         error
     })),
 

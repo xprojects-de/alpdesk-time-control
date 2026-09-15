@@ -8,6 +8,9 @@ import x.timecontrol.dto.ParticipantImportPreviewResponse;
 import x.timecontrol.dto.ParticipantImportResponse;
 import x.timecontrol.dto.ParticipantRequest;
 import x.timecontrol.dto.ParticipantResponse;
+import x.timecontrol.dto.ParticipantResultImportPreviewResponse;
+import x.timecontrol.dto.ParticipantResultImportResponse;
+import x.timecontrol.dto.ResultTimeFormat;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.ParticipantService;
@@ -275,6 +278,74 @@ public class ParticipantController {
             ParticipantService.ParticipantImportResult result = service.importMapped(raceId, bytes, parsedFormat, delim, mapping);
             List<ParticipantResponse> imported = service.toResponses(result.imported());
             return HttpResponse.ok(new ParticipantImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-results-preview")
+    @Operation(summary = "Preview a result-by-race-number import file", description = "Parses a CSV (any delimiter) and returns the detected source fields, a best-effort suggested mapping onto our result fields (raceNumber, time, measuredAt, comment, status), and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = ParticipantResultImportPreviewResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unreadable file")
+    public HttpResponse<?> importResultsPreview(@Part("file") CompletedFileUpload file,
+                                                 @Part("delimiter") Optional<String> delimiter) {
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+        try {
+            byte[] bytes = file.getBytes();
+            return HttpResponse.ok(service.previewResultsImport(bytes, delim));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-results-mapped/{raceId}")
+    @Operation(summary = "Import results (time/status) for existing participants, matched by race number", description = "Imports a CSV (any delimiter) of results for a race, matching each row onto an *existing* participant via raceNumber - never creates a new participant, and never touches identity data (name, team, category, ...). A raceNumber that matches nobody in the race is reported as a row error instead. Uses an explicit mapping from our fields (raceNumber, time, measuredAt, comment, status) onto the file's columns; a field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-results-preview) is used. timeFormat says how to read the mapped time column: MILLISECONDS (raw ms), SECONDS (decimal seconds, dot or comma), or CLOCK (\"[[hh:]mm:]ss[.,fraction]\", e.g. \"1:23,68\"). A time value that's actually a DNF/DNS/DSQ keyword sets that status instead of a duration.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantResultImportResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unknown time format, invalid mapping JSON, or unreadable file")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> importResultsMapped(@PathVariable Long raceId,
+                                                @Part("file") CompletedFileUpload file,
+                                                @Part("timeFormat") String timeFormat,
+                                                @Part("delimiter") Optional<String> delimiter,
+                                                @Part("mapping") Optional<String> mappingJson) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+
+        ResultTimeFormat parsedTimeFormat;
+        try {
+            parsedTimeFormat = ResultTimeFormat.valueOf(timeFormat.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Unknown time format: " + timeFormat + " (expected MILLISECONDS, SECONDS or CLOCK)"));
+        }
+
+        Map<String, String> mapping = null;
+        if (mappingJson.isPresent() && !mappingJson.get().isBlank()) {
+            try {
+                Map<?, ?> raw = jsonMapper.readValue(mappingJson.get(), Map.class);
+                mapping = new HashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getValue() != null) {
+                        mapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                    }
+                }
+            } catch (IOException e) {
+                return HttpResponse.badRequest(new ErrorResponse("Invalid mapping JSON: " + e.getMessage()));
+            }
+        }
+
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            ParticipantService.ParticipantResultImportResult result = service.importResultsByRaceNumber(raceId, bytes, delim, mapping, parsedTimeFormat);
+            List<ParticipantResponse> updated = service.toResponses(result.updated());
+            return HttpResponse.ok(new ParticipantResultImportResponse(updated.size(), result.errors().size(), updated, result.errors()));
         } catch (IOException e) {
             return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
         }

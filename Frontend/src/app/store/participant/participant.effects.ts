@@ -137,6 +137,20 @@ export class ParticipantEffects {
         )
     );
 
+    importParticipantResultsMapped$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantResultsMapped),
+            mergeMap(({raceId, file, timeFormat, delimiter, mapping}) =>
+                this.participantService.importResultsMapped(raceId, file, timeFormat, delimiter, mapping).pipe(
+                    map(result => ParticipantActions.importParticipantResultsMappedSuccess({result})),
+                    catchError(error => of(ParticipantActions.importParticipantResultsMappedFailure({
+                        error: extractErrorMessage(error, 'Failed to import participant results')
+                    })))
+                )
+            )
+        )
+    );
+
     exportParticipantsCsv$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.exportParticipantsCsv),

@@ -7,8 +7,11 @@ import x.timecontrol.dto.ParticipantImportFormat;
 import x.timecontrol.dto.ParticipantImportPreviewResponse;
 import x.timecontrol.dto.ParticipantImportRowError;
 import x.timecontrol.dto.ParticipantResponse;
+import x.timecontrol.dto.ParticipantResultImportPreviewResponse;
+import x.timecontrol.dto.ParticipantResultImportRowError;
 import x.timecontrol.dto.PersonResponse;
 import x.timecontrol.dto.RaceResponse;
+import x.timecontrol.dto.ResultTimeFormat;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
@@ -616,6 +619,180 @@ public class ParticipantService {
             case CSV -> ParticipantImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
             case DSV_XML -> ParticipantImportParsers.parseDsvXml(new ByteArrayInputStream(fileBytes));
         };
+    }
+
+    /**
+     * Parses a result-import file into detected source fields + a suggested mapping + a few sample
+     * rows, for building/pre-filling the column-mapping UI. Never touches the database.
+     */
+    public ParticipantResultImportPreviewResponse previewResultsImport(byte[] fileBytes, Character delimiter) {
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        Map<String, String> suggested = ParticipantResultImportParsers.suggestMapping(parsed.fields());
+        List<Map<String, String>> sample = parsed.rows().stream().limit(5).toList();
+        return new ParticipantResultImportPreviewResponse(parsed.fields(), suggested, sample);
+    }
+
+    public record ParticipantResultImportResult(List<Participant> updated, List<ParticipantResultImportRowError> errors) {
+    }
+
+    /**
+     * Imports results (time + optionally status/comment/measuredAt) for a race, matching each row
+     * onto an *existing* participant via raceNumber - deliberately never creates a participant.
+     * A raceNumber that matches nobody in the race, or that's missing/unparsable, is reported as a
+     * row error instead. Only the result fields (durationMs/measuredAt/status/comment) are touched;
+     * identity data (name, team, category, ...) is left exactly as it was, via
+     * {@link #update(Long, Participant)}'s "omitted means unchanged" convention for durationMs/
+     * measuredAt/status - raceId/personId/raceNumber/teamId/categoryId are carried over from the
+     * existing row explicitly since update() takes those from the passed-in Participant directly
+     * (no fallback), unlike durationMs/measuredAt/status.
+     * <p>
+     * {@code timeFormat} says how to read the mapped "time" column: raw milliseconds, decimal
+     * seconds, or a "[[hh:]mm:]ss[.,fraction]" race-clock string - different timing providers export
+     * differently, so this is picked explicitly rather than guessed. A time value that's actually a
+     * DNF/DNS/DSQ keyword (see {@link #parseExplicitStatus}) sets that status instead of a duration,
+     * regardless of the chosen format.
+     */
+    public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
+                                                                     Map<String, String> mapping, ResultTimeFormat timeFormat) {
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        Map<String, String> effectiveMapping = (mapping == null || mapping.isEmpty())
+                ? ParticipantResultImportParsers.suggestMapping(parsed.fields())
+                : mapping;
+
+        List<Participant> updated = new ArrayList<>();
+        List<ParticipantResultImportRowError> errors = new ArrayList<>();
+
+        int rowNumber = 1;
+        for (Map<String, String> row : parsed.rows()) {
+            rowNumber++;
+            String rawRowDescription = row.toString();
+
+            String raceNumberRaw = valueFor(row, effectiveMapping, "raceNumber");
+            if (raceNumberRaw == null || raceNumberRaw.isBlank()) {
+                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Startnummer fehlt"));
+                continue;
+            }
+            Integer raceNumber;
+            try {
+                raceNumber = Integer.parseInt(raceNumberRaw.trim());
+            } catch (NumberFormatException e) {
+                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Startnummer ist keine gültige Zahl: " + raceNumberRaw));
+                continue;
+            }
+
+            Optional<Participant> existingOpt = repository.findByRaceIdAndRaceNumber(raceId, raceNumber);
+            if (existingOpt.isEmpty()) {
+                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
+                continue;
+            }
+            Participant existing = existingOpt.get();
+
+            String timeRaw = valueFor(row, effectiveMapping, "time");
+            String statusRaw = valueFor(row, effectiveMapping, "status");
+            DisqualificationStatus status = parseExplicitStatus(statusRaw);
+
+            Integer durationMs = null;
+            if (timeRaw != null && !timeRaw.isBlank()) {
+                DisqualificationStatus timeStatus = parseExplicitStatus(timeRaw);
+                if (timeStatus != null) {
+                    status = timeStatus;
+                } else {
+                    try {
+                        durationMs = parseResultTime(timeRaw.trim(), timeFormat);
+                    } catch (IllegalArgumentException e) {
+                        errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription,
+                                "Zeit \"" + timeRaw + "\" konnte nicht als " + timeFormat + " gelesen werden"));
+                        continue;
+                    }
+                    if (durationMs < 0) {
+                        errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Zeit darf nicht negativ sein"));
+                        continue;
+                    }
+                }
+            } else if (status == null) {
+                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Zeit fehlt"));
+                continue;
+            }
+
+            String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
+            LocalDateTime measuredAt = null;
+            if (measuredAtRaw != null && !measuredAtRaw.isBlank()) {
+                try {
+                    measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
+                } catch (DateTimeParseException e) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription,
+                            "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
+                    continue;
+                }
+            }
+
+            String commentRaw = valueFor(row, effectiveMapping, "comment");
+            String comment = (commentRaw != null && !commentRaw.trim().isEmpty()) ? commentRaw.trim() : existing.comment();
+
+            Participant toUpdate = new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
+                    existing.teamId(), existing.categoryId(), durationMs, existing.penalty(), measuredAt, comment, status);
+            try {
+                update(existing.id(), toUpdate).ifPresent(updated::add);
+            } catch (Exception e) {
+                String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                LOG.warn("Failed to import result row {} for race {}: {}", rowNumber, raceId, reason);
+                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Speichern fehlgeschlagen: " + reason));
+            }
+        }
+
+        LOG.info("Result import for race {} finished: {} updated, {} skipped", raceId, updated.size(), errors.size());
+
+        return new ParticipantResultImportResult(updated, errors);
+    }
+
+    /**
+     * Recognizes an explicit DNF/DNS/DSQ (or NONE) marker - unlike {@link #parseStatus}, returns
+     * null rather than defaulting to NONE when the value isn't a recognized keyword, so the caller
+     * can tell "explicitly reset to NONE" apart from "not a status value at all" (e.g. a plain race
+     * time, which must not overwrite whatever status the participant already had).
+     */
+    private static DisqualificationStatus parseExplicitStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            return null;
+        }
+        return switch (rawStatus.trim().toUpperCase()) {
+            case "DSQ", "DISQUALIFIZIERT", "DISQUALIFIED" -> DisqualificationStatus.DSQ;
+            case "DNF", "AUFGEGEBEN" -> DisqualificationStatus.DNF;
+            case "DNS", "NICHT GESTARTET", "NICHT_GESTARTET" -> DisqualificationStatus.DNS;
+            case "NONE" -> DisqualificationStatus.NONE;
+            default -> null;
+        };
+    }
+
+    /**
+     * Parses a raw time value per the chosen {@link ResultTimeFormat}. CLOCK accepts "ss",
+     * "mm:ss" or "hh:mm:ss", with either "." or "," before the fractional seconds (e.g. "1:23,68"
+     * or "01:23.680") - covers both our own export format and the comma-decimal, no-milliseconds
+     * style common in timing-provider CSVs (e.g. Alpenhunde's "01:23,68").
+     *
+     * @throws IllegalArgumentException if the value doesn't match the chosen format
+     */
+    private static int parseResultTime(String raw, ResultTimeFormat format) {
+        try {
+            return switch (format) {
+                case MILLISECONDS -> Integer.parseInt(raw);
+                case SECONDS -> Math.round(Float.parseFloat(raw.replace(',', '.')) * 1000f);
+                case CLOCK -> parseClock(raw);
+            };
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    private static int parseClock(String raw) {
+        String[] parts = raw.split(":");
+        if (parts.length < 1 || parts.length > 3) {
+            throw new IllegalArgumentException("invalid clock format: " + raw);
+        }
+        double seconds = Double.parseDouble(parts[parts.length - 1].replace(',', '.'));
+        int minutes = parts.length >= 2 ? Integer.parseInt(parts[parts.length - 2]) : 0;
+        int hours = parts.length == 3 ? Integer.parseInt(parts[0]) : 0;
+        return (int) Math.round((hours * 3600L + minutes * 60L) * 1000.0 + seconds * 1000.0);
     }
 
     private static String valueFor(Map<String, String> row, Map<String, String> mapping, String targetField) {

@@ -4,6 +4,7 @@ import io.micronaut.data.exceptions.DataAccessException
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
 import x.timecontrol.dto.ParticipantImportFormat
+import x.timecontrol.dto.ResultTimeFormat
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
@@ -496,5 +497,83 @@ class ParticipantServiceSpec extends Specification {
         result.imported().isEmpty()
         result.errors().size() == 2
         result.errors()*.reason().every { it.contains("must not be negative") }
+    }
+
+    def "importResultsByRaceNumber matches rows onto existing participants by race number, never creates one, and leaves identity data untouched"() {
+        given: "a file shaped like a real export (Alpenhunde): the race-number column is mislabeled 'Name', times use CLOCK format with a comma decimal, and DNF appears instead of a time"
+        def existing61 = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        def existing63 = new Participant(101L, 5L, 2L, 63, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceIdAndRaceNumber(5L, 61) >> Optional.of(existing61)
+        repository.findByRaceIdAndRaceNumber(5L, 63) >> Optional.of(existing63)
+        repository.findByRaceIdAndRaceNumber(5L, 999) >> Optional.empty()
+        repository.findById(100L) >> Optional.of(existing61)
+        repository.findById(101L) >> Optional.of(existing63)
+        raceService.findById(5L) >> Optional.of(race())
+        personService.findById(_) >> Optional.of(person())
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.update(_) >> { Participant p -> p }
+
+        def csv = "IDX;Name;Team;End Time\n" +
+                "1;61;;01:23,68\n" +
+                "2;63;;DNF\n" +
+                "3;999;;00:10,00\n"
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
+                [raceNumber: "Name", time: "End Time"], ResultTimeFormat.CLOCK)
+
+        then: "the two known race numbers are updated with a parsed duration / DNF status, the unknown one is reported instead of creating a participant"
+        0 * repository.save(_)
+        result.updated().size() == 2
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("999")
+
+        def updated61 = result.updated().find { it.raceNumber() == 61 }
+        updated61.durationMs() == 83680
+        updated61.status() == DisqualificationStatus.NONE
+
+        def updated63 = result.updated().find { it.raceNumber() == 63 }
+        updated63.durationMs() == null
+        updated63.status() == DisqualificationStatus.DNF
+    }
+
+    def "importResultsByRaceNumber parses SECONDS and MILLISECONDS time formats"() {
+        given:
+        def existing = new Participant(100L, 5L, 1L, 61, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceIdAndRaceNumber(5L, 61) >> Optional.of(existing)
+        repository.findById(100L) >> Optional.of(existing)
+        raceService.findById(5L) >> Optional.of(race())
+        personService.findById(_) >> Optional.of(person())
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.update(_) >> { Participant p -> p }
+
+        expect:
+        def resultSeconds = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83.68\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+        resultSeconds.updated().first().durationMs() == 83680
+        resultSeconds.errors().isEmpty()
+
+        def resultMillis = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83680\n".getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.MILLISECONDS)
+        resultMillis.updated().first().durationMs() == 83680
+        resultMillis.errors().isEmpty()
+    }
+
+    def "importResultsByRaceNumber reports a missing race number or time instead of guessing"() {
+        given: "row 2's race number does exist, so the row reaches (and fails) the time check rather than the race-number lookup"
+        def existing62 = new Participant(100L, 5L, 1L, 62, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceIdAndRaceNumber(5L, 62) >> Optional.of(existing62)
+        def csv = "StNr;Zeit\n;01:00,00\n62;\n"
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.CLOCK)
+
+        then:
+        0 * repository.update(_)
+        result.updated().isEmpty()
+        result.errors().size() == 2
+        result.errors()[0].reason().contains("Startnummer")
+        result.errors()[1].reason().contains("Zeit")
     }
 }

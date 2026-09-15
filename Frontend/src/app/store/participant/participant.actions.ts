@@ -1,6 +1,7 @@
 import {createAction, props} from '@ngrx/store';
 import {Participant, ParticipantRequest} from '../../models/participant.model';
 import {ParticipantImportFileFormat, ParticipantImportResponse} from '../../models/participant-import.model';
+import {ParticipantResultImportResponse, ResultTimeFormat} from '../../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
 
 // Load all participants
@@ -136,6 +137,28 @@ export const importParticipantsMappedSuccess = createAction(
 );
 export const importParticipantsMappedFailure = createAction(
     '[Participant] Import Participants Mapped Failure',
+    props<{ error: string }>()
+);
+
+// Import results (time/status) for existing participants, matched by race number - never creates a
+// participant. Kept entirely separate from the roster import above (different response shape,
+// different state slice) so it can't regress it.
+export const importParticipantResultsMapped = createAction(
+    '[Participant] Import Participant Results Mapped',
+    props<{
+        raceId: number;
+        file: File;
+        timeFormat: ResultTimeFormat;
+        delimiter?: string;
+        mapping: Record<string, string>;
+    }>()
+);
+export const importParticipantResultsMappedSuccess = createAction(
+    '[Participant] Import Participant Results Mapped Success',
+    props<{ result: ParticipantResultImportResponse }>()
+);
+export const importParticipantResultsMappedFailure = createAction(
+    '[Participant] Import Participant Results Mapped Failure',
     props<{ error: string }>()
 );
 
