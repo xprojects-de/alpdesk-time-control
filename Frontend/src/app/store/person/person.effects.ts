@@ -66,4 +66,18 @@ export class PersonEffects {
             )
         )
     );
+
+    deleteUnusedPersons$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(PersonActions.deleteUnusedPersons),
+            mergeMap(() =>
+                this.personService.deleteUnused().pipe(
+                    map(({deletedCount}) => PersonActions.deleteUnusedPersonsSuccess({deletedCount})),
+                    catchError(error => of(PersonActions.deleteUnusedPersonsFailure({
+                        error: extractErrorMessage(error, 'Failed to delete unused persons')
+                    })))
+                )
+            )
+        )
+    );
 }

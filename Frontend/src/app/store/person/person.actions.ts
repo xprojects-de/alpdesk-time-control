@@ -49,3 +49,13 @@ export const deletePersonFailure = createAction(
     '[Person] Delete Person Failure',
     props<{ error: string }>()
 );
+
+export const deleteUnusedPersons = createAction('[Person] Delete Unused Persons');
+export const deleteUnusedPersonsSuccess = createAction(
+    '[Person] Delete Unused Persons Success',
+    props<{ deletedCount: number }>()
+);
+export const deleteUnusedPersonsFailure = createAction(
+    '[Person] Delete Unused Persons Failure',
+    props<{ error: string }>()
+);

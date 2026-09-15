@@ -21,4 +21,8 @@ public interface PersonRepository extends CrudRepository<Person, Long> {
             "OR LOWER(last_name || ' ' || first_name) LIKE LOWER(:pattern) " +
             "ORDER BY last_name, first_name LIMIT 20", nativeQuery = true)
     List<Person> search(String pattern);
+
+    @Query(value = "SELECT * FROM person " +
+            "WHERE id NOT IN (SELECT DISTINCT person_id FROM participant)", nativeQuery = true)
+    List<Person> findUnused();
 }

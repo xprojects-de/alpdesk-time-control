@@ -125,6 +125,15 @@ public class PersonController {
                 && request.gender() != null;
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Delete("/unused")
+    @Operation(summary = "Delete all persons not assigned to any participant", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Unused persons deleted", content = @Content(schema = @Schema(implementation = x.timecontrol.dto.DeleteUnusedPersonsResponse.class)))
+    public HttpResponse<x.timecontrol.dto.DeleteUnusedPersonsResponse> deleteUnused() {
+        int deletedCount = service.deleteUnused();
+        return HttpResponse.ok(new x.timecontrol.dto.DeleteUnusedPersonsResponse(deletedCount));
+    }
+
     @Delete("/{id}")
     @Operation(summary = "Delete a person", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Person deleted")
