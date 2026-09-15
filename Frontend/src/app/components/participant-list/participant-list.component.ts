@@ -162,6 +162,15 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <button
                                 mat-raised-button
+                                (click)="exportResults()"
+                                matTooltip="Ergebnisse (Startnummer/Zeit/Status) dieses Rennens als CSV exportieren - zum Teilen mit einer anderen Instanz, die dieselben Teilnehmer schon hat"
+                        >
+                            <mat-icon>download</mat-icon>
+                            Ergebnisse exportieren
+                        </button>
+
+                        <button
+                                mat-raised-button
                                 (click)="openCopyDialog()"
                                 [disabled]="copyLoading$ | async"
                                 matTooltip="Alle Teilnehmer dieses Rennens in andere Rennen kopieren"
@@ -1002,6 +1011,23 @@ async openImportDialog(): Promise<void> {
                     this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
             });
+    }
+
+    async exportResults(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+        const race = races.find(r => r.id === raceId);
+        this.store.dispatch(ParticipantActions.exportParticipantResultsCsv({
+            raceId,
+            filename: `ergebnisse_${race?.name ?? raceId}.csv`,
+        }));
     }
 
     async openCopyDialog(): Promise<void> {

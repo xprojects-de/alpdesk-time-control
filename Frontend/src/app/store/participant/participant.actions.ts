@@ -176,6 +176,21 @@ export const exportParticipantsCsvFailure = createAction(
     props<{ error: string }>()
 );
 
+// Results-only export (no identity data) - counterpart to importParticipantResultsMapped, for
+// sharing results between two instances that already have the same roster.
+export const exportParticipantResultsCsv = createAction(
+    '[Participant] Export Participant Results CSV',
+    props<{ raceId: number; filename: string }>()
+);
+export const exportParticipantResultsCsvSuccess = createAction(
+    '[Participant] Export Participant Results CSV Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportParticipantResultsCsvFailure = createAction(
+    '[Participant] Export Participant Results CSV Failure',
+    props<{ error: string }>()
+);
+
 // Copy participants into other races
 export const copyParticipants = createAction(
     '[Participant] Copy Participants',

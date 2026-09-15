@@ -576,4 +576,43 @@ class ParticipantServiceSpec extends Specification {
         result.errors()[0].reason().contains("Startnummer")
         result.errors()[1].reason().contains("Zeit")
     }
+
+    def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
+        given: "one participant with a full result, plus one with no result at all"
+        def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, null, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
+        def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [withResult, withoutResult]
+
+        when:
+        def lines = service.exportResultsCsv(5L).readLines()
+
+        then: "the header carries only raceNumber/time/measuredAt/comment/status - never name/team/category/etc."
+        lines[0] == "raceNumber;time;measuredAt;comment;status"
+        lines[1] == "42;125000;2026-08-18T10:30;Ski gebrochen;NONE"
+        lines[2] == ";;;;NONE"
+    }
+
+    def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
+        given: "the header exportResultsCsv would produce, reimported with the auto-suggested mapping"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceIdAndRaceNumber(5L, 42) >> Optional.of(existing)
+        repository.findById(10L) >> Optional.of(existing)
+        raceService.findById(5L) >> Optional.of(race())
+        personService.findById(_) >> Optional.of(person())
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.update(_) >> { Participant p -> p }
+
+        def csv = "raceNumber;time;measuredAt;comment;status\n" +
+                "42;125000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"
+
+        when: "no mapping is passed - it must be derivable from the header alone"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.MILLISECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().size() == 1
+        result.updated().first().durationMs() == 125000
+        result.updated().first().measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0)
+        result.updated().first().comment() == "Ski gebrochen"
+    }
 }

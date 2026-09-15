@@ -366,6 +366,21 @@ public class ParticipantController {
                 .header("Content-Disposition", "attachment; filename=rennergebnisse_" + raceId + ".csv");
     }
 
+    @Produces("text/csv")
+    @Get("/export/results-csv/{raceId}")
+    @Operation(summary = "Export a race's results only (no identity data) as CSV", description = "Exports every participant's raceNumber/time/measuredAt/comment/status - not name/team/category/etc. - as CSV. Counterpart to import-results-mapped: for sharing results between two instances that already have the same roster, matched by race number. Uses our own field names as the header row, so re-importing the file needs no manual mapping (just pick MILLISECONDS as the time format, since that's how \"time\" is written here).", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> exportParticipantResultsCsv(@PathVariable Long raceId) {
+        Optional<Race> race = raceService.findById(raceId);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        String csv = service.exportResultsCsv(raceId);
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header("Content-Disposition", "attachment; filename=ergebnisse_" + raceId + ".csv");
+    }
+
     @Produces("application/pdf")
     @Get("/export/pdf/startlist/{raceId}")
     @Operation(summary = "Export start list as PDF", description = "Generates a PDF start list sorted by race number for a specific race", security = @SecurityRequirement(name = "BearerAuth"))

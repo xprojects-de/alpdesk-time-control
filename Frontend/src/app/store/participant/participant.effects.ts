@@ -165,6 +165,20 @@ export class ParticipantEffects {
         )
     );
 
+    exportParticipantResultsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportParticipantResultsCsv),
+            mergeMap(({raceId, filename}) =>
+                this.participantService.exportResultsCsv(raceId).pipe(
+                    map(blob => ParticipantActions.exportParticipantResultsCsvSuccess({blob, filename})),
+                    catchError(error => of(ParticipantActions.exportParticipantResultsCsvFailure({
+                        error: extractErrorMessage(error, 'Failed to export results CSV')
+                    })))
+                )
+            )
+        )
+    );
+
     copyParticipants$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.copyParticipants),
@@ -310,7 +324,8 @@ export class ParticipantEffects {
                 ParticipantActions.exportByGenderByCategoryPdfSuccess,
                 ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
                 ParticipantActions.exportStartListPdfSuccess,
-                ParticipantActions.exportParticipantsCsvSuccess
+                ParticipantActions.exportParticipantsCsvSuccess,
+                ParticipantActions.exportParticipantResultsCsvSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

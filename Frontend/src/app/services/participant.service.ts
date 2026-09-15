@@ -133,6 +133,18 @@ export class ParticipantService {
         });
     }
 
+    /**
+     * Results-only export (raceNumber/time/measuredAt/comment/status, no identity data) - the
+     * counterpart to importResultsMapped, for sharing results between two instances that already
+     * have the same roster. "time" is written as raw milliseconds, so re-importing this file needs
+     * ResultTimeFormat 'MILLISECONDS' selected.
+     */
+    exportResultsCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/results-csv/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
     copyParticipants(request: ParticipantCopyRequest): Observable<ParticipantCopyResponse> {
         return this.http.post<ParticipantCopyResponse>(`${this.apiUrl}/copy`, request);
     }

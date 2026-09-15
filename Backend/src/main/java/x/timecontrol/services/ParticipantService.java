@@ -836,7 +836,7 @@ public class ParticipantService {
                     p.penalty() != null ? p.penalty().toString() : "",
                     p.measuredAt() != null ? p.measuredAt().toString() : "",
                     sanitizeForExport(p.comment()),
-                    p.status().name()
+                    Objects.requireNonNullElse(p.status(), DisqualificationStatus.NONE).name()
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
@@ -848,6 +848,37 @@ public class ParticipantService {
             return "";
         }
         return value.replace(String.valueOf(EXPORT_DELIMITER), " ").replace("\n", " ").replace("\r", " ");
+    }
+
+    /**
+     * Exports every participant of a race's *results only* (raceNumber/time/measuredAt/comment/
+     * status, no identity data) - the counterpart to {@link #importResultsByRaceNumber}, for sharing
+     * results between two instances that already have the same roster (e.g. two computers each
+     * timing part of the same race). Uses our own canonical field names as the header row (see
+     * {@link ParticipantResultImportParsers#TARGET_FIELDS}) so re-importing it via
+     * import-results-mapped needs no manual mapping - each header self-suggests via that field's
+     * own-name alias. "time" is written as raw milliseconds (lossless, matches internal storage), so
+     * re-importing this file needs {@link x.timecontrol.dto.ResultTimeFormat#MILLISECONDS} selected.
+     * A participant with no raceNumber is still exported (with an empty raceNumber column) rather
+     * than silently dropped - the other side's import will report it as a row error instead of a
+     * value quietly going missing.
+     */
+    public String exportResultsCsv(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), ParticipantResultImportParsers.TARGET_FIELDS)).append('\n');
+        for (Participant p : participants) {
+            List<String> values = List.of(
+                    p.raceNumber() != null ? p.raceNumber().toString() : "",
+                    p.durationMs() != null ? p.durationMs().toString() : "",
+                    p.measuredAt() != null ? p.measuredAt().toString() : "",
+                    sanitizeForExport(p.comment()),
+                    p.status().name()
+            );
+            csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
+        }
+        return csv.toString();
     }
 
     /**
