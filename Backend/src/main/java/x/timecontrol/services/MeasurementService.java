@@ -132,7 +132,7 @@ public class MeasurementService {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs ist keine gültige Zahl"));
                 continue;
             }
-            if (durationMs < 0) {
+            if (ValidationUtils.isNegative(durationMs)) {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs darf nicht negativ sein"));
                 continue;
             }

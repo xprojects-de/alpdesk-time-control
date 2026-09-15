@@ -33,6 +33,14 @@ public class Application {
     private static final String APP_PASSWORD_ENV_KEY = "APP_PASSWORD";
     private static final String DEFAULT_APP_USERNAME = "time-control";
 
+    // The app's identifying slug, used for the packaged build's data directory name below. This is
+    // independent of the jpackage installer's own display name/vendor (`--name`/`--vendor` in
+    // build.gradle's jpackageArgs) - those two are cosmetic and can be rebranded freely, but a
+    // change to APP_ID silently orphans any existing packaged install's data directory (no
+    // migration is performed - see the javadoc on ensureAppPassword/ensureJwtSecret). If you rename
+    // this, also update the path mentioned in README.md's "Wo liegt die Datenbank?" section.
+    private static final String APP_ID = "alpdesk-time-control";
+
     // When launched as a jpackage app bundle (double-click on macOS/Windows/Linux), the
     // process's working directory is unreliable - e.g. macOS sets it to "/" for apps started
     // via Finder/LaunchServices, which is a read-only system volume. "user.home" is correct
@@ -42,7 +50,7 @@ public class Application {
     // "database" directory unchanged.
     private static final boolean PACKAGED = Boolean.getBoolean("app.packaged");
     private static final Path APP_DATA_DIR = PACKAGED
-            ? Path.of(System.getProperty("user.home"), "alpdesk-time-control")
+            ? Path.of(System.getProperty("user.home"), APP_ID)
             : Path.of("database");
     private static final Path JWT_SECRET_FILE = APP_DATA_DIR.resolve("jwt-secret.txt");
     private static final Path APP_PASSWORD_FILE = APP_DATA_DIR.resolve("app-password.txt");

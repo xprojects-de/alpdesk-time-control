@@ -219,13 +219,13 @@ public class ParticipantService {
                 throw new IllegalStateException("Race number " + participant.raceNumber() + " is already assigned in this race");
             }
         }
-        if (participant.penalty() != null && participant.penalty() < 0) {
+        if (ValidationUtils.isNegative(participant.penalty())) {
             // RankingService.adjustedValue() applies the penalty directly (+/- depending on sort
             // direction) with no floor; a negative penalty can drive the adjusted value negative,
             // which formatTime()/formatDuration() render as garbled strings like "-1:-1.-500".
             throw new IllegalArgumentException("penalty must not be negative");
         }
-        if (participant.durationMs() != null && participant.durationMs() < 0) {
+        if (ValidationUtils.isNegative(participant.durationMs())) {
             // adjustedValue() floors the *adjusted* value at 0, but a negative raw duration would
             // still floor to 0 and rank that participant first/best - a garbled or malicious input
             // must be rejected here rather than silently winning the race.
@@ -681,24 +681,26 @@ public class ParticipantService {
         int rowNumber = 1;
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
-            String rawRowDescription = row.toString();
+            // row.toString() is only ever needed on an error path (never on the common
+            // successfully-parsed-row path), and every branch below `continue`s right after using
+            // it at most once - so it's computed inline at each error site instead of eagerly here.
 
             String raceNumberRaw = valueFor(row, effectiveMapping, "raceNumber");
             if (raceNumberRaw == null || raceNumberRaw.isBlank()) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Startnummer fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer fehlt"));
                 continue;
             }
             Integer raceNumber;
             try {
                 raceNumber = Integer.parseInt(raceNumberRaw.trim());
             } catch (NumberFormatException e) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Startnummer ist keine gültige Zahl: " + raceNumberRaw));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer ist keine gültige Zahl: " + raceNumberRaw));
                 continue;
             }
 
             Participant existing = existingByRaceNumber.get(raceNumber);
             if (existing == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
                 continue;
             }
 
@@ -715,17 +717,17 @@ public class ParticipantService {
                     try {
                         durationMs = parseResultTime(timeRaw.trim(), timeFormat);
                     } catch (IllegalArgumentException e) {
-                        errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription,
+                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
                                 "Zeit \"" + timeRaw + "\" konnte nicht als " + timeFormat + " gelesen werden"));
                         continue;
                     }
-                    if (durationMs < 0) {
-                        errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Zeit darf nicht negativ sein"));
+                    if (ValidationUtils.isNegative(durationMs)) {
+                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit darf nicht negativ sein"));
                         continue;
                     }
                 }
             } else if (status == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Zeit fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit fehlt"));
                 continue;
             }
 
@@ -739,11 +741,11 @@ public class ParticipantService {
                 try {
                     penalty = Integer.parseInt(penaltyRaw.trim());
                 } catch (NumberFormatException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Strafzeit \"" + penaltyRaw + "\" ist keine gültige Zahl"));
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit \"" + penaltyRaw + "\" ist keine gültige Zahl"));
                     continue;
                 }
-                if (penalty < 0) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Strafzeit darf nicht negativ sein"));
+                if (ValidationUtils.isNegative(penalty)) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit darf nicht negativ sein"));
                     continue;
                 }
             }
@@ -754,7 +756,7 @@ public class ParticipantService {
                 try {
                     measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
                 } catch (DateTimeParseException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription,
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
                             "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
                     continue;
                 }
@@ -1013,11 +1015,11 @@ public class ParticipantService {
         // entirely (see the same-person-per-race comment below) - without this, a negative value
         // from a hand-edited or malformed export floors to 0 in RankingService.adjustedValue() and
         // wins the ranking outright, silently and with no error surfaced anywhere.
-        if (penalty != null && penalty < 0) {
+        if (ValidationUtils.isNegative(penalty)) {
             errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription, "penalty must not be negative, row skipped"));
             return;
         }
-        if (durationMs != null && durationMs < 0) {
+        if (ValidationUtils.isNegative(durationMs)) {
             errors.add(new ParticipantImportRowError(rowNumber, rawRowDescription, "durationMs must not be negative, row skipped"));
             return;
         }

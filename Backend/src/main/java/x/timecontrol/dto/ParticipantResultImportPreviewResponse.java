@@ -12,7 +12,7 @@ public record ParticipantResultImportPreviewResponse(
         @Schema(description = "Field/column names detected in the uploaded file, in file order", example = "[\"StNr\",\"Zeit\"]")
         List<String> availableFields,
 
-        @Schema(description = "Best-effort suggested mapping from our fields (raceNumber, time, measuredAt, comment, status) to a detected source field; never saved, purely a starting point for the user to adjust")
+        @Schema(description = "Best-effort suggested mapping from our fields (raceNumber, time, penalty, measuredAt, comment, status) to a detected source field; never saved, purely a starting point for the user to adjust")
         Map<String, String> suggestedMapping,
 
         @Schema(description = "First few rows of the file, keyed by detected source field")

@@ -14,6 +14,7 @@ import {
 } from '../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../models/participant-copy.model';
 import {environment} from '../../environments/environment';
+import {buildImportFormData} from '../utils/import-form-data.util';
 
 @Injectable({
     providedIn: 'root'
@@ -52,9 +53,7 @@ export class ParticipantService {
     }
 
     importCsv(raceId: number, file: File): Observable<ParticipantImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, formData);
+        return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, buildImportFormData(file));
     }
 
     /**
@@ -63,12 +62,7 @@ export class ParticipantService {
      * the column-mapping UI.
      */
     previewImport(file: File, format: ParticipantImportFileFormat, delimiter?: string): Observable<ParticipantImportPreviewResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('format', format);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {format, delimiter});
         return this.http.post<ParticipantImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
     }
 
@@ -78,12 +72,7 @@ export class ParticipantService {
      * left out of mapping is simply not imported for any row.
      */
     importMapped(raceId: number, file: File, format: ParticipantImportFileFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('format', format);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {format, delimiter});
         if (mapping && Object.keys(mapping).length > 0) {
             formData.append('mapping', JSON.stringify(mapping));
         }
@@ -96,11 +85,7 @@ export class ParticipantService {
      * building/pre-filling the column-mapping UI.
      */
     previewResultsImport(file: File, delimiter?: string): Observable<ParticipantResultImportPreviewResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {delimiter});
         return this.http.post<ParticipantResultImportPreviewResponse>(`${this.apiUrl}/import-results-preview`, formData);
     }
 
@@ -114,12 +99,7 @@ export class ParticipantService {
      * set to "nicht importieren") must not be silently dropped here.
      */
     importResultsMapped(raceId: number, file: File, timeFormat: ResultTimeFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantResultImportResponse> {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('timeFormat', timeFormat);
-        if (delimiter) {
-            formData.append('delimiter', delimiter);
-        }
+        const formData = buildImportFormData(file, {timeFormat, delimiter});
         formData.append('mapping', JSON.stringify(mapping ?? {}));
         return this.http.post<ParticipantResultImportResponse>(`${this.apiUrl}/import-results-mapped/${raceId}`, formData);
     }

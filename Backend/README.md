@@ -91,7 +91,7 @@ Keine Sicherheitswarnung, kein Zusatzschritt nötig.
   ohne Gegenmaßnahme sofort beim Start crasht (`FileSystemException: /database: Read-only
   file system`). Deshalb setzt `jpackageArgs` in [build.gradle](build.gradle) das
   Java-Property `-Dapp.packaged=true`, wodurch [Application.java](src/main/java/x/timecontrol/Application.java)
-  Datenbank und JWT-Secret-Datei fest unter `<Home-Verzeichnis>/database/` ablegt –
+  Datenbank und JWT-Secret-Datei fest unter `<Home-Verzeichnis>/alpdesk-time-control/` ablegt –
   unabhängig vom tatsächlichen Arbeitsverzeichnis beim Start.
 - **Native-Image-Build** (GraalVM, `nativeCompile`): nutzt denselben `Application`-Code,
   bekommt aber `-Dapp.packaged=true` bisher **nicht** gesetzt (das Binary wird ohne
@@ -99,7 +99,7 @@ Keine Sicherheitswarnung, kein Zusatzschritt nötig.
   beim Doppelklick auf macOS zu erwarten, wurde aber noch nicht separat gefixt/getestet.
 
 Gilt entsprechend für die JWT-Secret-Datei (`database/jwt-secret.txt` bzw.
-`<Home>/database/jwt-secret.txt`), die im selben Ordner liegt.
+`<Home>/alpdesk-time-control/jwt-secret.txt`), die im selben Ordner liegt.
 
 ## Lokal selbst bauen
 

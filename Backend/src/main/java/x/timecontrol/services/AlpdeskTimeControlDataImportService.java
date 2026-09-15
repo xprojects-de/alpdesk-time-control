@@ -41,7 +41,15 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
     @Inject
     MeasurementTableLock measurementTableLock;
 
-    private volatile String baseUrl = DEFAULT_BASE_URL;
+    // A plain instance field here would be a shared-mutable-state race: TimingProviderRegistry
+    // calls configure() then immediately hands the (single, singleton) importer back to the caller
+    // for one action call, all on the caller's own thread - but two callers (e.g. the scheduler tick
+    // and a manual controller request) can interleave their configure()+action pairs, so a request
+    // could fire against whatever baseUrl the OTHER caller most recently configured instead of its
+    // own. A ThreadLocal scopes the configured value to the calling thread's own configure()+action
+    // sequence, which is always synchronous and same-thread (see every getActiveImporter() call
+    // site), so concurrent callers on different threads can no longer clobber each other.
+    private final ThreadLocal<String> baseUrl = ThreadLocal.withInitial(() -> DEFAULT_BASE_URL);
 
     @Override
     public TimingProviderType type() {
@@ -54,38 +62,38 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         if (configured != null && !configured.isBlank()) {
             // Strip trailing slash(es) so baseUrl + "/data" never ends up with a double slash
             // regardless of whether the saved value has one.
-            this.baseUrl = configured.trim().replaceAll("/+$", "");
+            this.baseUrl.set(configured.trim().replaceAll("/+$", ""));
         } else {
-            this.baseUrl = DEFAULT_BASE_URL;
+            this.baseUrl.set(DEFAULT_BASE_URL);
         }
     }
 
     private String dataUrl() {
-        return baseUrl + DATA_PATH;
+        return baseUrl.get() + DATA_PATH;
     }
 
     private String resetUrl() {
-        return baseUrl + RESET_PATH;
+        return baseUrl.get() + RESET_PATH;
     }
 
     private String statusUrl() {
-        return baseUrl + STATUS_PATH;
+        return baseUrl.get() + STATUS_PATH;
     }
 
     private String pingUrl() {
-        return baseUrl + PING_PATH;
+        return baseUrl.get() + PING_PATH;
     }
 
     private String discardUrl() {
-        return baseUrl + DISCARD_PATH;
+        return baseUrl.get() + DISCARD_PATH;
     }
 
     private String enableContinuousModeUrl() {
-        return baseUrl + ENABLE_CONTINUOUS_MODE_PATH;
+        return baseUrl.get() + ENABLE_CONTINUOUS_MODE_PATH;
     }
 
     private String disableContinuousModeUrl() {
-        return baseUrl + DISABLE_CONTINUOUS_MODE_PATH;
+        return baseUrl.get() + DISABLE_CONTINUOUS_MODE_PATH;
     }
 
     @Override

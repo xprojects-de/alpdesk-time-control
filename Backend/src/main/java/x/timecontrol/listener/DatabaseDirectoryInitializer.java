@@ -19,8 +19,9 @@ import java.io.File;
  * Context beans specifically: without it, relative ordering between independent @Context beans
  * is otherwise unspecified (works today only because this happens to be the only one), so any
  * future @Context/eager bean added elsewhere could otherwise end up running before this one and
- * hit a SQLite open failure on a machine where ~/database doesn't exist yet (e.g. first launch of
- * the packaged app on a clean machine).
+ * hit a SQLite open failure on a machine where the app data directory doesn't exist yet (e.g.
+ * first launch of the packaged app on a clean machine - see Application#APP_DATA_DIR for the
+ * actual path).
  */
 @Context
 @Order(Ordered.HIGHEST_PRECEDENCE)
