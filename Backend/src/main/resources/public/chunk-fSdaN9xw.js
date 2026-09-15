@@ -1,0 +1,1 @@
+function t(s){return new Promise((n,o)=>{let e=new FileReader;e.onload=()=>{let r=e.result;n(r.substring(r.indexOf(`,`)+1))},e.onerror=()=>o(e.error),e.readAsDataURL(s)})}export{t};
