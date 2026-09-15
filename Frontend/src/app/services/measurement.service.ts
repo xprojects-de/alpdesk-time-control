@@ -96,15 +96,17 @@ export class MeasurementService {
         return this.http.post<MeasurementImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
     }
 
+    // `mapping` is always sent, even when empty - the backend treats an explicitly empty mapping as
+    // "map nothing" and only falls back to the auto-suggested mapping when the part is omitted
+    // entirely, so a deliberately cleared mapping (every dropdown set to "nicht importieren") must
+    // not be silently dropped here (see ParticipantService#importResultsMapped for the same pattern).
     importMapped(file: File, delimiter: string | undefined, mapping: Record<string, string>): Observable<MeasurementImportResponse> {
         const formData = new FormData();
         formData.append('file', file);
         if (delimiter) {
             formData.append('delimiter', delimiter);
         }
-        if (mapping && Object.keys(mapping).length > 0) {
-            formData.append('mapping', JSON.stringify(mapping));
-        }
+        formData.append('mapping', JSON.stringify(mapping ?? {}));
         return this.http.post<MeasurementImportResponse>(`${this.apiUrl}/import-mapped`, formData);
     }
 

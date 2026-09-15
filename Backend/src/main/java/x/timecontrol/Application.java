@@ -42,7 +42,7 @@ public class Application {
     // "database" directory unchanged.
     private static final boolean PACKAGED = Boolean.getBoolean("app.packaged");
     private static final Path APP_DATA_DIR = PACKAGED
-            ? Path.of(System.getProperty("user.home"), "database")
+            ? Path.of(System.getProperty("user.home"), "alpdesk-time-control")
             : Path.of("database");
     private static final Path JWT_SECRET_FILE = APP_DATA_DIR.resolve("jwt-secret.txt");
     private static final Path APP_PASSWORD_FILE = APP_DATA_DIR.resolve("app-password.txt");

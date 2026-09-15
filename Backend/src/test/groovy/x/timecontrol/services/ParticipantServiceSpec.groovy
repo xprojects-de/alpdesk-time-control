@@ -599,17 +599,17 @@ class ParticipantServiceSpec extends Specification {
 
     def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
         given: "one participant with a full result, plus one with no result at all"
-        def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, null, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
+        def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
         def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
         repository.findByRaceId(5L) >> [withResult, withoutResult]
 
         when:
         def lines = service.exportResultsCsv(5L).readLines()
 
-        then: "the header carries only raceNumber/time/measuredAt/comment/status - never name/team/category/etc."
-        lines[0] == "raceNumber;time;measuredAt;comment;status"
-        lines[1] == "42;125000;2026-08-18T10:30;Ski gebrochen;NONE"
-        lines[2] == ";;;;NONE"
+        then: "the header carries only raceNumber/time/penalty/measuredAt/comment/status - never name/team/category/etc."
+        lines[0] == "raceNumber;time;penalty;measuredAt;comment;status"
+        lines[1] == "42;125000;5000;2026-08-18T10:30;Ski gebrochen;NONE"
+        lines[2] == ";;;;;NONE"
     }
 
     def "exportResultsCsv does not NPE on a participant with a null status"() {
@@ -618,7 +618,7 @@ class ParticipantServiceSpec extends Specification {
         repository.findByRaceId(5L) >> [noStatus]
 
         expect:
-        service.exportResultsCsv(5L).readLines()[1] == "42;;;;NONE"
+        service.exportResultsCsv(5L).readLines()[1] == "42;;;;;NONE"
     }
 
     def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
@@ -627,8 +627,8 @@ class ParticipantServiceSpec extends Specification {
         repository.findByRaceId(5L) >> [existing]
         repository.updateAll(_) >> { List<Participant> list -> list }
 
-        def csv = "raceNumber;time;measuredAt;comment;status\n" +
-                "42;125000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"
+        def csv = "raceNumber;time;penalty;measuredAt;comment;status\n" +
+                "42;125000;5000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"
 
         when: "no mapping is passed - it must be derivable from the header alone"
         def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.MILLISECONDS)
@@ -637,7 +637,43 @@ class ParticipantServiceSpec extends Specification {
         result.errors().isEmpty()
         result.updated().size() == 1
         result.updated().first().durationMs() == 125000
+        result.updated().first().penalty() == 5000
         result.updated().first().measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0)
         result.updated().first().comment() == "Ski gebrochen"
+    }
+
+    def "importResultsByRaceNumber rejects a negative penalty instead of letting it floor to 0 in ranking"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, 1000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+
+        def csv = "raceNumber;time;penalty\n42;120000;-500\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+
+        then: "the row is rejected and the participant's existing penalty is left untouched"
+        result.updated().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("Strafzeit")
+        0 * repository.updateAll(_)
+    }
+
+    def "importResultsByRaceNumber leaves penalty unchanged when the column isn't mapped"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, 1500, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time\n42;120000\n"
+        def mapping = [raceNumber: "raceNumber", time: "time"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().penalty() == 1500
     }
 }

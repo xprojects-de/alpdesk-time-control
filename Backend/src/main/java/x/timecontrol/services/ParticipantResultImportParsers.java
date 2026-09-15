@@ -23,11 +23,12 @@ public final class ParticipantResultImportParsers {
     // Only the fields this import actually applies - unlike ParticipantImportParsers, there's no
     // identity data here at all: every row is matched onto an *existing* participant via raceNumber,
     // never used to create one.
-    public static final List<String> TARGET_FIELDS = List.of("raceNumber", "time", "measuredAt", "comment", "status");
+    public static final List<String> TARGET_FIELDS = List.of("raceNumber", "time", "penalty", "measuredAt", "comment", "status");
 
     private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.of(
             "raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber"),
             "time", List.of("time", "zeit", "endtime", "result", "ergebnis", "dauer", "duration", "durationms", "zeitms"),
+            "penalty", List.of("penalty", "strafe", "strafzeit", "strafsekunden", "penaltyms", "penaltyseconds"),
             "measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp"),
             "comment", List.of("comment", "kommentar", "info", "bemerkung"),
             "status", List.of("status", "disqualifikation", "dsq"));

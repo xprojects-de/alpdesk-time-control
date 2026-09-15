@@ -636,11 +636,11 @@ public class ParticipantService {
     }
 
     /**
-     * Imports results (time + optionally status/comment/measuredAt) for a race, matching each row
-     * onto an *existing* participant via raceNumber - deliberately never creates a participant.
+     * Imports results (time + optionally penalty/status/comment/measuredAt) for a race, matching each
+     * row onto an *existing* participant via raceNumber - deliberately never creates a participant.
      * A raceNumber that matches nobody in the race, or that's missing/unparsable, is reported as a
-     * row error instead. Only the result fields (durationMs/measuredAt/status/comment) are touched;
-     * identity data (name, team, category, ...) is left exactly as it was - raceId/personId/
+     * row error instead. Only the result fields (durationMs/penalty/measuredAt/status/comment) are
+     * touched; identity data (name, team, category, ...) is left exactly as it was - raceId/personId/
      * raceNumber/teamId/categoryId are always carried over unchanged from the existing row.
      * <p>
      * The race's full roster is loaded once up front (like {@link #syncMeasurementsToParticipants})
@@ -729,6 +729,25 @@ public class ParticipantService {
                 continue;
             }
 
+            // Mirrors validate()'s penalty>=0 check, which this row-by-row import path bypasses
+            // entirely (see the class-level note above) - without this, a negative value from a
+            // hand-edited or malformed export floors to 0 in RankingService.adjustedValue() and wins
+            // the ranking outright, silently and with no error surfaced anywhere.
+            String penaltyRaw = valueFor(row, effectiveMapping, "penalty");
+            Integer penalty = existing.penalty();
+            if (penaltyRaw != null && !penaltyRaw.isBlank()) {
+                try {
+                    penalty = Integer.parseInt(penaltyRaw.trim());
+                } catch (NumberFormatException e) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Strafzeit \"" + penaltyRaw + "\" ist keine gültige Zahl"));
+                    continue;
+                }
+                if (penalty < 0) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, rawRowDescription, "Strafzeit darf nicht negativ sein"));
+                    continue;
+                }
+            }
+
             String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
             LocalDateTime measuredAt = null;
             if (measuredAtRaw != null && !measuredAtRaw.isBlank()) {
@@ -747,7 +766,7 @@ public class ParticipantService {
             toUpdate.add(new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(),
                     durationMs != null ? durationMs : existing.durationMs(),
-                    existing.penalty(),
+                    penalty,
                     measuredAt != null ? measuredAt : existing.measuredAt(),
                     comment,
                     status != null ? status : existing.status()));
@@ -877,8 +896,8 @@ public class ParticipantService {
     }
 
     /**
-     * Exports every participant of a race's *results only* (raceNumber/time/measuredAt/comment/
-     * status, no identity data) - the counterpart to {@link #importResultsByRaceNumber}, for sharing
+     * Exports every participant of a race's *results only* (raceNumber/time/penalty/measuredAt/
+     * comment/status, no identity data) - the counterpart to {@link #importResultsByRaceNumber}, for sharing
      * results between two instances that already have the same roster (e.g. two computers each
      * timing part of the same race). Uses our own canonical field names as the header row (see
      * {@link ParticipantResultImportParsers#TARGET_FIELDS}) so re-importing it via
@@ -898,6 +917,7 @@ public class ParticipantService {
             List<String> values = List.of(
                     p.raceNumber() != null ? p.raceNumber().toString() : "",
                     p.durationMs() != null ? p.durationMs().toString() : "",
+                    p.penalty() != null ? p.penalty().toString() : "",
                     p.measuredAt() != null ? p.measuredAt().toString() : "",
                     sanitizeForExport(p.comment()),
                     Objects.requireNonNullElse(p.status(), DisqualificationStatus.NONE).name()

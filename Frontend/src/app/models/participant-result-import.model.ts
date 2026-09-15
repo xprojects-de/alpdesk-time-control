@@ -38,6 +38,7 @@ export interface ParticipantResultImportTargetField {
 export const PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS: ParticipantResultImportTargetField[] = [
     {key: 'raceNumber', label: 'Startnummer', required: true},
     {key: 'time', label: 'Zeit', required: true},
+    {key: 'penalty', label: 'Strafzeit', required: false},
     {key: 'status', label: 'Status (DSQ/DNF/DNS)', required: false},
     {key: 'measuredAt', label: 'Gemessen am', required: false},
     {key: 'comment', label: 'Kommentar', required: false},
