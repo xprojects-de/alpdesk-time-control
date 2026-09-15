@@ -346,7 +346,7 @@ public class ParticipantService {
         // Wrapped as one transaction so a failure partway through (e.g. target race #3 of 5 hitting
         // a real, non-uniqueness DataAccessException) rolls back every already-copied target race
         // instead of leaving the caller with a confusing, undocumented partial copy.
-        return transactionOperations.executeWrite(status -> {
+        return transactionOperations.executeWrite(_ -> {
             int copied = 0;
             int skipped = 0;
             for (Long targetRaceId : targetRaceIds) {
@@ -469,7 +469,7 @@ public class ParticipantService {
         // constrained UNIQUE per race, writing the new numbers directly would collide with a
         // not-yet-updated participant still holding that number. Clearing every number to NULL
         // first (SQLite treats each NULL as distinct, so this never collides) avoids that.
-        return transactionOperations.executeWrite(status -> {
+        return transactionOperations.executeWrite(_ -> {
             for (Participant participant : ordered) {
                 if (participant.raceNumber() != null) {
                     repository.update(withRaceNumber(participant, null));
@@ -1031,7 +1031,7 @@ public class ParticipantService {
         // just-created person for that row too (no orphan Person left behind), and does not
         // abort rows that were already imported successfully or rows still to come.
         try {
-            Participant saved = transactionOperations.executeWrite(status -> {
+            Participant saved = transactionOperations.executeWrite(_ -> {
                 Long teamId = teamName.isEmpty() ? null : teamService.findOrCreateByName(teamName).id();
                 Long categoryId = categoryName.isEmpty() ? null : categoryService.findOrCreateByName(categoryName).id();
                 // AgeGroup isn't a participant FK - it's computed from birthDate/gender at read time
