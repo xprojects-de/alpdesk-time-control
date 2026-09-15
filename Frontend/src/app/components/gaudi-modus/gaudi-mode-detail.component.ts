@@ -420,7 +420,7 @@ export class GaudiModeDetailComponent implements OnDestroy {
             return "-";
         }
         return entry.members
-            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)}${m.counted ? '' : ', nicht gewertet'})`)
+            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)})`)
             .join(', ');
     }
 

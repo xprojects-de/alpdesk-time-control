@@ -74,21 +74,17 @@ public class TeamModeCalculator implements GaudiModeCalculator {
                 continue;
             }
 
-            List<Participant> sortedMembers = members.stream().sorted(byBestFirst).toList();
-            long totalValue = sortedMembers.stream()
-                    .limit(teamSize)
+            // Only the counted teamSize best members are ever shown - an organizer reading the
+            // result should see exactly who made up the team's scored total, not a roster
+            // padded with extra squad members who didn't count towards it.
+            List<Participant> countedMembers = members.stream().sorted(byBestFirst).limit(teamSize).toList();
+            long totalValue = countedMembers.stream()
                     .mapToLong(p -> rankingService.adjustedValue(race, p))
                     .sum();
 
-            List<GaudiTeamMemberResponse> memberResponses = new ArrayList<>();
-            for (int i = 0; i < sortedMembers.size(); i++) {
-                Participant p = sortedMembers.get(i);
-                memberResponses.add(new GaudiTeamMemberResponse(
-                        formatName(p, personsById),
-                        rankingService.adjustedValue(race, p),
-                        i < teamSize
-                ));
-            }
+            List<GaudiTeamMemberResponse> memberResponses = countedMembers.stream()
+                    .map(p -> new GaudiTeamMemberResponse(formatName(p, personsById), rankingService.adjustedValue(race, p)))
+                    .toList();
 
             Team team = teamsById.get(entry.getKey());
             String teamName = team != null ? team.name() : "Team " + entry.getKey();

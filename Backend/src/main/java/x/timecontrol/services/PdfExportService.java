@@ -390,9 +390,9 @@ public class PdfExportService {
 
     /**
      * Mannschaftswertung: a fixed summary row (Platz, Mannschaft, Gesamtwert) per team, with each
-     * team's individual members and their adjusted times drawn as wrapped detail line(s) below it
-     * so it's visible who is on the team - a member beyond the counted teamSize best results is
-     * marked "nicht gewertet" rather than omitted.
+     * team's individual members and their adjusted times drawn as wrapped detail line(s) below it -
+     * only the counted teamSize best members of each qualifying team, never an excluded extra
+     * member or a DSQ/DNF/DNS teammate (see {@link x.timecontrol.services.gaudi.TeamModeCalculator}).
      */
     public byte[] generateTeamModeRanking(String title, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
@@ -412,8 +412,7 @@ public class PdfExportService {
         List<String> blocks = new ArrayList<>();
         for (GaudiTeamMemberResponse member : entry.members()) {
             String value = formatValue(race, member.valueMs());
-            String suffix = member.counted() ? "" : " (nicht gewertet)";
-            blocks.add(truncate(member.label(), 25) + ": " + value + suffix);
+            blocks.add(truncate(member.label(), 25) + ": " + value);
         }
         return blocks;
     }

@@ -120,24 +120,24 @@ class TeamModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 125000
     }
 
-    def "team members are listed individually, marking which ones counted towards the total"() {
+    def "only the counted teamSize members are listed - an extra, uncounted member is omitted entirely"() {
         given:
         knownTeams.putAll([1L: new Team(1L, "Team A")])
         knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Ben"), 3L: person(3L, "Chris")])
         def participants = [
                 participant(1L, 1L, 60000),
                 participant(2L, 1L, 65000),
-                participant(3L, 1L, 999999), // slowest, doesn't count towards the top-2 total
+                participant(3L, 1L, 999999), // slowest, doesn't count towards the top-2 total - must not appear at all
         ]
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
 
         when:
         def ranking = calculator.computeRanking(teamMode(2), races)
 
-        then: "all three members are listed, but only the fastest two are marked as counted"
-        ranking[0].members().size() == 3
-        ranking[0].members()*.valueMs() == [60000, 65000, 999999]
-        ranking[0].members()*.counted() == [true, true, false]
+        then: "only the fastest two members are listed - the third, uncounted member is not"
+        ranking[0].members().size() == 2
+        ranking[0].members()*.label() == ["Anna", "Ben"]
+        ranking[0].members()*.valueMs() == [60000, 65000]
     }
 
     def "a not-yet-finished or DSQ/DNF/DNS teammate is excluded from the member list entirely"() {

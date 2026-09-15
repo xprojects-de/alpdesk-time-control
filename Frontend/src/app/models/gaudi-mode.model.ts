@@ -63,7 +63,6 @@ export interface GaudiRankingLeg {
 export interface GaudiTeamMember {
     label: string;
     valueMs?: number;
-    counted: boolean;
 }
 
 export interface GaudiRankingEntry {
