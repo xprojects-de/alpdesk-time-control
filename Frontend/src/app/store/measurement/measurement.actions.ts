@@ -1,5 +1,6 @@
 import {createAction, props} from '@ngrx/store';
 import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../../models/measurement.model';
+import {MeasurementImportResponse} from '../../models/measurement-import.model';
 
 // Load all measurements
 export const loadMeasurements = createAction('[Measurement] Load Measurements');
@@ -184,29 +185,30 @@ export const discardOldestStartFailure = createAction(
     props<{ error: string }>()
 );
 
-// Export measurements as JSON
-export const exportMeasurements = createAction(
-    '[Measurement] Export Measurements'
+// Export measurements as CSV
+export const exportMeasurementsCsv = createAction(
+    '[Measurement] Export Measurements CSV'
 );
-export const exportMeasurementsSuccess = createAction(
-    '[Measurement] Export Measurements Success'
+export const exportMeasurementsCsvSuccess = createAction(
+    '[Measurement] Export Measurements CSV Success',
+    props<{ blob: Blob; filename: string }>()
 );
-export const exportMeasurementsFailure = createAction(
-    '[Measurement] Export Measurements Failure',
+export const exportMeasurementsCsvFailure = createAction(
+    '[Measurement] Export Measurements CSV Failure',
     props<{ error: string }>()
 );
 
-// Import measurements from JSON
-export const importMeasurementsFromJson = createAction(
-    '[Measurement] Import Measurements From Json',
-    props<{ measurements: { participantId: number | null; durationMs: number; measuredAt: string }[] }>()
+// Import measurements from CSV with a user-defined column mapping
+export const importMeasurementsMapped = createAction(
+    '[Measurement] Import Measurements Mapped',
+    props<{ file: File; delimiter?: string; mapping: Record<string, string> }>()
 );
-export const importMeasurementsFromJsonSuccess = createAction(
-    '[Measurement] Import Measurements From Json Success',
-    props<{ count: number }>()
+export const importMeasurementsMappedSuccess = createAction(
+    '[Measurement] Import Measurements Mapped Success',
+    props<{ result: MeasurementImportResponse }>()
 );
-export const importMeasurementsFromJsonFailure = createAction(
-    '[Measurement] Import Measurements From Json Failure',
+export const importMeasurementsMappedFailure = createAction(
+    '[Measurement] Import Measurements Mapped Failure',
     props<{ error: string }>()
 );
 

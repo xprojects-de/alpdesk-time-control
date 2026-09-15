@@ -2,7 +2,7 @@ import {inject, Injectable} from '@angular/core';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {interval, of} from 'rxjs';
-import {catchError, map, mergeMap, switchMap, takeUntil} from 'rxjs/operators';
+import {catchError, map, mergeMap, switchMap, takeUntil, tap} from 'rxjs/operators';
 import {MeasurementService} from '../../services/measurement.service';
 import * as MeasurementActions from './measurement.actions';
 
@@ -213,21 +213,13 @@ export class MeasurementEffects {
         )
     );
 
-    exportMeasurements$ = createEffect(() =>
+    exportMeasurementsCsv$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurements),
+            ofType(MeasurementActions.exportMeasurementsCsv),
             mergeMap(() =>
-                this.measurementService.exportMeasurements().pipe(
-                    map(blob => {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'measurements.json';
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        return MeasurementActions.exportMeasurementsSuccess();
-                    }),
-                    catchError(error => of(MeasurementActions.exportMeasurementsFailure({
+                this.measurementService.exportCsv().pipe(
+                    map(blob => MeasurementActions.exportMeasurementsCsvSuccess({blob, filename: 'measurements.csv'})),
+                    catchError(error => of(MeasurementActions.exportMeasurementsCsvFailure({
                         error: extractErrorMessage(error, 'Export fehlgeschlagen')
                     })))
                 )
@@ -235,18 +227,34 @@ export class MeasurementEffects {
         )
     );
 
-    importMeasurementsFromJson$ = createEffect(() =>
+    importMeasurementsMapped$ = createEffect(() =>
         this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsFromJson),
-            mergeMap(({measurements}) =>
-                this.measurementService.importMeasurementsFromJson(measurements).pipe(
-                    map(created => MeasurementActions.importMeasurementsFromJsonSuccess({count: created.length})),
-                    catchError(error => of(MeasurementActions.importMeasurementsFromJsonFailure({
+            ofType(MeasurementActions.importMeasurementsMapped),
+            mergeMap(({file, delimiter, mapping}) =>
+                this.measurementService.importMapped(file, delimiter, mapping).pipe(
+                    map(result => MeasurementActions.importMeasurementsMappedSuccess({result})),
+                    catchError(error => of(MeasurementActions.importMeasurementsMappedFailure({
                         error: extractErrorMessage(error, 'Import fehlgeschlagen')
                     })))
                 )
             )
         )
+    );
+
+    // Auto-download the exported CSV once the export succeeds
+    downloadExportedFile$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(MeasurementActions.exportMeasurementsCsvSuccess),
+            tap(({blob, filename}) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+        ),
+        {dispatch: false}
     );
 
     // Device connection polling

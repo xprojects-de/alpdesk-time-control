@@ -88,3 +88,13 @@ export const selectAutoAssignStatus = createSelector(
     state => state.autoAssignStatus
 );
 
+export const selectImportLoading = createSelector(
+    selectMeasurementState,
+    state => state.importLoading
+);
+
+export const selectImportResult = createSelector(
+    selectMeasurementState,
+    state => state.importResult
+);
+

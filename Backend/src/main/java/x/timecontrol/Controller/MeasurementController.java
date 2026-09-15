@@ -4,6 +4,7 @@ import x.timecontrol.dto.AutoAssignEnableRequest;
 import x.timecontrol.dto.AutoAssignSetNextRequest;
 import x.timecontrol.dto.AutoAssignStatusResponse;
 import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.MeasurementImportResponse;
 import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
@@ -20,6 +21,8 @@ import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.http.multipart.CompletedFileUpload;
+import io.micronaut.json.JsonMapper;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -32,7 +35,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
@@ -59,6 +66,9 @@ public class MeasurementController {
 
     @Inject
     RaceService raceService;
+
+    @Inject
+    JsonMapper jsonMapper;
 
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -406,48 +416,70 @@ public class MeasurementController {
     }
 
 
-    @Produces(MediaType.APPLICATION_JSON)
-    @Get("/export")
-    @Operation(summary = "Export all measurements as JSON download",
-            description = "Returns all measurements as a JSON file download (without IDs, suitable for re-import)",
+    @Produces("text/csv")
+    @Get("/export/csv")
+    @Operation(summary = "Export all measurements as CSV download",
+            description = "Exports every measurement as CSV, using our own field names (participantId, durationMs, measuredAt) as the header row, so re-importing it via import-mapped needs no manual mapping.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
-    public HttpResponse<List<MeasurementRequest>> exportMeasurements() {
-        Iterable<Measurement> measurements = service.findAll();
-        List<MeasurementRequest> response = StreamSupport.stream(measurements.spliterator(), false)
-                .map(m -> new MeasurementRequest(m.participantId(), m.durationMs(), m.measuredAt()))
-                .toList();
-        return HttpResponse.ok(response)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.json\"");
+    public HttpResponse<?> exportMeasurementsCsv() {
+        String csv = service.exportCsv();
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"measurements.csv\"");
     }
 
     @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Post("/import-json")
-    @Operation(summary = "Import measurements from JSON",
-            description = "Imports a list of measurements from a JSON body. Existing measurements are kept; duplicates are inserted as new entries.",
-            security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
-            content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid JSON input")
-    public HttpResponse<?> importMeasurementsFromJson(@Body List<MeasurementRequest> requests) {
-        if (requests == null || requests.isEmpty()) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("A non-empty list of measurements is required"));
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-preview")
+    @Operation(summary = "Preview a measurement import file", description = "Parses a CSV (any delimiter) and returns the detected source fields, a best-effort suggested mapping onto our measurement fields, and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = x.timecontrol.dto.MeasurementImportPreviewResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unreadable file")
+    public HttpResponse<?> importPreview(@Part("file") CompletedFileUpload file,
+                                          @Part("delimiter") Optional<String> delimiter) {
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            return HttpResponse.ok(service.previewImport(bytes, delim));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
         }
-        // Validated up front, before any service.create() call below, so a bad entry anywhere in
-        // the batch rejects the whole import instead of partially creating earlier rows.
-        for (MeasurementRequest req : requests) {
-            HttpResponse<?> validationError = validateDurationMs(req.durationMs());
-            if (validationError != null) {
-                return validationError;
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/import-mapped")
+    @Operation(summary = "Import measurements with a custom column mapping", description = "Imports a CSV (any delimiter), using an explicit mapping from our fields (participantId, durationMs, measuredAt) onto the file's source columns. A field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-preview) is used. Existing measurements are kept; rows that fail validation are skipped and reported rather than rejecting the whole file.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = MeasurementImportResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid mapping JSON or unreadable file")
+    public HttpResponse<?> importMapped(@Part("file") CompletedFileUpload file,
+                                         @Part("delimiter") Optional<String> delimiter,
+                                         @Part("mapping") Optional<String> mappingJson) {
+        Map<String, String> mapping = null;
+        if (mappingJson.isPresent() && !mappingJson.get().isBlank()) {
+            try {
+                Map<?, ?> raw = jsonMapper.readValue(mappingJson.get(), Map.class);
+                mapping = new HashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getValue() != null) {
+                        mapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                    }
+                }
+            } catch (IOException e) {
+                return HttpResponse.badRequest(new ErrorResponse("Invalid mapping JSON: " + e.getMessage()));
             }
         }
-        List<MeasurementResponse> created = requests.stream()
-                .map(req -> new Measurement(null, req.participantId(), req.durationMs(), req.measuredAt()))
-                .map(service::create)
-                .map(MeasurementResponse::from)
-                .toList();
-        return HttpResponse.created(created);
+
+        Character delim = delimiter.filter(d -> !d.isBlank()).map(d -> d.charAt(0)).orElse(null);
+
+        try {
+            byte[] bytes = file.getBytes();
+            MeasurementService.MeasurementImportResult result = service.importMapped(bytes, delim, mapping);
+            List<MeasurementResponse> imported = result.imported().stream().map(MeasurementResponse::from).toList();
+            return HttpResponse.ok(new MeasurementImportResponse(imported.size(), result.errors().size(), imported, result.errors()));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read/parse the uploaded file: " + e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)

@@ -2,6 +2,7 @@ import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../models/measurement.model';
+import {MeasurementImportPreviewResponse, MeasurementImportResponse} from '../models/measurement-import.model';
 import {environment} from '../../environments/environment';
 
 
@@ -82,12 +83,29 @@ export class MeasurementService {
         });
     }
 
-    exportMeasurements(): Observable<Blob> {
-        return this.http.get(`${this.apiUrl}/export`, {responseType: 'blob'});
+    exportCsv(): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/csv`, {responseType: 'blob'});
     }
 
-    importMeasurementsFromJson(measurements: { participantId: number | null; durationMs: number; measuredAt: string }[]): Observable<Measurement[]> {
-        return this.http.post<Measurement[]>(`${this.apiUrl}/import-json`, measurements);
+    previewImport(file: File, delimiter?: string): Observable<MeasurementImportPreviewResponse> {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (delimiter) {
+            formData.append('delimiter', delimiter);
+        }
+        return this.http.post<MeasurementImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
+    }
+
+    importMapped(file: File, delimiter: string | undefined, mapping: Record<string, string>): Observable<MeasurementImportResponse> {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (delimiter) {
+            formData.append('delimiter', delimiter);
+        }
+        if (mapping && Object.keys(mapping).length > 0) {
+            formData.append('mapping', JSON.stringify(mapping));
+        }
+        return this.http.post<MeasurementImportResponse>(`${this.apiUrl}/import-mapped`, formData);
     }
 
     getAutoAssignStatus(): Observable<AutoAssignStatus> {

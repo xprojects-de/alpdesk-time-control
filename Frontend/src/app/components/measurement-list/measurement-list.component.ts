@@ -4,8 +4,6 @@ import {
     OnDestroy,
     inject,
     ChangeDetectionStrategy,
-    viewChild,
-    ElementRef,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
@@ -48,6 +46,10 @@ import {
     ArchiveMeasurementsDialogComponent,
     ArchiveMeasurementsDialogResult,
 } from "./archive-measurements-dialog.component";
+import {
+    MeasurementImportMappingDialogComponent,
+    MeasurementImportMappingDialogResult,
+} from "./measurement-import-mapping-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
 interface MeasurementWithParticipant extends Measurement {
@@ -132,27 +134,25 @@ interface MeasurementWithParticipant extends Measurement {
 
                     <button
                             mat-raised-button
-                            (click)="exportMeasurements()"
-                            matTooltip="Alle Messungen als JSON-Datei herunterladen"
+                            (click)="exportMeasurementsCsv()"
+                            matTooltip="Alle Messungen als CSV-Datei herunterladen"
                     >
                         <mat-icon>download</mat-icon>
-                        JSON Export
+                        CSV Export
                     </button>
                     <button
                             mat-raised-button
-                            (click)="triggerJsonImport()"
-                            matTooltip="Messungen aus JSON-Datei importieren"
+                            (click)="openImportDialog()"
+                            [disabled]="importLoading$ | async"
+                            matTooltip="Messungen aus CSV-Datei importieren (mit Spalten-Zuordnung)"
                     >
-                        <mat-icon>upload</mat-icon>
-                        JSON Import
+                        @if (importLoading$ | async) {
+                            <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                        } @else {
+                            <mat-icon>upload_file</mat-icon>
+                        }
+                        CSV Import
                     </button>
-                    <input
-                            #jsonImportInput
-                            type="file"
-                            accept=".json,application/json"
-                            style="display:none"
-                            (change)="onJsonFileSelected($event)"
-                    />
 
                     @if (timingProviderActive$ | async) {
                         @if ((deviceStatus$ | async) === 'continuous') {
@@ -519,11 +519,10 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     // hides the continuous-mode/discard-start controls and skips loading device status once a
     // timing device is confirmed not configured (NONE).
     timingProviderActive$: Observable<boolean>;
+    importLoading$: Observable<boolean>;
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
-
-    jsonImportInput = viewChild.required<ElementRef<HTMLInputElement>>('jsonImportInput');
 
     constructor() {
         this.measurements$ = this.store.select(
@@ -564,6 +563,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.autoAssignStatus$ = this.store.select(
             MeasurementSelectors.selectAutoAssignStatus,
+        );
+        this.importLoading$ = this.store.select(
+            MeasurementSelectors.selectImportLoading,
         );
 
         // Listen for successful auto-assign changes
@@ -797,7 +799,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         // Listen for successful export
         this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsSuccess),
+            ofType(MeasurementActions.exportMeasurementsCsvSuccess),
             takeUntil(this.destroy$)
         ).subscribe(() => {
             this.snackBar.open('Messungen erfolgreich exportiert', 'OK', {duration: 3000});
@@ -805,7 +807,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         // Listen for failed export
         this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsFailure),
+            ofType(MeasurementActions.exportMeasurementsCsvFailure),
             takeUntil(this.destroy$)
         ).subscribe(() => {
             this.snackBar.open('FEHLER beim Exportieren der Messungen', 'OK', {
@@ -814,21 +816,31 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             });
         });
 
-        // Listen for successful JSON import
+        // Listen for successful CSV import
         this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsFromJsonSuccess),
+            ofType(MeasurementActions.importMeasurementsMappedSuccess),
             takeUntil(this.destroy$)
-        ).subscribe(({count}) => {
-            this.snackBar.open(`${count} Messung(en) erfolgreich importiert`, 'OK', {duration: 3000});
+        ).subscribe(({result}) => {
+            const message = result.skippedCount > 0
+                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                : `Import abgeschlossen: ${result.importedCount} importiert`;
+            this.snackBar.open(message, 'OK', {duration: result.skippedCount > 0 ? 8000 : 3000});
+            const errors = result.errors ?? [];
+            if (errors.length > 0) {
+                const details = errors
+                    .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
+                    .join('\n');
+                alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+            }
             this.loadData();
         });
 
-        // Listen for failed JSON import
+        // Listen for failed CSV import
         this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsFromJsonFailure),
+            ofType(MeasurementActions.importMeasurementsMappedFailure),
             takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Importieren der Messungen', 'OK', {
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Importieren der Messungen: ${error}`, 'OK', {
                 duration: 10000,
                 panelClass: 'error-snackbar'
             });
@@ -1066,34 +1078,27 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    exportMeasurements(): void {
-        this.store.dispatch(MeasurementActions.exportMeasurements());
+    exportMeasurementsCsv(): void {
+        this.store.dispatch(MeasurementActions.exportMeasurementsCsv());
     }
 
-    triggerJsonImport(): void {
-        this.jsonImportInput().nativeElement.value = '';
-        this.jsonImportInput().nativeElement.click();
-    }
+    openImportDialog(): void {
+        const dialogRef = this.dialog.open(MeasurementImportMappingDialogComponent, {
+            width: '900px',
+        });
 
-    onJsonFileSelected(event: Event): void {
-        const input = event.target as HTMLInputElement;
-        const file = input.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target?.result as string;
-                const measurements = JSON.parse(content);
-                if (!Array.isArray(measurements)) {
-                    this.snackBar.open('Ungültiges JSON-Format: Array erwartet', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
-                    return;
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: MeasurementImportMappingDialogResult | undefined) => {
+                if (result) {
+                    this.store.dispatch(MeasurementActions.importMeasurementsMapped({
+                        file: result.file,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }));
+                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
                 }
-                this.store.dispatch(MeasurementActions.importMeasurementsFromJson({measurements}));
-            } catch {
-                this.snackBar.open('Fehler beim Lesen der JSON-Datei', 'OK', {duration: 5000, panelClass: 'error-snackbar'});
-            }
-        };
-        reader.readAsText(file);
+            });
     }
 }

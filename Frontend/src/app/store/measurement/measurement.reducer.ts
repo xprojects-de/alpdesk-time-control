@@ -1,5 +1,6 @@
 import {createReducer, on} from '@ngrx/store';
 import {AutoAssignStatus, Measurement} from '../../models/measurement.model';
+import {MeasurementImportResponse} from '../../models/measurement-import.model';
 import * as MeasurementActions from './measurement.actions';
 
 export interface MeasurementState {
@@ -27,6 +28,8 @@ export interface MeasurementState {
     deviceConnected: boolean | null;
     isPollingDeviceConnection: boolean;
     autoAssignStatus: AutoAssignStatus;
+    importLoading: boolean;
+    importResult: MeasurementImportResponse | null;
 }
 
 export const initialState: MeasurementState = {
@@ -40,7 +43,9 @@ export const initialState: MeasurementState = {
     deviceStatus: null,
     deviceConnected: null,
     isPollingDeviceConnection: false,
-    autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null}
+    autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null},
+    importLoading: false,
+    importResult: null
 };
 
 const startLoading = (state: MeasurementState) => ({
@@ -240,27 +245,40 @@ export const measurementReducer = createReducer(
         error
     })),
 
-    // Export measurements
-    on(MeasurementActions.exportMeasurements, startLoading),
-    on(MeasurementActions.exportMeasurementsSuccess, state => ({
+    // Export measurements as CSV
+    on(MeasurementActions.exportMeasurementsCsv, startLoading),
+    on(MeasurementActions.exportMeasurementsCsvSuccess, state => ({
         ...state,
         loadingCount: endLoading(state)
     })),
-    on(MeasurementActions.exportMeasurementsFailure, (state, {error}) => ({
+    on(MeasurementActions.exportMeasurementsCsvFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
         error
     })),
 
-    // Import measurements from JSON
-    on(MeasurementActions.importMeasurementsFromJson, startLoading),
-    on(MeasurementActions.importMeasurementsFromJsonSuccess, state => ({
+    // Import measurements from CSV with a column mapping
+    on(MeasurementActions.importMeasurementsMapped, state => ({
         ...state,
-        loadingCount: endLoading(state)
+        importLoading: true,
+        importResult: null,
+        error: null
     })),
-    on(MeasurementActions.importMeasurementsFromJsonFailure, (state, {error}) => ({
+    on(MeasurementActions.importMeasurementsMappedSuccess, (state, {result}) => {
+        // The backend omits empty array fields from the JSON response entirely, so
+        // "imported"/"errors" can be undefined when there was nothing to report.
+        const imported = result.imported ?? [];
+        const errors = result.errors ?? [];
+        return {
+            ...state,
+            measurements: [...state.measurements, ...imported],
+            importLoading: false,
+            importResult: {...result, imported, errors}
+        };
+    }),
+    on(MeasurementActions.importMeasurementsMappedFailure, (state, {error}) => ({
         ...state,
-        loadingCount: endLoading(state),
+        importLoading: false,
         error
     })),
 
