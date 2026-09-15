@@ -148,26 +148,33 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <button
                                 mat-raised-button
-                                (click)="openResultImportDialog()"
+                                [matMenuTriggerFor]="resultsMenu"
                                 [disabled]="resultImportLoading$ | async"
-                                matTooltip="Ergebnisse (Zeit/Status) für bereits vorhandene Teilnehmer per Startnummer importieren - legt keine neuen Teilnehmer an"
+                                matTooltip="Ergebnisse per Startnummer importieren oder als CSV exportieren"
                         >
                             @if (resultImportLoading$ | async) {
                                 <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
                             } @else {
                                 <mat-icon>update</mat-icon>
                             }
-                            Ergebnisse importieren
+                            Ergebnisse
+                            <mat-icon>arrow_drop_down</mat-icon>
                         </button>
 
-                        <button
-                                mat-raised-button
-                                (click)="exportResults()"
-                                matTooltip="Ergebnisse (Startnummer/Zeit/Status) dieses Rennens als CSV exportieren - zum Teilen mit einer anderen Instanz, die dieselben Teilnehmer schon hat"
-                        >
-                            <mat-icon>download</mat-icon>
-                            Ergebnisse exportieren
-                        </button>
+                        <mat-menu #resultsMenu="matMenu">
+                            <button mat-menu-item (click)="openResultImportDialog()"
+                                    matTooltip="Ergebnisse (Zeit/Status) für bereits vorhandene Teilnehmer per Startnummer importieren - legt keine neuen Teilnehmer an"
+                                    matTooltipPosition="left">
+                                <mat-icon>upload_file</mat-icon>
+                                <span>Ergebnisse importieren</span>
+                            </button>
+                            <button mat-menu-item (click)="exportResults()"
+                                    matTooltip="Ergebnisse (Startnummer/Zeit/Status) dieses Rennens als CSV exportieren - zum Teilen mit einer anderen Instanz, die dieselben Teilnehmer schon hat"
+                                    matTooltipPosition="left">
+                                <mat-icon>download</mat-icon>
+                                <span>Ergebnisse exportieren</span>
+                            </button>
+                        </mat-menu>
 
                         <button
                                 mat-raised-button
