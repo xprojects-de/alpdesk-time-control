@@ -28,6 +28,7 @@ import {Actions, ofType} from "@ngrx/effects";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
 import {GaudiModeDialogComponent} from "./gaudi-mode-dialog.component";
 import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
+import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.component";
 
 @Component({
     selector: "app-gaudi-modus",
@@ -68,6 +69,11 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                         <mat-icon>add</mat-icon>
                         Neuer Gaudi-Modus
                     </button>
+
+                    <button mat-stroked-button (click)="openPointsScaleManager()">
+                        <mat-icon>list_alt</mat-icon>
+                        Punkteschemata verwalten
+                    </button>
                 </div>
 
                 @if (loading$ | async) {
@@ -107,6 +113,9 @@ import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
                                     Anzeigen
                                 </button>
                             }
+                            <button mat-icon-button (click)="openEditDialog(gm)" matTooltip="Bearbeiten">
+                                <mat-icon>edit</mat-icon>
+                            </button>
                             <button mat-icon-button color="warn" (click)="deleteGaudiMode(gm)" matTooltip="Löschen">
                                 <mat-icon>delete</mat-icon>
                             </button>
@@ -205,6 +214,19 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
         });
 
         this.actions$.pipe(
+            ofType(GaudiModeActions.updateGaudiModeSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Gaudi-Modus erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.updateGaudiModeFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
             ofType(GaudiModeActions.deleteGaudiModeSuccess),
             takeUntil(this.destroy$),
         ).subscribe(() => {
@@ -252,6 +274,26 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
                     }
                 });
         });
+    }
+
+    openEditDialog(gaudiMode: GaudiMode): void {
+        const dialogRef = this.dialog.open(GaudiModeDialogComponent, {
+            width: "500px",
+            data: {raceId: null, gaudiMode},
+        });
+
+        dialogRef
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result) => {
+                if (result) {
+                    this.store.dispatch(GaudiModeActions.updateGaudiMode({id: gaudiMode.id, gaudiMode: result}));
+                }
+            });
+    }
+
+    openPointsScaleManager(): void {
+        this.dialog.open(PointsScaleManagerDialogComponent, {width: "600px"});
     }
 
     selectGaudiMode(gaudiMode: GaudiMode): void {

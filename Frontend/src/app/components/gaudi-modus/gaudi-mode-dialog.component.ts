@@ -25,6 +25,7 @@ import {take, takeUntil} from "rxjs/operators";
 import {selectAllRaces} from "../../store/race/race.selectors";
 import {Race} from "../../models/race.model";
 import {
+    GaudiMode,
     GaudiModeRaceEntry,
     GaudiModeRequest,
     GaudiModeType,
@@ -38,6 +39,7 @@ import {readFileAsBase64} from "../../utils/file-base64.util";
 
 export interface GaudiModeDialogData {
     raceId: number | null;
+    gaudiMode?: GaudiMode;
 }
 
 @Component({
@@ -56,7 +58,7 @@ export interface GaudiModeDialogData {
         MatSnackBarModule,
     ],
     template: `
-        <h2 mat-dialog-title>Neuer Gaudi-Modus</h2>
+        <h2 mat-dialog-title>{{ isEdit ? "Gaudi-Modus bearbeiten" : "Neuer Gaudi-Modus" }}</h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="gaudi-mode-form">
                 <mat-form-field appearance="outline">
@@ -174,7 +176,7 @@ export interface GaudiModeDialogData {
                     (click)="onSave()"
                     [disabled]="!canSave()"
             >
-                Erstellen
+                {{ isEdit ? "Speichern" : "Erstellen" }}
             </button>
         </mat-dialog-actions>
     `,
@@ -296,8 +298,25 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
         pointsScaleId: [null],
     });
 
+    get isEdit(): boolean {
+        return !!this.data?.gaudiMode;
+    }
+
     ngOnInit(): void {
-        if (this.data?.raceId) {
+        const editing = this.data?.gaudiMode;
+        if (editing) {
+            this.selectedRaceIds = [...editing.races]
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map(r => r.raceId);
+            this.weights = Object.fromEntries(editing.races.map(r => [r.raceId, r.weight]));
+            this.coverPageActive = editing.hasCoverPage;
+            this.form.patchValue({
+                type: editing.type,
+                name: editing.name,
+                teamSize: editing.teamSize ?? 5,
+                pointsScaleId: editing.pointsScaleId ?? null,
+            });
+        } else if (this.data?.raceId) {
             this.selectedRaceIds = [this.data.raceId];
         }
         this.races$.pipe(take(1)).subscribe(races => (this.allRaces = races));
@@ -428,9 +447,11 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
         this.pointsScaleService.getAll().subscribe({
             next: scales => {
                 this.pointsScales = scales;
-                const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
-                if (defaultScale) {
-                    this.form.patchValue({pointsScaleId: defaultScale.id});
+                if (!this.form.value.pointsScaleId) {
+                    const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
+                    if (defaultScale) {
+                        this.form.patchValue({pointsScaleId: defaultScale.id});
+                    }
                 }
             },
             error: err => {
