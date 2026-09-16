@@ -25,6 +25,7 @@ import * as RaceActions from '../../store/race/race.actions';
 import * as RaceSelectors from '../../store/race/race.selectors';
 import * as ParticipantActions from '../../store/participant/participant.actions';
 import {RaceDialogComponent} from './race-dialog.component';
+import {RaceLiveLinksDialogComponent} from './race-live-links-dialog.component';
 import {
     ParticipantImportMappingDialogComponent,
     ParticipantImportMappingDialogResult
@@ -122,6 +123,13 @@ import {Actions, ofType} from '@ngrx/effects';
                     <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                         <td mat-cell *matCellDef="let race">
+                            <button
+                                    mat-icon-button
+                                    (click)="openLiveLinksDialog(race)"
+                                    matTooltip="Live-Ergebnisse-Links"
+                            >
+                                <mat-icon>link</mat-icon>
+                            </button>
                             <button
                                     mat-icon-button
                                     (click)="exportResults(race)"
@@ -358,6 +366,13 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
             raceId: race.id,
             filename: `rennergebnisse_${race.name}.csv`,
         }));
+    }
+
+    openLiveLinksDialog(race: Race): void {
+        this.dialog.open(RaceLiveLinksDialogComponent, {
+            width: '500px',
+            data: {race},
+        });
     }
 
     /**

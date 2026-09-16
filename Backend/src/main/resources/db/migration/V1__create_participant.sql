@@ -34,7 +34,12 @@ CREATE TABLE race
     -- ON DELETE SET NULL so deleting run 1 doesn't cascade-delete run 2, it just un-links it.
     previous_race_id     INTEGER REFERENCES race (id) ON DELETE SET NULL,
     start_order_mode     TEXT CHECK (start_order_mode IN ('REVERSE_TOP_N')),
-    start_order_reverse_top_count INTEGER
+    start_order_reverse_top_count INTEGER,
+
+    -- Opaque, unguessable identifier for this race's public live-results URLs (RaceLiveController),
+    -- deliberately unrelated to `id` so those URLs can't be walked by incrementing/guessing a
+    -- number - see RaceService.generateLiveToken. Always set by the application on insert.
+    live_token            TEXT NOT NULL UNIQUE
 );
 
 CREATE INDEX idx_race_previous_race_id ON race (previous_race_id);

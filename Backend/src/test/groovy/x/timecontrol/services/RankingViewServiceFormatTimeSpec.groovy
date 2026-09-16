@@ -5,26 +5,19 @@ import spock.lang.Unroll
 
 /**
  * formatTime() renders a time in hundredths of a second (mm:ss.SS), rounding the thousandths digit
- * instead of truncating it - invoked via reflection since it's a private static helper needing no
- * PDFBox document/service dependencies.
+ * instead of truncating it.
  */
-class PdfExportServiceFormatTimeSpec extends Specification {
-
-    private static String formatTime(Integer timeMs) {
-        def method = PdfExportService.class.getDeclaredMethod("formatTime", Integer)
-        method.setAccessible(true)
-        return method.invoke(null, [timeMs] as Object[]) as String
-    }
+class RankingViewServiceFormatTimeSpec extends Specification {
 
     def "null renders as a dash"() {
         expect:
-        formatTime(null) == "-"
+        RankingViewService.formatTime(null) == "-"
     }
 
     @Unroll
     def "#timeMs ms renders as #expected"() {
         expect:
-        formatTime(timeMs) == expected
+        RankingViewService.formatTime(timeMs) == expected
 
         where:
         timeMs | expected

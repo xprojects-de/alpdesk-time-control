@@ -74,6 +74,11 @@ public record RaceResponse(
         @Schema(description = "Number of top-placed previousRaceId finishers (per age group) started in reverse order, if startOrderMode is REVERSE_TOP_N", nullable = true)
         Integer startOrderReverseTopCount
 ) {
+    /**
+     * This race's live-results links (see {@code RaceController#liveLinks},
+     * {@code RaceLiveController}) are a separate, on-demand endpoint, not a field here - nothing
+     * about them belongs on every plain race response.
+     */
     public static RaceResponse from(Race race) {
         return new RaceResponse(
                 race.id(),

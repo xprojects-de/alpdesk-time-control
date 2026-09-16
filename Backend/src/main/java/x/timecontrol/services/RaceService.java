@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Singleton
 public class RaceService {
@@ -34,7 +35,32 @@ public class RaceService {
         assertNameAvailable(race.name(), null);
         assertValidPreviousRace(null, race.previousRaceId());
         assertValidStartOrderReverseTopCount(race.startOrderReverseTopCount());
-        return repository.save(race);
+        // liveToken is never provided by RaceRequest/createFromRequest - generated here, the one
+        // place a brand-new race is actually persisted, rather than earlier where it could still
+        // be discarded (e.g. a validation failure above never wastes/exposes a generated token).
+        Race toSave = race.liveToken() != null ? race : withLiveToken(race, generateLiveToken());
+        return repository.save(toSave);
+    }
+
+    public Optional<Race> findByLiveToken(String liveToken) {
+        return repository.findByLiveToken(liveToken);
+    }
+
+    /**
+     * An opaque, unguessable id for this race's public live-results URLs - deliberately unrelated
+     * to the sequential `id` so those URLs can't be walked by incrementing/guessing a number. Not
+     * reused as the JWT/session secret or anything security-critical - just non-enumerable.
+     */
+    private static String generateLiveToken() {
+        return UUID.randomUUID().toString();
+    }
+
+    private static Race withLiveToken(Race race, String liveToken) {
+        return new Race(race.id(), race.name(), race.date(), race.organisation(), race.referee(),
+                race.raceDirector(), race.timeControl(), race.routeName(), race.elevationDifference(),
+                race.routeLength(), race.courseSetter(), race.weather(), race.resultUnit(), race.resultUnitLabel(),
+                race.sortDirection(), race.coverPagePdf(), race.previousRaceId(), race.startOrderMode(),
+                race.startOrderReverseTopCount(), liveToken);
     }
 
     public Iterable<Race> findAll() {
@@ -101,7 +127,10 @@ public class RaceService {
                     coverPagePdf,
                     race.previousRaceId(),
                     startOrder.mode(),
-                    startOrder.reverseTopCount()
+                    startOrder.reverseTopCount(),
+                    // liveToken isn't exposed in RaceRequest at all - always carried over from the
+                    // existing row, never regenerated or cleared by an unrelated edit.
+                    existing.get().liveToken()
             );
             return Optional.of(repository.update(updated));
         }

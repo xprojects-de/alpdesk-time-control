@@ -49,6 +49,13 @@ export interface Race {
     startOrderReverseTopCount?: number;
 }
 
+/** One discoverable public live-results view for a race - see RaceService.getLiveLinks. */
+export interface RaceLiveLink {
+    label: string;
+    /** Path relative to the backend's own origin - resolve with RaceService.toAbsoluteUrl before displaying/sharing. */
+    path: string;
+}
+
 export interface RaceRequest {
     name: string;
     date: string;
