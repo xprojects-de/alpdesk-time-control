@@ -305,6 +305,43 @@ class ParticipantServiceSpec extends Specification {
         result*.startSequence() == [1, 2, 3, 4]
     }
 
+    def "applyStartOrderFromPreviousRace reverses per GENDER within a single mixed-gender (BOTH) age group, instead of reversing boys and girls together as one field"() {
+        given: "one BOTH-gender U21 age group; by raw time A(100)=fastest overall, C(150), B(200), D(250)=slowest overall"
+        ageGroups = [new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH)]
+        def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 2)
+        def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+        raceService.findById(5L) >> Optional.of(race5)
+        raceService.findById(4L) >> Optional.of(race4)
+
+        def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null)
+        def personB = new Person(2L, "B", "B", LocalDate.of(2006, 1, 1), Gender.MALE, null)
+        def personC = new Person(3L, "C", "C", LocalDate.of(2005, 1, 1), Gender.FEMALE, null)
+        def personD = new Person(4L, "D", "D", LocalDate.of(2006, 1, 1), Gender.FEMALE, null)
+        personService.findByIds(_) >> [1L: personA, 2L: personB, 3L: personC, 4L: personD]
+
+        def prevA = new Participant(101L, 4L, 1L, 1, null, null, 100, null, null, null)
+        def prevB = new Participant(102L, 4L, 2L, 2, null, null, 200, null, null, null)
+        def prevC = new Participant(103L, 4L, 3L, 3, null, null, 150, null, null, null)
+        def prevD = new Participant(104L, 4L, 4L, 4, null, null, 250, null, null, null)
+        repository.findByRaceId(4L) >> [prevA, prevB, prevC, prevD]
+
+        def targetA = new Participant(201L, 5L, 1L, 1, null, null, null, null, null, null)
+        def targetB = new Participant(202L, 5L, 2L, 2, null, null, null, null, null, null)
+        def targetC = new Participant(203L, 5L, 3L, 3, null, null, null, null, null, null)
+        def targetD = new Participant(204L, 5L, 4L, 4, null, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [targetA, targetB, targetC, targetD]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        def result = service.applyStartOrderFromPreviousRace(5L, true)
+
+        then: "females (C rank1, D rank2) reversed to D,C entirely before males (A rank1, B rank2) reversed to B,A - never interleaved by raw time across genders (which would have been C,A,B,D)"
+        result*.personId() == [4L, 3L, 2L, 1L]
+        result*.startSequence() == [1, 2, 3, 4]
+    }
+
     def "applyStartOrderFromPreviousRace with includeUnranked=false marks the DNF participant's target counterpart DNS instead of giving it a start position, and never touches its bib"() {
         given:
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,

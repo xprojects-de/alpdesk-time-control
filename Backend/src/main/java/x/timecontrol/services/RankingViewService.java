@@ -131,11 +131,16 @@ public class RankingViewService {
 
     /**
      * Age group names, sorted youngest-first (by birthYearTo descending) - the order every
-     * by-age-group view iterates sections in.
+     * by-age-group view iterates sections in. Age groups sharing the same birthYearTo (e.g. a
+     * same-Jahrgang "U14m"/"U14w" pair) are tie-broken by gender, female before male, matching
+     * {@link ParticipantService#groupByAgeGroup} and the female-before-male convention used
+     * throughout {@link PdfExportService} - without this, two same-year different-gender age
+     * groups would print in whatever order {@code ageGroupService.findAll()} happens to return.
      */
     public List<String> uniqueAgeGroupNamesYoungestFirst() {
         return StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
+                        .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
                 .distinct()
                 .toList();

@@ -15,7 +15,6 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiTeamMemberResponse;
-import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.Gender;
@@ -221,7 +220,7 @@ public class PdfExportService {
 
         return renderDocument(race, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
-                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null, lookup);
                     if (!entries.isEmpty()) {
                         String title = "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender);
@@ -290,7 +289,7 @@ public class PdfExportService {
 
         return renderDocument(race, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
-                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     for (Category category : categories) {
                         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id(), lookup);
                         if (!entries.isEmpty()) {
@@ -461,16 +460,11 @@ public class PdfExportService {
             GaudiMode gaudiMode, List<Race> legRaces, Race headerRace,
             BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher,
             List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
-        List<AgeGroup> ageGroups = rankingViewService.loadAgeGroups();
-        List<String> uniqueAgeGroupNames = ageGroups.stream()
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
-                .map(AgeGroup::name)
-                .distinct()
-                .toList();
+        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst();
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {
-                for (Gender gender : List.of(Gender.MALE, Gender.FEMALE)) {
+                for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (!entries.isEmpty()) {
                         String sectionTitle = "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender);

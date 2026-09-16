@@ -153,8 +153,8 @@ export class AgeGroupDialogComponent {
 
     form: FormGroup;
     genderOptions = [
-        {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
         {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
+        {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
         {value: Gender.BOTH, label: GenderLabels[Gender.BOTH]},
     ];
 
