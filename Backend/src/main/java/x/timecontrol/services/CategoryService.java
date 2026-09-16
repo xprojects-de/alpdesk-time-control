@@ -7,10 +7,13 @@ import x.timecontrol.repositories.CategoryRepository;
 import x.timecontrol.repositories.ParticipantRepository;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 @Singleton
 public class CategoryService {
@@ -38,6 +41,17 @@ public class CategoryService {
 
     public Optional<Category> findByName(String name) {
         return repository.findByName(name);
+    }
+
+    /**
+     * Categories sorted by name - the shared "how do we order categories for grouped display"
+     * rule, used by both PdfExportService's by-category exports and ParticipantService's derived
+     * start-order grouping, so the two can't silently diverge.
+     */
+    public List<Category> sortedByName() {
+        return StreamSupport.stream(findAll().spliterator(), false)
+                .sorted(Comparator.comparing(Category::name))
+                .toList();
     }
 
     /**

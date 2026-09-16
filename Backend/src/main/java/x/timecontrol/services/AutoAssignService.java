@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,9 +21,16 @@ import java.util.stream.StreamSupport;
 
 /**
  * Live auto-assign mode: while active for a race, every still-unassigned device measurement is
- * matched to the participant currently at the front of the auto-assign queue (ascending race
- * number). The match is written straight onto the raw measurement - the same "measurement" table
- * and "participantId" field the Messungen screen already reads and edits.
+ * matched to the participant currently at the front of the auto-assign queue - ordered by
+ * {@link Participant#startSequence()} when a participant has one (e.g. a race whose start order
+ * was derived from a linked previous race's results, so bib 30 can start before bib 5), falling
+ * back to {@link Participant#raceNumber()} (ascending bib order) for one that doesn't. A
+ * participant already marked DSQ/DNF/DNS with no startSequence is excluded from the queue
+ * entirely - they're not starting, so no measurement is ever expected for them. The match is
+ * written straight onto the raw measurement - the same "measurement" table and "participantId"
+ * field the Messungen screen already reads and edits. The queue is still keyed and displayed by
+ * race number (the bib an official actually reads), only its *order* differs from bib-ascending
+ * when a start order has been derived.
  * <p>
  * Nothing is archived into a race here. That only happens when the operator explicitly clicks
  * "Archivieren", at which point the existing copy-from-measurements logic (see
@@ -107,7 +113,7 @@ public class AutoAssignService {
                 }
                 nextRaceNumber = startRaceNumber;
             } else {
-                nextRaceNumber = skipAlreadyAssigned(roster, roster.raceNumbers().stream().findFirst().orElse(null), assignedParticipantIds());
+                nextRaceNumber = skipAlreadyAssigned(roster, roster.raceNumbersInStartOrder().stream().findFirst().orElse(null), assignedParticipantIds());
             }
             activeRaceId = raceId;
             return currentStatus();
@@ -129,7 +135,7 @@ public class AutoAssignService {
         return measurementTableLock.get(() -> {
             Long raceId = requireActive();
             RaceRoster roster = loadRoster(raceId);
-            nextRaceNumber = skipAlreadyAssigned(roster, firstGreaterThan(roster.raceNumbers(), nextRaceNumber), assignedParticipantIds());
+            nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster.raceNumbersInStartOrder(), nextRaceNumber), assignedParticipantIds());
             return currentStatus();
         });
     }
@@ -218,7 +224,7 @@ public class AutoAssignService {
                         measurement.id(), participant.id(), measurement.durationMs(), measurement.measuredAt()
                 ));
                 assignedParticipantIds.add(participant.id());
-                nextRaceNumber = skipAlreadyAssigned(roster, firstGreaterThan(roster.raceNumbers(), nextRaceNumber), assignedParticipantIds);
+                nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster.raceNumbersInStartOrder(), nextRaceNumber), assignedParticipantIds);
             }
         });
     }
@@ -229,34 +235,55 @@ public class AutoAssignService {
      * {@link #processNewMeasurements} both used to call {@code participantRepository.findByRaceIdAndRaceNumber}
      * per race number checked, which meant one DB round trip per already-assigned/skipped number on
      * every 5s scheduler cycle - wasteful for a large field with many already-matched participants.
+     * <p>
+     * {@code byRaceNumber} includes every participant with a bib, regardless of whether they're
+     * actually starting - an explicit {@link #setNextRaceNumber} override is allowed to point at
+     * any known bib. {@code raceNumbersInStartOrder} is the actual auto-assign queue: only
+     * participants who are starting (see {@link #effectiveStartOrder}), in that start order - not
+     * necessarily ascending bib order, see the class javadoc.
      */
-    private record RaceRoster(List<Integer> raceNumbers, Map<Integer, Participant> byRaceNumber) {
+    private record RaceRoster(List<Integer> raceNumbersInStartOrder, Map<Integer, Participant> byRaceNumber) {
     }
 
     private RaceRoster loadRoster(Long raceId) {
         List<Participant> participants = StreamSupport.stream(participantRepository.findByRaceId(raceId).spliterator(), false).toList();
         Map<Integer, Participant> byRaceNumber = new HashMap<>();
-        List<Integer> raceNumbers = new ArrayList<>();
+        List<Participant> starting = new ArrayList<>();
         for (Participant participant : participants) {
-            if (participant.raceNumber() != null) {
-                raceNumbers.add(participant.raceNumber());
-                byRaceNumber.put(participant.raceNumber(), participant);
+            if (participant.raceNumber() == null) {
+                continue;
+            }
+            byRaceNumber.put(participant.raceNumber(), participant);
+            if (participant.effectiveStartOrder() != null) {
+                starting.add(participant);
             }
         }
-        Collections.sort(raceNumbers);
-        return new RaceRoster(raceNumbers, byRaceNumber);
+        // requireNonNull: every entry in `starting` was only added above after confirming
+        // effectiveStartOrder() != null, but the comparator calls the method again independently -
+        // the compiler/IDE can't see that invariant across the two calls, so state it explicitly
+        // instead of leaving a @Nullable method reference where Comparator.comparing needs non-null.
+        starting.sort(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())));
+        List<Integer> raceNumbersInStartOrder = starting.stream().map(Participant::raceNumber).toList();
+        return new RaceRoster(raceNumbersInStartOrder, byRaceNumber);
     }
 
     /**
      * Must only be called while holding measurementTableLock.
+     * <p>
+     * Checks {@code effectiveStartOrder() != null}, not just presence in {@code byRaceNumber} -
+     * {@code candidate} is often the cursor's *current* value, re-validated on every cycle
+     * (see {@link #processNewMeasurements}), and that participant may have been marked
+     * DSQ/DNF/DNS *after* the cursor was already pointing at them (e.g. a scratch discovered
+     * right before their start). Without this check, a measurement arriving while the cursor
+     * still sat on that now-excluded bib would be silently credited to them.
      */
     private Integer skipAlreadyAssigned(RaceRoster roster, Integer candidate, Set<Long> assignedParticipantIds) {
         while (candidate != null) {
             Participant participant = roster.byRaceNumber().get(candidate);
-            if (participant != null && !assignedParticipantIds.contains(participant.id())) {
+            if (participant != null && participant.effectiveStartOrder() != null && !assignedParticipantIds.contains(participant.id())) {
                 return candidate;
             }
-            candidate = firstGreaterThan(roster.raceNumbers(), candidate);
+            candidate = firstAfter(roster.raceNumbersInStartOrder(), candidate);
         }
         return null;
     }
@@ -268,10 +295,18 @@ public class AutoAssignService {
                 .collect(Collectors.toCollection(HashSet::new));
     }
 
-    private static Integer firstGreaterThan(List<Integer> sortedRaceNumbers, Integer current) {
+    /**
+     * The race number immediately after {@code current} in the queue's actual start order - not a
+     * numeric "next greater bib" comparison, since start order need not be bib-ascending.
+     */
+    private static Integer firstAfter(List<Integer> raceNumbersInStartOrder, Integer current) {
         if (current == null) {
             return null;
         }
-        return sortedRaceNumbers.stream().filter(n -> n > current).findFirst().orElse(null);
+        int index = raceNumbersInStartOrder.indexOf(current);
+        if (index < 0 || index + 1 >= raceNumbersInStartOrder.size()) {
+            return null;
+        }
+        return raceNumbersInStartOrder.get(index + 1);
     }
 }

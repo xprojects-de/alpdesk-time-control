@@ -27,8 +27,17 @@ CREATE TABLE race
 
     -- Optional cover page prepended to every ranking/results PDF generated for this race (not the
     -- start list) - see PdfExportService.renderDocument/generateStartList.
-    cover_page_pdf       BLOB
+    cover_page_pdf       BLOB,
+
+    -- Links this race to an earlier run/leg it derives its start order from (e.g. slalom run 2's
+    -- start list depends on run 1's results) - see ParticipantService.assignRaceNumbersFromPreviousRace.
+    -- ON DELETE SET NULL so deleting run 1 doesn't cascade-delete run 2, it just un-links it.
+    previous_race_id     INTEGER REFERENCES race (id) ON DELETE SET NULL,
+    start_order_mode     TEXT CHECK (start_order_mode IN ('REVERSE_TOP_N')),
+    start_order_reverse_top_count INTEGER
 );
+
+CREATE INDEX idx_race_previous_race_id ON race (previous_race_id);
 
 CREATE TABLE team
 (
@@ -66,6 +75,14 @@ CREATE TABLE participant
     comment     TEXT,
     status      TEXT    NOT NULL DEFAULT 'NONE' CHECK (status IN ('NONE', 'DNS', 'DNF', 'DSQ')),
 
+    -- Position in this race's actual start order, when it differs from race_number (e.g. a
+    -- slalom run 2 whose start order was derived from run 1's results, so bib 30 might start
+    -- before bib 5). race_number is the athlete's fixed bib and is never touched by that
+    -- derivation - see ParticipantService#applyStartOrderFromPreviousRace and AutoAssignService.
+    -- Null means "this participant starts in race_number order", which is every participant of
+    -- every race that never had a start order derived for it.
+    start_sequence INTEGER,
+
     FOREIGN KEY (race_id)
         REFERENCES race (id)
         ON DELETE CASCADE
@@ -77,6 +94,7 @@ CREATE INDEX idx_participant_person_id ON participant (person_id);
 CREATE INDEX idx_participant_team_id ON participant (team_id);
 CREATE INDEX idx_participant_category_id ON participant (category_id);
 CREATE UNIQUE INDEX idx_participant_race_race_number_unique ON participant (race_id, race_number);
+CREATE UNIQUE INDEX idx_participant_race_start_sequence_unique ON participant (race_id, start_sequence);
 -- Enforces "one person per race" at the DB level (application code already checks this, but
 -- without this index two concurrent requests could both pass that check and create duplicates).
 CREATE UNIQUE INDEX idx_participant_race_person_unique ON participant (race_id, person_id);

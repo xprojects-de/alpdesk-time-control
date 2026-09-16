@@ -6,6 +6,7 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.entities.StartOrderMode;
 import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.RaceRepository;
 
@@ -31,6 +32,8 @@ public class RaceService {
 
     public Race create(Race race) {
         assertNameAvailable(race.name(), null);
+        assertValidPreviousRace(null, race.previousRaceId());
+        assertValidStartOrderReverseTopCount(race.startOrderReverseTopCount());
         return repository.save(race);
     }
 
@@ -71,9 +74,12 @@ public class RaceService {
         Optional<Race> existing = repository.findById(id);
         if (existing.isPresent()) {
             assertNameAvailable(race.name(), id);
+            assertValidPreviousRace(id, race.previousRaceId());
+            assertValidStartOrderReverseTopCount(race.startOrderReverseTopCount());
             byte[] coverPagePdf = removeCoverPage ? null
                     : race.coverPagePdf() != null ? race.coverPagePdf()
                     : existing.get().coverPagePdf();
+            NormalizedStartOrder startOrder = normalizeStartOrder(race.previousRaceId(), race.startOrderMode(), race.startOrderReverseTopCount());
             // resultUnit/sortDirection defaulting is already applied once, in createFromRequest() -
             // the only place that ever builds the `race` object passed in here.
             Race updated = new Race(
@@ -92,7 +98,10 @@ public class RaceService {
                     race.resultUnit(),
                     race.resultUnitLabel(),
                     race.sortDirection(),
-                    coverPagePdf
+                    coverPagePdf,
+                    race.previousRaceId(),
+                    startOrder.mode(),
+                    startOrder.reverseTopCount()
             );
             return Optional.of(repository.update(updated));
         }
@@ -124,6 +133,7 @@ public class RaceService {
         if (request.coverPagePdf() != null) {
             validateCoverPagePdf(request.coverPagePdf());
         }
+        NormalizedStartOrder startOrder = normalizeStartOrder(request.previousRaceId(), request.startOrderMode(), request.startOrderReverseTopCount());
         return new Race(
                 null,
                 request.name().trim(),
@@ -140,8 +150,24 @@ public class RaceService {
                 request.resultUnit() != null ? request.resultUnit() : ResultUnit.TIME,
                 request.resultUnitLabel(),
                 request.sortDirection() != null ? request.sortDirection() : SortDirection.ASC,
-                request.coverPagePdf()
+                request.coverPagePdf(),
+                request.previousRaceId(),
+                startOrder.mode(),
+                startOrder.reverseTopCount()
         );
+    }
+
+    private record NormalizedStartOrder(StartOrderMode mode, Integer reverseTopCount) {
+    }
+
+    /**
+     * startOrderMode/startOrderReverseTopCount are meaningless without a link - dropped here
+     * instead of stored as orphaned config that a later UI might resurrect. Shared by
+     * {@link #update} and {@link #createFromRequest} so the drop-when-unlinked rule can't drift
+     * between the two.
+     */
+    private static NormalizedStartOrder normalizeStartOrder(Long previousRaceId, StartOrderMode mode, Integer reverseTopCount) {
+        return previousRaceId == null ? new NormalizedStartOrder(null, null) : new NormalizedStartOrder(mode, reverseTopCount);
     }
 
     /**
@@ -151,6 +177,38 @@ public class RaceService {
         Optional<Race> conflict = repository.findByNameIgnoreCase(name);
         if (conflict.isPresent() && !conflict.get().id().equals(excludeId)) {
             throw new IllegalStateException("A race named \"" + name + "\" already exists");
+        }
+    }
+
+    /**
+     * @throws IllegalArgumentException if previousRaceId references this same race, a
+     *                                   non-existent race, or a race that (directly) links back to
+     *                                   this one - a mutual link would leave "which race is
+     *                                   actually first" undefined
+     */
+    private void assertValidPreviousRace(Long id, Long previousRaceId) {
+        if (previousRaceId == null) {
+            return;
+        }
+        if (previousRaceId.equals(id)) {
+            throw new IllegalArgumentException("A race cannot be linked to itself");
+        }
+        Race linked = repository.findById(previousRaceId)
+                .orElseThrow(() -> new IllegalArgumentException("Race with id " + previousRaceId + " does not exist"));
+        if (id != null && id.equals(linked.previousRaceId())) {
+            throw new IllegalArgumentException("Race with id " + previousRaceId + " already links back to this race");
+        }
+    }
+
+    /**
+     * @throws IllegalArgumentException if reverseTopCount is negative - the frontend already blocks
+     *                                   this, but ParticipantService#assignRaceNumbersFromPreviousRace
+     *                                   would otherwise silently clamp a negative value to 0 rather
+     *                                   than rejecting it up front.
+     */
+    private void assertValidStartOrderReverseTopCount(Integer reverseTopCount) {
+        if (ValidationUtils.isNegative(reverseTopCount)) {
+            throw new IllegalArgumentException("startOrderReverseTopCount must not be negative");
         }
     }
 

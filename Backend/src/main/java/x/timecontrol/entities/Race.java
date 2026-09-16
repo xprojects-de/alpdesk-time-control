@@ -33,6 +33,12 @@ public record Race(
 
         // Optional cover page prepended to every ranking/results PDF generated for this race (not
         // the start list) - see PdfExportService.renderDocument/generateStartList.
-        @Nullable byte[] coverPagePdf
+        @Nullable byte[] coverPagePdf,
+
+        // Race this one derives its start order from (e.g. slalom run 2 <- run 1) - see
+        // ParticipantService#assignRaceNumbersFromPreviousRace.
+        @Nullable Long previousRaceId,
+        @Nullable StartOrderMode startOrderMode,
+        @Nullable Integer startOrderReverseTopCount
 ) {
 }

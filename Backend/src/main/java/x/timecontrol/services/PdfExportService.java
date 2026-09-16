@@ -211,9 +211,19 @@ public class PdfExportService {
         return hasExternalId(externalId) ? externalId : "-";
     }
 
+    /**
+     * Sorted by each participant's {@link Participant#effectiveStartOrder()} - their derived
+     * start position when this race has one (e.g. a slalom run 2 whose order was built from run
+     * 1's results, so bib 30 can be printed above bib 5), otherwise plain race-number order. A
+     * participant excluded from the start order entirely (DSQ/DNF/DNS with no derived position)
+     * doesn't print here - they're not starting.
+     */
     private List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
         List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
-                .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .filter(p -> p.effectiveStartOrder() != null)
+                // requireNonNull: just filtered for this, but the comparator calls the @Nullable
+                // method again independently, so state the invariant explicitly.
+                .sorted(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())))
                 .toList();
         List<AgeGroup> ageGroups = loadAgeGroups();
         Map<Long, Person> personsById = loadPersonsByIds(sorted, Participant::personId);
@@ -395,9 +405,7 @@ public class PdfExportService {
     }
 
     private List<Category> sortedCategories() {
-        return StreamSupport.stream(categoryService.findAll().spliterator(), false)
-                .sorted(Comparator.comparing(Category::name))
-                .toList();
+        return categoryService.sortedByName();
     }
 
     /**

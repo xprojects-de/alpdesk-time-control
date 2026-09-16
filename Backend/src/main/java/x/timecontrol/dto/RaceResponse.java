@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.entities.StartOrderMode;
 
 import java.time.LocalDate;
 
@@ -59,7 +60,19 @@ public record RaceResponse(
         SortDirection sortDirection,
 
         @Schema(description = "Whether a cover page PDF is set for this race. The PDF content itself is never included here - upload via coverPagePdf on update to replace it.")
-        boolean hasCoverPage
+        boolean hasCoverPage,
+
+        @Nullable
+        @Schema(description = "Id of an earlier race this race derives its start order from, if linked", nullable = true)
+        Long previousRaceId,
+
+        @Nullable
+        @Schema(description = "How the start order is derived from previousRaceId, if linked", nullable = true)
+        StartOrderMode startOrderMode,
+
+        @Nullable
+        @Schema(description = "Number of top-placed previousRaceId finishers (per category) started in reverse order, if startOrderMode is REVERSE_TOP_N", nullable = true)
+        Integer startOrderReverseTopCount
 ) {
     public static RaceResponse from(Race race) {
         return new RaceResponse(
@@ -78,7 +91,10 @@ public record RaceResponse(
                 race.resultUnit(),
                 race.resultUnitLabel(),
                 race.sortDirection(),
-                race.coverPagePdf() != null
+                race.coverPagePdf() != null,
+                race.previousRaceId(),
+                race.startOrderMode(),
+                race.startOrderReverseTopCount()
         );
     }
 }

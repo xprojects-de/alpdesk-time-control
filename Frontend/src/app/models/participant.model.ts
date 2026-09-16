@@ -11,6 +11,7 @@ export interface Participant {
     id: number;
     race?: Race;
     person: Person | null;
+    /** The participant's fixed bib/start number - never changed by "Startreihenfolge übernehmen". */
     raceNumber?: number;
     team?: Team;
     category?: Category;
@@ -20,6 +21,12 @@ export interface Participant {
     measuredAt?: string;
     comment?: string;
     status?: DisqualificationStatus;
+    /**
+     * Position in this race's actual start order, when it differs from raceNumber (e.g. derived
+     * via "Startreihenfolge übernehmen" from a linked previous race's results - bib 30 can start
+     * before bib 5). Undefined/null means this participant starts in raceNumber order.
+     */
+    startSequence?: number | null;
 }
 
 export interface ParticipantRequest {

@@ -9,7 +9,7 @@ import {
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
-import {Observable, Subject, firstValueFrom} from "rxjs";
+import {Observable, Subject, firstValueFrom, combineLatest} from "rxjs";
 import {MatTableModule, MatTableDataSource} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -41,7 +41,7 @@ import {
     ParticipantResultImportMappingDialogComponent,
     ParticipantResultImportMappingDialogResult
 } from "./participant-result-import-mapping-dialog.component";
-import {takeUntil, take} from "rxjs/operators";
+import {takeUntil, take, map} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
@@ -115,22 +115,43 @@ import {Actions, ofType} from "@ngrx/effects";
                     @if ((selectedRaceId$ | async) !== null) {
                         <button
                                 mat-raised-button
-                                (click)="assignRaceNumbers()"
-                                matTooltip="Startnummern innerhalb der Altersklassen zufällig zuweisen"
+                                [matMenuTriggerFor]="startOrderMenu"
+                                [disabled]="pdfExportLoading$ | async"
+                                matTooltip="Startnummern zuweisen, Startreihenfolge übernehmen oder Startliste exportieren"
                         >
-                            <mat-icon>shuffle</mat-icon>
-                            Startnummern zuweisen
+                            @if (pdfExportLoading$ | async) {
+                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                            } @else {
+                                <mat-icon>format_list_numbered</mat-icon>
+                            }
+                            Startnummern
+                            <mat-icon>arrow_drop_down</mat-icon>
                         </button>
 
-                        <button
-                                mat-raised-button
-                                color="accent"
-                                (click)="exportStartListPdf()"
-                                matTooltip="Startliste als PDF exportieren"
-                        >
-                            <mat-icon>picture_as_pdf</mat-icon>
-                            Startliste (PDF)
-                        </button>
+                        <mat-menu #startOrderMenu="matMenu">
+                            <button mat-menu-item (click)="assignRaceNumbers()"
+                                    matTooltip="Startnummern innerhalb der Altersklassen zufällig zuweisen"
+                                    matTooltipPosition="left">
+                                <mat-icon>shuffle</mat-icon>
+                                <span>Startnummern zuweisen</span>
+                            </button>
+
+                            @if ((selectedRace$ | async)?.previousRaceId) {
+                                <button mat-menu-item (click)="applyStartOrderFromPreviousRace()"
+                                        matTooltip="Startreihenfolge aus dem verknüpften Durchgang übernehmen (Startnummern bleiben unverändert)"
+                                        matTooltipPosition="left">
+                                    <mat-icon>low_priority</mat-icon>
+                                    <span>Startreihenfolge übernehmen</span>
+                                </button>
+                            }
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportStartListPdf()">
+                                <mat-icon>picture_as_pdf</mat-icon>
+                                <span>Startliste (PDF)</span>
+                            </button>
+                        </mat-menu>
 
                         <button
                                 mat-raised-button
@@ -314,13 +335,24 @@ import {Actions, ofType} from "@ngrx/effects";
                         </td>
                     </ng-container>
 
-                    <!-- Race Number Column -->
+                    <!-- Race Number (bib) Column -->
                     <ng-container matColumnDef="raceNumber">
                         <th mat-header-cell *matHeaderCellDef mat-sort-header>
                             Startnummer
                         </th>
                         <td mat-cell *matCellDef="let participant">
                             {{ participant.raceNumber }}
+                        </td>
+                    </ng-container>
+
+                    <!-- Start Sequence (actual start order, may differ from the bib - see "Startreihenfolge übernehmen") Column -->
+                    <ng-container matColumnDef="startSequence">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header
+                            matTooltip="Tatsächliche Startreihenfolge, falls von der Startnummer abweichend (z.B. durch 'Startreihenfolge übernehmen')">
+                            Startreihenfolge
+                        </th>
+                        <td mat-cell *matCellDef="let participant">
+                            {{ participant.startSequence ?? "=Startnr." }}
                         </td>
                     </ng-container>
 
@@ -528,6 +560,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     participants$: Observable<Participant[]>;
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
+    /** The currently selected race's full record - used to check previousRaceId for the "Startreihenfolge übernehmen" button. */
+    selectedRace$: Observable<Race | undefined>;
     loading$: Observable<boolean>;
     pdfExportLoading$: Observable<boolean>;
     importLoading$: Observable<boolean>;
@@ -540,6 +574,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "birthDate",
         "gender",
         "raceNumber",
+        "startSequence",
         "team",
         "category",
         "ageGroup",
@@ -596,6 +631,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         );
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
+        this.selectedRace$ = combineLatest([this.races$, this.selectedRaceId$]).pipe(
+            map(([races, id]) => races.find(r => r.id === id))
+        );
         this.loading$ = this.store.select(
             ParticipantSelectors.selectParticipantLoading,
         );
@@ -675,6 +713,19 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Vergeben der Startnummern: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.applyStartOrderFromPreviousRaceSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Startreihenfolge erfolgreich übernommen", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.applyStartOrderFromPreviousRaceFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Übernehmen der Startreihenfolge: ${error}`, "OK", {duration: 5000});
         });
 
         // Import/Copy/PDF-Export failures previously had no feedback at all: the loading spinner
@@ -1096,6 +1147,34 @@ async openImportDialog(): Promise<void> {
                 duration: 2000,
             });
         }
+    }
+
+    async applyStartOrderFromPreviousRace(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+            });
+            return;
+        }
+
+        if (!confirm(
+            'Möchten Sie die Startreihenfolge dieses Rennens aus dem verknüpften Durchgang übernehmen? ' +
+            'Die Startnummern (Bibs) bleiben unverändert - es wird nur die Reihenfolge, in der gestartet wird, neu gesetzt.'
+        )) {
+            return;
+        }
+
+        const includeUnranked = confirm(
+            'Teilnehmer ohne Ergebnis (DSQ/DNF/DNS) im verknüpften Durchgang ans Ende der jeweiligen Kategorie ' +
+            'anhängen? "Abbrechen" markiert sie stattdessen als "Nicht gestartet" und nimmt sie von der Startliste.'
+        );
+
+        this.store.dispatch(ParticipantActions.applyStartOrderFromPreviousRace({raceId, includeUnranked}));
+        this.snackBar.open('Startreihenfolge wird übernommen...', 'OK', {
+            duration: 2000,
+        });
     }
 
     async exportStartListPdf(): Promise<void> {

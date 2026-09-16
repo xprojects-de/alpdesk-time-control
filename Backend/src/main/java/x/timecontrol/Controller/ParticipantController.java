@@ -183,6 +183,23 @@ public class ParticipantController {
     }
 
     @Produces(MediaType.APPLICATION_JSON)
+    @Post("/race/{raceId}/apply-start-order-from-previous-race")
+    @Operation(summary = "Derive a race's start order (not its race numbers/bibs) from its linked previous race's results", description = "Sets startSequence per category from the ranking of the race's linked previousRaceId race: the top startOrderReverseTopCount placed finishers of that category start in reverse order, followed by the rest in normal placement order (e.g. a slalom run 2 start order derived from run 1, where bib 30 can end up starting before bib 5). raceNumber (the bib) is never changed by this. Only participants entered in both races are reordered; anyone else keeps their relative race-number order, appended last. includeUnranked controls whether previous-race participants with no result (DSQ/DNF/DNS) are appended at the end of their category, or excluded from this race's start order and marked DNS.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Start order applied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Race (or its linked previous race) not found, or the race has no linked previous race")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
+    public HttpResponse<?> applyStartOrderFromPreviousRace(@PathVariable Long raceId, @QueryValue(defaultValue = "true") boolean includeUnranked) {
+        try {
+            List<Participant> updated = service.applyStartOrderFromPreviousRace(raceId, includeUnranked);
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import/{raceId}")
     @Operation(summary = "Import participants from CSV for a race", description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender and " + "an optional 6th ExternalId column. The header row is ignored. Teams are looked up case-insensitively " + "and created (uppercased) if they don't exist yet. Rows with a missing/invalid gender (only MALE or " + "FEMALE are accepted) or an invalid birthdate (expected yyyy-MM-dd) are skipped and reported in the " + "response. ExternalId is fully optional (omit the column entirely, or leave it empty); when given, " + "it is used to find-or-create the matching Person so the same person can be re-imported for a later " + "race/season without creating a duplicate.", security = @SecurityRequirement(name = "BearerAuth"))

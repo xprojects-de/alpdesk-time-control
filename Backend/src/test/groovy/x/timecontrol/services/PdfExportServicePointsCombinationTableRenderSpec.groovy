@@ -20,7 +20,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
 
     private static Race race(Long id, String name, ResultUnit unit, String unitLabel) {
         new Race(id, name, LocalDate.of(2026, 9, 12), null, null, null, null, null, null,
-                null, null, null, unit, unitLabel, SortDirection.ASC)
+                null, null, null, unit, unitLabel, SortDirection.ASC, null, null, null, null)
     }
 
     private static GaudiRankingEntryResponse entry(int place, String label, String team, int totalPoints,

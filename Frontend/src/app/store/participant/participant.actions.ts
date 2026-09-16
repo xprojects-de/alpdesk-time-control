@@ -105,6 +105,21 @@ export const assignRaceNumbersFailure = createAction(
     props<{ error: string }>()
 );
 
+// Apply a start order derived from a linked previous race's results (e.g. slalom run 2 from run 1) -
+// sets startSequence, never raceNumber/the bib itself.
+export const applyStartOrderFromPreviousRace = createAction(
+    '[Participant] Apply Start Order From Previous Race',
+    props<{ raceId: number; includeUnranked: boolean }>()
+);
+export const applyStartOrderFromPreviousRaceSuccess = createAction(
+    '[Participant] Apply Start Order From Previous Race Success',
+    props<{ participants: Participant[] }>()
+);
+export const applyStartOrderFromPreviousRaceFailure = createAction(
+    '[Participant] Apply Start Order From Previous Race Failure',
+    props<{ error: string }>()
+);
+
 // Import participants from CSV
 export const importParticipantsCsv = createAction(
     '[Participant] Import Participants CSV',

@@ -35,7 +35,7 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
-                null, null, null, ResultUnit.TIME, null, SortDirection.ASC)
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
     }
 
     private static Participant participant(Long id, Long personId, Integer durationMs) {

@@ -25,8 +25,15 @@ import {
     ResultUnitLabels,
     SortDirection,
     SortDirectionLabels,
+    StartOrderMode,
 } from '../../models/race.model';
 import {readFileAsBase64} from '../../utils/file-base64.util';
+
+/** Dialog input: the race being edited (null for a new race) plus every other race, for the "linked previous race" dropdown. */
+export interface RaceDialogData {
+    race: Race | null;
+    races: Race[];
+}
 
 @Component({
     selector: 'app-race-dialog',
@@ -45,7 +52,7 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data ? 'Rennen bearbeiten' : 'Neues Rennen' }}
+            {{ data.race ? 'Rennen bearbeiten' : 'Neues Rennen' }}
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="race-form">
@@ -103,6 +110,34 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
                         <mat-form-field appearance="outline">
                             <mat-label>Einheiten-Bezeichnung</mat-label>
                             <input matInput formControlName="resultUnitLabel" placeholder="z.B. m, Punkte"/>
+                        </mat-form-field>
+                    }
+                </div>
+
+                <h3 class="section-title">Startreihenfolge (optional)</h3>
+                <p class="hint">
+                    Für einen zweiten Durchgang (z.B. Slalom): verknüpft dieses Rennen mit einem
+                    anderen, dessen Ergebnis die Startreihenfolge (und automatische Zeitmesswert-Zuordnung) bestimmt.
+                </p>
+                <div class="race-form-grid">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Verknüpfter Durchgang</mat-label>
+                        <mat-select formControlName="previousRaceId">
+                            <mat-option [value]="null">Kein</mat-option>
+                            @for (race of availablePreviousRaces; track race.id) {
+                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    @if (form.value.previousRaceId) {
+                        <mat-form-field appearance="outline">
+                            <mat-label>Anzahl Top-Platzierte umkehren</mat-label>
+                            <input matInput type="number" min="0" formControlName="startOrderReverseTopCount"/>
+                            <mat-hint>Pro Kategorie; z.B. 15 bei Slalom. 0 = keine Umkehrung.</mat-hint>
+                            @if (form.get('startOrderReverseTopCount')?.hasError('min')) {
+                                <mat-error>Darf nicht negativ sein</mat-error>
+                            }
                         </mat-form-field>
                     }
                 </div>
@@ -244,9 +279,11 @@ export class RaceDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<RaceDialogComponent>);
     private cdr = inject(ChangeDetectorRef);
-    public data = inject<Race | null>(MAT_DIALOG_DATA);
+    public data = inject<RaceDialogData>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    /** Every other race this one could link to as its "previous race" - excludes itself. */
+    availablePreviousRaces: Race[];
     resultUnit = ResultUnit;
     resultUnitOptions = [
         {value: ResultUnit.TIME, label: ResultUnitLabels[ResultUnit.TIME]},
@@ -270,7 +307,10 @@ export class RaceDialogComponent {
     private removeCoverPage = false;
 
     constructor() {
-        let date: Date | string = this.data?.date || '';
+        const race = this.data.race;
+        this.availablePreviousRaces = this.data.races.filter(r => r.id !== race?.id);
+
+        let date: Date | string = race?.date || '';
         if (date && typeof date === 'string') {
             const parts = date.split('-');
             if (parts.length === 3) {
@@ -283,23 +323,25 @@ export class RaceDialogComponent {
         }
 
         this.form = this.fb.group({
-            name: [this.data?.name || '', Validators.required],
+            name: [race?.name || '', Validators.required],
             date: [date, Validators.required],
-            organisation: [this.data?.organisation || ''],
-            referee: [this.data?.referee || ''],
-            raceDirector: [this.data?.raceDirector || ''],
-            timeControl: [this.data?.timeControl || ''],
-            routeName: [this.data?.routeName || ''],
-            elevationDifference: [this.data?.elevationDifference || ''],
-            routeLength: [this.data?.routeLength || ''],
-            courseSetter: [this.data?.courseSetter || ''],
-            weather: [this.data?.weather || ''],
-            resultUnit: [this.data?.resultUnit || ResultUnit.TIME],
-            resultUnitLabel: [this.data?.resultUnitLabel || ''],
-            sortDirection: [this.data?.sortDirection || SortDirection.ASC],
+            organisation: [race?.organisation || ''],
+            referee: [race?.referee || ''],
+            raceDirector: [race?.raceDirector || ''],
+            timeControl: [race?.timeControl || ''],
+            routeName: [race?.routeName || ''],
+            elevationDifference: [race?.elevationDifference || ''],
+            routeLength: [race?.routeLength || ''],
+            courseSetter: [race?.courseSetter || ''],
+            weather: [race?.weather || ''],
+            resultUnit: [race?.resultUnit || ResultUnit.TIME],
+            resultUnitLabel: [race?.resultUnitLabel || ''],
+            sortDirection: [race?.sortDirection || SortDirection.ASC],
+            previousRaceId: [race?.previousRaceId ?? null],
+            startOrderReverseTopCount: [race?.startOrderReverseTopCount ?? 15, Validators.min(0)],
         });
 
-        this.coverPageActive = this.data?.hasCoverPage ?? false;
+        this.coverPageActive = race?.hasCoverPage ?? false;
     }
 
     onCancel(): void {
@@ -349,6 +391,9 @@ export class RaceDialogComponent {
                 sortDirection: formValue.sortDirection,
                 coverPagePdf: this.coverPagePdfBase64,
                 removeCoverPage: this.removeCoverPage || undefined,
+                previousRaceId: formValue.previousRaceId || null,
+                startOrderMode: formValue.previousRaceId ? StartOrderMode.REVERSE_TOP_N : undefined,
+                startOrderReverseTopCount: formValue.previousRaceId ? formValue.startOrderReverseTopCount : undefined,
             };
             this.dialogRef.close(race);
         }

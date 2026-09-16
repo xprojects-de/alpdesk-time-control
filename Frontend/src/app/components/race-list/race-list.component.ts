@@ -299,6 +299,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     openCreateDialog(): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
             width: '500px',
+            data: {race: null, races: this.dataSource.data},
         });
 
         dialogRef
@@ -316,7 +317,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     openEditDialog(race: Race): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
             width: '500px',
-            data: race,
+            data: {race, races: this.dataSource.data},
         });
 
         dialogRef.afterClosed()
@@ -365,7 +366,10 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
      * the roster+results CSV into it via the same mapping dialog the participant list uses.
      */
     async importRaceResults(): Promise<void> {
-        const raceDialogRef = this.dialog.open(RaceDialogComponent, {width: '500px'});
+        const raceDialogRef = this.dialog.open(RaceDialogComponent, {
+            width: '500px',
+            data: {race: null, races: this.dataSource.data},
+        });
         const raceRequest: RaceRequest | undefined = await firstValueFrom(raceDialogRef.afterClosed());
         if (!raceRequest) {
             return;

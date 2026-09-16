@@ -109,6 +109,20 @@ export class ParticipantEffects {
         )
     );
 
+    applyStartOrderFromPreviousRace$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.applyStartOrderFromPreviousRace),
+            mergeMap(({raceId, includeUnranked}) =>
+                this.participantService.applyStartOrderFromPreviousRace(raceId, includeUnranked).pipe(
+                    map(participants => ParticipantActions.applyStartOrderFromPreviousRaceSuccess({participants})),
+                    catchError(error => of(ParticipantActions.applyStartOrderFromPreviousRaceFailure({
+                        error: extractErrorMessage(error, 'Failed to apply start order from previous race')
+                    })))
+                )
+            )
+        )
+    );
+
     importParticipantsCsv$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.importParticipantsCsv),
