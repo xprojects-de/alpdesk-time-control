@@ -12,7 +12,7 @@ public record ParticipantResultImportRowError(
         @Schema(description = "Raw content of the skipped row")
         String rawLine,
 
-        @Schema(description = "Reason why the row was skipped", example = "Kein Teilnehmer mit Startnummer 61 in diesem Rennen gefunden")
+        @Schema(description = "Reason why the row was skipped", example = "No participant with raceNumber 61 found in this race")
         String reason
 ) {
 }

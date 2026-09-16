@@ -577,8 +577,8 @@ class ParticipantServiceSpec extends Specification {
         0 * repository.updateAll(_)
         result.updated().isEmpty()
         result.errors().size() == 2
-        result.errors()[0].reason().contains("Startnummer")
-        result.errors()[1].reason().contains("Zeit")
+        result.errors()[0].reason().contains("raceNumber")
+        result.errors()[1].reason().contains("time")
     }
 
     def "importResultsByRaceNumber treats an explicitly empty mapping as 'map nothing', not as 'use the auto-suggested mapping'"() {
@@ -594,7 +594,7 @@ class ParticipantServiceSpec extends Specification {
         0 * repository.updateAll(_)
         result.updated().isEmpty()
         result.errors().size() == 1
-        result.errors()[0].reason().contains("Startnummer")
+        result.errors()[0].reason().contains("raceNumber")
     }
 
     def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
@@ -656,7 +656,7 @@ class ParticipantServiceSpec extends Specification {
         then: "the row is rejected and the participant's existing penalty is left untouched"
         result.updated().isEmpty()
         result.errors().size() == 1
-        result.errors()[0].reason().contains("Strafzeit")
+        result.errors()[0].reason().contains("penalty")
         0 * repository.updateAll(_)
     }
 

@@ -37,7 +37,7 @@ public class GlobalExceptionHandler {
         if (lower.contains("unique constraint")) {
             LOG.warn("Uniqueness violation on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
             return HttpResponse.status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse("Die Aktion steht im Konflikt mit einem bestehenden Eintrag und konnte nicht ausgeführt werden."));
+                    .body(new ErrorResponse("The action conflicts with an existing entry and could not be completed."));
         }
         // NOT NULL / CHECK / FOREIGN KEY violations mean the request itself was missing or
         // referencing invalid data, not that it conflicts with an existing entry - 400 fits
@@ -45,11 +45,11 @@ public class GlobalExceptionHandler {
         if (lower.contains("not null constraint") || lower.contains("check constraint") || lower.contains("foreign key constraint")) {
             LOG.warn("Invalid data on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
             return HttpResponse.status(HttpStatus.BAD_REQUEST)
-                    .body(new ErrorResponse("Die Anfrage enthält ungültige oder unvollständige Daten."));
+                    .body(new ErrorResponse("The request contains invalid or incomplete data."));
         }
         LOG.error("Unhandled persistence error on {} {}", request.getMethod(), request.getPath(), exception);
         return HttpResponse.<ErrorResponse>serverError()
-                .body(new ErrorResponse("Ein unerwarteter Fehler ist aufgetreten."));
+                .body(new ErrorResponse("An unexpected error occurred."));
     }
 
     private static String rootCauseMessage(Throwable throwable) {

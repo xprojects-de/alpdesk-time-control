@@ -96,7 +96,7 @@ public class MeasurementService {
      * {@code {sourceField: value}} rows via {@link MeasurementImportParsers}, then applies
      * {@code mapping} (our field name -> source field name) to pull out the values for each new
      * measurement. A field left out of {@code mapping} is simply not imported for any row - since
-     * durationMs is required, an explicitly empty {@code mapping} just reports "durationMs fehlt" for
+     * durationMs is required, an explicitly empty {@code mapping} just reports "durationMs is missing" for
      * every row rather than silently importing anything. {@code mapping} is used as given - including
      * an explicitly empty map, meaning "map nothing" - and only falls back to the auto-suggested
      * mapping when it's entirely omitted ({@code null}), mirroring
@@ -122,18 +122,18 @@ public class MeasurementService {
             String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
 
             if (durationRaw == null || durationRaw.isBlank()) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs fehlt"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs is missing"));
                 continue;
             }
             Integer durationMs;
             try {
                 durationMs = Integer.parseInt(durationRaw.trim());
             } catch (NumberFormatException e) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs ist keine gültige Zahl"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs is not a valid number"));
                 continue;
             }
             if (ValidationUtils.isNegative(durationMs)) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs darf nicht negativ sein"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs must not be negative"));
                 continue;
             }
 
@@ -144,7 +144,7 @@ public class MeasurementService {
                 try {
                     measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
                 } catch (DateTimeParseException e) {
-                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
+                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "measuredAt has an invalid format (expected e.g. 2026-08-13T10:30:00)"));
                     continue;
                 }
             }
@@ -154,7 +154,7 @@ public class MeasurementService {
                 try {
                     participantId = Long.parseLong(participantIdRaw.trim());
                 } catch (NumberFormatException e) {
-                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "participantId ist keine gültige Zahl"));
+                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "participantId is not a valid number"));
                     continue;
                 }
             }

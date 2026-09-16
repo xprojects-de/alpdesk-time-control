@@ -168,7 +168,7 @@ public class GaudiModeService {
         try (var ignored = Loader.loadPDF(pdfBytes)) {
             // Parsed only to validate - if it doesn't throw, the file is a real PDF.
         } catch (IOException e) {
-            throw new IllegalArgumentException("Die hochgeladene Datei ist keine gültige PDF-Datei");
+            throw new IllegalArgumentException("The uploaded file is not a valid PDF file");
         }
     }
 

@@ -106,9 +106,9 @@ public class RaceService {
         if (!force) {
             long assigned = participantRepository.countByRaceId(id);
             if (assigned > 0) {
-                throw new IllegalStateException(assigned + " Teilnehmer sind diesem Rennen zugeordnet. " +
-                        "Beim Löschen werden alle Teilnehmer, Messungen und Zuordnungen dieses Rennens " +
-                        "unwiderruflich gelöscht. Trotzdem löschen?");
+                throw new IllegalStateException(assigned + " participants are assigned to this race. " +
+                        "Deleting it will irrevocably delete all participants, measurements and " +
+                        "assignments of this race. Delete anyway?");
             }
         }
         // race_measurement.race_id has ON DELETE CASCADE, so deleting a race implicitly writes to
@@ -158,7 +158,7 @@ public class RaceService {
         try (var ignored = Loader.loadPDF(pdfBytes)) {
             // Parsed only to validate - if it doesn't throw, the file is a real PDF.
         } catch (IOException e) {
-            throw new IllegalArgumentException("Die hochgeladene Datei ist keine gültige PDF-Datei");
+            throw new IllegalArgumentException("The uploaded file is not a valid PDF file");
         }
     }
 }

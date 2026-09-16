@@ -687,20 +687,20 @@ public class ParticipantService {
 
             String raceNumberRaw = valueFor(row, effectiveMapping, "raceNumber");
             if (raceNumberRaw == null || raceNumberRaw.isBlank()) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "raceNumber is missing"));
                 continue;
             }
             Integer raceNumber;
             try {
                 raceNumber = Integer.parseInt(raceNumberRaw.trim());
             } catch (NumberFormatException e) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer ist keine gültige Zahl: " + raceNumberRaw));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "raceNumber is not a valid number: " + raceNumberRaw));
                 continue;
             }
 
             Participant existing = existingByRaceNumber.get(raceNumber);
             if (existing == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "No participant with raceNumber " + raceNumber + " found in this race"));
                 continue;
             }
 
@@ -718,16 +718,16 @@ public class ParticipantService {
                         durationMs = parseResultTime(timeRaw.trim(), timeFormat);
                     } catch (IllegalArgumentException e) {
                         errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                                "Zeit \"" + timeRaw + "\" konnte nicht als " + timeFormat + " gelesen werden"));
+                                "Time \"" + timeRaw + "\" could not be read as " + timeFormat));
                         continue;
                     }
                     if (ValidationUtils.isNegative(durationMs)) {
-                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit darf nicht negativ sein"));
+                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time must not be negative"));
                         continue;
                     }
                 }
             } else if (status == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time is missing"));
                 continue;
             }
 
@@ -741,11 +741,11 @@ public class ParticipantService {
                 try {
                     penalty = Integer.parseInt(penaltyRaw.trim());
                 } catch (NumberFormatException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit \"" + penaltyRaw + "\" ist keine gültige Zahl"));
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty \"" + penaltyRaw + "\" is not a valid number"));
                     continue;
                 }
                 if (ValidationUtils.isNegative(penalty)) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit darf nicht negativ sein"));
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty must not be negative"));
                     continue;
                 }
             }
@@ -757,7 +757,7 @@ public class ParticipantService {
                     measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
                 } catch (DateTimeParseException e) {
                     errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                            "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
+                            "measuredAt has an invalid format (expected e.g. 2026-08-13T10:30:00)"));
                     continue;
                 }
             }

@@ -72,8 +72,8 @@ public class CategoryService {
         if (!force) {
             long assigned = participantRepository.countByCategoryId(id);
             if (assigned > 0) {
-                throw new IllegalStateException(assigned + " Teilnehmer sind dieser Kategorie zugeordnet. " +
-                        "Beim Löschen wird die Kategorie-Zuordnung bei diesen Teilnehmern entfernt. Trotzdem löschen?");
+                throw new IllegalStateException(assigned + " participants are assigned to this category. " +
+                        "Deleting it will remove the category assignment from those participants. Delete anyway?");
             }
         }
         repository.deleteById(id);
