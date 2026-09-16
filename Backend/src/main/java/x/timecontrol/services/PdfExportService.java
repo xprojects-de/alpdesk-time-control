@@ -370,7 +370,13 @@ public class PdfExportService {
                 // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
                 // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
                 new PdfColumn<>("Gesamt", 1.2f, e -> RankingViewService.formatValue(headerRace, e.valueMs())),
-                new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null ? "+" + RankingViewService.formatValue(headerRace, e.diffMs()) : "-")
+                // Signed explicitly rather than always prefixing "+": a DESC-sorted (higher-is-better)
+                // Zeit-Kombination - explicitly supported, see TimeCombinationModeCalculator - has a
+                // negative diffMs for every non-leader entry, which formatValue()/formatTime() would
+                // otherwise render as a garbled negative time string (e.g. "+0:-05.-00").
+                new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null
+                        ? (e.diffMs() >= 0 ? "+" : "-") + RankingViewService.formatValue(headerRace, Math.abs(e.diffMs()))
+                        : "-")
         ));
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
