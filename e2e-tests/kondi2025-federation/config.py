@@ -18,12 +18,6 @@ STATION_BASES = {k: f"http://localhost:{v}" for k, v in STATION_PORTS.items()}
 APP_USERNAME = os.environ.get("KONDI_APP_USERNAME", "e2e_admin")
 APP_PASSWORD = os.environ.get("KONDI_APP_PASSWORD", "e2eTestPass123")
 
-# Path to MAIN's own SQLite file - only needed by phase4b_results_backup_restore.py, which has to
-# clear participant results directly in the database (see that script's docstring for why the API
-# can't do this). Set by run_phased_results.sh from the work dir it's given; leave unset for any
-# other phase/script, none of which touch the database directly.
-MAIN_DB_PATH = os.environ.get("KONDI_MAIN_DB_PATH")
-
 # Which race each station manages, and the resultUnit/sortDirection for each of the 4 races.
 # Adjust RACE_CSV_FILES to point at your own race data (see README.md for the expected CSV
 # format: lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;

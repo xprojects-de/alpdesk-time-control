@@ -1,27 +1,17 @@
 #!/bin/bash
 # Runs the SAME federation setup as run_all.sh (single-shot result entry per station, consolidated
 # into MAIN), then adds one more check on top: MAIN's results, for every race, get exported via the
-# RESULTS-ONLY CSV export, wiped, and restored purely via the RESULTS-ONLY CSV import - see
-# phase4b_results_backup_restore.py's docstring for why the wipe has to go around the API. This
-# simulates an operator backing up and restoring a race's results by hand from a CSV, using only the
-# results import/export feature - never the roster/participant-list import/export.
+# RESULTS-ONLY CSV export, cleared via POST /participants/{id}/clear-result, and restored purely via
+# the RESULTS-ONLY CSV import - see phase4b_results_backup_restore.py's docstring. This simulates an
+# operator backing up and restoring a race's results by hand from a CSV, using only the results
+# import/export feature - never the roster/participant-list import/export.
 #
 # Requires 5 FRESH instances (same as run_all.sh/run_phased.sh - creates races with the same names,
 # so don't run this against instances that already ran one of the other two - see README.md).
 #
-# Usage: ./run_phased_results.sh /path/to/work-dir
-# <path-to-work-dir> MUST be the same work dir start_instances.sh printed/created for these
-# instances - needed to locate MAIN's SQLite file directly for the wipe step.
+# Usage: ./run_phased_results.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-
-WORK_DIR="${1:?Usage: $0 /path/to/work-dir (the same one start_instances.sh printed)}"
-MAIN_DB="$WORK_DIR/main/database/time-control.db"
-if [ ! -f "$MAIN_DB" ]; then
-    echo "MAIN-Datenbank nicht gefunden unter $MAIN_DB - bitte denselben Work-Dir uebergeben, den start_instances.sh verwendet hat." >&2
-    exit 1
-fi
-export KONDI_MAIN_DB_PATH="$MAIN_DB"
 
 echo "=== Phase 1: MAIN setup (age groups, races, roster import, copy to other races) ==="
 python3 phase1_main.py
@@ -43,7 +33,7 @@ echo "=== Phase 5: reconcile MAIN vs. each station ==="
 python3 phase5_reconcile.py
 
 echo ""
-echo "=== Phase 4b: MAIN Ergebnis-Backup/Restore (Export -> DB leeren -> Reimport) ==="
+echo "=== Phase 4b: MAIN Ergebnis-Backup/Restore (Export -> clear-result -> Reimport) ==="
 python3 phase4b_results_backup_restore.py
 
 echo ""

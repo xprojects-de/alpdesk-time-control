@@ -1,30 +1,23 @@
 """Phase 4b (run on MAIN once phase4/phase5 have established that MAIN's results already match
 every station): for every race, exports MAIN's results via the RESULTS-ONLY CSV export
 (/participants/export/results-csv - NOT /export/csv, which also carries the roster/identity data),
-wipes every participant's result fields directly in MAIN's own SQLite file, then restores them
+clears every participant's result via POST /participants/{id}/clear-result, then restores them
 purely via the RESULTS-ONLY import (/participants/import-results-mapped) and checks every
-participant's result comes back exactly as it was before the wipe. Simulates an operator restoring
+participant's result comes back exactly as it was before the clear. Simulates an operator restoring
 a race's results from a CSV backup (e.g. after the database had to be rebuilt) using only the
 manual results import/export feature - the participant/roster list itself is never touched.
 
-Why a direct DB wipe instead of going through the API: PUT /participants/{id}
+Why a dedicated clear-result call instead of PUT /participants/{id}: PUT
 (ParticipantService#update) always falls back to the participant's EXISTING durationMs/penalty/
 measuredAt whenever the request's value is null - there is no way for a JSON body to distinguish
 "explicitly clear this" from "field omitted" for those three fields (see that method's own
-comment), so no API call can actually null out an already-entered result. Directly clearing the
-row here is safe because this is the suite's own throwaway, isolated SQLite file (see
-start_instances.sh) - never the real database.
+comment), so PUT alone could never actually null out an already-entered result. clear-result exists
+specifically to make that possible (see ParticipantService#clearResult).
 """
-import os, sys, json, sqlite3
+import os, sys, json
 sys.path.insert(0, '.')
 import common as c
 import config
-
-if not config.MAIN_DB_PATH:
-    sys.exit(
-        "KONDI_MAIN_DB_PATH is not set - run this via run_phased_results.sh <work-dir>, or export "
-        "it yourself pointing at MAIN's database/time-control.db"
-    )
 
 main_token = c.login(config.MAIN)
 with open(c.results_path("state.json")) as f:
@@ -37,7 +30,7 @@ for name, unit, label, direction, csv_file, key in config.RACES:
     race_id = race_ids[name]
 
     # 1) snapshot the current (post phase4/5) state, by raceNumber - this is what must come back
-    #    unchanged after the wipe + reimport.
+    #    unchanged after the clear + reimport.
     _, before = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
     before_by_rn = {p["raceNumber"]: {f: p.get(f) for f in RESULT_FIELDS} for p in before}
 
@@ -49,19 +42,14 @@ for name, unit, label, direction, csv_file, key in config.RACES:
         f.write(body)
     print(f"{name}: Ergebnisse exportiert -> {fname} ({len(body)} bytes)")
 
-    # 3) wipe every participant's result columns directly in MAIN's SQLite file - identity columns
+    # 3) clear every participant's result via the dedicated endpoint - identity columns
     #    (person/team/category/raceNumber) are left untouched.
-    conn = sqlite3.connect(config.MAIN_DB_PATH, timeout=10)
-    try:
-        cur = conn.execute(
-            "UPDATE participant SET duration_ms=NULL, penalty=NULL, measured_at=NULL, comment=NULL, status='NONE' "
-            "WHERE race_id=?",
-            (race_id,),
-        )
-        conn.commit()
-        print(f"{name}: {cur.rowcount} Teilnehmer-Ergebnisse in der DB geleert")
-    finally:
-        conn.close()
+    cleared_count = 0
+    for p in before:
+        st, resp = c.post(config.MAIN, main_token, f"/participants/{p['id']}/clear-result", {})
+        assert st == 200, (p["id"], st, resp)
+        cleared_count += 1
+    print(f"{name}: {cleared_count} Teilnehmer-Ergebnisse zurueckgesetzt")
 
     # sanity check: the API must now report every participant of this race as blank/unranked.
     _, cleared = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
@@ -80,7 +68,7 @@ for name, unit, label, direction, csv_file, key in config.RACES:
     assert status == 200, (status, resp)
     assert resp.get("errorCount", 0) == 0, resp["errors"]
 
-    # 5) compare against the pre-wipe snapshot.
+    # 5) compare against the pre-clear snapshot.
     _, after = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
     after_by_rn = {p["raceNumber"]: {f: p.get(f) for f in RESULT_FIELDS} for p in after}
     assert set(before_by_rn) == set(after_by_rn), f"{name}: raceNumber-Menge hat sich veraendert!"
