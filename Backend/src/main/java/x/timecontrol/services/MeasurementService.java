@@ -26,8 +26,14 @@ public class MeasurementService {
         this.measurementTableLock = measurementTableLock;
     }
 
+    /**
+     * @throws IllegalStateException if participantId is already assigned to another measurement
+     */
     public Measurement create(Measurement measurement) {
         return measurementTableLock.get(() -> {
+            if (measurement.participantId() != null) {
+                assertParticipantNotAlreadyAssigned(measurement.participantId(), null);
+            }
             Measurement toSave = measurement;
             if (toSave.deviceMeasurementId() == null) {
                 // device_measurement_id is NOT NULL (see V1__create_participant.sql), so this must be
@@ -54,6 +60,21 @@ public class MeasurementService {
         return min == null ? -1L : Math.min(min, 0) - 1;
     }
 
+    // Mirrors RaceMeasurementService's equivalent guard for archived measurements. Without this, an
+    // operator correcting a mismatched row in the "Messungen" dialog (or a CSV import with a
+    // duplicate participantId column value) can point two raw measurement rows at the same
+    // participant; there's no unique index on participant_id to catch it at the DB level (unlike
+    // device_measurement_id), so the second one would silently coexist until archiving picks
+    // whichever one "wins" in an unspecified order - overwriting the participant's correct finish
+    // time with the wrong one.
+    private void assertParticipantNotAlreadyAssigned(Long participantId, Long excludingMeasurementId) {
+        boolean conflict = repository.findByParticipantId(participantId).stream()
+                .anyMatch(m -> excludingMeasurementId == null || !m.id().equals(excludingMeasurementId));
+        if (conflict) {
+            throw new IllegalStateException("Participant with id " + participantId + " is already assigned to another measurement");
+        }
+    }
+
     public Iterable<Measurement> findAll() {
         return repository.findAll();
     }
@@ -70,10 +91,16 @@ public class MeasurementService {
         return repository.findByDeviceMeasurementId(deviceMeasurementId);
     }
 
+    /**
+     * @throws IllegalStateException if participantId is already assigned to another measurement
+     */
     public Optional<Measurement> update(Long id, Measurement measurement) {
         return measurementTableLock.get(() -> {
             Optional<Measurement> existing = repository.findById(id);
             if (existing.isPresent()) {
+                if (measurement.participantId() != null) {
+                    assertParticipantNotAlreadyAssigned(measurement.participantId(), id);
+                }
                 Measurement updated = new Measurement(
                         id,
                         // Always carried over from the existing row, never taken from the incoming
@@ -194,7 +221,11 @@ public class MeasurementService {
                 }
             }
 
-            imported.add(create(new Measurement(null, null, participantId, durationMs, measuredAt)));
+            try {
+                imported.add(create(new Measurement(null, null, participantId, durationMs, measuredAt)));
+            } catch (IllegalStateException e) {
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), e.getMessage()));
+            }
         }
 
         return new MeasurementImportResult(imported, errors);

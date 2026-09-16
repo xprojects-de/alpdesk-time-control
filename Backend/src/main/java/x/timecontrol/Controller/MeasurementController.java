@@ -28,6 +28,8 @@ import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import io.swagger.v3.oas.annotations.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -48,6 +50,8 @@ import java.util.stream.StreamSupport;
 @ExecuteOn(TaskExecutors.BLOCKING)
 @Tag(name = "Measurement")
 public class MeasurementController {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MeasurementController.class);
 
     @Inject
     MeasurementService service;
@@ -112,6 +116,7 @@ public class MeasurementController {
     @Operation(summary = "Create a new measurement", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Measurement created", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Participant is already assigned to another measurement")
     public HttpResponse<?> add(@Body MeasurementRequest request) {
         HttpResponse<?> validationError = validateParticipantId(request.participantId());
         if (validationError != null) {
@@ -128,8 +133,12 @@ public class MeasurementController {
                 request.durationMs(),
                 request.measuredAt()
         );
-        Measurement created = service.create(measurement);
-        return HttpResponse.created(MeasurementResponse.from(created));
+        try {
+            Measurement created = service.create(measurement);
+            return HttpResponse.created(MeasurementResponse.from(created));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -139,6 +148,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurement updated", content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
     @ApiResponse(responseCode = "404", description = "Measurement not found")
     @ApiResponse(responseCode = "400", description = "Invalid input")
+    @ApiResponse(responseCode = "409", description = "Participant is already assigned to another measurement")
     public HttpResponse<?> update(@PathVariable Long id, @Body MeasurementRequest request) {
         if (service.findById(id).isEmpty()) {
             return HttpResponse.notFound();
@@ -161,9 +171,13 @@ public class MeasurementController {
                 request.durationMs(),
                 request.measuredAt()
         );
-        Optional<Measurement> updated = service.update(id, measurement);
-        return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
-                .orElse(HttpResponse.notFound());
+        try {
+            Optional<Measurement> updated = service.update(id, measurement);
+            return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
+                    .orElse(HttpResponse.notFound());
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     /**
@@ -334,6 +348,7 @@ public class MeasurementController {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE);
             }
         } catch (Exception e) {
+            LOG.warn("Error checking device connection: {}", e.getMessage(), e);
             return HttpResponse.serverError();
         }
     }
@@ -392,6 +407,7 @@ public class MeasurementController {
                     .toList();
             return HttpResponse.created(response);
         } catch (Exception e) {
+            LOG.warn("Error importing measurements from device: {}", e.getMessage(), e);
             return HttpResponse.serverError();
         }
     }

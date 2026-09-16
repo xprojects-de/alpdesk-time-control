@@ -59,6 +59,7 @@ import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {VersionEffects} from "./store/version/version.effects";
 import {SettingsEffects} from "./store/settings/settings.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
+import {timeoutInterceptor} from "./interceptors/timeout.interceptor";
 
 registerLocaleData(localeDe);
 
@@ -78,7 +79,7 @@ export const appConfig: ApplicationConfig = {
     providers: [
         provideBrowserGlobalErrorListeners(),
         provideRouter(routes),
-        provideHttpClient(withXhr(), withInterceptors([authInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([authInterceptor, timeoutInterceptor])),
         provideAnimationsAsync(),
         {provide: LOCALE_ID, useValue: "de-DE"},
         {provide: MAT_DATE_LOCALE, useValue: "de-DE"},
