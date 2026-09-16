@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test, the Nachtslalom auto-assign/measurement-editing test, and the Rundung rounding-consistency regression test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, and the Rundung rounding-consistency regression test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -8,11 +8,26 @@ description: "Run all Time Control end-to-end test suites under e2e-tests/ (curr
 Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
 
 - `e2e-tests/bergsprint/` — single race, real device-import path, category + Los-Modus scoring.
-- `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations).
-  Also has `run_phased.sh`: the same scenario but with results entered/exported/imported in 3
-  waves instead of one shot at the end, to check partial imports don't error or corrupt data. It
-  needs its own fresh set of 5 instances — it creates races with the same names `run_all.sh` does,
-  so it fails if run against instances `run_all.sh` already used.
+- `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations),
+  with four runnable variants, each needing its own fresh set of 5 instances (they all create
+  races with the same names, so none can run against instances another variant already used):
+  - `run_all.sh` — the baseline scenario: stations enter results, export, MAIN imports them back,
+    then full ranking/gender/age-group/Gaudi verification (phases 1–10).
+  - `run_phased.sh` — the same scenario but with results entered/exported/imported in 3 waves
+    instead of one shot at the end, to check partial imports don't error or corrupt data.
+  - `run_phased_results.sh` — runs phases 1–5 like `run_all.sh`, then exercises the dedicated
+    **results** export/import round-trip (`/participants/export/results-csv` +
+    `/participants/import-results-mapped`, phase 4b): export MAIN's results per race, reset them
+    via `clear-result`, reimport from that CSV, and verify every result was restored exactly —
+    distinct from the roster export/import path, which also carries identity data.
+  - `run_phased_results_with_status.sh` — runs phases 1–10 like `run_phased_results.sh`, then adds
+    phases 11–13: inject targeted DNS/DNF/DSQ on 5 chosen participants, create 6 Gaudi
+    points-combination instances covering every `keepDnsInRanking`/`keepDnfInRanking`/
+    `keepDsqInRanking` flag combination and verify each against an independent Python
+    recalculation (JSON ranking + PDF "nicht gewertet" list), then a guardrail check that these
+    flags have no effect on `TIME_COMBINATION` mode.
+  See its [README.md](../../e2e-tests/kondi2025-federation/README.md) for full detail on each
+  variant — treat it as authoritative if a new variant script appears there that isn't listed here.
 - `e2e-tests/nachtslalom/` — two-run race exercising every `AutoAssignService` combination/error
   case (enable/skip/set-next/disable, default-by-raceNumber vs. default-by-startSequence, a
   participant marked DSQ/DNF/DNS while the cursor sits on them, `discardOldestStart()`) plus
@@ -44,7 +59,13 @@ found.
 
 1. Build the jar once: `cd Backend && ./gradlew shadowJar` (produces
    `Backend/build/libs/time-control.jar`). Skip the rebuild only if that jar already exists and
-   is newer than the newest file under `Backend/src`.
+   is newer than the newest file under `Backend/src`. The Backend requires Java 25
+   (`sourceCompatibility 25`); if the default `java` on PATH is older, running the jar fails with
+   `UnsupportedClassVersionError` and the instance's health check comes back HTTP 000/connection
+   failure with no obvious cause until you check `backend.log`. Export `JAVA_HOME` to a Java 25
+   install before building/running (`/usr/libexec/java_home -V` lists installed JVMs) — and
+   re-export it in every subsequent command, since exported env vars don't persist between
+   separate shell invocations.
 2. For `kondi2025-federation`, check its 4 required CSVs exist first (see its
    [README.md](../../e2e-tests/kondi2025-federation/README.md)):
    `race1_schnelligkeit_import.csv`, `race2_gleichgewicht_import.csv`,
@@ -61,13 +82,14 @@ found.
       the first failed step/verification.
    d. Clean up regardless of outcome: `pkill -f 'time-control.jar'` (plus
       `pkill -f 'fake_device.py'` for bergsprint/nachtslalom), then `rm -rf` that suite's temp work dir.
-   e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d once more with
-      `./run_phased.sh` instead of `./run_all.sh` — fresh instances/work dir again, same CSVs,
-      same cleanup.
+   e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d three more times, once
+      each with `./run_phased.sh`, `./run_phased_results.sh`, and
+      `./run_phased_results_with_status.sh` instead of `./run_all.sh` — fresh instances/work dir
+      each time, same CSVs, same cleanup.
 4. Report a final summary with three parts:
    a. A short recap of what was actually done — whether the jar was (re)built or reused, which
-      suites ran, which were skipped and why (e.g. missing CSVs), and whether `run_phased.sh`
-      also ran for `kondi2025-federation`.
+      suites ran, which were skipped and why (e.g. missing CSVs), and which of the four
+      `kondi2025-federation` variants ran.
    b. A summary table: suite → ran/skipped, pass/fail, and for any failure point at
       `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and
       the failing script's output.
