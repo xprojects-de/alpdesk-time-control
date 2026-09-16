@@ -62,21 +62,31 @@ pkill -f 'time-control.jar'; rm -rf /tmp/kondi-normal
 pkill -f 'time-control.jar'; rm -rf /tmp/kondi-phased
 ```
 
-Optional, zum Abgleich mit einem echten offiziellen Ergebnis-PDF:
+Sowohl `run_all.sh` als auch `run_phased.sh` schließen automatisch mit einem Abgleich gegen ein
+echtes offizielles Ergebnis-PDF ab (`verify_against_official.py`, Phase 10), sofern
+`sample-data/official_result.pdf` vorhanden ist — fehlt die Datei (z.B. weil sie aus
+Datenschutzgründen entfernt wurde, siehe Hinweis unten), wird dieser Schritt übersprungen statt den
+Lauf fehlschlagen zu lassen. Findet der Abgleich unerklärte Abweichungen, bricht das Skript ab
+(`set -e`) — erklärte Abweichungen müsst ihr vorher in `KNOWN_INTENTIONAL_DEVIATIONS` in
+`verify_against_official.py` eintragen (z.B. eure bewusst injizierten DNS/DNF/DSQ-Abweichungen, aber
+auch bekannte Datenfixture-Artefakte wie unten beschrieben).
 
-```bash
-python3 verify_against_official.py
-```
-
-Ohne Argument wird standardmäßig `sample-data/official_result.pdf` verwendet (liegt bei, siehe
-Hinweis unten) — mit Argument könnt ihr stattdessen ein beliebiges anderes PDF angeben:
+Manuell mit einem beliebigen anderen PDF aufrufen:
 
 ```bash
 python3 verify_against_official.py /pfad/zu/anderes_ergebnis.pdf
 ```
 
-Trägt zuerst eure bewusst injizierten DNS/DNF/DSQ-Abweichungen in `KNOWN_INTENTIONAL_DEVIATIONS`
-in dieser Datei ein, sonst werden sie als unerklärte Abweichungen gemeldet.
+**Hinweis zu knappen Gleichständen (Rundung):** Das offizielle Ergebnis ist nur auf Hundertstelsekunden
+genau, während unsere `durationMs`-CSV-Fixtures Millisekunden-Präzision tragen. Zwei beim echten
+Rennen tatsächlich gleichzeitige Ergebnisse (gleiche Hundertstelsekunden) können beim Nachbauen der
+CSV 1-2ms auseinanderfallen — das bricht den Gleichstand im exakten Vergleich von `RankingService`
+und verschiebt beide um einen Platz. Das ist kein Ranking-Bug (bei echt gleichen `durationMs` weist
+`RankingService` korrekt denselben Platz zu, Standard-"1224"-Regel), sondern ein Artefakt der
+Fixture-Erstellung. Ein bestätigter Fall ist bereits in `KNOWN_INTENTIONAL_DEVIATIONS` eingetragen
+(`REDACTED`/`REDACTED`, Schnelligkeit, 36432 vs. 36430ms bei offiziell beide 36,43s). Wird eine CSV neu
+erzeugt/aktualisiert, prüft neue knappe Gleichstände (`durationMs` innerhalb weniger ms in derselben
+Kategorie) vor der Annahme, ein neuer Mismatch sei ein echter Bug.
 
 ### ⚠️ Datenschutz-Hinweis zu `sample-data/official_result.pdf`
 
@@ -112,5 +122,5 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase7_verify_gender_agegroup.py` | Dasselbe für Geschlecht/Altersklassen-Aufschlüsselung |
 | `phase8_gaudi_combo.py` | Gaudi-Punkte-Mischwertung erstellen und verifizieren |
 | `phase9_gaudi_agegroups.py` | Gaudi-Punkte-Mischwertung nach Altersklassen verifizieren |
-| `verify_against_official.py` | Optional: Abgleich mit einem echten Ergebnis-PDF |
+| `verify_against_official.py` | Phase 10 (automatisch, falls PDF vorhanden): Abgleich mit einem echten Ergebnis-PDF |
 | `sample-data/official_result.pdf` | Das mitgelieferte echte Ergebnis-PDF (siehe Datenschutz-Hinweis oben) |
