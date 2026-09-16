@@ -121,4 +121,46 @@ class LosModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 80000
         ranking[0].diffMs() == 0
     }
+
+    def "diffMs is derived from the printed (rounded) Ø-Werte, not from independently rounding the raw gap"() {
+        given: "overall average of all four participants (4083,4083,33525,33525) is 18804ms -> prints as 0:18.80; the tested pair's average is 4083ms -> prints as 0:04.08"
+        def participants = [
+                participant(1L, 4083), participant(2L, 4083),   // this pair: average 4083ms
+                participant(3L, 33525), participant(4L, 33525), // only present to shift the overall average, not part of a tested pairing
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then: "the raw gap |4083-18804|=14721ms (the old, now-wrong behaviour) does not equal the difference of the two printed values 0:18.80-0:04.08=0:14.72=14720ms, which is what's now returned"
+        ranking.size() == 1
+        ranking[0].valueMs() == 4083
+        ranking[0].referenceMs() == 18804
+        ranking[0].diffMs() == 14720
+    }
+
+    def "diffMs is derived from the printed values for POINTS races too, not just TIME"() {
+        given: "a pair average of 10.5 rounds to 11, an overall average of 20.4 rounds to 20 - the raw gap |10.5-20.4|=9.9 would round to 10 on its own (the old behaviour), but the printed values differ by |11-20|=9"
+        def pointsRace = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.POINTS, null, SortDirection.ASC, null, null, null, null)
+        def participants = [
+                participant(1L, 10), participant(2L, 11), // this pair: average 10.5
+                participant(3L, 27), participant(4L, 27), participant(5L, 27), // only present to shift the overall average to 20.4
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, pointsRace, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].valueMs() == 11
+        ranking[0].referenceMs() == 20
+        ranking[0].diffMs() == 9
+    }
 }

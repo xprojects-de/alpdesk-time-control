@@ -9,6 +9,7 @@ import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Person;
+import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
@@ -124,23 +125,28 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         // TIME_COMBINATION over DESC (higher-is-better, e.g. points) races would always rank
         // ascending and award the win to the worst total instead of the best, mirroring the
         // direction-aware sort TeamModeCalculator already applies.
-        SortDirection sortDirection = races.getFirst().race().sortDirection();
+        Race combinedRace = races.getFirst().race();
+        SortDirection sortDirection = combinedRace.sortDirection();
         Comparator<PersonResult> byTotalAscending = Comparator.comparingInt(PersonResult::totalMs);
         results.sort(sortDirection == SortDirection.DESC ? byTotalAscending.reversed() : byTotalAscending);
-        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList(), races.getFirst().race().resultUnit());
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList(), combinedRace.resultUnit());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
-        Integer leaderMs = results.isEmpty() ? null : results.getFirst().totalMs();
+        // Diffed from the already-rounded display value (not the raw totalMs) so a printed
+        // "Rückstand" always equals the difference of the two printed "Gesamt" totals - see
+        // RankingService#roundForDisplay.
+        Integer leaderDisplayMs = results.isEmpty() ? null : rankingService.roundForDisplay(combinedRace, results.getFirst().totalMs());
         for (int i = 0; i < results.size(); i++) {
             PersonResult r = results.get(i);
+            Integer displayMs = rankingService.roundForDisplay(combinedRace, r.totalMs());
             entries.add(new GaudiRankingEntryResponse(
                     places.get(i),
                     r.label(),
                     null,
                     null,
                     r.totalMs(),
-                    leaderMs,
-                    r.totalMs() == leaderMs ? null : r.totalMs() - leaderMs,
+                    leaderDisplayMs,
+                    displayMs.equals(leaderDisplayMs) ? null : displayMs - leaderDisplayMs,
                     null,
                     r.legs(),
                     r.team(),

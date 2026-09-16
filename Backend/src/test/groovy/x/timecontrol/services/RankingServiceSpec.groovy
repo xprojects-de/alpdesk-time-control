@@ -188,6 +188,35 @@ class RankingServiceSpec extends Specification {
         places == [1L: 1, 2L: 2]
     }
 
+    def "roundForDisplay rounds a TIME race's value to the nearest 10ms (hundredth of a second)"() {
+        expect:
+        rankingService.roundForDisplay(raceAsc, rawValue) == expected
+
+        where:
+        rawValue || expected
+        4083     || 4080  // 0:04.08
+        33525    || 33530 // 0:33.53
+        36432    || 36430 // 0:36.43
+        null     || null
+    }
+
+    def "roundForDisplay does not round a POINTS race's value"() {
+        given:
+        def racePoints = race(SortDirection.ASC, ResultUnit.POINTS)
+
+        expect:
+        rankingService.roundForDisplay(racePoints, 1004) == 1004
+    }
+
+    def "roundForDisplay makes a diff of already-rounded totals consistent with the printed values"() {
+        given: "4083ms and 33525ms print as 0:04.08 and 0:33.53 - their raw gap (29442ms) would round to 0:29.44 on its own, but the difference of the printed totals is 0:29.45"
+        def leader = rankingService.roundForDisplay(raceAsc, 4083)
+        def other = rankingService.roundForDisplay(raceAsc, 33525)
+
+        expect:
+        other - leader == 29450
+    }
+
     def "assignStandardPlaces shares a place for ties and skips the next place accordingly"() {
         expect:
         rankingService.assignStandardPlaces([100.0d, 100.0d, 90.0d, 80.0d, 80.0d]) == [1, 1, 3, 4, 4]

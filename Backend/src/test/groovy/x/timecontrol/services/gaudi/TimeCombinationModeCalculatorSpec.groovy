@@ -156,6 +156,22 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking*.place() == [1, 1]
     }
 
+    def "diffMs equals the difference of the two printed (rounded) totals, not the raw unrounded gap"() {
+        given: "4083ms and 33525ms print as 0:04.08 and 0:33.53 (a difference of 29450ms); the raw gap 33525-4083=29442ms would round to 29440ms on its own"
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Berta")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d,
+                        [participant(1L, 1L, 4083), participant(2L, 2L, 33525)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then:
+        ranking[0].diffMs() == null
+        ranking[1].diffMs() == 29450
+    }
+
     def "a person missing a result only in a zero-weighted leg is still ranked"() {
         given: "person 1 has no result in leg 2, which is weighted 0 and must not disqualify them"
         knownPersons.putAll([1L: person(1L, "Anna")])

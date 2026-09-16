@@ -234,7 +234,8 @@ public class RankingViewService {
 
         // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
-        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.getFirst().participant());
+        Integer leaderDisplayValue = sortedParticipants.isEmpty() ? null
+                : rankingService.roundForDisplay(race, rankingService.adjustedValue(race, sortedParticipants.getFirst().participant()));
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
             Participant p = sortedParticipants.get(i).participant();
@@ -246,7 +247,9 @@ public class RankingViewService {
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
             Integer adjustedValue = rankingService.adjustedValue(race, p);
-            Integer diff = (i > 0) ? adjustedValue - leaderValue : null;
+            // Diffed from the already-rounded display value (not the raw one) so "Rückstand" always
+            // equals the difference of the two printed totals - see RankingService#roundForDisplay.
+            Integer diff = (i > 0) ? rankingService.roundForDisplay(race, adjustedValue) - leaderDisplayValue : null;
 
             entries.add(new RankingEntry(
                     places.get(p.id()),
