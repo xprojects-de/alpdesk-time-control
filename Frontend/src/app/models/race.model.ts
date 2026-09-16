@@ -45,7 +45,7 @@ export interface Race {
     previousRaceId?: number;
     /** How the start order is derived from previousRaceId, if linked. */
     startOrderMode?: StartOrderMode;
-    /** Number of top-placed previousRaceId finishers (per category) started in reverse order, if startOrderMode is REVERSE_TOP_N. */
+    /** Number of top-placed previousRaceId finishers (per age group) started in reverse order, if startOrderMode is REVERSE_TOP_N. */
     startOrderReverseTopCount?: number;
 }
 
@@ -72,6 +72,6 @@ export interface RaceRequest {
     previousRaceId?: number | null;
     /** How the start order is derived from previousRaceId; only relevant when previousRaceId is set. */
     startOrderMode?: StartOrderMode;
-    /** Number of top-placed previousRaceId finishers (per category) to start in reverse order when startOrderMode is REVERSE_TOP_N. */
+    /** Number of top-placed previousRaceId finishers (per age group) to start in reverse order when startOrderMode is REVERSE_TOP_N. */
     startOrderReverseTopCount?: number;
 }

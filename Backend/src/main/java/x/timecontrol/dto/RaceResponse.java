@@ -71,7 +71,7 @@ public record RaceResponse(
         StartOrderMode startOrderMode,
 
         @Nullable
-        @Schema(description = "Number of top-placed previousRaceId finishers (per category) started in reverse order, if startOrderMode is REVERSE_TOP_N", nullable = true)
+        @Schema(description = "Number of top-placed previousRaceId finishers (per age group) started in reverse order, if startOrderMode is REVERSE_TOP_N", nullable = true)
         Integer startOrderReverseTopCount
 ) {
     public static RaceResponse from(Race race) {

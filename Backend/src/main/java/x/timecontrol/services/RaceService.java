@@ -202,7 +202,7 @@ public class RaceService {
 
     /**
      * @throws IllegalArgumentException if reverseTopCount is negative - the frontend already blocks
-     *                                   this, but ParticipantService#assignRaceNumbersFromPreviousRace
+     *                                   this, but ParticipantService#applyStartOrderFromPreviousRace
      *                                   would otherwise silently clamp a negative value to 0 rather
      *                                   than rejecting it up front.
      */

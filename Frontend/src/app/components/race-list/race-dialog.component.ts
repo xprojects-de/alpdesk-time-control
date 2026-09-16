@@ -134,7 +134,7 @@ export interface RaceDialogData {
                         <mat-form-field appearance="outline">
                             <mat-label>Anzahl Top-Platzierte umkehren</mat-label>
                             <input matInput type="number" min="0" formControlName="startOrderReverseTopCount"/>
-                            <mat-hint>Pro Kategorie; z.B. 15 bei Slalom. 0 = keine Umkehrung.</mat-hint>
+                            <mat-hint>Pro Altersgruppe; z.B. 15 bei Slalom. 0 = keine Umkehrung.</mat-hint>
                             @if (form.get('startOrderReverseTopCount')?.hasError('min')) {
                                 <mat-error>Darf nicht negativ sein</mat-error>
                             }

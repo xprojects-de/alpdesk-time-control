@@ -275,6 +275,34 @@ public class ParticipantService {
     }
 
     /**
+     * Groups participants by their computed age group (from birthDate/gender via
+     * {@link #findMatchingAgeGroup}) - oldest age group first (by birthYearTo descending), with a
+     * null-keyed bucket for participants without a matching age group appended last. Shared by
+     * {@link #assignRaceNumbers} (random shuffle within each group) and
+     * {@link #applyStartOrderFromPreviousRace} (per-group reversal), so the age-group ordering
+     * convention can't drift between the two. {@code personsById} is caller-provided since both
+     * callers already need to batch-load it for other purposes too.
+     */
+    private Map<Long, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
+        List<AgeGroup> ageGroups = allAgeGroups().stream()
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .toList();
+
+        Map<Long, List<Participant>> byAgeGroup = new LinkedHashMap<>();
+        for (AgeGroup ageGroup : ageGroups) {
+            byAgeGroup.put(ageGroup.id(), new ArrayList<>());
+        }
+        byAgeGroup.put(null, new ArrayList<>());
+
+        for (Participant participant : participants) {
+            Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
+            Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
+            byAgeGroup.get(ageGroup.map(AgeGroup::id).orElse(null)).add(participant);
+        }
+        return byAgeGroup;
+    }
+
+    /**
      * Builds response DTOs for a batch of participants, batch-loading each referenced
      * race/person/team/category once instead of issuing one lookup per participant per
      * relation (the previous per-participant approach did 5+ queries per row).
@@ -429,35 +457,20 @@ public class ParticipantService {
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
-                .toList();
-
-        Map<Long, List<Participant>> byAgeGroup = new LinkedHashMap<>();
-        for (AgeGroup ageGroup : ageGroups) {
-            byAgeGroup.put(ageGroup.id(), new ArrayList<>());
-        }
-        List<Participant> withoutAgeGroup = new ArrayList<>();
-
-        for (Participant participant : participants) {
-            Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
-            Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
-            if (ageGroup.isPresent()) {
-                byAgeGroup.get(ageGroup.get().id()).add(participant);
-            } else {
-                withoutAgeGroup.add(participant);
-            }
-        }
+        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
-        for (AgeGroup ageGroup : ageGroups) {
-            List<Participant> group = byAgeGroup.get(ageGroup.id());
+        for (Map.Entry<Long, List<Participant>> entry : byAgeGroup.entrySet()) {
+            if (entry.getKey() == null) {
+                continue; // handled separately below, sorted by birthdate instead of shuffled
+            }
+            List<Participant> group = entry.getValue();
             Collections.shuffle(group, random);
             ordered.addAll(group);
         }
 
+        List<Participant> withoutAgeGroup = byAgeGroup.get(null);
         withoutAgeGroup.sort(Comparator.comparing(
                 (Participant p) -> {
                     Person person = personsById.get(p.personId());
@@ -472,17 +485,19 @@ public class ParticipantService {
     /**
      * Derives the {@code startSequence} (start ORDER, never the {@code raceNumber} bib itself -
      * see the field's own doc on {@link Participant}) for {@code raceId} from the ranking of its
-     * linked {@link Race#previousRaceId()} race: per category (sorted by name, participants
-     * without a category grouped last, matching {@code PdfExportService}'s by-category export
-     * order), the top {@link Race#startOrderReverseTopCount()} placed finishers of the previous
-     * race start in reverse order, followed by the rest of that category in normal placement
-     * order - e.g. a slalom run 2 start order built from run 1's results, where bib 30 can end up
-     * starting before bib 5. Only participants entered in *both* races are reordered this way; a
+     * linked {@link Race#previousRaceId()} race: per age group (computed from birthDate/gender,
+     * same convention as {@link #assignRaceNumbers} - oldest age group first, participants
+     * without a matching age group grouped last; {@code Category} plays no role here at all,
+     * independent of the reversal), the top {@link Race#startOrderReverseTopCount()} placed
+     * finishers of the previous race start in reverse order, followed by the rest of that age
+     * group in normal placement order - e.g. a slalom run 2 start order built from run 1's
+     * results, where bib 30 can end up starting before bib 5. Only participants entered in *both*
+     * races are reordered this way; a
      * participant of this race whose person wasn't reordered (not in the previous race) is
      * appended last, keeping their current relative race-number order rather than being dropped.
      * <p>
      * A previous-race participant with no result (DSQ/DNF/DNS, or simply not yet measured) is
-     * either appended at the end of their category's block ({@code includeUnranked=true}) or
+     * either appended at the end of their age group's block ({@code includeUnranked=true}) or
      * excluded from this race's start order entirely and marked
      * {@link DisqualificationStatus#DNS} here ({@code includeUnranked=false}) - they didn't start
      * the previous race, so they don't start this one either.
@@ -522,16 +537,11 @@ public class ParticipantService {
 
         int reverseTopCount = race.startOrderReverseTopCount() != null ? Math.max(0, race.startOrderReverseTopCount()) : 0;
 
-        // LinkedHashMap iteration order is the display order categories are grouped/concatenated in:
-        // alphabetical by name (matching PdfExportService's by-category exports), with a null bucket
-        // for "no category" appended last.
-        Map<Long, List<Participant>> byCategory = new LinkedHashMap<>();
-        categoryService.sortedByName().forEach(category -> byCategory.put(category.id(), new ArrayList<>()));
-        byCategory.put(null, new ArrayList<>());
-
-        for (Participant participant : previousParticipants) {
-            byCategory.computeIfAbsent(participant.categoryId(), k -> new ArrayList<>()).add(participant);
-        }
+        // Grouped and reversed per age group, independent of Category - see groupByAgeGroup for
+        // the shared ordering convention (oldest age group first, no-match bucket last).
+        Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
+        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
 
         List<Participant> ordered = new ArrayList<>();
         Set<Long> matchedPersonIds = new HashSet<>();
@@ -540,7 +550,7 @@ public class ParticipantService {
         // stale start sequence cleared below, instead of silently getting a start position anyway.
         List<Participant> excludedTargets = new ArrayList<>();
 
-        for (List<Participant> group : byCategory.values()) {
+        for (List<Participant> group : byAgeGroup.values()) {
             if (group.isEmpty()) {
                 continue;
             }
@@ -563,15 +573,15 @@ public class ParticipantService {
             List<Participant> top = new ArrayList<>(ranked.subList(0, splitIndex));
             Collections.reverse(top);
 
-            List<Participant> categoryBlock = new ArrayList<>(top);
-            categoryBlock.addAll(ranked.subList(splitIndex, ranked.size()));
+            List<Participant> ageGroupBlock = new ArrayList<>(top);
+            ageGroupBlock.addAll(ranked.subList(splitIndex, ranked.size()));
 
             List<Participant> unranked = group.stream()
                     .filter(p -> !places.containsKey(p.id()))
                     .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
                     .toList();
             if (includeUnranked) {
-                categoryBlock.addAll(unranked);
+                ageGroupBlock.addAll(unranked);
             } else {
                 for (Participant p : unranked) {
                     Participant target = targetByPersonId.get(p.personId());
@@ -581,7 +591,7 @@ public class ParticipantService {
                 }
             }
 
-            for (Participant sourceParticipant : categoryBlock) {
+            for (Participant sourceParticipant : ageGroupBlock) {
                 Participant target = targetByPersonId.get(sourceParticipant.personId());
                 if (target != null && matchedPersonIds.add(sourceParticipant.personId())) {
                     ordered.add(target);

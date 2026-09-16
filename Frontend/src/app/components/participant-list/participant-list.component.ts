@@ -1167,7 +1167,7 @@ async openImportDialog(): Promise<void> {
         }
 
         const includeUnranked = confirm(
-            'Teilnehmer ohne Ergebnis (DSQ/DNF/DNS) im verknüpften Durchgang ans Ende der jeweiligen Kategorie ' +
+            'Teilnehmer ohne Ergebnis (DSQ/DNF/DNS) im verknüpften Durchgang ans Ende der jeweiligen Altersgruppe ' +
             'anhängen? "Abbrechen" markiert sie stattdessen als "Nicht gestartet" und nimmt sie von der Startliste.'
         );
 

@@ -36,7 +36,7 @@ public record Race(
         @Nullable byte[] coverPagePdf,
 
         // Race this one derives its start order from (e.g. slalom run 2 <- run 1) - see
-        // ParticipantService#assignRaceNumbersFromPreviousRace.
+        // ParticipantService#applyStartOrderFromPreviousRace.
         @Nullable Long previousRaceId,
         @Nullable StartOrderMode startOrderMode,
         @Nullable Integer startOrderReverseTopCount

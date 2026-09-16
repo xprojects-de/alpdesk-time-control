@@ -36,14 +36,21 @@ class ParticipantServiceSpec extends Specification {
     ParticipantService service = new ParticipantService(
             repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, transactionOperations)
 
-    // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_) with a
-    // more specific argument matcher - a single closure-based interaction per mock method avoids
-    // the ambiguity of two equally-plausible interactions on the same method (see the identical
-    // pattern/reasoning in the gaudi calculator specs' knownPersons/knownTeams maps).
+    // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_)/
+    // ageGroupService.findAll() with a more specific interaction - a single closure-based
+    // interaction per mock method avoids the ambiguity of two equally-plausible interactions on
+    // the same method (see the identical pattern/reasoning in the gaudi calculator specs'
+    // knownPersons/knownTeams maps).
     boolean autoAssignActiveForRace = false
+    List<AgeGroup> ageGroups = []
 
     def setup() {
-        ageGroupService.findAll() >> []
+        ageGroupService.findAll() >> { ageGroups }
+        // Mirrors AgeGroupService's real isYearInAgeGroup() exactly - safe to stub globally
+        // (deterministic, no per-test variation needed) unlike the mutable fields above.
+        ageGroupService.isYearInAgeGroup(_, _) >> { AgeGroup ageGroup, int birthYear ->
+            birthYear >= ageGroup.birthYearFrom() && birthYear <= ageGroup.birthYearTo()
+        }
         autoAssignService.isActiveFor(_) >> { autoAssignActiveForRace }
         // executeWrite just runs the given callback immediately, as the real JDBC transaction manager would
         transactionOperations.executeWrite(_) >> { args -> args[0].call(null) }
@@ -230,7 +237,9 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        categoryService.sortedByName() >> []
+        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // too would be a redundant, ambiguous second interaction on the same mock method.
+        personService.findByIds(_) >> [:]
 
         def prevA = new Participant(101L, 4L, 1L, 1, null, null, 100, null, null, null)
         def prevB = new Participant(102L, 4L, 2L, 2, null, null, 200, null, null, null)
@@ -255,6 +264,47 @@ class ParticipantServiceSpec extends Specification {
         result*.raceNumber() == [22, 11, 33, 44]
     }
 
+    def "applyStartOrderFromPreviousRace reverses per AGE GROUP, completely independent of Category - two different categories within the same age group are reversed together, and each age group is reversed on its own"() {
+        given: "U21 (2000-2010) and Senior (1980-1999); within U21, A(cat 1)=rank1 and B(cat 2)=rank2; within Senior, C(cat 1)=rank1 and D(cat 2)=rank2"
+        ageGroups = [
+                new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH),
+                new AgeGroup(2L, "Senior", 1980, 1999, Gender.BOTH),
+        ]
+        def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 15)
+        def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+        raceService.findById(5L) >> Optional.of(race5)
+        raceService.findById(4L) >> Optional.of(race4)
+
+        def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null) // U21
+        def personB = new Person(2L, "B", "B", LocalDate.of(2006, 1, 1), Gender.MALE, null) // U21
+        def personC = new Person(3L, "C", "C", LocalDate.of(1990, 1, 1), Gender.MALE, null) // Senior
+        def personD = new Person(4L, "D", "D", LocalDate.of(1985, 1, 1), Gender.MALE, null) // Senior
+        personService.findByIds(_) >> [1L: personA, 2L: personB, 3L: personC, 4L: personD]
+
+        // categoryId differs WITHIN each age group (10 vs 20) - must have zero effect on grouping.
+        def prevA = new Participant(101L, 4L, 1L, 1, null, 10L, 100, null, null, null)
+        def prevB = new Participant(102L, 4L, 2L, 2, null, 20L, 200, null, null, null)
+        def prevC = new Participant(103L, 4L, 3L, 3, null, 10L, 150, null, null, null)
+        def prevD = new Participant(104L, 4L, 4L, 4, null, 20L, 250, null, null, null)
+        repository.findByRaceId(4L) >> [prevA, prevB, prevC, prevD]
+
+        def targetA = new Participant(201L, 5L, 1L, 1, null, 10L, null, null, null, null)
+        def targetB = new Participant(202L, 5L, 2L, 2, null, 20L, null, null, null, null)
+        def targetC = new Participant(203L, 5L, 3L, 3, null, 10L, null, null, null, null)
+        def targetD = new Participant(204L, 5L, 4L, 4, null, 20L, null, null, null, null)
+        repository.findByRaceId(5L) >> [targetA, targetB, targetC, targetD]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        def result = service.applyStartOrderFromPreviousRace(5L, true)
+
+        then: "U21 (younger/higher birthYearTo) goes first: B,A reversed; then Senior: D,C reversed - category never influenced the grouping"
+        result*.personId() == [2L, 1L, 4L, 3L]
+        result*.startSequence() == [1, 2, 3, 4]
+    }
+
     def "applyStartOrderFromPreviousRace with includeUnranked=false marks the DNF participant's target counterpart DNS instead of giving it a start position, and never touches its bib"() {
         given:
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -263,7 +313,9 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        categoryService.sortedByName() >> []
+        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // too would be a redundant, ambiguous second interaction on the same mock method.
+        personService.findByIds(_) >> [:]
 
         def prevA = new Participant(101L, 4L, 1L, 1, null, null, 100, null, null, null)
         def prevDnf = new Participant(102L, 4L, 2L, 2, null, null, null, null, null, null, DisqualificationStatus.DNF)
@@ -296,7 +348,9 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        categoryService.sortedByName() >> []
+        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // too would be a redundant, ambiguous second interaction on the same mock method.
+        personService.findByIds(_) >> [:]
 
         def prevA = new Participant(101L, 4L, 1L, 3, null, null, 100, null, null, null)
         def prevB = new Participant(102L, 4L, 2L, 1, null, null, null, null, null, null, DisqualificationStatus.DNF)
@@ -339,6 +393,37 @@ class ParticipantServiceSpec extends Specification {
         b.status() == DisqualificationStatus.DNS
     }
 
+    def "applyStartOrderFromPreviousRace puts participants with no matching age group in their own block, after every real age group"() {
+        given: "only A (born 2005) matches the one defined age group; B (born 1970) matches none"
+        ageGroups = [new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH)]
+        def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 15)
+        def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+        raceService.findById(5L) >> Optional.of(race5)
+        raceService.findById(4L) >> Optional.of(race4)
+
+        def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null)
+        def personB = new Person(2L, "B", "B", LocalDate.of(1970, 1, 1), Gender.MALE, null)
+        personService.findByIds(_) >> [1L: personA, 2L: personB]
+
+        def prevA = new Participant(101L, 4L, 1L, 1, null, null, 100, null, null, null)
+        def prevB = new Participant(102L, 4L, 2L, 2, null, null, 200, null, null, null)
+        repository.findByRaceId(4L) >> [prevA, prevB]
+
+        def targetA = new Participant(201L, 5L, 1L, 1, null, null, null, null, null, null)
+        def targetB = new Participant(202L, 5L, 2L, 2, null, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [targetA, targetB]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        def result = service.applyStartOrderFromPreviousRace(5L, true)
+
+        then: "A (in the U21 block) starts before B (in the no-age-group block), even though B was ranked ahead of nobody to reverse against - each block is reversed independently"
+        result*.personId() == [1L, 2L]
+        result*.startSequence() == [1, 2]
+    }
+
     def "applyStartOrderFromPreviousRace keeps participants tied for the same place together across the reversal boundary"() {
         given: "X=place1, Y and Z tied for place2 (identical time) - reverseTopCount=2 must not split Y from Z"
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -347,7 +432,9 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        categoryService.sortedByName() >> []
+        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // too would be a redundant, ambiguous second interaction on the same mock method.
+        personService.findByIds(_) >> [:]
 
         def prevX = new Participant(101L, 4L, 1L, 1, null, null, 100, null, null, null)
         def prevY = new Participant(102L, 4L, 2L, 2, null, null, 200, null, null, null)

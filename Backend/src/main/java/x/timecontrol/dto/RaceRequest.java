@@ -74,7 +74,7 @@ public record RaceRequest(
         StartOrderMode startOrderMode,
 
         @Nullable
-        @Schema(description = "Number of top-placed previousRaceId finishers (per category) to start in reverse order when startOrderMode is REVERSE_TOP_N", example = "15", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        @Schema(description = "Number of top-placed previousRaceId finishers (per age group) to start in reverse order when startOrderMode is REVERSE_TOP_N", example = "15", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         Integer startOrderReverseTopCount
 ) {
 }

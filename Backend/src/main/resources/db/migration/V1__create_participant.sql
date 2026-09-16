@@ -30,7 +30,7 @@ CREATE TABLE race
     cover_page_pdf       BLOB,
 
     -- Links this race to an earlier run/leg it derives its start order from (e.g. slalom run 2's
-    -- start list depends on run 1's results) - see ParticipantService.assignRaceNumbersFromPreviousRace.
+    -- start list depends on run 1's results) - see ParticipantService.applyStartOrderFromPreviousRace.
     -- ON DELETE SET NULL so deleting run 1 doesn't cascade-delete run 2, it just un-links it.
     previous_race_id     INTEGER REFERENCES race (id) ON DELETE SET NULL,
     start_order_mode     TEXT CHECK (start_order_mode IN ('REVERSE_TOP_N')),
