@@ -4,6 +4,7 @@ import jakarta.inject.Singleton;
 import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
+import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
 
 import java.util.ArrayList;
@@ -72,6 +73,27 @@ public class RankingService {
         return "DNS";
     }
 
+    /**
+     * The value participants are considered tied on for place assignment: same as
+     * {@link #adjustedValue}, but for time-based races rounded to the nearest 10ms (hundredth of a
+     * second) - the precision actually printed on a PDF/live result (see
+     * {@code RankingViewService#formatTime}). Two participants whose raw results differ only in the
+     * millisecond digit that rounding erases must show the same time and therefore share a place;
+     * ranking on the unrounded value would otherwise give them different places despite an identical
+     * printed result, which reads as a timing/ranking bug to race officials.
+     */
+    private Integer placeTieValue(Race race, Participant participant) {
+        Integer adjusted = adjustedValue(race, participant);
+        if (adjusted == null || race.resultUnit() != ResultUnit.TIME) {
+            return adjusted;
+        }
+        return (int) roundToTensOfMs(adjusted);
+    }
+
+    private static double roundToTensOfMs(double valueMs) {
+        return Math.round(valueMs / 10.0) * 10.0;
+    }
+
     public Comparator<Participant> comparator(Race race) {
         Comparator<Participant> ascending = Comparator.comparing(
                 p -> adjustedValue(race, p),
@@ -94,7 +116,7 @@ public class RankingService {
         int place = 0;
         for (int i = 0; i < ranked.size(); i++) {
             Participant participant = ranked.get(i);
-            Integer value = adjustedValue(race, participant);
+            Integer value = placeTieValue(race, participant);
             if (previousValue == null || !value.equals(previousValue)) {
                 place = i + 1;
             }
@@ -123,5 +145,22 @@ public class RankingService {
             previousValue = value;
         }
         return places;
+    }
+
+    /**
+     * Same as {@link #assignStandardPlaces(List)}, but for a time-based race, first rounds every
+     * value to the nearest 10ms (hundredth of a second) - the same display-precision tie rounding
+     * {@link #placeTieValue} applies to a single race's places - before comparing for ties. Without
+     * this, a combined Gaudi-Modus total (Zeit-Kombination/Mannschaftswertung's summed times,
+     * Los-Verfahren's average-deviation) that differs from another only in a millisecond digit the
+     * PDF rounds away would still be assigned a different place despite printing an identical value.
+     * A non-time result (e.g. a points total) is passed through unrounded, since its stored value is
+     * already at the precision it's printed at.
+     */
+    public List<Integer> assignStandardPlaces(List<Double> valuesBestToWorst, ResultUnit resultUnit) {
+        List<Double> tieValues = resultUnit == ResultUnit.TIME
+                ? valuesBestToWorst.stream().map(RankingService::roundToTensOfMs).toList()
+                : valuesBestToWorst;
+        return assignStandardPlaces(tieValues);
     }
 }

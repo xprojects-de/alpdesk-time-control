@@ -94,7 +94,7 @@ public class TeamModeCalculator implements GaudiModeCalculator {
 
         Comparator<TeamResult> byTotalAscending = Comparator.comparingLong(TeamResult::totalValue);
         results.sort(race.sortDirection() == SortDirection.DESC ? byTotalAscending.reversed() : byTotalAscending);
-        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalValue()).toList());
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalValue()).toList(), race.resultUnit());
 
         List<GaudiRankingEntryResponse> ranking = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {

@@ -121,7 +121,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         results.sort(Comparator.comparingDouble(PairResult::diff));
-        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(PairResult::diff).toList());
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(PairResult::diff).toList(), race.resultUnit());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {

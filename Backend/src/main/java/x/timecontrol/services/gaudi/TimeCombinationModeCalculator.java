@@ -42,7 +42,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
     private final AgeGroupService ageGroupService;
 
     public TimeCombinationModeCalculator(RankingService rankingService, PersonService personService,
-                                          TeamService teamService, AgeGroupService ageGroupService) {
+                                         TeamService teamService, AgeGroupService ageGroupService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.teamService = teamService;
@@ -67,7 +67,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
-        record PersonResult(String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs, String team) {
+        record PersonResult(String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs,
+                            String team) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -126,7 +127,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         SortDirection sortDirection = races.getFirst().race().sortDirection();
         Comparator<PersonResult> byTotalAscending = Comparator.comparingInt(PersonResult::totalMs);
         results.sort(sortDirection == SortDirection.DESC ? byTotalAscending.reversed() : byTotalAscending);
-        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList());
+        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList(), races.getFirst().race().resultUnit());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         Integer leaderMs = results.isEmpty() ? null : results.getFirst().totalMs();
