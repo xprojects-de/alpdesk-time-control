@@ -286,7 +286,7 @@ public class RaceLiveService {
             html.append("<td>").append(escapeHtml(e.diffFormatted())).append("</td></tr>");
         }
         html.append("</tbody></table>");
-        return html.toString();
+        return "<div class=\"table-scroll\">" + html + "</div>";
     }
 
     private String renderDnsTable(List<RankingViewService.DnsRow> rows) {
@@ -305,7 +305,7 @@ public class RaceLiveService {
             html.append("<td>").append(escapeHtml(r.status())).append("</td></tr>");
         }
         html.append("</tbody></table>");
-        return html.toString();
+        return "<div class=\"table-scroll\">" + html + "</div>";
     }
 
     private String renderStartListTable(List<RankingViewService.StartListEntry> entries) {
@@ -330,7 +330,7 @@ public class RaceLiveService {
             html.append("</tr>");
         }
         html.append("</tbody></table>");
-        return html.toString();
+        return "<div class=\"table-scroll\">" + html + "</div>";
     }
 
     private static String dashIfBlank(String value) {
@@ -360,8 +360,9 @@ public class RaceLiveService {
                   h2 { color: %s; margin: 2rem 0 0.5rem; font-size: 1.15rem; border-bottom: 2px solid %s; padding-bottom: 0.25rem; }
                   .subtitle { margin: 0 0 1.5rem; color: #555; }
                   .empty { color: #777; font-style: italic; }
-                  table { border-collapse: collapse; width: 100%%; margin-bottom: 1rem; background: #fff; }
-                  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ddd; font-size: 0.95rem; }
+                  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; }
+                  table { border-collapse: collapse; width: 100%%; min-width: 100%%; background: #fff; }
+                  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ddd; font-size: 0.95rem; white-space: nowrap; }
                   th { background: %s; color: #fff; font-weight: 600; }
                   tbody tr:nth-child(even) { background: #fafaf7; }
                   ul.menu { list-style: none; padding: 0; }
@@ -377,6 +378,13 @@ public class RaceLiveService {
                     text-decoration: none;
                   }
                   ul.menu a:hover { background: #f0f0e8; }
+                  @media (max-width: 600px) {
+                    body { padding: 0.75rem; }
+                    h1 { font-size: 1.3rem; }
+                    h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+                    th, td { padding: 0.35rem 0.5rem; font-size: 0.85rem; }
+                    .table-scroll { margin-left: -0.75rem; margin-right: -0.75rem; padding: 0 0.75rem; }
+                  }
                 </style>
                 </head>
                 <body>
