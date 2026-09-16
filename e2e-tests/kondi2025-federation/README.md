@@ -84,6 +84,36 @@ Läuft komplett über die API (keine direkte DB-Manipulation nötig, dank `clear
 pkill -f 'time-control.jar'; rm -rf /tmp/kondi-results
 ```
 
+### Gaudi-Modus Status-Szenarien-Variante (`run_phased_results_with_status.sh`)
+
+Testet die `keepDnsInRanking`/`keepDnfInRanking`/`keepDsqInRanking`-Optionen (V2-Migration) der
+Punkte-Mischwertung end-to-end - bislang nur auf Unit-Test-Ebene abgedeckt
+(`PointsCombinationModeCalculatorSpec`), nie mit echten, über mehrere Stationen eingegebenen Daten
+oder gegen den gerenderten PDF-Export. Läuft denselben Ablauf wie `run_phased_results.sh` (Phasen
+1-10 unverändert), danach zusätzlich:
+
+- **Phase 11** (`phase11_prepare_status_scenarios.py`): sucht sich 5 Teilnehmer, die in allen 4
+  Rennen ein normales Ergebnis haben, und setzt gezielt DNS/DNF/DSQ in einzelnen Rennen (X1-X4:
+  je ein schlechtes Bein; X5: DNS in allen 4 Rennen - muss immer ausgeschlossen bleiben).
+- **Phase 12** (`phase12_gaudi_status_scenarios.py`): legt 6 Punkte-Mischwertungen mit
+  verschiedenen Flag-Kombinationen an (alle aus, je einzeln an, alle an, sowie eine
+  Unabhängigkeits-Kombination DNS+DNF an/DSQ aus) und verifiziert pro Szenario - unabhängig in
+  Python nachgerechnet, inkl. der 0-Punkte-Regel für ein toleriertes Bein - sowohl die komplette
+  Rangliste (JSON) als auch die "Nicht gewertet"-Liste im PDF (für **alle sechs** Szenarien, nicht
+  nur eins).
+- **Phase 13** (`phase13_status_flags_no_effect_on_other_types.py`): Guardrail - die drei Flags
+  wirken laut Code nur bei `POINTS_COMBINATION`; legt zwei `TIME_COMBINATION`-Instanzen (einmal
+  alle Flags an, einmal aus) über dieselben Daten an und prüft, dass die Rangliste identisch ist.
+
+Braucht wie `run_phased_results.sh` kein zusätzliches Argument, aber ebenfalls **frische**
+Instanzen:
+
+```bash
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-status
+./run_phased_results_with_status.sh
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-status
+```
+
 Sowohl `run_all.sh` als auch `run_phased.sh` schließen automatisch mit einem Abgleich gegen ein
 echtes offizielles Ergebnis-PDF ab (`verify_against_official.py`, Phase 10), sofern
 `sample-data/official_result.pdf` vorhanden ist — fehlt die Datei (z.B. weil sie aus
@@ -147,4 +177,8 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase8_gaudi_combo.py` | Gaudi-Punkte-Mischwertung erstellen und verifizieren |
 | `phase9_gaudi_agegroups.py` | Gaudi-Punkte-Mischwertung nach Altersklassen verifizieren |
 | `verify_against_official.py` | Phase 10 (automatisch, falls PDF vorhanden): Abgleich mit einem echten Ergebnis-PDF |
+| `phase11_prepare_status_scenarios.py` | MAIN: 5 Teilnehmer auswählen, gezielt DNS/DNF/DSQ in einzelnen Rennen setzen (X1-X5) |
+| `phase12_gaudi_status_scenarios.py` | 6 Punkte-Mischwertungen mit verschiedenen keep-in-ranking-Flag-Kombinationen anlegen und je gegen unabhängige Python-Berechnung + PDF verifizieren |
+| `phase13_status_flags_no_effect_on_other_types.py` | Guardrail: keep-in-ranking-Flags dürfen bei TIME_COMBINATION keinen Effekt haben |
+| `run_phased_results_with_status.sh` | Orchestriert phase1-10 wie `run_phased_results.sh`, dann phase11-13 |
 | `sample-data/official_result.pdf` | Das mitgelieferte echte Ergebnis-PDF (siehe Datenschutz-Hinweis oben) |

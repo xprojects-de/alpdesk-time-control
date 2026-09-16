@@ -51,9 +51,11 @@ for name, unit, label, direction, csv_file, key in config.RACES:
         cleared_count += 1
     print(f"{name}: {cleared_count} Teilnehmer-Ergebnisse zurueckgesetzt")
 
-    # sanity check: the API must now report every participant of this race as blank/unranked.
+    # sanity check: clear-result only clears durationMs/penalty/measuredAt - comment/status are
+    # deliberately preserved (see ParticipantService#clearResult's docstring), so only the former
+    # are asserted empty here.
     _, cleared = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
-    still_set = [p["raceNumber"] for p in cleared if p.get("durationMs") is not None or p.get("status") != "NONE"]
+    still_set = [p["raceNumber"] for p in cleared if p.get("durationMs") is not None or p.get("penalty") is not None]
     assert not still_set, f"{name}: Ergebnisse nicht vollstaendig geleert, raceNumbers={still_set}"
 
     # 4) restore purely via the RESULTS-ONLY import (matched by raceNumber, never touches identity).
