@@ -8,6 +8,7 @@ import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {Race, RaceLiveLink} from '../../models/race.model';
 import {RaceService} from '../../services/race.service';
+import {MatTooltip} from "@angular/material/tooltip";
 
 export interface RaceLiveLinksDialogData {
     race: Race;
@@ -27,6 +28,7 @@ export interface RaceLiveLinksDialogData {
         MatListModule,
         MatProgressSpinnerModule,
         MatSnackBarModule,
+        MatTooltip,
     ],
     template: `
         <h2 mat-dialog-title>Live-Ergebnisse: {{ data.race.name }}</h2>
