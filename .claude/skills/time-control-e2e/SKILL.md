@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test, and the Nachtslalom auto-assign/measurement-editing test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test, the Nachtslalom auto-assign/measurement-editing test, and the Rundung rounding-consistency regression test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -19,6 +19,13 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   manual measurement corrections and the reset-time regressions (device unreachable during
   archive+reset; a manual and a device measurement colliding on the same low id right after a
   reset). Also uses `fake_device.py`, like bergsprint.
+- `e2e-tests/rundung/` — rounding-consistency regression test: a near-tie 2ms apart that must
+  print/rank as the same place, a "Rueckstand"/"Abweichung" that must equal the difference of the
+  two already-rounded printed values (not an independently-rounded raw gap), the same place-tie
+  reaching into a derived Lauf-2 start order, and the DESC Zeit-Kombination sign fix (checked
+  against the actual PDF text via `pdftotext`, not just the JSON API). No timing device involved -
+  results are set directly via `PUT`/`POST /participants` - so it runs much faster than
+  bergsprint/nachtslalom.
 
 Each suite starts its own throwaway backend instance(s) via its own `start_instances.sh` into a
 fresh `mktemp -d` work dir with an isolated SQLite DB — **never** the real

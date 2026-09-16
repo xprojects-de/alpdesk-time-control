@@ -17,8 +17,23 @@ def adjusted_value(direction, duration_ms, penalty, status):
         return max(0, duration_ms - penalty)
     return max(0, duration_ms + penalty)
 
+def tie_value(value_ms, result_unit):
+    """Mirrors RankingService.placeTieValue: a TIME race's value is rounded to the nearest 10ms
+    (hundredth of a second, the display precision) before comparing for ties, so two results that
+    print identically share a place. Uses integer round-half-up (matching Java's Math.round on a
+    non-negative double) rather than Python's round-half-to-even, and rather than float division,
+    to avoid disagreeing with the server at exact .5 boundaries."""
+    if value_ms is None or result_unit != "TIME":
+        return value_ms
+    return (value_ms + 5) // 10 * 10
+
 def compute_expected_places(participants, direction):
-    """Standard competition ranking (1,2,2,4,...). Returns dict externalId -> place."""
+    """Standard competition ranking (1,2,2,4,...). Returns dict externalId -> place.
+    Sorted by the raw adjusted value (the exact order the server sorts by), but a participant
+    only gets a new place when its *tie value* (see tie_value) differs from the previous one -
+    matching RankingService.computePlaces, which ranks by the raw value but only bumps the place
+    counter on a change in the rounded-for-display value."""
+    result_unit = participants[0]["race"]["resultUnit"] if participants else None
     scored = []
     for p in participants:
         av = adjusted_value(direction, p.get("durationMs"), p.get("penalty"), p.get("status"))
@@ -30,13 +45,14 @@ def compute_expected_places(participants, direction):
         scored.sort(key=lambda t: t[0])
 
     places = {}
-    prev_val = None
+    prev_tie = None
     place = 0
     for i, (av, p) in enumerate(scored):
-        if prev_val is None or av != prev_val:
+        tie = tie_value(av, result_unit)
+        if prev_tie is None or tie != prev_tie:
             place = i + 1
         places[p["person"]["externalId"]] = place
-        prev_val = av
+        prev_tie = tie
     return places, scored
 
 def parse_pdf_places(pdf_bytes, tmp_name):
