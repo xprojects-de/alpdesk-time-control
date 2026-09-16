@@ -8,7 +8,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 print("=== 'Kontinuierlicher Import' aktivieren - das treibt processNewMeasurements() an ===")
@@ -26,7 +26,7 @@ status, measurements = c.get(config.BASE, token, "/measurements")
 assigned = [m for m in measurements if m.get("participantId") is not None]
 print(f"Messungen zugeordnet: {len(assigned)} von {len(measurements)}")
 
-times_ms = {int(k): v for k, v in json.load(open("times_ms.json")).items()}
+times_ms = {int(k): v for k, v in json.load(open(c.results_path("times_ms.json"))).items()}
 status, participants = c.get(config.BASE, token, f"/participants?raceId={race_id}")
 by_participant_id = {p["id"]: p for p in participants}
 mismatches = []

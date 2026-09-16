@@ -6,7 +6,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 status, all_participants = c.get(config.BASE, token, f"/participants?raceId={race_id}")
@@ -102,7 +102,7 @@ for m in mismatches[:20]:
 
 status, pdf_bytes = c.get_raw(config.BASE, token, f"/gaudi-modes/{gm_id}/export/pdf")
 assert status == 200
-with open("los_ranking.pdf", "wb") as f:
+with open(c.results_path("los_ranking.pdf"), "wb") as f:
     f.write(pdf_bytes)
 print(f"\nPDF-Export erfolgreich ({len(pdf_bytes)} bytes)")
 

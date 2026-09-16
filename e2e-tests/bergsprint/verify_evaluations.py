@@ -6,7 +6,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 def adjusted_value(p):
@@ -35,7 +35,7 @@ all_ok = True
 for gender_en, gender_de in [("FEMALE", "weiblich"), ("MALE", "maennlich")]:
     status, pdf_bytes = c.get_raw(config.BASE, token, f"/participants/export/pdf/gender/{gender_en}/categories/{race_id}")
     assert status == 200, (gender_en, status, pdf_bytes)
-    fname = f"verify_{gender_de}_categories.pdf"
+    fname = c.results_path(f"verify_{gender_de}_categories.pdf")
     with open(fname, "wb") as f:
         f.write(pdf_bytes)
     full_text = subprocess.run(["pdftotext", "-layout", fname, "-"], capture_output=True, text=True).stdout

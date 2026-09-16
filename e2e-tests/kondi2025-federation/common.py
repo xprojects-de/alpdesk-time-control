@@ -1,8 +1,15 @@
 import json
 import mimetypes
+import os
 import urllib.request
 import urllib.error
 import uuid
+
+def results_path(name):
+    """Path for a generated e2e artifact (state files, PDFs, CSV exports) - kept out of the
+    suite's own directory (and out of git) under results/, instead of littering it on every run."""
+    os.makedirs("results", exist_ok=True)
+    return os.path.join("results", name)
 
 def login(base, username="e2e_admin", password="e2eTestPass123"):
     body = json.dumps({"username": username, "password": password}).encode()
