@@ -811,7 +811,7 @@ class ParticipantServiceSpec extends Specification {
 
         when:
         def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
-                [raceNumber: "Name", time: "End Time"], ResultTimeFormat.CLOCK)
+                [raceNumber: "Name", time: "End Time"], ResultTimeFormat.CLOCK, ResultUnit.TIME)
 
         then: "the two known race numbers are updated with a parsed duration / DNF status, the unknown one is reported instead of creating a participant"
         0 * repository.save(_)
@@ -836,12 +836,12 @@ class ParticipantServiceSpec extends Specification {
 
         expect:
         def resultSeconds = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83.68\n".getBytes("UTF-8"), null,
-                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS, ResultUnit.TIME)
         resultSeconds.updated().first().durationMs() == 83680
         resultSeconds.errors().isEmpty()
 
         def resultMillis = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;83680\n".getBytes("UTF-8"), null,
-                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.MILLISECONDS)
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
         resultMillis.updated().first().durationMs() == 83680
         resultMillis.errors().isEmpty()
     }
@@ -854,7 +854,7 @@ class ParticipantServiceSpec extends Specification {
 
         when:
         def result = service.importResultsByRaceNumber(5L, "StNr;Zeit\n61;35999.99\n".getBytes("UTF-8"), null,
-                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS)
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.SECONDS, ResultUnit.TIME)
 
         then:
         result.errors().isEmpty()
@@ -869,7 +869,7 @@ class ParticipantServiceSpec extends Specification {
 
         when:
         def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null,
-                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.CLOCK)
+                [raceNumber: "StNr", time: "Zeit"], ResultTimeFormat.CLOCK, ResultUnit.TIME)
 
         then:
         0 * repository.updateAll(_)
@@ -886,7 +886,7 @@ class ParticipantServiceSpec extends Specification {
 
         when:
         def result = service.importResultsByRaceNumber(5L, "raceNumber;time\n61;83680\n".getBytes("UTF-8"), null,
-                [:], ResultTimeFormat.MILLISECONDS)
+                [:], ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
 
         then: "every row fails for lack of a raceNumber mapping instead of silently using the auto-suggested one"
         0 * repository.updateAll(_)
@@ -895,28 +895,39 @@ class ParticipantServiceSpec extends Specification {
         result.errors()[0].reason().contains("raceNumber")
     }
 
-    def "exportResultsCsv writes only the result fields (no identity data) using our own field names as the header"() {
-        given: "one participant with a full result, plus one with no result at all"
+    def "exportResultsCsv writes result fields plus informational identity fields, sorted ascending by raceNumber"() {
+        given: "one participant with a full result, plus one with no result at all and no raceNumber"
         def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
         def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        def person1 = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
+        def person2 = new Person(2L, "Erika", "Musterfrau", LocalDate.of(1991, 1, 1), Gender.FEMALE, null)
         repository.findByRaceId(5L) >> [withResult, withoutResult]
+        personService.findByIds([1L, 2L] as Set) >> [1L: person1, 2L: person2]
+        teamService.findByIds([2L] as Set) >> [2L: new Team(2L, "TEAM A")]
+        categoryService.findByIds(_ as Set) >> [:]
+        raceService.findByIds(_ as Set) >> [:]
 
         when:
-        def lines = service.exportResultsCsv(5L).readLines()
+        def lines = service.exportResultsCsv(5L, ResultUnit.TIME).readLines()
 
-        then: "the header carries only raceNumber/time/penalty/measuredAt/comment/status - never name/team/category/etc."
-        lines[0] == "raceNumber;time;penalty;measuredAt;comment;status"
-        lines[1] == "42;125000;5000;2026-08-18T10:30;Ski gebrochen;NONE"
-        lines[2] == ";;;;;NONE"
+        then: "the header carries raceNumber + informational identity fields + the result fields, and time/value/penalty are human-readable clock strings"
+        lines[0] == "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status"
+        lines[1] == "42;Mustermann;Max;TEAM A;EXT-1;2:05.000;0:05.000;Ski gebrochen;NONE"
+        lines[2] == ";Musterfrau;Erika;;;;;;NONE"
     }
 
-    def "exportResultsCsv does not NPE on a participant with a null status"() {
+    def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
         given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
-        def noStatus = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, null)
+        def noStatus = new Participant(10L, 5L, 1L, 42, null, null, 8550, null, null, null, null)
+        def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
         repository.findByRaceId(5L) >> [noStatus]
+        personService.findByIds(_ as Set) >> [1L: person]
+        teamService.findByIds(_ as Set) >> [:]
+        categoryService.findByIds(_ as Set) >> [:]
+        raceService.findByIds(_ as Set) >> [:]
 
         expect:
-        service.exportResultsCsv(5L).readLines()[1] == "42;;;;;NONE"
+        service.exportResultsCsv(5L, ResultUnit.POINTS).readLines()[1] == "42;Mustermann;Max;;;85.50;;;NONE"
     }
 
     def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
@@ -925,19 +936,51 @@ class ParticipantServiceSpec extends Specification {
         repository.findByRaceId(5L) >> [existing]
         repository.updateAll(_) >> { List<Participant> list -> list }
 
-        def csv = "raceNumber;time;penalty;measuredAt;comment;status\n" +
-                "42;125000;5000;2026-08-18T10:30:00;Ski gebrochen;NONE\n"
+        def csv = "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status\n" +
+                "42;Mustermann;Max;;;2:05.000;0:05.000;Ski gebrochen;NONE\n"
 
-        when: "no mapping is passed - it must be derivable from the header alone"
-        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.MILLISECONDS)
+        when: "no mapping is passed - it must be derivable from the header alone, and the informational identity columns are ignored"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.CLOCK, ResultUnit.TIME)
 
         then:
         result.errors().isEmpty()
         result.updated().size() == 1
         result.updated().first().durationMs() == 125000
         result.updated().first().penalty() == 5000
-        result.updated().first().measuredAt() == LocalDateTime.of(2026, 8, 18, 10, 30, 0)
         result.updated().first().comment() == "Ski gebrochen"
+    }
+
+    def "importResultsByRaceNumber stamps measuredAt with the import's own timestamp on every updated row"() {
+        given: "there is no measuredAt column to map any more - every touched row is stamped with 'now' instead"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, null, LocalDateTime.of(2020, 1, 1, 0, 0), null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, "raceNumber;time\n42;120000\n".getBytes("UTF-8"), null,
+                [raceNumber: "raceNumber", time: "time"], ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().measuredAt().isAfter(LocalDateTime.of(2020, 1, 1, 0, 0))
+    }
+
+    def "importResultsByRaceNumber reads time/value and penalty as plain decimals for a POINTS race, ignoring timeFormat"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 999, 1000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time;penalty\n42;85,50;2,00\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty"]
+
+        when: "timeFormat is MILLISECONDS, but the race is POINTS - the decimal reading must win"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.POINTS)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().durationMs() == 8550
+        result.updated().first().penalty() == 200
     }
 
     def "importResultsByRaceNumber rejects a negative penalty instead of letting it floor to 0 in ranking"() {
@@ -949,7 +992,7 @@ class ParticipantServiceSpec extends Specification {
         def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty"]
 
         when:
-        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
 
         then: "the row is rejected and the participant's existing penalty is left untouched"
         result.updated().isEmpty()
@@ -968,7 +1011,7 @@ class ParticipantServiceSpec extends Specification {
         def mapping = [raceNumber: "raceNumber", time: "time"]
 
         when:
-        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS)
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
 
         then:
         result.errors().isEmpty()

@@ -26,7 +26,7 @@ for name, unit, label, direction, csv_file, key in config.RACES:
     main_race_id = race_ids[name]
     status, resp = c.post_multipart(
         config.MAIN, main_token, f"/participants/import-results-mapped/{main_race_id}",
-        {"timeFormat": "MILLISECONDS"},
+        {"timeFormat": "CLOCK"},
         {"file": (fname, body, "text/csv")},
     )
     print(f"{key} -> MAIN/{name}: import status={status} updated={resp.get('updatedCount')} errors={resp.get('errorCount')}")

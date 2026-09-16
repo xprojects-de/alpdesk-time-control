@@ -22,14 +22,16 @@ public final class ParticipantResultImportParsers {
 
     // Only the fields this import actually applies - unlike ParticipantImportParsers, there's no
     // identity data here at all: every row is matched onto an *existing* participant via raceNumber,
-    // never used to create one.
-    public static final List<String> TARGET_FIELDS = List.of("raceNumber", "time", "penalty", "measuredAt", "comment", "status");
+    // never used to create one. There's deliberately no "measuredAt" field - see the note on
+    // ParticipantService#importResultsByRaceNumber for why.
+    public static final List<String> TARGET_FIELDS = List.of("raceNumber", "time", "penalty", "comment", "status");
 
     private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.of(
             "raceNumber", List.of("stnr", "startnummer", "racenumber", "bib", "bibnumber"),
-            "time", List.of("time", "zeit", "endtime", "result", "ergebnis", "dauer", "duration", "durationms", "zeitms"),
-            "penalty", List.of("penalty", "strafe", "strafzeit", "strafsekunden", "penaltyms", "penaltyseconds"),
-            "measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp"),
+            // "timevalue" matches our own exported "time/value" header (normalize() strips the "/"
+            // and space), so a re-imported export still self-suggests without manual mapping.
+            "time", List.of("time", "timevalue", "zeit", "endtime", "result", "ergebnis", "dauer", "duration", "durationms", "zeitms", "wert", "value", "punkte", "points"),
+            "penalty", List.of("penalty", "strafe", "strafzeit", "strafpunkte", "strafsekunden", "penaltyms", "penaltyseconds"),
             "comment", List.of("comment", "kommentar", "info", "bemerkung"),
             "status", List.of("status", "disqualifikation", "dsq"));
 
