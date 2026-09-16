@@ -9,6 +9,10 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
 
 - `e2e-tests/bergsprint/` — single race, real device-import path, category + Los-Modus scoring.
 - `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations).
+  Also has `run_phased.sh`: the same scenario but with results entered/exported/imported in 3
+  waves instead of one shot at the end, to check partial imports don't error or corrupt data. It
+  needs its own fresh set of 5 instances — it creates races with the same names `run_all.sh` does,
+  so it fails if run against instances `run_all.sh` already used.
 - `e2e-tests/nachtslalom/` — two-run race exercising every `AutoAssignService` combination/error
   case (enable/skip/set-next/disable, default-by-raceNumber vs. default-by-startSequence, a
   participant marked DSQ/DNF/DNS while the cursor sits on them, `discardOldestStart()`) plus
@@ -50,6 +54,9 @@ found.
       the first failed step/verification.
    d. Clean up regardless of outcome: `pkill -f 'time-control.jar'` (plus
       `pkill -f 'fake_device.py'` for bergsprint/nachtslalom), then `rm -rf` that suite's temp work dir.
+   e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d once more with
+      `./run_phased.sh` instead of `./run_all.sh` — fresh instances/work dir again, same CSVs,
+      same cleanup.
 4. Report a summary table: suite → ran/skipped, pass/fail, and for any failure point at
    `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and the
    failing script's output.

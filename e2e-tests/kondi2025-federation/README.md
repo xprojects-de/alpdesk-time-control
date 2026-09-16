@@ -40,6 +40,28 @@ ihr DNS/DNF/DSQ gezielt auf bestimmten Startnummern testen wollt (`INJECTED_STAT
 ./run_all.sh
 ```
 
+### Phasen-Variante (Teilimporte an Pausen)
+
+`run_phased.sh` prüft denselben Ablauf, trägt die Ergebnisse aber in 3 Phasen ein statt alles auf
+einmal: an jeder Station wird nach jedem Drittel des Feldes ein Export/Import zur Hauptinstanz
+gemacht (simuliert das Sichern des Zwischenstands in den Wettkampfpausen). Prüft insbesondere,
+dass ein Teilimport (die meisten Teilnehmer haben noch kein Ergebnis) keine Fehler wirft und dass
+ein späterer Teilimport bereits importierte Ergebnisse nicht dupliziert oder überschreibt.
+
+**Läuft auf denselben 5 Instanzen wie `run_all.sh` nicht ein zweites Mal** - `phase1_main.py`
+legt Rennen mit denselben Namen an, das schlägt auf einer Instanz fehl, die schon welche hat.
+Normal-Test und Phasen-Test nacheinander laufen lassen:
+
+```bash
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-normal
+./run_all.sh
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-normal
+
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-phased
+./run_phased.sh
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-phased
+```
+
 Optional, zum Abgleich mit einem echten offiziellen Ergebnis-PDF:
 
 ```bash
@@ -82,6 +104,9 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase2_station_setup.py` | Station: eigenes Rennen anlegen, Roster importieren |
 | `phase3_enter_results.py` | Station: Ergebnisse einzeln eintragen (inkl. DNS/DNF/DSQ) |
 | `phase4_export_import.py` | Ergebnis-Export je Station → Import in Hauptinstanz |
+| `phase3_phased_results.py` | Wie phase3, aber nur ein Drittel des Feldes pro Aufruf (`station<N> <phase 1\|2\|3>`) |
+| `phase4_phased_export_import.py` | Wie phase4, aber pro Phase (`<phase 1\|2\|3>`) - prüft insb. `errorCount == 0` bei unvollständigem Zwischenstand |
+| `run_phased.sh` | Orchestriert phase1+phase2 wie gewohnt, dann 3x phase3_phased+phase4_phased, dann phase5-9 |
 | `phase5_reconcile.py` | Datenintegrität Station ↔ Hauptinstanz prüfen |
 | `phase6_verify_rankings.py` | Gesamt-Platzierung unabhängig nachrechnen und mit PDF abgleichen |
 | `phase7_verify_gender_agegroup.py` | Dasselbe für Geschlecht/Altersklassen-Aufschlüsselung |
