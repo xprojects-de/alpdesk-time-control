@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import spock.lang.Unroll
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
@@ -50,8 +51,14 @@ class PointsCombinationModeCalculatorSpec extends Specification {
         new Person(id, firstName, "Testperson", LocalDate.of(1990, 1, 1), Gender.MALE, null)
     }
 
-    private static GaudiMode pointsMode() {
-        new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Punkte-Mischwertung", null, 1L, LocalDateTime.now())
+    private static GaudiMode pointsMode(boolean keepDnsInRanking = false, boolean keepDnfInRanking = false, boolean keepDsqInRanking = false) {
+        new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Punkte-Mischwertung", null, 1L,
+                keepDnsInRanking, keepDnfInRanking, keepDsqInRanking, LocalDateTime.now())
+    }
+
+    /** Only the one flag matching {@code status} turned on - the other two stay off. */
+    private static GaudiMode pointsModeTolerating(DisqualificationStatus status) {
+        pointsMode(status == DisqualificationStatus.DNS, status == DisqualificationStatus.DNF, status == DisqualificationStatus.DSQ)
     }
 
     def setup() {
@@ -101,6 +108,127 @@ class PointsCombinationModeCalculatorSpec extends Specification {
 
         then:
         ranking.isEmpty()
+    }
+
+    @Unroll
+    def "a person #status in a required race is excluded when no keep*InRanking flag is set"() {
+        given:
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participantWithStatus(2L, 1L, null, status)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(pointsMode(), races)
+
+        then:
+        ranking.isEmpty()
+
+        where:
+        status << [DisqualificationStatus.DNS, DisqualificationStatus.DNF, DisqualificationStatus.DSQ]
+    }
+
+    @Unroll
+    def "a person #status in a required race stays ranked with 0 points for that leg when its own keep*InRanking flag is set"() {
+        given:
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participantWithStatus(2L, 1L, null, status)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(pointsModeTolerating(status), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].totalPoints() == 100
+        ranking[0].legs()[1].points() == 0
+        ranking[0].legs()[1].place() == null
+        ranking[0].legs()[1].status() == status.name()
+        ranking[0].legs()[0].status() == null
+
+        where:
+        status << [DisqualificationStatus.DNS, DisqualificationStatus.DNF, DisqualificationStatus.DSQ]
+    }
+
+    @Unroll
+    def "the three flags are independent - a #status leg is still excluded when only the other two flags are set"() {
+        given:
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participantWithStatus(2L, 1L, null, status)]),
+        ]
+        def otherTwoOnly = pointsMode(status != DisqualificationStatus.DNS, status != DisqualificationStatus.DNF, status != DisqualificationStatus.DSQ)
+
+        when:
+        def ranking = calculator.computeRanking(otherTwoOnly, races)
+
+        then:
+        ranking.isEmpty()
+
+        where:
+        status << [DisqualificationStatus.DNS, DisqualificationStatus.DNF, DisqualificationStatus.DSQ]
+    }
+
+    def "a person kept in ranking despite a bad leg is not also reported in computeDnsEntries"() {
+        given:
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participantWithStatus(2L, 1L, null, DisqualificationStatus.DNF)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(pointsMode(false, true, false), races)
+
+        then:
+        dns.isEmpty()
+    }
+
+    def "a missing (never entered) leg is tolerated too when keepDnsInRanking is true, marked as the generic DNS label"() {
+        given: "person 1 has no Participant record at all in race 2, unlike an explicit status - " +
+                "this counts as the generic DNS case, gated by keepDnsInRanking specifically"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(pointsMode(true, false, false), races)
+
+        then:
+        ranking.size() == 1
+        ranking[0].totalPoints() == 100
+        ranking[0].legs()[1].points() == 0
+        ranking[0].legs()[1].status() == "DNS"
+    }
+
+    def "a person with no valid result in ANY required race is still excluded even when all three flags are set"() {
+        given: "Anna never has a placed result in either required race - she never actually raced"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d,
+                        [participantWithStatus(1L, 1L, null, DisqualificationStatus.DNS)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, []),
+        ]
+        def allFlags = pointsMode(true, true, true)
+
+        when:
+        def ranking = calculator.computeRanking(allFlags, races)
+        def dns = calculator.computeDnsEntries(allFlags, races)
+
+        then:
+        ranking.isEmpty()
+        dns.size() == 1
+        dns[0].status() == "DNS"
     }
 
     def "computeDnsEntries reports the explicit DSQ status of the leg that carries it"() {

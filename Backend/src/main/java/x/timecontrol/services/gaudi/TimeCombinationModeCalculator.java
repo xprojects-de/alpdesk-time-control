@@ -108,6 +108,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                         p != null ? p.penalty() : null,
                         adjusted,
                         p != null ? placesByRace.get(race.raceId()).get(p.id()) : null,
+                        null,
                         null
                 ));
             }

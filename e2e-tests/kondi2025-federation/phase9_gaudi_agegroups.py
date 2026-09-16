@@ -8,8 +8,8 @@ import config
 from phase6_verify_rankings import compute_expected_places, RACE_DIRECTIONS
 
 token = c.login(config.MAIN)
-race_ids = json.load(open("state.json"))["race_ids"]
-gaudi_id = json.load(open("gaudi_state.json"))["gm_id"]
+race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
+gaudi_id = json.load(open(c.results_path("gaudi_state.json")))["gm_id"]
 
 FIS_SCHEMA = [100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]
 def points_for_place(place):
@@ -50,9 +50,9 @@ all_participants = next(iter(per_race.values()))["participants"]
 status, pdf_bytes = c.get_raw(config.MAIN, token, f"/gaudi-modes/{gaudi_id}/export/pdf/agegroups/all")
 print("Gaudi agegroups/all PDF status:", status)
 assert status == 200, pdf_bytes
-with open("gaudi_agegroups_all.pdf", "wb") as f:
+with open(c.results_path("gaudi_agegroups_all.pdf"), "wb") as f:
     f.write(pdf_bytes)
-text = subprocess.run(["pdftotext", "-layout", "gaudi_agegroups_all.pdf", "-"], capture_output=True, text=True).stdout
+text = subprocess.run(["pdftotext", "-layout", c.results_path("gaudi_agegroups_all.pdf"), "-"], capture_output=True, text=True).stdout
 
 sections = re.split(r"\nWertung ([\w ]+?) (weiblich|männlich)\n", "\n" + text)
 all_ok, seen_sections, i = True, 0, 1

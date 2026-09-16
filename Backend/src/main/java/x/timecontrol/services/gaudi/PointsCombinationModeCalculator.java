@@ -4,6 +4,7 @@ import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiRankingLegResponse;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
@@ -30,8 +31,10 @@ import java.util.stream.StreamSupport;
 /**
  * Punkte-Mischwertung: per race, each participant's place is looked up in a Punkteschema
  * (place -> points), multiplied by that race's weight. Participants are matched across races by
- * Person; only a person with a valid, ranked result in EVERY referenced race is included, and
- * points are summed across races - highest total wins.
+ * Person; points are summed across races - highest total wins. By default only a person with a
+ * valid, ranked result in EVERY referenced race is included; {@link GaudiMode#keepDnsInRanking()}/
+ * {@link GaudiMode#keepDnfInRanking()}/{@link GaudiMode#keepDsqInRanking()} each independently
+ * relax that for a leg of their specific status (see {@link #isEligibleForRanking}).
  */
 @Singleton
 public class PointsCombinationModeCalculator implements GaudiModeCalculator {
@@ -91,15 +94,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             Long personId = entry.getKey();
             Map<Long, Participant> byRace = entry.getValue();
 
-            // A race weighted 0 is meant to be ignored, not to disqualify a person who has no
-            // result there - only races that actually count towards the total require completeness.
-            boolean completeRequiredLegs = races.stream()
-                    .filter(race -> race.weight() != 0)
-                    .allMatch(race -> {
-                        Participant p = byRace.get(race.raceId());
-                        return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
-                    });
-            if (!completeRequiredLegs) {
+            if (!isEligibleForRanking(gaudiMode, races, byRace, placesByRace)) {
                 continue;
             }
 
@@ -116,6 +111,12 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
                 double weightedPoints = place != null ? pointsScaleService.pointsForPlace(scalePoints, place) * race.weight() : 0;
                 weightedTotal += weightedPoints;
+                // A leg without a place shows its effective DSQ/DNF/DNS status (falling back to the
+                // generic "DNS" for a missing Participant record or a status-less missing result) -
+                // only reachable here at all when that status's own keep*InRanking flag kept the
+                // person in the ranking despite this leg, since a null place otherwise means
+                // isEligibleForRanking excluded them entirely.
+                String legStatus = place != null ? null : effectiveStatus(p).name();
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
                         race.race().name(),
@@ -123,7 +124,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                         p != null ? p.penalty() : null,
                         adjusted,
                         place,
-                        (int) Math.round(weightedPoints)
+                        (int) Math.round(weightedPoints),
+                        legStatus
                 ));
             }
             int totalPoints = (int) Math.round(weightedTotal);
@@ -162,10 +164,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
     }
 
     /**
-     * The complement of {@link #computeRanking}'s completeness filter: every person referenced by at
-     * least one leg race who lacks a placed result in at least one other required (non-zero-weight)
-     * leg, so they never made it into the combined ranking - reported as "nicht gewertet" (DNS)
-     * instead of silently dropped.
+     * The complement of {@link #computeRanking}'s {@link #isEligibleForRanking} filter: every person
+     * referenced by at least one leg race who wasn't included in the combined ranking, reported as
+     * "nicht gewertet" (DNS) instead of silently dropped.
      */
     @Override
     public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
@@ -183,13 +184,7 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
             Map<Long, Participant> byRace = entry.getValue();
 
-            boolean completeRequiredLegs = races.stream()
-                    .filter(race -> race.weight() != 0)
-                    .allMatch(race -> {
-                        Participant p = byRace.get(race.raceId());
-                        return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
-                    });
-            if (completeRequiredLegs) {
+            if (isEligibleForRanking(gaudiMode, races, byRace, placesByRace)) {
                 continue;
             }
 
@@ -205,6 +200,63 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                 .thenComparing(GaudiDnsEntryResponse::firstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
         return dns;
+    }
+
+    /**
+     * Whether a person is included in the combined ranking, considering only races that actually
+     * count towards the total (weight != 0 - a race weighted 0 is meant to be ignored, not to
+     * disqualify a person who has no result there, regardless of the rest of this method).
+     *
+     * <p>Every counted race must either have a valid, ranked result, or be a "bad" leg (no
+     * {@link Participant} record, or one with no place because of DSQ/DNF/DNS) whose specific status
+     * is tolerated by the matching {@link GaudiMode#keepDnsInRanking()}/{@link GaudiMode#keepDnfInRanking()}/
+     * {@link GaudiMode#keepDsqInRanking()} flag - a bad leg whose flag is off still drops the person
+     * entirely, exactly like before those flags existed (they are reported by
+     * {@link #computeDnsEntries} instead). A tolerated bad leg gives 0 points instead (see
+     * {@link #computeRanking}).
+     *
+     * <p>Independently of the flags, a person with NO valid result in any counted race is always
+     * excluded - someone who never actually raced doesn't belong in a "combined" ranking with 0
+     * points just because every status happens to be tolerated, they belong in "nicht gewertet".
+     */
+    private boolean isEligibleForRanking(GaudiMode gaudiMode, List<RaceParticipants> races,
+                                          Map<Long, Participant> byRace, Map<Long, Map<Long, Integer>> placesByRace) {
+        List<RaceParticipants> requiredRaces = races.stream().filter(race -> race.weight() != 0).toList();
+        if (requiredRaces.isEmpty()) {
+            return true;
+        }
+        boolean anyValid = requiredRaces.stream().anyMatch(race -> hasValidPlace(race, byRace, placesByRace));
+        if (!anyValid) {
+            return false;
+        }
+        return requiredRaces.stream().allMatch(race ->
+                hasValidPlace(race, byRace, placesByRace) || isTolerated(gaudiMode, effectiveStatus(byRace.get(race.raceId()))));
+    }
+
+    private static boolean hasValidPlace(RaceParticipants race, Map<Long, Participant> byRace,
+                                          Map<Long, Map<Long, Integer>> placesByRace) {
+        Participant p = byRace.get(race.raceId());
+        return p != null && placesByRace.get(race.raceId()).get(p.id()) != null;
+    }
+
+    /**
+     * The status that explains why a leg has no place: the participant's explicit DSQ/DNF/DNS
+     * status if one was recorded, otherwise the generic DNS fallback - for a missing
+     * {@link Participant} record (never entered that race) or one simply missing a measured result
+     * with no recorded reason, exactly mirroring {@link RankingService#dnsStatusLabel(Participant)}.
+     */
+    private static DisqualificationStatus effectiveStatus(Participant p) {
+        DisqualificationStatus status = p != null ? p.status() : null;
+        return status != null && status != DisqualificationStatus.NONE ? status : DisqualificationStatus.DNS;
+    }
+
+    private static boolean isTolerated(GaudiMode gaudiMode, DisqualificationStatus status) {
+        return switch (status) {
+            case DNS -> gaudiMode.keepDnsInRanking();
+            case DNF -> gaudiMode.keepDnfInRanking();
+            case DSQ -> gaudiMode.keepDsqInRanking();
+            case NONE -> true;
+        };
     }
 
     /**

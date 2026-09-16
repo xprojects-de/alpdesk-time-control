@@ -21,7 +21,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race1_id = state["race1_id"]
 pid = {int(rn): part_id for rn, part_id in state["participants_by_race"][str(race1_id)].items()}
 
@@ -212,6 +212,6 @@ status, resp = c.post(config.BASE, token, "/measurements/auto-assign/disable", {
 assert status == 200 and resp["active"] is False, resp
 print("Auto-Assign deaktiviert.")
 
-with open("lauf1_lines.json", "w") as f:
+with open(c.results_path("lauf1_lines.json"), "w") as f:
     json.dump(lines, f)
 print("\nLauf 1 Auto-Assign-Tour abgeschlossen (alle Kombinationen + Fehlerfaelle OK).")

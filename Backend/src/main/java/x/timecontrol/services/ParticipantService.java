@@ -21,6 +21,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.RaceMeasurement;
+import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.ParticipantRepository;
 import io.micronaut.data.exceptions.DataAccessException;
@@ -45,6 +46,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -142,6 +144,26 @@ public class ParticipantService {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Resets a participant's result (durationMs/penalty/measuredAt to null) while leaving its
+     * identity (race/person/raceNumber/team/category/startSequence) and its comment/status
+     * untouched - the counterpart to {@link #update}'s deliberate "null means keep existing"
+     * behaviour, which makes it impossible to actually clear an already-entered result through that
+     * endpoint. No {@link #validate} call needed: identity fields are carried over unchanged from
+     * the existing row, so neither a race-number collision nor any other validation failure is
+     * possible here.
+     */
+    public Optional<Participant> clearResult(Long id) {
+        Optional<Participant> existing = repository.findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        Participant cleared = new Participant(id, existing.get().raceId(), existing.get().personId(), existing.get().raceNumber(),
+                existing.get().teamId(), existing.get().categoryId(), null, null, null, existing.get().comment(),
+                existing.get().status(), existing.get().startSequence());
+        return Optional.of(repository.update(cleared));
     }
 
     public record SyncMeasurementsResult(int synced, int skipped) {
@@ -864,12 +886,15 @@ public class ParticipantService {
     }
 
     /**
-     * Imports results (time + optionally penalty/status/comment/measuredAt) for a race, matching each
+     * Imports results (time/value + optionally penalty/status/comment) for a race, matching each
      * row onto an *existing* participant via raceNumber - deliberately never creates a participant.
      * A raceNumber that matches nobody in the race, or that's missing/unparsable, is reported as a
      * row error instead. Only the result fields (durationMs/penalty/measuredAt/status/comment) are
      * touched; identity data (name, team, category, ...) is left exactly as it was - raceId/personId/
-     * raceNumber/teamId/categoryId are always carried over unchanged from the existing row.
+     * raceNumber/teamId/categoryId are always carried over unchanged from the existing row. There is
+     * no "measuredAt" column to map: every row that ends up in {@code toUpdate} gets its
+     * {@code measuredAt} stamped with the import's own timestamp instead, since a hand-edited/
+     * re-imported CSV has no meaningful original measurement time of its own.
      * <p>
      * The race's full roster is loaded once up front (like {@link #syncMeasurementsToParticipants})
      * and matched in memory, and every row's update is applied in one {@code repository.updateAll}
@@ -883,14 +908,24 @@ public class ParticipantService {
      * {@code mapping} is used as given - including an explicitly empty map, meaning "map nothing" -
      * and only falls back to the auto-suggested mapping when it's entirely omitted ({@code null}).
      * <p>
-     * {@code timeFormat} says how to read the mapped "time" column: raw milliseconds, decimal
-     * seconds, or a "[[hh:]mm:]ss[.,fraction]" race-clock string - different timing providers export
-     * differently, so this is picked explicitly rather than guessed. A time value that's actually a
-     * DNF/DNS/DSQ keyword (see {@link #parseExplicitStatus}) sets that status instead of a duration,
-     * regardless of the chosen format.
+     * {@code resultUnit} (the race's own {@code TIME}/{@code POINTS} setting) decides how the mapped
+     * "time" and "penalty" columns are read: for a {@code POINTS} race both are always a plain decimal
+     * number (dot or comma), rounded to hundredths, regardless of {@code timeFormat}; for a
+     * {@code TIME} race, {@code timeFormat} says whether they're raw milliseconds, decimal seconds, or
+     * a "[[hh:]mm:]ss[.,fraction]" race-clock string - different timing providers export differently,
+     * so this is picked explicitly rather than guessed. A time value that's actually a DNF/DNS/DSQ
+     * keyword (see {@link #parseExplicitStatus}) sets that status instead of a duration, regardless of
+     * the chosen format.
+     * <p>
+     * The mapped "status" column has three outcomes: not mapped at all leaves the existing status
+     * untouched; mapped but blank for this row resolves to an explicit {@code NONE} ("NONE oder leer
+     * als gewertet") - including undoing a previously imported DNF/DNS/DSQ by clearing the cell; a
+     * mapped, non-blank value that isn't NONE/DNF/DNS/DSQ (any casing) is a row error rather than
+     * being silently dropped.
      */
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
-                                                                     Map<String, String> mapping, ResultTimeFormat timeFormat) {
+                                                                     Map<String, String> mapping, ResultTimeFormat timeFormat,
+                                                                     ResultUnit resultUnit) {
         ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
         Map<String, String> effectiveMapping = (mapping == null)
                 ? ParticipantResultImportParsers.suggestMapping(parsed.fields())
@@ -934,7 +969,24 @@ public class ParticipantService {
 
             String timeRaw = valueFor(row, effectiveMapping, "time");
             String statusRaw = valueFor(row, effectiveMapping, "status");
-            DisqualificationStatus status = parseExplicitStatus(statusRaw);
+            // Distinguishes "status column not mapped at all" (null - no status info requested,
+            // leave the existing one untouched) from "mapped but this row's cell is blank" ("" -
+            // explicitly means NONE/gewertet, e.g. to undo a previously imported DNF by clearing the
+            // cell) - matching the original "NONE oder leer als gewertet" spec. An unrecognized
+            // non-blank value is a row error rather than being silently dropped.
+            DisqualificationStatus status;
+            if (statusRaw == null) {
+                status = null;
+            } else if (statusRaw.isBlank()) {
+                status = DisqualificationStatus.NONE;
+            } else {
+                status = parseExplicitStatus(statusRaw);
+                if (status == null) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
+                            "status \"" + statusRaw + "\" is not recognized (expected NONE/DNF/DNS/DSQ, or empty)"));
+                    continue;
+                }
+            }
 
             Integer durationMs = null;
             if (timeRaw != null && !timeRaw.isBlank()) {
@@ -943,19 +995,19 @@ public class ParticipantService {
                     status = timeStatus;
                 } else {
                     try {
-                        durationMs = parseResultTime(timeRaw.trim(), timeFormat);
+                        durationMs = parseResultValue(timeRaw.trim(), timeFormat, resultUnit);
                     } catch (IllegalArgumentException e) {
                         errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                                "Time \"" + timeRaw + "\" could not be read as " + timeFormat));
+                                "Time/value \"" + timeRaw + "\" could not be read"));
                         continue;
                     }
                     if (ValidationUtils.isNegative(durationMs)) {
-                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time must not be negative"));
+                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time/value must not be negative"));
                         continue;
                     }
                 }
             } else if (status == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time is missing"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time/value is missing"));
                 continue;
             }
 
@@ -967,25 +1019,13 @@ public class ParticipantService {
             Integer penalty = existing.penalty();
             if (penaltyRaw != null && !penaltyRaw.isBlank()) {
                 try {
-                    penalty = Integer.parseInt(penaltyRaw.trim());
-                } catch (NumberFormatException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty \"" + penaltyRaw + "\" is not a valid number"));
+                    penalty = parseResultValue(penaltyRaw.trim(), timeFormat, resultUnit);
+                } catch (IllegalArgumentException e) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty \"" + penaltyRaw + "\" could not be read"));
                     continue;
                 }
                 if (ValidationUtils.isNegative(penalty)) {
                     errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty must not be negative"));
-                    continue;
-                }
-            }
-
-            String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
-            LocalDateTime measuredAt = null;
-            if (measuredAtRaw != null && !measuredAtRaw.isBlank()) {
-                try {
-                    measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
-                } catch (DateTimeParseException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                            "measuredAt has an invalid format (expected e.g. 2026-08-13T10:30:00)"));
                     continue;
                 }
             }
@@ -997,7 +1037,7 @@ public class ParticipantService {
                     existing.teamId(), existing.categoryId(),
                     durationMs != null ? durationMs : existing.durationMs(),
                     penalty,
-                    measuredAt != null ? measuredAt : existing.measuredAt(),
+                    LocalDateTime.now(),
                     comment,
                     status != null ? status : existing.status(),
                     existing.startSequence()));
@@ -1038,6 +1078,26 @@ public class ParticipantService {
             case "NONE" -> DisqualificationStatus.NONE;
             default -> null;
         };
+    }
+
+    /**
+     * Parses a raw "time"/"penalty" cell for {@link #importResultsByRaceNumber}. A {@code POINTS}
+     * race ignores {@code format} entirely - the value is always a plain decimal number (dot or
+     * comma), rounded to hundredths, matching the {@code pointsValue}/{@code penaltyPointsValue}
+     * convention the manual participant-edit dialog already uses. A {@code TIME} race defers to
+     * {@link #parseResultTime}.
+     *
+     * @throws IllegalArgumentException if the value doesn't match the expected format
+     */
+    private static int parseResultValue(String raw, ResultTimeFormat format, ResultUnit resultUnit) {
+        if (resultUnit == ResultUnit.POINTS) {
+            try {
+                return (int) Math.round(Double.parseDouble(raw.replace(',', '.')) * 100.0);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(e);
+            }
+        }
+        return parseResultTime(raw, format);
     }
 
     /**
@@ -1126,36 +1186,90 @@ public class ParticipantService {
         return value.replace(String.valueOf(EXPORT_DELIMITER), " ").replace("\n", " ").replace("\r", " ");
     }
 
+    // Header text for exportResultsCsv, sorted ascending by raceNumber. lastName/firstName/team/
+    // ageGroup/externalId are informational only - present so a human editing the file in Excel can
+    // tell whose row they're looking at, but never read back on import (raceNumber is the only key).
+    // Unlike exportCsv's roster export, ageGroup here is the participant's *current* computed
+    // ageGroup (from toResponses(), same as the UI shows) rather than always blank - it's read-only
+    // information here, not something re-imported into another instance's own AgeGroup config.
+    // "time/value" self-suggests onto ParticipantResultImportParsers' "time" target field on
+    // re-import (see its "timevalue" alias); there's no "measuredAt" column - see the note on
+    // importResultsByRaceNumber for why.
+    private static final List<String> RESULTS_EXPORT_HEADER =
+            List.of("raceNumber", "lastName", "firstName", "team", "ageGroup", "externalId", "time/value", "penalty", "comment", "status");
+
     /**
-     * Exports every participant of a race's *results only* (raceNumber/time/penalty/measuredAt/
-     * comment/status, no identity data) - the counterpart to {@link #importResultsByRaceNumber}, for sharing
-     * results between two instances that already have the same roster (e.g. two computers each
-     * timing part of the same race). Uses our own canonical field names as the header row (see
-     * {@link ParticipantResultImportParsers#TARGET_FIELDS}) so re-importing it via
-     * import-results-mapped needs no manual mapping - each header self-suggests via that field's
-     * own-name alias. "time" is written as raw milliseconds (lossless, matches internal storage), so
-     * re-importing this file needs {@link x.timecontrol.dto.ResultTimeFormat#MILLISECONDS} selected.
-     * A participant with no raceNumber is still exported (with an empty raceNumber column) rather
-     * than silently dropped - the other side's import will report it as a row error instead of a
-     * value quietly going missing.
+     * Exports every participant of a race's results (raceNumber + identity fields for readability
+     * only + time/value/penalty/comment/status), sorted ascending by raceNumber - the counterpart to
+     * {@link #importResultsByRaceNumber}, meant to be opened in Excel, have its result columns
+     * filled in or corrected, and re-imported to update those same participants (matched purely by
+     * raceNumber; the identity columns have no effect on import). "time/value" and "penalty" are
+     * written as a human-readable clock string ("m:ss.SSS"/"h:mm:ss.SSS") for a {@code TIME} race, or
+     * a plain decimal for a {@code POINTS} race - both round-trip through
+     * {@link #parseResultValue} on re-import. A participant with no raceNumber is still exported
+     * (with an empty raceNumber column, sorted last) rather than silently dropped - the other side's
+     * import will report it as a row error instead of a value quietly going missing.
      */
-    public String exportResultsCsv(Long raceId) {
-        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+    public String exportResultsCsv(Long raceId, ResultUnit resultUnit) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false)
+                .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        List<ParticipantResponse> responses = toResponses(participants);
 
         StringBuilder csv = new StringBuilder();
-        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), ParticipantResultImportParsers.TARGET_FIELDS)).append('\n');
-        for (Participant p : participants) {
+        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), RESULTS_EXPORT_HEADER)).append('\n');
+        for (ParticipantResponse p : responses) {
+            PersonResponse person = p.person();
             List<String> values = List.of(
                     p.raceNumber() != null ? p.raceNumber().toString() : "",
-                    p.durationMs() != null ? p.durationMs().toString() : "",
-                    p.penalty() != null ? p.penalty().toString() : "",
-                    p.measuredAt() != null ? p.measuredAt().toString() : "",
+                    sanitizeForExport(person != null ? person.lastName() : ""),
+                    sanitizeForExport(person != null ? person.firstName() : ""),
+                    sanitizeForExport(p.team() != null ? p.team().name() : ""),
+                    sanitizeForExport(p.ageGroup() != null ? p.ageGroup().name() : ""),
+                    sanitizeForExport(person != null && person.externalId() != null ? person.externalId() : ""),
+                    formatResultValueForExport(p.durationMs(), resultUnit),
+                    formatResultValueForExport(p.penalty(), resultUnit),
                     sanitizeForExport(p.comment()),
-                    Objects.requireNonNullElse(p.status(), DisqualificationStatus.NONE).name()
+                    formatStatusForExport(p.status())
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
         return csv.toString();
+    }
+
+    /**
+     * Renders a status for {@link #exportResultsCsv} - blank for {@code NONE} (the normal, ranked
+     * case) rather than the literal "NONE", so the column reads as empty-unless-flagged in Excel.
+     * Round-trips correctly through {@link #importResultsByRaceNumber}'s blank-means-NONE handling
+     * (including letting a cleared cell undo a previously imported DNF/DNS/DSQ).
+     */
+    private static String formatStatusForExport(DisqualificationStatus status) {
+        DisqualificationStatus resolved = Objects.requireNonNullElse(status, DisqualificationStatus.NONE);
+        return resolved == DisqualificationStatus.NONE ? "" : resolved.name();
+    }
+
+    /**
+     * Renders a durationMs/penalty value for {@link #exportResultsCsv} - a plain decimal (2 places,
+     * "."-separated) for a {@code POINTS} race, or "m:ss.SSS"/"h:mm:ss.SSS" for a {@code TIME} race.
+     * Always includes at least "m:ss" (never the bare "SS.mmm" form {@code formatDuration} on the
+     * frontend uses for display) so the value always contains a ":" and round-trips unambiguously
+     * through {@link #parseClock} rather than being misread as decimal seconds.
+     */
+    private static String formatResultValueForExport(Integer value, ResultUnit resultUnit) {
+        if (value == null) {
+            return "";
+        }
+        if (resultUnit == ResultUnit.POINTS) {
+            return String.format(Locale.ROOT, "%.2f", value / 100.0);
+        }
+        long totalMs = value;
+        long hours = totalMs / 3_600_000;
+        long minutes = (totalMs % 3_600_000) / 60_000;
+        long seconds = (totalMs % 60_000) / 1000;
+        long millis = totalMs % 1000;
+        return hours > 0
+                ? String.format(Locale.ROOT, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis)
+                : String.format(Locale.ROOT, "%d:%02d.%03d", minutes, seconds, millis);
     }
 
     /**

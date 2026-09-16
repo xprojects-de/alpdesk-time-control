@@ -11,7 +11,7 @@ if not config.ADDITIONAL_STATUS_OVERRIDES:
     sys.exit(0)
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 status, participants = c.get(config.BASE, token, f"/participants?raceId={race_id}")

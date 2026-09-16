@@ -34,7 +34,7 @@ class TeamModeCalculatorSpec extends Specification {
     }
 
     private static GaudiMode teamMode(Integer teamSize) {
-        new GaudiMode(1L, GaudiModeType.TEAM, "Team-Wertung", teamSize, null, LocalDateTime.now())
+        new GaudiMode(1L, GaudiModeType.TEAM, "Team-Wertung", teamSize, null, false, false, false, LocalDateTime.now())
     }
 
     private static Person person(Long id, String firstName) {

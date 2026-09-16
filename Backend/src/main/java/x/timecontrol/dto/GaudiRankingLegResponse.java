@@ -31,6 +31,10 @@ public record GaudiRankingLegResponse(
 
         @Nullable
         @Schema(description = "Points earned in this race (Punkte-Mischwertung only, already weighted)", example = "100", nullable = true)
-        Integer points
+        Integer points,
+
+        @Nullable
+        @Schema(description = "The participant's explicit DSQ/DNF/DNS status in this race, if any; null for a normal result", example = "DNF", nullable = true)
+        String status
 ) {
 }

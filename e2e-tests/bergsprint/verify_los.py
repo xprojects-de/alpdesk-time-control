@@ -1,21 +1,34 @@
 """Step 6: create a Los-Modus over all participants, draw pairings, and independently verify the
 pair-average/deviation-from-overall-average math and place assignment."""
-import sys, json
+import sys, json, math
 sys.path.insert(0, '.')
 import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 status, all_participants = c.get(config.BASE, token, f"/participants?raceId={race_id}")
 by_id = {p["id"]: p for p in all_participants}
+result_unit = all_participants[0]["race"]["resultUnit"] if all_participants else None
 
 def adjusted_value(p):
     if p.get("durationMs") is None or (p.get("status") not in (None, "NONE")):
         return None
     return p["durationMs"]
+
+def round_half_up(x):
+    """Matches Java's Math.round(double) on a non-negative value: floor(x + 0.5), not Python's
+    round-half-to-even."""
+    return int(math.floor(x + 0.5))
+
+def round_to_10ms(value_ms):
+    """Mirrors RankingService#roundForDisplay: a TIME race's value is rounded to the nearest 10ms
+    (hundredth of a second, the display precision) before it's used for tie/diff comparisons."""
+    if value_ms is None or result_unit != "TIME":
+        return value_ms
+    return (value_ms + 5) // 10 * 10
 
 print("=== Los-Modus erstellen und auslosen ===")
 status, gm = c.post(config.BASE, token, "/gaudi-modes", {
@@ -36,6 +49,8 @@ print(f"{len(ranking)} Paare in der Wertung")
 
 all_values = [v for v in (adjusted_value(p) for p in all_participants) if v is not None]
 overall_avg = sum(all_values) / len(all_values)
+overall_average_ms = round_half_up(overall_avg)
+overall_average_display = round_to_10ms(overall_average_ms)
 print(f"\nErwarteter Gesamtdurchschnitt (aus {len(all_values)} gueltigen Werten): {overall_avg:.3f} ms")
 
 expected_pairs, skipped_pairs = [], []
@@ -48,8 +63,14 @@ for pairing in pairings:
         skipped_pairs.append((pairing["participant1Name"], pairing.get("participant2Name")))
         continue
     pair_avg = (v1 + v2) / 2.0 if v2 is not None else v1
+    pair_average_ms = round_half_up(pair_avg)
+    pair_average_display = round_to_10ms(pair_average_ms)
+    # LosModeCalculator diffs the two already-display-rounded values, not the raw gap rounded
+    # once at the end - rounding doesn't distribute over subtraction, so those can differ by up
+    # to a printed hundredth.
+    diff_display = abs(pair_average_display - overall_average_display)
     label = f"{pairing['participant1Name']} & {pairing['participant2Name']}" if v2 is not None else f"{pairing['participant1Name']} (Einzel)"
-    expected_pairs.append({"label": label, "avg": pair_avg, "diff": abs(pair_avg - overall_avg)})
+    expected_pairs.append({"label": label, "avg": pair_average_ms, "diff": diff_display})
 
 print(f"gueltige Paare: {len(expected_pairs)}, uebersprungen (DNF/DNS-Partner): {len(skipped_pairs)}")
 
@@ -70,10 +91,10 @@ for e, exp_place in zip(expected_pairs, expected_places):
         continue
     if actual["place"] != exp_place:
         mismatches.append((e["label"], f"expected place {exp_place}, got {actual['place']}"))
-    if abs(actual["valueMs"] - round(e["avg"])) > 1:
-        mismatches.append((e["label"], f"expected avg {e['avg']:.1f}, got {actual['valueMs']}"))
-    if abs(actual["diffMs"] - round(e["diff"])) > 1:
-        mismatches.append((e["label"], f"expected diff {e['diff']:.1f}, got {actual['diffMs']}"))
+    if actual["valueMs"] != e["avg"]:
+        mismatches.append((e["label"], f"expected avg {e['avg']}, got {actual['valueMs']}"))
+    if actual["diffMs"] != e["diff"]:
+        mismatches.append((e["label"], f"expected diff {e['diff']}, got {actual['diffMs']}"))
 
 print(f"\nAbweichungen: {len(mismatches)}")
 for m in mismatches[:20]:
@@ -81,7 +102,7 @@ for m in mismatches[:20]:
 
 status, pdf_bytes = c.get_raw(config.BASE, token, f"/gaudi-modes/{gm_id}/export/pdf")
 assert status == 200
-with open("los_ranking.pdf", "wb") as f:
+with open(c.results_path("los_ranking.pdf"), "wb") as f:
     f.write(pdf_bytes)
 print(f"\nPDF-Export erfolgreich ({len(pdf_bytes)} bytes)")
 

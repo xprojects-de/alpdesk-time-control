@@ -62,6 +62,58 @@ pkill -f 'time-control.jar'; rm -rf /tmp/kondi-normal
 pkill -f 'time-control.jar'; rm -rf /tmp/kondi-phased
 ```
 
+### Ergebnis-Backup/Restore-Variante (`run_phased_results.sh`)
+
+Testet gezielt das **Ergebnisse**-Export/Import-Feature (`/participants/export/results-csv` +
+`/participants/import-results-mapped`) als eigenständigen Wiederherstellungsweg - **nicht** den
+Roster-Export/Import (`/export/csv` + `/import-mapped`), der Identitätsdaten mitschleppt. Läuft den
+gleichen Ablauf wie `run_all.sh`, exportiert danach MAINs Ergebnisse je Rennen, setzt sie über
+`POST /participants/{id}/clear-result` zurück und importiert sie anschließend rein aus der zuvor
+exportierten CSV zurück. Prüft danach Teilnehmer-für-Teilnehmer, dass jedes Ergebnis exakt wie vor
+dem Zurücksetzen wiederhergestellt wurde, plus einen erneuten `phase5_reconcile.py`-Lauf und die
+volle Ranking-Verifikation (Phasen 6-10) - simuliert damit, dass ein Wettkampfleiter Ergebnisse von
+Hand aus einer CSV-Sicherung wiederherstellt, ohne die Teilnehmerliste selbst anzufassen.
+
+Läuft komplett über die API (keine direkte DB-Manipulation nötig, dank `clear-result`), braucht also
+- wie `run_all.sh`/`run_phased.sh` - kein zusätzliches Argument. Auch diese Variante braucht
+**frische** Instanzen (siehe oben):
+
+```bash
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-results
+./run_phased_results.sh
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-results
+```
+
+### Gaudi-Modus Status-Szenarien-Variante (`run_phased_results_with_status.sh`)
+
+Testet die `keepDnsInRanking`/`keepDnfInRanking`/`keepDsqInRanking`-Optionen (V2-Migration) der
+Punkte-Mischwertung end-to-end - bislang nur auf Unit-Test-Ebene abgedeckt
+(`PointsCombinationModeCalculatorSpec`), nie mit echten, über mehrere Stationen eingegebenen Daten
+oder gegen den gerenderten PDF-Export. Läuft denselben Ablauf wie `run_phased_results.sh` (Phasen
+1-10 unverändert), danach zusätzlich:
+
+- **Phase 11** (`phase11_prepare_status_scenarios.py`): sucht sich 5 Teilnehmer, die in allen 4
+  Rennen ein normales Ergebnis haben, und setzt gezielt DNS/DNF/DSQ in einzelnen Rennen (X1-X4:
+  je ein schlechtes Bein; X5: DNS in allen 4 Rennen - muss immer ausgeschlossen bleiben).
+- **Phase 12** (`phase12_gaudi_status_scenarios.py`): legt 6 Punkte-Mischwertungen mit
+  verschiedenen Flag-Kombinationen an (alle aus, je einzeln an, alle an, sowie eine
+  Unabhängigkeits-Kombination DNS+DNF an/DSQ aus) und verifiziert pro Szenario - unabhängig in
+  Python nachgerechnet, inkl. der 0-Punkte-Regel für ein toleriertes Bein - sowohl die komplette
+  Rangliste (JSON) als auch die "Nicht gewertet"-Liste im PDF (für **alle sechs** Szenarien, nicht
+  nur eins).
+- **Phase 13** (`phase13_status_flags_no_effect_on_other_types.py`): Guardrail - die drei Flags
+  wirken laut Code nur bei `POINTS_COMBINATION`; legt zwei `TIME_COMBINATION`-Instanzen (einmal
+  alle Flags an, einmal aus) über dieselben Daten an und prüft, dass die Rangliste identisch ist.
+
+Braucht wie `run_phased_results.sh` kein zusätzliches Argument, aber ebenfalls **frische**
+Instanzen:
+
+```bash
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-status
+./run_phased_results_with_status.sh
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-status
+```
+
 Sowohl `run_all.sh` als auch `run_phased.sh` schließen automatisch mit einem Abgleich gegen ein
 echtes offizielles Ergebnis-PDF ab (`verify_against_official.py`, Phase 10), sofern
 `sample-data/official_result.pdf` vorhanden ist — fehlt die Datei (z.B. weil sie aus
@@ -117,10 +169,16 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase3_phased_results.py` | Wie phase3, aber nur ein Drittel des Feldes pro Aufruf (`station<N> <phase 1\|2\|3>`) |
 | `phase4_phased_export_import.py` | Wie phase4, aber pro Phase (`<phase 1\|2\|3>`) - prüft insb. `errorCount == 0` bei unvollständigem Zwischenstand |
 | `run_phased.sh` | Orchestriert phase1+phase2 wie gewohnt, dann 3x phase3_phased+phase4_phased, dann phase5-9 |
+| `phase4b_results_backup_restore.py` | MAIN: Ergebnisse je Rennen exportieren (Ergebnis-CSV), über `clear-result` zurücksetzen, aus der CSV zurückimportieren, gegen den Vorher-Stand verifizieren |
+| `run_phased_results.sh` | Orchestriert phase1-5 wie `run_all.sh`, dann phase4b, dann erneut phase5, dann phase6-9 |
 | `phase5_reconcile.py` | Datenintegrität Station ↔ Hauptinstanz prüfen |
 | `phase6_verify_rankings.py` | Gesamt-Platzierung unabhängig nachrechnen und mit PDF abgleichen |
 | `phase7_verify_gender_agegroup.py` | Dasselbe für Geschlecht/Altersklassen-Aufschlüsselung |
 | `phase8_gaudi_combo.py` | Gaudi-Punkte-Mischwertung erstellen und verifizieren |
 | `phase9_gaudi_agegroups.py` | Gaudi-Punkte-Mischwertung nach Altersklassen verifizieren |
 | `verify_against_official.py` | Phase 10 (automatisch, falls PDF vorhanden): Abgleich mit einem echten Ergebnis-PDF |
+| `phase11_prepare_status_scenarios.py` | MAIN: 5 Teilnehmer auswählen, gezielt DNS/DNF/DSQ in einzelnen Rennen setzen (X1-X5) |
+| `phase12_gaudi_status_scenarios.py` | 6 Punkte-Mischwertungen mit verschiedenen keep-in-ranking-Flag-Kombinationen anlegen und je gegen unabhängige Python-Berechnung + PDF verifizieren |
+| `phase13_status_flags_no_effect_on_other_types.py` | Guardrail: keep-in-ranking-Flags dürfen bei TIME_COMBINATION keinen Effekt haben |
+| `run_phased_results_with_status.sh` | Orchestriert phase1-10 wie `run_phased_results.sh`, dann phase11-13 |
 | `sample-data/official_result.pdf` | Das mitgelieferte echte Ergebnis-PDF (siehe Datenschutz-Hinweis oben) |

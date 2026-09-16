@@ -8,14 +8,14 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 persons = state["persons"]
 by_rn = {p["raceNumber"]: p for p in persons}
 
 print("=== Messungen als CSV exportieren (Sicherung) ===")
 status, body = c.get_raw(config.BASE, token, "/measurements/export/csv")
-with open("measurements_backup.csv", "wb") as f:
+with open(c.results_path("measurements_backup.csv"), "wb") as f:
     f.write(body)
 print(f"Backup exportiert: {len(body)} bytes")
 
@@ -53,7 +53,7 @@ status, participants = c.get(config.BASE, token, f"/participants?raceId={race_id
 with_time = [p for p in participants if p.get("durationMs") is not None]
 print(f"\nTeilnehmer mit Zeit NACH Sync: {len(with_time)} von {len(participants)}")
 
-times_ms = {int(k): v for k, v in json.load(open("times_ms.json")).items()}
+times_ms = {int(k): v for k, v in json.load(open(c.results_path("times_ms.json"))).items()}
 mismatches = []
 for p in participants:
     rn = p["raceNumber"]

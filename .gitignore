@@ -5,3 +5,13 @@
 /Frontend/.angular
 /Frontend/dist
 /Frontend/node_modules
+
+# e2e-tests: generated per-run artifacts (state files, PDFs, CSV exports) - each suite
+# writes these under its own results/ subfolder instead of the suite dir itself
+/e2e-tests/*/results/
+
+# Python bytecode cache, regenerated on every e2e run
+__pycache__/
+*.pyc
+
+.DS_Store

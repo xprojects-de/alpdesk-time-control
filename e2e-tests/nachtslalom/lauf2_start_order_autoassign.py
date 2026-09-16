@@ -15,7 +15,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race2_id = state["race2_id"]
 pid = {int(rn): part_id for rn, part_id in state["participants_by_race"][str(race2_id)].items()}
 rn_by_pid = {v: k for k, v in pid.items()}
@@ -140,7 +140,7 @@ assert status == 200
 status, resp = c.post(config.BASE, token, "/measurements/auto-assign/disable", {})
 assert status == 200 and resp["active"] is False, resp
 
-with open("lauf2_expected.json", "w") as f:
+with open(c.results_path("lauf2_expected.json"), "w") as f:
     json.dump({
         "expected_order_rns": expected_rns,
         "dns_rn": skipped["raceNumber"],

@@ -42,9 +42,10 @@ export interface ParticipantResultImportMappingDialogResult {
                 CSV-Datei (beliebiges Trennzeichen) mit Ergebnissen. Jede Zeile wird über die Startnummer
                 einem bereits vorhandenen Teilnehmer dieses Rennens zugeordnet - es werden dabei
                 <strong>keine neuen Teilnehmer angelegt</strong> und keine Stammdaten (Name, Verein, ...)
-                verändert, nur Zeit/Status/Kommentar. Eine Startnummer ohne passenden Teilnehmer wird als
-                Fehler gemeldet. Das Mapping wird nicht gespeichert und muss bei jedem Import neu gewählt
-                werden.
+                verändert, nur Zeit/Wert, Strafe, Status und Kommentar. Etwaige Name/Verein-Spalten in
+                der Datei sind reine Information und werden nicht ausgewertet. Eine Startnummer ohne
+                passenden Teilnehmer wird als Fehler gemeldet. Das Mapping wird nicht gespeichert und muss
+                bei jedem Import neu gewählt werden.
             </p>
 
             <div class="file-row">
@@ -68,6 +69,7 @@ export interface ParticipantResultImportMappingDialogResult {
                                 <mat-option [value]="option.value">{{ option.label }}</mat-option>
                             }
                         </mat-select>
+                        <mat-hint>nur bei Zeit-Rennen</mat-hint>
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">

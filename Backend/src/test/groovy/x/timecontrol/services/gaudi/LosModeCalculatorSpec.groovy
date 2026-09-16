@@ -37,7 +37,7 @@ class LosModeCalculatorSpec extends Specification {
     }
 
     private static GaudiMode losMode() {
-        new GaudiMode(1L, GaudiModeType.LOS, "Los-Modus", null, null, LocalDateTime.now())
+        new GaudiMode(1L, GaudiModeType.LOS, "Los-Modus", null, null, false, false, false, LocalDateTime.now())
     }
 
     // Backing maps for the findByIds() stubs below - populated per-test via given:. A single

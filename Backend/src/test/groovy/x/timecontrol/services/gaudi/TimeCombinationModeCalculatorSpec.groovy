@@ -45,7 +45,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
     }
 
     private static GaudiMode timeCombinationMode() {
-        new GaudiMode(1L, GaudiModeType.TIME_COMBINATION, "Zeit-Kombination", null, null, LocalDateTime.now())
+        new GaudiMode(1L, GaudiModeType.TIME_COMBINATION, "Zeit-Kombination", null, null, false, false, false, LocalDateTime.now())
     }
 
     // Backing maps for the findByIds() stubs below - populated per-test via given:. A single

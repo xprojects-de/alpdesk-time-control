@@ -25,7 +25,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
     }
 
     private static GaudiMode gaudiMode(String name) {
-        new GaudiMode(null, null, name, null, null, null, null)
+        new GaudiMode(null, null, name, null, null, false, false, false, null, null)
     }
 
     private static GaudiRankingEntryResponse entry(int place, String label, String team, int totalPoints,
@@ -41,12 +41,12 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
         def entries = [
                 entry(1, "Meier Paul", "SV SCHNEEKRISTALL", 132, [
-                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 47650, null, 47650, 1, 100),
-                        new GaudiRankingLegResponse(2L, "Kraftausdauer", 1500, 200, 1300, 8, 32),
+                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 47650, null, 47650, 1, 100, null),
+                        new GaudiRankingLegResponse(2L, "Kraftausdauer", 1500, 200, 1300, 8, 32, null),
                 ]),
                 entry(2, "Huber Elias", "TSV GLETSCHER", 71, [
-                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 49980, null, 49980, 3, 60),
-                        new GaudiRankingLegResponse(2L, "Kraftausdauer", 1000, 100, 900, 20, 11),
+                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 49980, null, 49980, 3, 60, null),
+                        new GaudiRankingLegResponse(2L, "Kraftausdauer", 1000, 100, 900, 20, 11, null),
                 ]),
         ]
 
@@ -62,7 +62,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         def legRaces = [race(1L, "Schnelligkeit", ResultUnit.TIME, null)]
         def entries = [
                 entry(1, "Meier Paul", "SV SCHNEEKRISTALL", 100, [
-                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 47650, null, 47650, 1, 100),
+                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 47650, null, 47650, 1, 100, null),
                 ]),
         ]
 
@@ -81,10 +81,30 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
         def entries = (1..40).collect { i ->
             entry(i, "Teilnehmer $i", "Team $i", 100 - i, [
-                    new GaudiRankingLegResponse(1L, "Schnelligkeit", 40000 + i * 100, null, 40000 + i * 100, i, 100 - i),
-                    new GaudiRankingLegResponse(2L, "Kraftausdauer", 1000 + i * 10, i % 3 == 0 ? 100 : 0, 900, i, 100 - i),
+                    new GaudiRankingLegResponse(1L, "Schnelligkeit", 40000 + i * 100, null, 40000 + i * 100, i, 100 - i, null),
+                    new GaudiRankingLegResponse(2L, "Kraftausdauer", 1000 + i * 10, i % 3 == 0 ? 100 : 0, 900, i, 100 - i, null),
             ])
         }
+
+        when:
+        byte[] pdf = service.generatePointsCombinationRanking(gaudiMode("Kondiwettkamp"), entries, legRaces, legRaces.first(), [])
+
+        then:
+        pdf.length > 0
+    }
+
+    def "renders a DNF leg in the sub-table when the person is kept in the ranking"() {
+        given:
+        def legRaces = [
+                race(1L, "Schnelligkeit", ResultUnit.TIME, null),
+                race(2L, "Kraftausdauer", ResultUnit.POINTS, "Meter"),
+        ]
+        def entries = [
+                entry(1, "Meier Paul", "SV SCHNEEKRISTALL", 100, [
+                        new GaudiRankingLegResponse(1L, "Schnelligkeit", 47650, null, 47650, 1, 100, null),
+                        new GaudiRankingLegResponse(2L, "Kraftausdauer", null, null, null, null, 0, "DNF"),
+                ]),
+        ]
 
         when:
         byte[] pdf = service.generatePointsCombinationRanking(gaudiMode("Kondiwettkamp"), entries, legRaces, legRaces.first(), [])

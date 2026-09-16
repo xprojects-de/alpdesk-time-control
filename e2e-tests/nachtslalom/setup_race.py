@@ -68,7 +68,7 @@ print("Teilnehmer angelegt: Herren 1-6, Damen 7-12 (jeweils in Lauf 1 und Lauf 2
 print("\n=== Startliste Lauf 1 (Checkpoint) ===")
 status, pdf = c.get_raw(config.BASE, token, f"/participants/export/pdf/startlist/{race1_id}")
 assert status == 200
-with open("startliste_lauf1.pdf", "wb") as f:
+with open(c.results_path("startliste_lauf1.pdf"), "wb") as f:
     f.write(pdf)
 print(f"Startliste generiert ({len(pdf)} bytes)")
 
@@ -80,7 +80,7 @@ assert status == 400, resp
 status, resp = c.get(config.BASE, token, "/measurements/auto-assign/status")
 assert resp["active"] is False, resp
 
-with open("state.json", "w") as f:
+with open(c.results_path("state.json"), "w") as f:
     json.dump({
         "race1_id": race1_id, "race2_id": race2_id, "persons": persons,
         "participants_by_race": participants_by_race,

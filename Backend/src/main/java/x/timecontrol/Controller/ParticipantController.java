@@ -129,6 +129,16 @@ public class ParticipantController {
         return updated.map(p -> HttpResponse.ok((Object) service.toResponses(List.of(p)).getFirst())).orElse(HttpResponse.notFound());
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/{id}/clear-result")
+    @Operation(summary = "Clear a participant's result", description = "Resets durationMs/penalty/measuredAt to empty, leaving comment/status and identity (race/person/raceNumber/team/category/startSequence) untouched. Unlike PUT /participants/{id}, which always keeps an already-entered value when the corresponding field is left out of the request, this is the only way to actually clear a result that was entered by mistake.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Result cleared", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Participant not found")
+    public HttpResponse<?> clearResult(@PathVariable Long id) {
+        Optional<Participant> cleared = service.clearResult(id);
+        return cleared.map(p -> HttpResponse.ok((Object) service.toResponses(List.of(p)).getFirst())).orElse(HttpResponse.notFound());
+    }
+
     @Delete("/{id}")
     @Operation(summary = "Delete a participant", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Participant deleted")
@@ -303,7 +313,7 @@ public class ParticipantController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import-results-preview")
-    @Operation(summary = "Preview a result-by-race-number import file", description = "Parses a CSV (any delimiter) and returns the detected source fields, a best-effort suggested mapping onto our result fields (raceNumber, time, measuredAt, comment, status), and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Preview a result-by-race-number import file", description = "Parses a CSV (any delimiter) and returns the detected source fields, a best-effort suggested mapping onto our result fields (raceNumber, time, comment, status), and a few sample rows - for building a column-mapping UI. Nothing is saved.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = ParticipantResultImportPreviewResponse.class)))
     @ApiResponse(responseCode = "400", description = "Unreadable file")
     public HttpResponse<?> importResultsPreview(@Part("file") CompletedFileUpload file,
@@ -320,7 +330,7 @@ public class ParticipantController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import-results-mapped/{raceId}")
-    @Operation(summary = "Import results (time/status) for existing participants, matched by race number", description = "Imports a CSV (any delimiter) of results for a race, matching each row onto an *existing* participant via raceNumber - never creates a new participant, and never touches identity data (name, team, category, ...). A raceNumber that matches nobody in the race is reported as a row error instead. Uses an explicit mapping from our fields (raceNumber, time, measuredAt, comment, status) onto the file's columns; a field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-results-preview) is used. timeFormat says how to read the mapped time column: MILLISECONDS (raw ms), SECONDS (decimal seconds, dot or comma), or CLOCK (\"[[hh:]mm:]ss[.,fraction]\", e.g. \"1:23,68\"). A time value that's actually a DNF/DNS/DSQ keyword sets that status instead of a duration.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Import results (time/value/status) for existing participants, matched by race number", description = "Imports a CSV (any delimiter) of results for a race, matching each row onto an *existing* participant via raceNumber - never creates a new participant, and never touches identity data (name, team, category, ...). A raceNumber that matches nobody in the race is reported as a row error instead. Uses an explicit mapping from our fields (raceNumber, time, comment, status) onto the file's columns; a field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-results-preview) is used. For a POINTS race, the mapped time/penalty columns are always read as a plain decimal number and timeFormat is ignored; for a TIME race, timeFormat says how to read them: MILLISECONDS (raw ms), SECONDS (decimal seconds, dot or comma), or CLOCK (\"[[hh:]mm:]ss[.,fraction]\", e.g. \"1:23,68\"). A time value that's actually a DNF/DNS/DSQ keyword sets that status instead of a duration. Every updated row's measuredAt is stamped with the import's own timestamp.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = ParticipantResultImportResponse.class)))
     @ApiResponse(responseCode = "400", description = "Unknown time format, invalid mapping JSON, or unreadable file")
     @ApiResponse(responseCode = "404", description = "Race not found")
@@ -360,7 +370,7 @@ public class ParticipantController {
 
         try {
             byte[] bytes = file.getBytes();
-            ParticipantService.ParticipantResultImportResult result = service.importResultsByRaceNumber(raceId, bytes, delim, mapping, parsedTimeFormat);
+            ParticipantService.ParticipantResultImportResult result = service.importResultsByRaceNumber(raceId, bytes, delim, mapping, parsedTimeFormat, race.get().resultUnit());
             List<ParticipantResponse> updated = service.toResponses(result.updated());
             return HttpResponse.ok(new ParticipantResultImportResponse(updated.size(), result.errors().size(), updated, result.errors()));
         } catch (IOException e) {
@@ -385,7 +395,7 @@ public class ParticipantController {
 
     @Produces("text/csv")
     @Get("/export/results-csv/{raceId}")
-    @Operation(summary = "Export a race's results only (no identity data) as CSV", description = "Exports every participant's raceNumber/time/measuredAt/comment/status - not name/team/category/etc. - as CSV. Counterpart to import-results-mapped: for sharing results between two instances that already have the same roster, matched by race number. Uses our own field names as the header row, so re-importing the file needs no manual mapping (just pick MILLISECONDS as the time format, since that's how \"time\" is written here).", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Export a race's results as CSV, sorted by race number", description = "Exports every participant's raceNumber/lastName/firstName/team/ageGroup/externalId/time-value/penalty/comment/status, sorted ascending by raceNumber - identity columns (including the participant's current, computed ageGroup) are informational only (readability when editing in Excel), never read back on import. Meant to be opened, have result columns filled in or corrected, and re-imported via import-results-mapped, matched purely by raceNumber. time/value and penalty are written as \"m:ss.SSS\" (TIME races) or a plain decimal (POINTS races) - pick CLOCK as the time format on re-import for a TIME race (irrelevant for a POINTS race).", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "CSV generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<?> exportParticipantResultsCsv(@PathVariable Long raceId) {
@@ -393,7 +403,7 @@ public class ParticipantController {
         if (race.isEmpty()) {
             return HttpResponse.notFound();
         }
-        String csv = service.exportResultsCsv(raceId);
+        String csv = service.exportResultsCsv(raceId, race.get().resultUnit());
         return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
                 .header("Content-Disposition", "attachment; filename=ergebnisse_" + raceId + ".csv");
     }

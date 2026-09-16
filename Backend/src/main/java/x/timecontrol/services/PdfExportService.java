@@ -562,7 +562,9 @@ public class PdfExportService {
         for (int i = 0; i < legRaces.size(); i++) {
             Race legRace = legRaces.get(i);
             String raceLabel = truncate(legRace.name(), 40);
-            String wert = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+            String legStatus = entry.legs() != null && i < entry.legs().size() ? entry.legs().get(i).status() : null;
+            String wert = legStatus != null ? legStatus
+                    : RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
             String strafe = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
             String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);

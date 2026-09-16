@@ -104,6 +104,19 @@ export const participantReducer = createReducer(
         error
     })),
 
+    // Clear participant result
+    on(ParticipantActions.clearParticipantResult, startLoading),
+    on(ParticipantActions.clearParticipantResultSuccess, (state, {participant}) => ({
+        ...state,
+        participants: state.participants.map(p => p.id === participant.id ? participant : p),
+        loadingCount: endLoading(state)
+    })),
+    on(ParticipantActions.clearParticipantResultFailure, (state, {error}) => ({
+        ...state,
+        loadingCount: endLoading(state),
+        error
+    })),
+
     // Delete participant
     on(ParticipantActions.deleteParticipant, startLoading),
     on(ParticipantActions.deleteParticipantSuccess, (state, {id}) => ({

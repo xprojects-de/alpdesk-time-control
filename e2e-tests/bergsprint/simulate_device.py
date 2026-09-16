@@ -24,7 +24,7 @@ assert status == 200
 status, _ = c.get(config.BASE, token, "/measurements/device-connection")
 assert status == 200, "Fake-Geraet nicht erreichbar - laeuft fake_device.py?"
 
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race_id = state["race_id"]
 
 print("=== Auto-Assign aktivieren (raceNumber 1 als Start) ===")
@@ -57,6 +57,6 @@ print(f"\nGesamt Messungen in der DB: {len(measurements)}")
 print(f"davon zugeordnet: {len([m for m in measurements if m.get('participantId') is not None])} "
       "(erwartungsgemaess 0, solange 'Kontinuierlicher Import' noch nicht lief - siehe naechsten Schritt)")
 
-with open("times_ms.json", "w") as f:
+with open(c.results_path("times_ms.json"), "w") as f:
     json.dump(times_ms, f)
 print("\ndone")

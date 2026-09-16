@@ -66,10 +66,10 @@ print(f"{config.NUM_PARTICIPANTS} Teilnehmer angelegt. "
 print("=== Startliste (Checkpoint vor der Zeitmessung) ===")
 status, pdf = c.get_raw(config.BASE, token, f"/participants/export/pdf/startlist/{race_id}")
 assert status == 200
-with open("startliste.pdf", "wb") as f:
+with open(c.results_path("startliste.pdf"), "wb") as f:
     f.write(pdf)
 print(f"Startliste generiert ({len(pdf)} bytes)")
 
-with open("state.json", "w") as f:
+with open(c.results_path("state.json"), "w") as f:
     json.dump({"race_id": race_id, "cat1_id": cat1_id, "cat2_id": cat2_id, "persons": persons}, f, indent=2)
 print("Setup fertig, state.json gespeichert.")

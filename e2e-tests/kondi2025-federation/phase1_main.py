@@ -76,11 +76,11 @@ assert len(set(counts.values())) == 1, "roster mismatch across races!"
 
 for name, rid in race_ids.items():
     status, body = c.get_raw(config.MAIN, token, f"/participants/export/csv/{rid}")
-    fname = f"roster_export_{name}.csv"
+    fname = c.results_path(f"roster_export_{name}.csv")
     with open(fname, "wb") as f:
         f.write(body)
     print(f"exported roster for {name} -> {fname} ({len(body)} bytes)")
 
-with open("state.json", "w") as f:
+with open(c.results_path("state.json"), "w") as f:
     json.dump({"race_ids": race_ids}, f, indent=2)
 print("done. state saved to state.json")

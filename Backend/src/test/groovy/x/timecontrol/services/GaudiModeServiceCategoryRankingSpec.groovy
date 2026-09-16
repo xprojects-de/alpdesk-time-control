@@ -48,7 +48,7 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
             raceService, personService, ageGroupService, [calculator], transactionOperations)
 
-    def gaudiMode = new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Kondiwettkamp", null, 1L, LocalDateTime.now())
+    def gaudiMode = new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Kondiwettkamp", null, 1L, false, false, false, LocalDateTime.now())
     def race = new Race(10L, "Schnelligkeit", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60,50")

@@ -40,6 +40,10 @@ export class ParticipantService {
         return this.http.put<Participant>(`${this.apiUrl}/${id}`, participant);
     }
 
+    clearResult(id: number): Observable<Participant> {
+        return this.http.post<Participant>(`${this.apiUrl}/${id}/clear-result`, {});
+    }
+
     delete(id: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
@@ -105,13 +109,14 @@ export class ParticipantService {
     }
 
     /**
-     * Imports results (time/status) for existing participants, matched by race number - never
-     * creates a participant, never touches identity data. See
-     * PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS for the mappable fields and ResultTimeFormat for how
-     * the "time" column is interpreted. `mapping` is always sent, even when empty - the backend
-     * treats an explicitly empty mapping as "map nothing" and only falls back to the auto-suggested
-     * mapping when the part is omitted entirely, so a deliberately cleared mapping (every dropdown
-     * set to "nicht importieren") must not be silently dropped here.
+     * Imports results (time/value/penalty/status/comment) for existing participants, matched by race
+     * number - never creates a participant, never touches identity data. See
+     * PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS for the mappable fields. `timeFormat` only matters for
+     * a TIME race - the backend always reads a POINTS race's mapped columns as a plain decimal
+     * number and ignores it. `mapping` is always sent, even when empty - the backend treats an
+     * explicitly empty mapping as "map nothing" and only falls back to the auto-suggested mapping
+     * when the part is omitted entirely, so a deliberately cleared mapping (every dropdown set to
+     * "nicht importieren") must not be silently dropped here.
      */
     importResultsMapped(raceId: number, file: File, timeFormat: ResultTimeFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantResultImportResponse> {
         const formData = buildImportFormData(file, {timeFormat, delimiter});
@@ -130,10 +135,12 @@ export class ParticipantService {
     }
 
     /**
-     * Results-only export (raceNumber/time/measuredAt/comment/status, no identity data) - the
-     * counterpart to importResultsMapped, for sharing results between two instances that already
-     * have the same roster. "time" is written as raw milliseconds, so re-importing this file needs
-     * ResultTimeFormat 'MILLISECONDS' selected.
+     * Results export (raceNumber + lastName/firstName/team/ageGroup/externalId for readability only
+     * + time/value/penalty/comment/status), sorted ascending by raceNumber - the counterpart to
+     * importResultsMapped. Meant to be opened in Excel, have result columns filled in or corrected,
+     * and re-imported to update those same participants (matched purely by raceNumber). "time/value"
+     * and "penalty" are written as "m:ss.SSS" (TIME race) or a plain decimal (POINTS race); no
+     * "measuredAt" column - the backend stamps that with the import's own timestamp instead.
      */
     exportResultsCsv(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/results-csv/${raceId}`, {
