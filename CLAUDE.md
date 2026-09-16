@@ -133,8 +133,18 @@ Angular 22 standalone-style app using Angular Material and NgRx.
 
 ## Full reviews
 
-For a categorized stability/best-practice/functionality review across Backend and Frontend, use the
-built-in `/code-review` skill instead of an ad-hoc manual review — e.g. `/code-review high` for the
-current branch, `/code-review <PR#>` for a PR, or `/code-review ultra` for a deep multi-agent cloud
+For a categorized stability/best-practice/functionality review across Backend and Frontend, use `/time-control-code-review`
+skill instead of an ad-hoc manual review — e.g. `/time-control-code-review high` for the
+current branch, `/time-control-code-review <PR#>` for a PR, or `/time-control-code-review ultra` for a deep multi-agent cloud
 review. Group the resulting findings under these five categories: **Best Practice**, **Stabilität**,
 **Performance**, **Funktionalität**, **Memory-Leaks**.
+
+## Full e2e
+
+For end-to-end verification against real (throwaway) backend instances — as opposed to the Spock
+suite under `Backend/src/test/groovy`, which mocks/unit-tests individual services — use
+`/time-control-e2e` instead of running the scripts under `e2e-tests/` by hand. It builds the jar,
+starts each suite's isolated instance(s), runs its `run_all.sh`, and tears everything down
+afterward; see each suite's own `README.md` (`e2e-tests/bergsprint/`,
+`e2e-tests/kondi2025-federation/`) for what it covers and its prerequisites — notably,
+`kondi2025-federation` needs 4 CSV files with real race data that aren't checked into the repo.
