@@ -440,6 +440,14 @@ import {Actions, ofType} from "@ngrx/effects";
                             </button>
                             <button
                                     mat-icon-button
+                                    [disabled]="!participant.durationMs && (!participant.status || participant.status === 'NONE')"
+                                    (click)="clearParticipantResult(participant)"
+                                    matTooltip="Ergebnis zurücksetzen"
+                            >
+                                <mat-icon>restart_alt</mat-icon>
+                            </button>
+                            <button
+                                    mat-icon-button
                                     color="warn"
                                     (click)="deleteParticipant(participant)"
                                     matTooltip="Löschen"
@@ -682,6 +690,19 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Aktualisieren des Teilnehmers: ${error}`, "OK", {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(ParticipantActions.clearParticipantResultSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.snackBar.open("Ergebnis erfolgreich zurückgesetzt", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.clearParticipantResultFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Zurücksetzen des Ergebnisses: ${error}`, "OK", {duration: 5000});
         });
 
         this.actions$.pipe(
@@ -981,6 +1002,21 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     );
                 }
             });
+    }
+
+    clearParticipantResult(participant: Participant): void {
+        const name = participant.person
+            ? `${participant.person.firstName} ${participant.person.lastName}`
+            : `#${participant.id}`;
+        if (
+            confirm(
+                `Möchten Sie das Ergebnis von "${name}" wirklich zurücksetzen?`,
+            )
+        ) {
+            this.store.dispatch(
+                ParticipantActions.clearParticipantResult({id: participant.id}),
+            );
+        }
     }
 
     deleteParticipant(participant: Participant): void {

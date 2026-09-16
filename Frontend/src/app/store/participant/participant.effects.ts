@@ -67,6 +67,20 @@ export class ParticipantEffects {
         )
     );
 
+    clearParticipantResult$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.clearParticipantResult),
+            mergeMap(({id}) =>
+                this.participantService.clearResult(id).pipe(
+                    map(updated => ParticipantActions.clearParticipantResultSuccess({participant: updated})),
+                    catchError(error => of(ParticipantActions.clearParticipantResultFailure({
+                        error: extractErrorMessage(error, 'Ergebnis konnte nicht zurückgesetzt werden')
+                    })))
+                )
+            )
+        )
+    );
+
     deleteParticipant$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.deleteParticipant),

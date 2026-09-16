@@ -40,6 +40,10 @@ export class ParticipantService {
         return this.http.put<Participant>(`${this.apiUrl}/${id}`, participant);
     }
 
+    clearResult(id: number): Observable<Participant> {
+        return this.http.post<Participant>(`${this.apiUrl}/${id}/clear-result`, {});
+    }
+
     delete(id: number): Observable<void> {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }

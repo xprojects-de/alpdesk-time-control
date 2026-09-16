@@ -146,6 +146,26 @@ public class ParticipantService {
         return Optional.empty();
     }
 
+    /**
+     * Resets a participant's result (durationMs/penalty/measuredAt/comment to null, status back to
+     * NONE) while leaving its identity (race/person/raceNumber/team/category/startSequence)
+     * untouched - the counterpart to {@link #update}'s deliberate "null means keep existing"
+     * behaviour, which makes it impossible to actually clear an already-entered result through that
+     * endpoint. No {@link #validate} call needed: identity fields are carried over unchanged from
+     * the existing row, so neither a race-number collision nor any other validation failure is
+     * possible here.
+     */
+    public Optional<Participant> clearResult(Long id) {
+        Optional<Participant> existing = repository.findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        Participant cleared = new Participant(id, existing.get().raceId(), existing.get().personId(), existing.get().raceNumber(),
+                existing.get().teamId(), existing.get().categoryId(), null, null, null, null,
+                DisqualificationStatus.NONE, existing.get().startSequence());
+        return Optional.of(repository.update(cleared));
+    }
+
     public record SyncMeasurementsResult(int synced, int skipped) {
     }
 

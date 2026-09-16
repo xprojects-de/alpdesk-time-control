@@ -182,6 +182,44 @@ class ParticipantServiceSpec extends Specification {
         result.isPresent()
     }
 
+    def "clearResult resets durationMs/penalty/measuredAt/comment/status but keeps identity fields"() {
+        given:
+        def existing = new Participant(10L, 1L, 1L, 5, 2L, 3L, 125000, 2000,
+                LocalDateTime.of(2026, 1, 1, 10, 30), "Ski gebrochen", DisqualificationStatus.DNF, 7)
+        repository.findById(10L) >> Optional.of(existing)
+
+        when:
+        def result = service.clearResult(10L)
+
+        then:
+        1 * repository.update(_) >> { Participant p -> p }
+        result.isPresent()
+        def cleared = result.get()
+        cleared.raceId() == 1L
+        cleared.personId() == 1L
+        cleared.raceNumber() == 5
+        cleared.teamId() == 2L
+        cleared.categoryId() == 3L
+        cleared.startSequence() == 7
+        cleared.durationMs() == null
+        cleared.penalty() == null
+        cleared.measuredAt() == null
+        cleared.comment() == null
+        cleared.status() == DisqualificationStatus.NONE
+    }
+
+    def "clearResult returns empty for an unknown participant id"() {
+        given:
+        repository.findById(99L) >> Optional.empty()
+
+        when:
+        def result = service.clearResult(99L)
+
+        then:
+        !result.isPresent()
+        0 * repository.update(_)
+    }
+
     def "assignRaceNumbers re-shuffling an already-numbered race does not collide with the unique constraint"() {
         given: "3 participants already hold numbers 2,3,1; the new assignment (by birthdate, youngest first) is 1,2,3 - a naive single-pass update would collide immediately"
         def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null, null)

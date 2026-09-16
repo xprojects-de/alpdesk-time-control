@@ -57,6 +57,22 @@ export const updateParticipantFailure = createAction(
     props<{ error: string }>()
 );
 
+// Clear a participant's result (durationMs/penalty/measuredAt/comment/status) - the only way to
+// actually null out an already-entered result, since updateParticipant always keeps an existing
+// value when the corresponding field is left out of the request.
+export const clearParticipantResult = createAction(
+    '[Participant] Clear Participant Result',
+    props<{ id: number }>()
+);
+export const clearParticipantResultSuccess = createAction(
+    '[Participant] Clear Participant Result Success',
+    props<{ participant: Participant }>()
+);
+export const clearParticipantResultFailure = createAction(
+    '[Participant] Clear Participant Result Failure',
+    props<{ error: string }>()
+);
+
 // Delete participant
 export const deleteParticipant = createAction(
     '[Participant] Delete Participant',
