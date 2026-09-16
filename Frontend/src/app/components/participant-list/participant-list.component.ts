@@ -610,6 +610,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return participant.person?.birthDate ?? "";
                 case "gender":
                     return participant.person?.gender ?? "";
+                case "team":
+                    return participant.team?.name ?? "";
+                case "category":
+                    return participant.category?.name ?? "";
+                case "ageGroup":
+                    return participant.ageGroup?.name ?? "";
+                case "race":
+                    return participant.race?.name ?? "";
                 case "durationMs": {
                     if (participant.durationMs === undefined || participant.durationMs === null) {
                         return "";

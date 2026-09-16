@@ -18,7 +18,7 @@ export class VersionEffects {
                 this.versionService.get().pipe(
                     map(version => VersionActions.loadVersionSuccess({version})),
                     catchError(error => of(VersionActions.loadVersionFailure({
-                        error: extractErrorMessage(error, 'Failed to load version')
+                        error: extractErrorMessage(error, 'Version konnte nicht geladen werden')
                     })))
                 )
             )

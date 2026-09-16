@@ -19,7 +19,7 @@ export class TeamEffects {
                 this.teamService.getAll().pipe(
                     map(teams => TeamActions.loadTeamsSuccess({teams})),
                     catchError(error => of(TeamActions.loadTeamsFailure({
-                        error: extractErrorMessage(error, 'Failed to load teams')
+                        error: extractErrorMessage(error, 'Teams konnten nicht geladen werden')
                     })))
                 )
             )
@@ -33,7 +33,7 @@ export class TeamEffects {
                 this.teamService.create(team).pipe(
                     map(created => TeamActions.createTeamSuccess({team: created})),
                     catchError(error => of(TeamActions.createTeamFailure({
-                        error: extractErrorMessage(error, 'Failed to create team')
+                        error: extractErrorMessage(error, 'Team konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -47,7 +47,7 @@ export class TeamEffects {
                 this.teamService.update(id, team).pipe(
                     map(updated => TeamActions.updateTeamSuccess({team: updated})),
                     catchError(error => of(TeamActions.updateTeamFailure({
-                        error: extractErrorMessage(error, 'Failed to update team')
+                        error: extractErrorMessage(error, 'Team konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -64,11 +64,11 @@ export class TeamEffects {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
                             return of(TeamActions.deleteTeamConflict({
                                 id,
-                                message: extractErrorMessage(error, 'Failed to delete team')
+                                message: extractErrorMessage(error, 'Team konnte nicht gelöscht werden')
                             }));
                         }
                         return of(TeamActions.deleteTeamFailure({
-                            error: extractErrorMessage(error, 'Failed to delete team')
+                            error: extractErrorMessage(error, 'Team konnte nicht gelöscht werden')
                         }));
                     })
                 )

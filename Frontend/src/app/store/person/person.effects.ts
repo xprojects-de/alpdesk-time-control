@@ -18,7 +18,7 @@ export class PersonEffects {
                 this.personService.getAll().pipe(
                     map(persons => PersonActions.loadPersonsSuccess({persons})),
                     catchError(error => of(PersonActions.loadPersonsFailure({
-                        error: extractErrorMessage(error, 'Failed to load persons')
+                        error: extractErrorMessage(error, 'Personen konnten nicht geladen werden')
                     })))
                 )
             )
@@ -32,7 +32,7 @@ export class PersonEffects {
                 this.personService.create(person).pipe(
                     map(created => PersonActions.createPersonSuccess({person: created})),
                     catchError(error => of(PersonActions.createPersonFailure({
-                        error: extractErrorMessage(error, 'Failed to create person')
+                        error: extractErrorMessage(error, 'Person konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -46,7 +46,7 @@ export class PersonEffects {
                 this.personService.update(id, person).pipe(
                     map(updated => PersonActions.updatePersonSuccess({person: updated})),
                     catchError(error => of(PersonActions.updatePersonFailure({
-                        error: extractErrorMessage(error, 'Failed to update person')
+                        error: extractErrorMessage(error, 'Person konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -60,7 +60,7 @@ export class PersonEffects {
                 this.personService.delete(id).pipe(
                     map(() => PersonActions.deletePersonSuccess({id})),
                     catchError(error => of(PersonActions.deletePersonFailure({
-                        error: extractErrorMessage(error, 'Failed to delete person')
+                        error: extractErrorMessage(error, 'Person konnte nicht gelöscht werden')
                     })))
                 )
             )
@@ -74,7 +74,7 @@ export class PersonEffects {
                 this.personService.deleteUnused().pipe(
                     map(({deletedCount}) => PersonActions.deleteUnusedPersonsSuccess({deletedCount})),
                     catchError(error => of(PersonActions.deleteUnusedPersonsFailure({
-                        error: extractErrorMessage(error, 'Failed to delete unused persons')
+                        error: extractErrorMessage(error, 'Unbenutzte Personen konnten nicht gelöscht werden')
                     })))
                 )
             )

@@ -19,7 +19,7 @@ export class RaceEffects {
                 this.raceService.getAll().pipe(
                     map(races => RaceActions.loadRacesSuccess({races})),
                     catchError(error => of(RaceActions.loadRacesFailure({
-                        error: extractErrorMessage(error, 'Failed to load races')
+                        error: extractErrorMessage(error, 'Rennen konnten nicht geladen werden')
                     })))
                 )
             )
@@ -33,7 +33,7 @@ export class RaceEffects {
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceSuccess({race})),
                     catchError(error => of(RaceActions.createRaceFailure({
-                        error: extractErrorMessage(error, 'Failed to create race')
+                        error: extractErrorMessage(error, 'Rennen konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -47,7 +47,7 @@ export class RaceEffects {
                 this.raceService.update(id, race).pipe(
                     map(race => RaceActions.updateRaceSuccess({race})),
                     catchError(error => of(RaceActions.updateRaceFailure({
-                        error: extractErrorMessage(error, 'Failed to update race')
+                        error: extractErrorMessage(error, 'Rennen konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -64,11 +64,11 @@ export class RaceEffects {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
                             return of(RaceActions.deleteRaceConflict({
                                 id,
-                                message: extractErrorMessage(error, 'Failed to delete race')
+                                message: extractErrorMessage(error, 'Rennen konnte nicht gelöscht werden')
                             }));
                         }
                         return of(RaceActions.deleteRaceFailure({
-                            error: extractErrorMessage(error, 'Failed to delete race')
+                            error: extractErrorMessage(error, 'Rennen konnte nicht gelöscht werden')
                         }));
                     })
                 )

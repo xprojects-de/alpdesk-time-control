@@ -18,7 +18,7 @@ export class ParticipantEffects {
                 this.participantService.getAll().pipe(
                     map(participants => ParticipantActions.loadParticipantsSuccess({participants})),
                     catchError(error => of(ParticipantActions.loadParticipantsFailure({
-                        error: extractErrorMessage(error, 'Failed to load participants')
+                        error: extractErrorMessage(error, 'Teilnehmer konnten nicht geladen werden')
                     })))
                 )
             )
@@ -32,7 +32,7 @@ export class ParticipantEffects {
                 this.participantService.getById(id).pipe(
                     map(participant => ParticipantActions.loadParticipantSuccess({participant})),
                     catchError(error => of(ParticipantActions.loadParticipantFailure({
-                        error: extractErrorMessage(error, 'Failed to load participant')
+                        error: extractErrorMessage(error, 'Teilnehmer konnte nicht geladen werden')
                     })))
                 )
             )
@@ -46,7 +46,7 @@ export class ParticipantEffects {
                 this.participantService.create(participant).pipe(
                     map(created => ParticipantActions.createParticipantSuccess({participant: created})),
                     catchError(error => of(ParticipantActions.createParticipantFailure({
-                        error: extractErrorMessage(error, 'Failed to create participant')
+                        error: extractErrorMessage(error, 'Teilnehmer konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -60,7 +60,7 @@ export class ParticipantEffects {
                 this.participantService.update(id, participant).pipe(
                     map(updated => ParticipantActions.updateParticipantSuccess({participant: updated})),
                     catchError(error => of(ParticipantActions.updateParticipantFailure({
-                        error: extractErrorMessage(error, 'Failed to update participant')
+                        error: extractErrorMessage(error, 'Teilnehmer konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -74,7 +74,7 @@ export class ParticipantEffects {
                 this.participantService.delete(id).pipe(
                     map(() => ParticipantActions.deleteParticipantSuccess({id})),
                     catchError(error => of(ParticipantActions.deleteParticipantFailure({
-                        error: extractErrorMessage(error, 'Failed to delete participant')
+                        error: extractErrorMessage(error, 'Teilnehmer konnte nicht gelöscht werden')
                     })))
                 )
             )
@@ -88,7 +88,7 @@ export class ParticipantEffects {
                 this.participantService.deleteByRaceId(raceId).pipe(
                     map(() => ParticipantActions.deleteParticipantsByRaceIdSuccess({raceId})),
                     catchError(error => of(ParticipantActions.deleteParticipantsByRaceIdFailure({
-                        error: extractErrorMessage(error, 'Failed to delete participants by race')
+                        error: extractErrorMessage(error, 'Teilnehmer des Rennens konnten nicht gelöscht werden')
                     })))
                 )
             )
@@ -102,7 +102,7 @@ export class ParticipantEffects {
                 this.participantService.assignRaceNumbers(raceId).pipe(
                     map(participants => ParticipantActions.assignRaceNumbersSuccess({participants})),
                     catchError(error => of(ParticipantActions.assignRaceNumbersFailure({
-                        error: extractErrorMessage(error, 'Failed to assign race numbers')
+                        error: extractErrorMessage(error, 'Startnummern konnten nicht vergeben werden')
                     })))
                 )
             )
@@ -116,7 +116,7 @@ export class ParticipantEffects {
                 this.participantService.applyStartOrderFromPreviousRace(raceId, includeUnranked).pipe(
                     map(participants => ParticipantActions.applyStartOrderFromPreviousRaceSuccess({participants})),
                     catchError(error => of(ParticipantActions.applyStartOrderFromPreviousRaceFailure({
-                        error: extractErrorMessage(error, 'Failed to apply start order from previous race')
+                        error: extractErrorMessage(error, 'Startreihenfolge konnte nicht übernommen werden')
                     })))
                 )
             )
@@ -130,7 +130,7 @@ export class ParticipantEffects {
                 this.participantService.importCsv(raceId, file).pipe(
                     map(result => ParticipantActions.importParticipantsCsvSuccess({result})),
                     catchError(error => of(ParticipantActions.importParticipantsCsvFailure({
-                        error: extractErrorMessage(error, 'Failed to import participants')
+                        error: extractErrorMessage(error, 'Teilnehmer konnten nicht importiert werden')
                     })))
                 )
             )
@@ -144,7 +144,7 @@ export class ParticipantEffects {
                 this.participantService.importMapped(raceId, file, format, delimiter, mapping).pipe(
                     map(result => ParticipantActions.importParticipantsMappedSuccess({result})),
                     catchError(error => of(ParticipantActions.importParticipantsMappedFailure({
-                        error: extractErrorMessage(error, 'Failed to import participants')
+                        error: extractErrorMessage(error, 'Teilnehmer konnten nicht importiert werden')
                     })))
                 )
             )
@@ -158,7 +158,7 @@ export class ParticipantEffects {
                 this.participantService.importResultsMapped(raceId, file, timeFormat, delimiter, mapping).pipe(
                     map(result => ParticipantActions.importParticipantResultsMappedSuccess({result})),
                     catchError(error => of(ParticipantActions.importParticipantResultsMappedFailure({
-                        error: extractErrorMessage(error, 'Failed to import participant results')
+                        error: extractErrorMessage(error, 'Teilnehmerergebnisse konnten nicht importiert werden')
                     })))
                 )
             )
@@ -172,7 +172,7 @@ export class ParticipantEffects {
                 this.participantService.exportCsv(raceId).pipe(
                     map(blob => ParticipantActions.exportParticipantsCsvSuccess({blob, filename})),
                     catchError(error => of(ParticipantActions.exportParticipantsCsvFailure({
-                        error: extractErrorMessage(error, 'Failed to export CSV')
+                        error: extractErrorMessage(error, 'CSV konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -186,7 +186,7 @@ export class ParticipantEffects {
                 this.participantService.exportResultsCsv(raceId).pipe(
                     map(blob => ParticipantActions.exportParticipantResultsCsvSuccess({blob, filename})),
                     catchError(error => of(ParticipantActions.exportParticipantResultsCsvFailure({
-                        error: extractErrorMessage(error, 'Failed to export results CSV')
+                        error: extractErrorMessage(error, 'Ergebnis-CSV konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -200,7 +200,7 @@ export class ParticipantEffects {
                 this.participantService.copyParticipants(request).pipe(
                     map(result => ParticipantActions.copyParticipantsSuccess({result})),
                     catchError(error => of(ParticipantActions.copyParticipantsFailure({
-                        error: extractErrorMessage(error, 'Failed to copy participants')
+                        error: extractErrorMessage(error, 'Teilnehmer konnten nicht kopiert werden')
                     })))
                 )
             )
@@ -217,7 +217,7 @@ export class ParticipantEffects {
                         filename: 'startliste.pdf'
                     })),
                     catchError(error => of(ParticipantActions.exportStartListPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -235,7 +235,7 @@ export class ParticipantEffects {
                         filename: 'gesamtwertung.pdf'
                     })),
                     catchError(error => of(ParticipantActions.exportAllPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -252,7 +252,7 @@ export class ParticipantEffects {
                         filename: `wertung_${gender.toLowerCase()}.pdf`
                     })),
                     catchError(error => of(ParticipantActions.exportByGenderPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -269,7 +269,7 @@ export class ParticipantEffects {
                         filename: 'wertung_altersklassen.pdf'
                     })),
                     catchError(error => of(ParticipantActions.exportAllAgeGroupsPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -286,7 +286,7 @@ export class ParticipantEffects {
                         filename: 'gesamtwertung_kategorien.pdf'
                     })),
                     catchError(error => of(ParticipantActions.exportAllByCategoryPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -303,7 +303,7 @@ export class ParticipantEffects {
                         filename: `wertung_${gender.toLowerCase()}_kategorien.pdf`
                     })),
                     catchError(error => of(ParticipantActions.exportByGenderByCategoryPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
@@ -320,7 +320,7 @@ export class ParticipantEffects {
                         filename: 'wertung_altersklassen_kategorien.pdf'
                     })),
                     catchError(error => of(ParticipantActions.exportAllAgeGroupsByCategoryPdfFailure({
-                        error: extractErrorMessage(error, 'Failed to export PDF')
+                        error: extractErrorMessage(error, 'PDF konnte nicht exportiert werden')
                     })))
                 )
             )
