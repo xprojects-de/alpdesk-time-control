@@ -131,8 +131,8 @@ export class ParticipantService {
     }
 
     /**
-     * Results export (raceNumber + lastName/firstName/team/externalId for readability only +
-     * time/value/penalty/comment/status), sorted ascending by raceNumber - the counterpart to
+     * Results export (raceNumber + lastName/firstName/team/ageGroup/externalId for readability only
+     * + time/value/penalty/comment/status), sorted ascending by raceNumber - the counterpart to
      * importResultsMapped. Meant to be opened in Excel, have result columns filled in or corrected,
      * and re-imported to update those same participants (matched purely by raceNumber). "time/value"
      * and "penalty" are written as "m:ss.SSS" (TIME race) or a plain decimal (POINTS race); no

@@ -1167,13 +1167,16 @@ public class ParticipantService {
     }
 
     // Header text for exportResultsCsv, sorted ascending by raceNumber. lastName/firstName/team/
-    // externalId are informational only - present so a human editing the file in Excel can tell
-    // whose row they're looking at, but never read back on import (raceNumber is the only key).
+    // ageGroup/externalId are informational only - present so a human editing the file in Excel can
+    // tell whose row they're looking at, but never read back on import (raceNumber is the only key).
+    // Unlike exportCsv's roster export, ageGroup here is the participant's *current* computed
+    // ageGroup (from toResponses(), same as the UI shows) rather than always blank - it's read-only
+    // information here, not something re-imported into another instance's own AgeGroup config.
     // "time/value" self-suggests onto ParticipantResultImportParsers' "time" target field on
     // re-import (see its "timevalue" alias); there's no "measuredAt" column - see the note on
     // importResultsByRaceNumber for why.
     private static final List<String> RESULTS_EXPORT_HEADER =
-            List.of("raceNumber", "lastName", "firstName", "team", "externalId", "time/value", "penalty", "comment", "status");
+            List.of("raceNumber", "lastName", "firstName", "team", "ageGroup", "externalId", "time/value", "penalty", "comment", "status");
 
     /**
      * Exports every participant of a race's results (raceNumber + identity fields for readability
@@ -1202,6 +1205,7 @@ public class ParticipantService {
                     sanitizeForExport(person != null ? person.lastName() : ""),
                     sanitizeForExport(person != null ? person.firstName() : ""),
                     sanitizeForExport(p.team() != null ? p.team().name() : ""),
+                    sanitizeForExport(p.ageGroup() != null ? p.ageGroup().name() : ""),
                     sanitizeForExport(person != null && person.externalId() != null ? person.externalId() : ""),
                     formatResultValueForExport(p.durationMs(), resultUnit),
                     formatResultValueForExport(p.penalty(), resultUnit),

@@ -895,8 +895,8 @@ class ParticipantServiceSpec extends Specification {
         result.errors()[0].reason().contains("raceNumber")
     }
 
-    def "exportResultsCsv writes result fields plus informational identity fields, sorted ascending by raceNumber"() {
-        given: "one participant with a full result, plus one with no result at all and no raceNumber"
+    def "exportResultsCsv writes result fields plus informational identity fields (including the computed ageGroup), sorted ascending by raceNumber"() {
+        given: "one participant with a full result and a matching AgeGroup, plus one with no result, no raceNumber and no matching AgeGroup"
         def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
         def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
         def person1 = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
@@ -906,14 +906,15 @@ class ParticipantServiceSpec extends Specification {
         teamService.findByIds([2L] as Set) >> [2L: new Team(2L, "TEAM A")]
         categoryService.findByIds(_ as Set) >> [:]
         raceService.findByIds(_ as Set) >> [:]
+        ageGroups = [new AgeGroup(1L, "Herren Elite", 1985, 2000, Gender.MALE)]
 
         when:
         def lines = service.exportResultsCsv(5L, ResultUnit.TIME).readLines()
 
-        then: "the header carries raceNumber + informational identity fields + the result fields, and time/value/penalty are human-readable clock strings; a NONE status is blank, not the literal word"
-        lines[0] == "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status"
-        lines[1] == "42;Mustermann;Max;TEAM A;EXT-1;2:05.000;0:05.000;Ski gebrochen;"
-        lines[2] == ";Musterfrau;Erika;;;;;;"
+        then: "the header carries raceNumber + informational identity fields (incl. ageGroup) + the result fields, and time/value/penalty are human-readable clock strings; a NONE status is blank, not the literal word"
+        lines[0] == "raceNumber;lastName;firstName;team;ageGroup;externalId;time/value;penalty;comment;status"
+        lines[1] == "42;Mustermann;Max;TEAM A;Herren Elite;EXT-1;2:05.000;0:05.000;Ski gebrochen;"
+        lines[2] == ";Musterfrau;Erika;;;;;;;"
     }
 
     def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
@@ -927,7 +928,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.findByIds(_ as Set) >> [:]
 
         expect:
-        service.exportResultsCsv(5L, ResultUnit.POINTS).readLines()[1] == "42;Mustermann;Max;;;85.50;;;"
+        service.exportResultsCsv(5L, ResultUnit.POINTS).readLines()[1] == "42;Mustermann;Max;;;;85.50;;;"
     }
 
     def "exportResultsCsv writes DNF/DNS/DSQ as the literal word, not blank"() {
@@ -941,7 +942,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.findByIds(_ as Set) >> [:]
 
         expect:
-        service.exportResultsCsv(5L, ResultUnit.TIME).readLines()[1] == "42;Mustermann;Max;;;;;;DSQ"
+        service.exportResultsCsv(5L, ResultUnit.TIME).readLines()[1] == "42;Mustermann;Max;;;;;;;DSQ"
     }
 
     def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
@@ -950,10 +951,10 @@ class ParticipantServiceSpec extends Specification {
         repository.findByRaceId(5L) >> [existing]
         repository.updateAll(_) >> { List<Participant> list -> list }
 
-        def csv = "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status\n" +
-                "42;Mustermann;Max;;;2:05.000;0:05.000;Ski gebrochen;\n"
+        def csv = "raceNumber;lastName;firstName;team;ageGroup;externalId;time/value;penalty;comment;status\n" +
+                "42;Mustermann;Max;;Herren Elite;;2:05.000;0:05.000;Ski gebrochen;\n"
 
-        when: "no mapping is passed - it must be derivable from the header alone, and the informational identity columns are ignored"
+        when: "no mapping is passed - it must be derivable from the header alone, and the informational identity columns (including ageGroup) are ignored"
         def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.CLOCK, ResultUnit.TIME)
 
         then:
