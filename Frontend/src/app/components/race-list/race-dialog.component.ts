@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from '@angular/core';
+import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {
     FormBuilder,
@@ -163,7 +163,7 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
                     @if (coverPageActive) {
                         <span class="cover-page-name">
                             <mat-icon inline="true">picture_as_pdf</mat-icon>
-                            Deckblatt aktiv
+                            {{ selectedFileName ?? 'Deckblatt aktiv' }}
                         </span>
                         <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
                             Entfernen
@@ -243,6 +243,7 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
 export class RaceDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<RaceDialogComponent>);
+    private cdr = inject(ChangeDetectorRef);
     public data = inject<Race | null>(MAT_DIALOG_DATA);
 
     form: FormGroup;
@@ -258,6 +259,12 @@ export class RaceDialogComponent {
 
     /** Whether a cover page is (or will be, after saving) set for this race. */
     coverPageActive = false;
+    /**
+     * Filename of the file just picked in this session, shown instead of the generic "Deckblatt
+     * aktiv" label so replacing an existing cover page gives visible feedback - never sent to the
+     * backend, which only ever sees hasCoverPage (see race.model.ts).
+     */
+    selectedFileName?: string;
     /** Set only when the user picks a new file this session; sent as coverPagePdf on save. */
     private coverPagePdfBase64?: string;
     private removeCoverPage = false;
@@ -308,11 +315,16 @@ export class RaceDialogComponent {
         }
         this.coverPagePdfBase64 = await readFileAsBase64(file);
         this.coverPageActive = true;
+        this.selectedFileName = file.name;
         this.removeCoverPage = false;
+        // OnPush only marks the view dirty automatically for the synchronous part of a template
+        // event handler - state set after this `await` needs markForCheck() or it never renders.
+        this.cdr.markForCheck();
     }
 
     onRemoveCoverPage(): void {
         this.coverPageActive = false;
+        this.selectedFileName = undefined;
         this.coverPagePdfBase64 = undefined;
         this.removeCoverPage = true;
     }

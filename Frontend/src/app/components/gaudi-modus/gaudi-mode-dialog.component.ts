@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -150,7 +150,7 @@ export interface GaudiModeDialogData {
                     @if (coverPageActive) {
                         <span class="cover-page-name">
                             <mat-icon inline="true">picture_as_pdf</mat-icon>
-                            Deckblatt aktiv
+                            {{ selectedFileName ?? 'Deckblatt aktiv' }}
                         </span>
                         <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
                             Entfernen
@@ -258,6 +258,7 @@ export interface GaudiModeDialogData {
 export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<GaudiModeDialogComponent>);
+    private cdr = inject(ChangeDetectorRef);
     private store = inject(Store);
     private pointsScaleService = inject(PointsScaleService);
     private dialog = inject(MatDialog);
@@ -280,6 +281,11 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     pointsScales: PointsScale[] = [];
 
     coverPageActive = false;
+    /**
+     * Filename of the file just picked in this session, shown instead of the generic "Deckblatt
+     * aktiv" label so replacing a cover page gives visible feedback - never sent to the backend.
+     */
+    selectedFileName?: string;
     private coverPagePdfBase64?: string;
     private removeCoverPage = false;
 
@@ -382,11 +388,16 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
         }
         this.coverPagePdfBase64 = await readFileAsBase64(file);
         this.coverPageActive = true;
+        this.selectedFileName = file.name;
         this.removeCoverPage = false;
+        // OnPush only marks the view dirty automatically for the synchronous part of a template
+        // event handler - state set after this `await` needs markForCheck() or it never renders.
+        this.cdr.markForCheck();
     }
 
     onRemoveCoverPage(): void {
         this.coverPageActive = false;
+        this.selectedFileName = undefined;
         this.coverPagePdfBase64 = undefined;
         this.removeCoverPage = true;
     }
