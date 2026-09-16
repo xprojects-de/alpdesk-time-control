@@ -184,6 +184,15 @@ public class GaudiModeService {
         if (races == null || races.isEmpty()) {
             throw new IllegalArgumentException("At least one race must be selected");
         }
+        // Without this, the same race referenced twice would double-count that leg's weighted
+        // contribution in TimeCombinationModeCalculator/PointsCombinationModeCalculator, silently
+        // skewing every participant's combined total.
+        Set<Long> raceIds = new LinkedHashSet<>();
+        for (GaudiModeRaceEntry entry : races) {
+            if (!raceIds.add(entry.raceId())) {
+                throw new IllegalArgumentException("Race with id " + entry.raceId() + " is referenced more than once");
+            }
+        }
         for (GaudiModeRaceEntry entry : races) {
             if (entry.weight() != null && entry.weight() < 0) {
                 throw new IllegalArgumentException("Race weight must not be negative");

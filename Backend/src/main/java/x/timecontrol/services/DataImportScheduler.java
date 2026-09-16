@@ -102,6 +102,7 @@ public class DataImportScheduler {
             return;
         }
 
+        boolean deviceImportSucceeded = true;
         try {
             Optional<TimingDataImporter> importer = timingProviderRegistry.getActiveImporter();
             if (importer.isPresent()) {
@@ -117,31 +118,37 @@ public class DataImportScheduler {
             } else {
                 LOG.trace("No timing provider configured, skipping device import");
             }
-
-            // Runs every cycle regardless of whether a device is configured or whether this cycle
-            // imported anything new. Deliberately NOT inside the `if (importer.isPresent())` branch
-            // above: processNewMeasurements() matches ANY still-unassigned measurement row
-            // (manually entered, JSON-imported, or device-imported) purely by querying the
-            // measurement table - it has nothing to do with polling a device. Gating it on a
-            // configured provider would silently kill live auto-assign for manually-entered times
-            // in evaluation-only (NONE) mode, which is exactly the use case NONE exists to support.
-            // Only updates participantId on still-unassigned raw measurements - no-ops immediately
-            // if no race currently has auto-assign mode active, and never touches race_measurement
-            // itself.
-            autoAssignService.processNewMeasurements();
-
-            if (!lastImportSucceeded) {
-                LOG.info("Scheduled data import recovered");
-                lastImportSucceeded = true;
-            }
         } catch (Exception e) {
+            deviceImportSucceeded = false;
             if (lastImportSucceeded) {
                 LOG.warn("Scheduled data import failed (will keep retrying every 5s): {}", e.getMessage());
-                lastImportSucceeded = false;
             } else {
                 LOG.debug("Scheduled data import still failing: {}", e.getMessage());
             }
         }
+
+        // Runs every cycle regardless of whether a device is configured, or whether the device
+        // import above succeeded, failed, or was skipped: processNewMeasurements() matches ANY
+        // still-unassigned measurement row (manually entered, JSON-imported, or device-imported)
+        // purely by querying the measurement table - it has nothing to do with polling a device.
+        // A device import failure (e.g. network drop) must not silently disable auto-assign for
+        // manually-entered times in evaluation-only (NONE) mode, which is exactly the use case
+        // NONE exists to support. Only updates participantId on still-unassigned raw measurements
+        // - no-ops immediately if no race currently has auto-assign mode active, and never touches
+        // race_measurement itself.
+        boolean autoAssignSucceeded = true;
+        try {
+            autoAssignService.processNewMeasurements();
+        } catch (Exception e) {
+            autoAssignSucceeded = false;
+            LOG.warn("Scheduled auto-assign failed: {}", e.getMessage());
+        }
+
+        boolean cycleSucceeded = deviceImportSucceeded && autoAssignSucceeded;
+        if (cycleSucceeded && !lastImportSucceeded) {
+            LOG.info("Scheduled data import recovered");
+        }
+        lastImportSucceeded = cycleSucceeded;
     }
 }
 

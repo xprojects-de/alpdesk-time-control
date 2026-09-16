@@ -146,12 +146,17 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
 
                     long deviceId = Long.parseLong(parts[0].trim());
                     double timeValue = Double.parseDouble(parts[1].trim());
-                    int durationMs = (int) Math.round(timeValue);
+                    long roundedDurationMs = Math.round(timeValue);
 
-                    if (durationMs < 0) {
-                        LOG.warn("Ignoring negative duration from device for ID {}: {} ms", deviceId, durationMs);
+                    // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose
+                    // value parses as a huge double: narrowing straight to int would silently wrap
+                    // around, possibly landing on a small, plausible-looking positive number that
+                    // the durationMs < 0 check below would never catch.
+                    if (roundedDurationMs < 0 || roundedDurationMs > Integer.MAX_VALUE) {
+                        LOG.warn("Ignoring out-of-range duration from device for ID {}: {} ms", deviceId, roundedDurationMs);
                         continue;
                     }
+                    int durationMs = (int) roundedDurationMs;
 
                     // Looked up (and upserted below) by the device's own id, kept in a column
                     // separate from this table's own `id` PK - see Measurement#deviceMeasurementId.
