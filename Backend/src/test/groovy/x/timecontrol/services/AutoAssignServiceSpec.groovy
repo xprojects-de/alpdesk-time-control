@@ -1,6 +1,7 @@
 package x.timecontrol.services
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Measurement
 import x.timecontrol.entities.Participant
 import x.timecontrol.repositories.MeasurementRepository
@@ -21,8 +22,16 @@ class AutoAssignServiceSpec extends Specification {
         new Participant(id, 1L, id, raceNumber, null, null, null, null, null, null)
     }
 
+    private static Participant participant(Long id, Integer raceNumber, Integer startSequence) {
+        new Participant(id, 1L, id, raceNumber, null, null, null, null, null, null, DisqualificationStatus.NONE, startSequence)
+    }
+
+    private static Participant participantWithStatus(Long id, Integer raceNumber, DisqualificationStatus status) {
+        new Participant(id, 1L, id, raceNumber, null, null, null, null, null, null, status, null)
+    }
+
     private static Measurement measurement(Long id, Long participantId, int durationMs) {
-        new Measurement(id, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0))
+        new Measurement(id, null, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0))
     }
 
     def setup() {
@@ -224,5 +233,132 @@ class AutoAssignServiceSpec extends Specification {
         then: "the pending measurement is matched to race number 2, not re-matched to 1"
         1 * measurementRepository.update({ Measurement m -> m.id() == 101L && m.participantId() == 11L })
         service.getStatus().nextRaceNumber() == null
+    }
+
+    def "enable defaults to the participant with the lowest startSequence, not the lowest raceNumber, when a start order was derived"() {
+        given: "bib 30 has startSequence=1 (starts first), bib 5 has startSequence=2 - e.g. a slalom run 2 built from run 1's results"
+        participantRepository.findByRaceId(1L) >> [participant(10L, 30, 1), participant(11L, 5, 2)]
+        measurementRepository.findAll() >> []
+
+        when:
+        def status = service.enable(1L, null)
+
+        then: "bib 30 is expected first, even though its number is numerically higher than bib 5"
+        status.nextRaceNumber() == 30
+    }
+
+    def "processNewMeasurements follows startSequence order, not ascending raceNumber, when participants have one"() {
+        given: "bib 30 starts first (startSequence=1), then bib 5 (startSequence=2)"
+        participantRepository.findByRaceId(1L) >> [participant(10L, 30, 1), participant(11L, 5, 2)]
+        measurementRepository.findAll() >> [measurement(101L, null, 5000), measurement(102L, null, 6000)]
+        service.enable(1L, null)
+
+        when:
+        service.processNewMeasurements()
+
+        then: "the first arriving measurement goes to bib 30 (startSequence 1), the second to bib 5 (startSequence 2)"
+        1 * measurementRepository.update({ Measurement m -> m.id() == 101L && m.participantId() == 10L })
+        1 * measurementRepository.update({ Measurement m -> m.id() == 102L && m.participantId() == 11L })
+    }
+
+    def "a participant already marked DSQ/DNF/DNS with no startSequence is excluded from the auto-assign queue entirely"() {
+        given: "bib 2 is marked DNS (never got a start position) - no measurement should ever be expected for them"
+        participantRepository.findByRaceId(1L) >> [
+                participant(10L, 1),
+                participantWithStatus(11L, 2, DisqualificationStatus.DNS),
+                participant(12L, 3)
+        ]
+        measurementRepository.findAll() >> []
+
+        when:
+        def status = service.enable(1L, null)
+
+        then: "the queue starts at bib 1 and, after that, skip()s straight to bib 3 - never stopping at the excluded bib 2"
+        status.nextRaceNumber() == 1
+
+        when:
+        def status2 = service.skip()
+
+        then:
+        status2.nextRaceNumber() == 3
+    }
+
+    def "marking a participant DSQ/DNF/DNS pulls them out of the queue even if they already have a startSequence from an earlier derivation"() {
+        given: "bib 30 has startSequence=1 (was due to start first), but is then marked DNF (e.g. injured before the start) - no measurement should be expected for them anymore"
+        participantRepository.findByRaceId(1L) >> [
+                new Participant(10L, 1L, 10L, 30, null, null, null, null, null, null, DisqualificationStatus.DNF, 1),
+                participant(11L, 5, 2)
+        ]
+        measurementRepository.findAll() >> []
+
+        when:
+        def status = service.enable(1L, null)
+
+        then: "the queue skips straight to bib 5 (startSequence 2), never expecting bib 30"
+        status.nextRaceNumber() == 5
+    }
+
+    def "processNewMeasurements never credits a measurement to a participant marked DSQ/DNF/DNS after the cursor already landed on them"() {
+        given: "bib 5 is the only one left in the queue; the cursor is already sitting on it"
+        // Mutated by this test instead of re-stubbing with a second `>>` interaction - two
+        // separate interactions on the same mock method are ambiguous about which one future
+        // calls match (see the identical pattern/reasoning in ParticipantServiceSpec).
+        def bib5 = participant(11L, 5, 1)
+        participantRepository.findByRaceId(1L) >> { [bib5] }
+        def pendingMeasurements = []
+        measurementRepository.findAll() >> { pendingMeasurements }
+        service.enable(1L, null)
+        assert service.getStatus().nextRaceNumber() == 5
+
+        and: "bib 5 is then marked DNF (e.g. a late scratch) - the repository now reflects that"
+        bib5 = new Participant(11L, 1L, 11L, 5, null, null, null, null, null, null, DisqualificationStatus.DNF, null)
+        pendingMeasurements = [measurement(101L, null, 5000)]
+
+        when:
+        service.processNewMeasurements()
+
+        then: "the pending measurement is NOT credited to the now-excluded bib 5 - nobody is left in the queue"
+        0 * measurementRepository.update(_)
+        service.getStatus().nextRaceNumber() == null
+    }
+
+    def "processNewMeasurements advances past a cursor marked DSQ/DNF/DNS to the next real participant instead of freezing"() {
+        given: "cursor is manually pointed at bib 5 (e.g. an explicit re-match), which is then marked DNF; bib 7 is still active after it"
+        // Both stubs use a single interaction with a mutable captured variable, re-assigned below,
+        // rather than a second `>>` - see the identical pattern/reasoning a few tests up.
+        def participants = [participant(11L, 5), participant(12L, 7)]
+        participantRepository.findByRaceId(1L) >> { participants }
+        def pendingMeasurements = []
+        measurementRepository.findAll() >> { pendingMeasurements }
+        service.enable(1L, 5)
+        assert service.getStatus().nextRaceNumber() == 5
+
+        and: "bib 5 is then marked DNF - loadRoster's raceNumbersInStartOrder no longer contains it at all"
+        participants = [
+                new Participant(11L, 1L, 11L, 5, null, null, null, null, null, null, DisqualificationStatus.DNF, null),
+                participant(12L, 7)
+        ]
+        pendingMeasurements = [measurement(101L, null, 5000)]
+
+        when:
+        service.processNewMeasurements()
+
+        then: "the pending measurement is matched to bib 7 - the cursor must not get stuck returning null forever just because 5 (its own last value) is no longer in the start-order list"
+        1 * measurementRepository.update({ Measurement m -> m.id() == 101L && m.participantId() == 12L })
+        service.getStatus().nextRaceNumber() == null
+    }
+
+    def "a participant re-included via includeUnranked=true keeps their normal (NONE) status and IS included in the queue"() {
+        given: "bib 2 didn't have a result in the linked previous race but was still given startSequence=1 (includeUnranked=true) - its own status in THIS race is untouched by that, i.e. still NONE"
+        participantRepository.findByRaceId(1L) >> [
+                new Participant(11L, 1L, 11L, 2, null, null, null, null, null, null, DisqualificationStatus.NONE, 1)
+        ]
+        measurementRepository.findAll() >> []
+
+        when:
+        def status = service.enable(1L, null)
+
+        then:
+        status.nextRaceNumber() == 2
     }
 }

@@ -3,7 +3,7 @@ import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
-import {distinctUntilChanged, filter, takeUntil} from "rxjs/operators";
+import {distinctUntilChanged, filter, map, takeUntil} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
 import {MatToolbarModule} from "@angular/material/toolbar";
@@ -56,23 +56,25 @@ interface NavItem {
                  error for a deliberate evaluation-only setup rather than a device problem. -->
             @if (timingProviderActive$ | async) {
                 <div class="connection-status">
-                    @if (deviceConnected$ | async; as connected) {
-                        @if (connected) {
+                    @switch (deviceConnectionStatus$ | async) {
+                        @case ('connected') {
                             <mat-icon class="status-icon connected"
                                       [matTooltip]="'Gerät verbunden'">
                                 wifi
                             </mat-icon>
-                        } @else if (connected === false) {
+                        }
+                        @case ('disconnected') {
                             <mat-icon class="status-icon disconnected"
                                       [matTooltip]="'Gerät nicht verbunden'">
                                 wifi_off
                             </mat-icon>
                         }
-                    } @else {
-                        <mat-icon class="status-icon unknown"
-                                  [matTooltip]="'Verbindungsstatus unbekannt'">
-                            help_outline
-                        </mat-icon>
+                        @default {
+                            <mat-icon class="status-icon unknown"
+                                      [matTooltip]="'Verbindungsstatus unbekannt'">
+                                help_outline
+                            </mat-icon>
+                        }
                     }
                 </div>
             }
@@ -196,7 +198,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
     private destroy$ = new Subject<void>();
     username$: Observable<string | null>;
-    deviceConnected$: Observable<boolean | null>;
+    deviceConnectionStatus$: Observable<'connected' | 'disconnected' | 'unknown'>;
     version$: Observable<VersionInfo | null>;
     // Emits only once the real value is known (see constructor / selectTimingProviderActive).
     timingProviderActive$: Observable<boolean>;
@@ -219,7 +221,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     constructor() {
         this.username$ = this.store.select(AuthSelectors.selectAuthUsername);
-        this.deviceConnected$ = this.store.select(MeasurementSelectors.selectDeviceConnected);
+        // Mapped to a tri-state string rather than switched on the raw boolean|null in the template:
+        // `@if (x$ | async; as x)` skips its block for a falsy `x === false`, which previously made
+        // a real "disconnected" reading fall through to the "unknown" branch instead.
+        this.deviceConnectionStatus$ = this.store.select(MeasurementSelectors.selectDeviceConnected).pipe(
+            map(connected => connected === true ? 'connected' : connected === false ? 'disconnected' : 'unknown'),
+        );
         this.version$ = this.store.select(VersionSelectors.selectVersion);
         // Waits for the real settings value (or a load failure, which falls back to "active" so
         // connection polling isn't silently disabled forever) instead of guessing while loading -

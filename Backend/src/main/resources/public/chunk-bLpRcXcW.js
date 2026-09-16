@@ -1,0 +1,1 @@
+async function o(a){let i=await a.arrayBuffer(),e=new Uint8Array(i),t=``,n=32768;for(let r=0;r<e.length;r+=n)t+=String.fromCharCode(...e.subarray(r,r+n));return btoa(t)}export{o as t};

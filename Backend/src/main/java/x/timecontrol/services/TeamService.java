@@ -72,8 +72,8 @@ public class TeamService {
         if (!force) {
             long assigned = participantRepository.countByTeamId(id);
             if (assigned > 0) {
-                throw new IllegalStateException(assigned + " Teilnehmer sind diesem Team zugeordnet. " +
-                        "Beim Löschen wird die Team-Zuordnung bei diesen Teilnehmern entfernt. Trotzdem löschen?");
+                throw new IllegalStateException(assigned + " participants are assigned to this team. " +
+                        "Deleting it will remove the team assignment from those participants. Delete anyway?");
             }
         }
         repository.deleteById(id);

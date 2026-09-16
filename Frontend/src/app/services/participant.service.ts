@@ -52,6 +52,21 @@ export class ParticipantService {
         return this.http.post<Participant[]>(`${this.apiUrl}/race/${raceId}/assign-race-numbers`, {});
     }
 
+    /**
+     * Derives a race's start order (startSequence, never raceNumber/the bib itself) from its
+     * linked previousRaceId race's ranking (see Race.previousRaceId) - e.g. a slalom run 2 start
+     * order built from run 1's results, where bib 30 can end up starting before bib 5.
+     * includeUnranked controls whether previous-race participants with no result (DSQ/DNF/DNS) are
+     * appended at the end of their category, or excluded from this race's start order and marked DNS.
+     */
+    applyStartOrderFromPreviousRace(raceId: number, includeUnranked: boolean): Observable<Participant[]> {
+        return this.http.post<Participant[]>(
+            `${this.apiUrl}/race/${raceId}/apply-start-order-from-previous-race`,
+            {},
+            {params: {includeUnranked}}
+        );
+    }
+
     importCsv(raceId: number, file: File): Observable<ParticipantImportResponse> {
         return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import/${raceId}`, buildImportFormData(file));
     }

@@ -144,7 +144,13 @@ public class AgeGroupService {
         if (widenedFrom == match.birthYearFrom() && widenedTo == match.birthYearTo()) {
             return match;
         }
-        return repository.update(new AgeGroup(match.id(), match.name(), widenedFrom, widenedTo, match.gender()));
+        AgeGroup widened = new AgeGroup(match.id(), match.name(), widenedFrom, widenedTo, match.gender());
+        // Same guard create()/update() enforce for a manually-entered range: without it, widening
+        // this group to cover the imported row's birth year could make its range overlap another
+        // existing group's, so a participant ends up matched inconsistently between call sites
+        // depending on unspecified DB iteration order (see findMatchingAgeGroup/calculateAgeGroupName).
+        assertNoOverlap(widened, match.id());
+        return repository.update(widened);
     }
 
     /**

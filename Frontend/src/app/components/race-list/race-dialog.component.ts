@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from '@angular/core';
+import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {
     FormBuilder,
@@ -25,8 +25,15 @@ import {
     ResultUnitLabels,
     SortDirection,
     SortDirectionLabels,
+    StartOrderMode,
 } from '../../models/race.model';
 import {readFileAsBase64} from '../../utils/file-base64.util';
+
+/** Dialog input: the race being edited (null for a new race) plus every other race, for the "linked previous race" dropdown. */
+export interface RaceDialogData {
+    race: Race | null;
+    races: Race[];
+}
 
 @Component({
     selector: 'app-race-dialog',
@@ -45,7 +52,7 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data ? 'Rennen bearbeiten' : 'Neues Rennen' }}
+            {{ data.race ? 'Rennen bearbeiten' : 'Neues Rennen' }}
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="race-form">
@@ -107,6 +114,34 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
                     }
                 </div>
 
+                <h3 class="section-title">Startreihenfolge (optional)</h3>
+                <p class="hint">
+                    Für einen zweiten Durchgang (z.B. Slalom): verknüpft dieses Rennen mit einem
+                    anderen, dessen Ergebnis die Startreihenfolge (und automatische Zeitmesswert-Zuordnung) bestimmt.
+                </p>
+                <div class="race-form-grid">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Verknüpfter Durchgang</mat-label>
+                        <mat-select formControlName="previousRaceId">
+                            <mat-option [value]="null">Kein</mat-option>
+                            @for (race of availablePreviousRaces; track race.id) {
+                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    @if (form.value.previousRaceId) {
+                        <mat-form-field appearance="outline">
+                            <mat-label>Anzahl Top-Platzierte umkehren</mat-label>
+                            <input matInput type="number" min="0" formControlName="startOrderReverseTopCount"/>
+                            <mat-hint>Pro Altersgruppe; z.B. 15 bei Slalom. 0 = keine Umkehrung.</mat-hint>
+                            @if (form.get('startOrderReverseTopCount')?.hasError('min')) {
+                                <mat-error>Darf nicht negativ sein</mat-error>
+                            }
+                        </mat-form-field>
+                    }
+                </div>
+
                 <h3 class="section-title">Zusatzinformationen (optional)</h3>
                 <div class="race-form-grid">
                     <mat-form-field appearance="outline">
@@ -163,7 +198,7 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
                     @if (coverPageActive) {
                         <span class="cover-page-name">
                             <mat-icon inline="true">picture_as_pdf</mat-icon>
-                            Deckblatt aktiv
+                            {{ selectedFileName ?? 'Deckblatt aktiv' }}
                         </span>
                         <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
                             Entfernen
@@ -243,9 +278,12 @@ import {readFileAsBase64} from '../../utils/file-base64.util';
 export class RaceDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<RaceDialogComponent>);
-    public data = inject<Race | null>(MAT_DIALOG_DATA);
+    private cdr = inject(ChangeDetectorRef);
+    public data = inject<RaceDialogData>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    /** Every other race this one could link to as its "previous race" - excludes itself. */
+    availablePreviousRaces: Race[];
     resultUnit = ResultUnit;
     resultUnitOptions = [
         {value: ResultUnit.TIME, label: ResultUnitLabels[ResultUnit.TIME]},
@@ -258,12 +296,21 @@ export class RaceDialogComponent {
 
     /** Whether a cover page is (or will be, after saving) set for this race. */
     coverPageActive = false;
+    /**
+     * Filename of the file just picked in this session, shown instead of the generic "Deckblatt
+     * aktiv" label so replacing an existing cover page gives visible feedback - never sent to the
+     * backend, which only ever sees hasCoverPage (see race.model.ts).
+     */
+    selectedFileName?: string;
     /** Set only when the user picks a new file this session; sent as coverPagePdf on save. */
     private coverPagePdfBase64?: string;
     private removeCoverPage = false;
 
     constructor() {
-        let date: Date | string = this.data?.date || '';
+        const race = this.data.race;
+        this.availablePreviousRaces = this.data.races.filter(r => r.id !== race?.id);
+
+        let date: Date | string = race?.date || '';
         if (date && typeof date === 'string') {
             const parts = date.split('-');
             if (parts.length === 3) {
@@ -276,23 +323,25 @@ export class RaceDialogComponent {
         }
 
         this.form = this.fb.group({
-            name: [this.data?.name || '', Validators.required],
+            name: [race?.name || '', Validators.required],
             date: [date, Validators.required],
-            organisation: [this.data?.organisation || ''],
-            referee: [this.data?.referee || ''],
-            raceDirector: [this.data?.raceDirector || ''],
-            timeControl: [this.data?.timeControl || ''],
-            routeName: [this.data?.routeName || ''],
-            elevationDifference: [this.data?.elevationDifference || ''],
-            routeLength: [this.data?.routeLength || ''],
-            courseSetter: [this.data?.courseSetter || ''],
-            weather: [this.data?.weather || ''],
-            resultUnit: [this.data?.resultUnit || ResultUnit.TIME],
-            resultUnitLabel: [this.data?.resultUnitLabel || ''],
-            sortDirection: [this.data?.sortDirection || SortDirection.ASC],
+            organisation: [race?.organisation || ''],
+            referee: [race?.referee || ''],
+            raceDirector: [race?.raceDirector || ''],
+            timeControl: [race?.timeControl || ''],
+            routeName: [race?.routeName || ''],
+            elevationDifference: [race?.elevationDifference || ''],
+            routeLength: [race?.routeLength || ''],
+            courseSetter: [race?.courseSetter || ''],
+            weather: [race?.weather || ''],
+            resultUnit: [race?.resultUnit || ResultUnit.TIME],
+            resultUnitLabel: [race?.resultUnitLabel || ''],
+            sortDirection: [race?.sortDirection || SortDirection.ASC],
+            previousRaceId: [race?.previousRaceId ?? null],
+            startOrderReverseTopCount: [race?.startOrderReverseTopCount ?? 15, Validators.min(0)],
         });
 
-        this.coverPageActive = this.data?.hasCoverPage ?? false;
+        this.coverPageActive = race?.hasCoverPage ?? false;
     }
 
     onCancel(): void {
@@ -308,11 +357,16 @@ export class RaceDialogComponent {
         }
         this.coverPagePdfBase64 = await readFileAsBase64(file);
         this.coverPageActive = true;
+        this.selectedFileName = file.name;
         this.removeCoverPage = false;
+        // OnPush only marks the view dirty automatically for the synchronous part of a template
+        // event handler - state set after this `await` needs markForCheck() or it never renders.
+        this.cdr.markForCheck();
     }
 
     onRemoveCoverPage(): void {
         this.coverPageActive = false;
+        this.selectedFileName = undefined;
         this.coverPagePdfBase64 = undefined;
         this.removeCoverPage = true;
     }
@@ -337,6 +391,9 @@ export class RaceDialogComponent {
                 sortDirection: formValue.sortDirection,
                 coverPagePdf: this.coverPagePdfBase64,
                 removeCoverPage: this.removeCoverPage || undefined,
+                previousRaceId: formValue.previousRaceId || null,
+                startOrderMode: formValue.previousRaceId ? StartOrderMode.REVERSE_TOP_N : undefined,
+                startOrderReverseTopCount: formValue.previousRaceId ? formValue.startOrderReverseTopCount : undefined,
             };
             this.dialogRef.close(race);
         }

@@ -16,10 +16,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.RaceLiveLinkResponse;
 import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
+import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.CategoryService;
 import x.timecontrol.services.DataImportScheduler;
+import x.timecontrol.services.RaceLiveService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
 import x.timecontrol.services.TimingDataImporter;
@@ -46,6 +50,12 @@ public class RaceController {
 
     @Inject
     DataImportScheduler dataImportScheduler;
+
+    @Inject
+    RaceLiveService raceLiveService;
+
+    @Inject
+    CategoryService categoryService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -79,6 +89,23 @@ public class RaceController {
         Optional<Race> race = service.findByName(name);
         return race.map(r -> HttpResponse.ok(RaceResponse.from(r)))
                 .orElse(HttpResponse.notFound());
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/{id}/live-links")
+    @Operation(summary = "This race's public live-results links", description = "Every discoverable live-results view for this race (menu page, fixed top-level views, one per category), as paths relative to this backend's own origin - the frontend prepends its own known origin/apiUrl (rather than the backend guessing its own externally-reachable address, which a reverse proxy could change) - for the frontend's \"copy a live link\" dialog.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "List of live links", content = @Content(schema = @Schema(implementation = RaceLiveLinkResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<List<RaceLiveLinkResponse>> liveLinks(@PathVariable Long id) {
+        Optional<Race> race = service.findById(id);
+        if (race.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        List<Category> categories = StreamSupport.stream(categoryService.findAll().spliterator(), false).toList();
+        List<RaceLiveLinkResponse> response = raceLiveService.liveLinks(race.get(), categories).stream()
+                .map(link -> new RaceLiveLinkResponse(link.label(), link.path()))
+                .toList();
+        return HttpResponse.ok(response);
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -152,7 +179,7 @@ public class RaceController {
 
     @Post("/{raceId}/archive-measurements")
     @Operation(summary = "Archive current measurements into this race, optionally clearing the measurement table",
-            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first (if device reset fails, no data is copied or deleted). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
+            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first (if pulling pending measurements or the device reset fails, e.g. device unreachable, no data is copied or deleted). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements archived successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")

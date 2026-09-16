@@ -5,6 +5,7 @@ import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.entities.StartOrderMode;
 
 import java.time.LocalDate;
 
@@ -62,6 +63,18 @@ public record RaceRequest(
 
         @Nullable
         @Schema(description = "Set to true to remove the current cover page (if any); takes precedence over coverPagePdf.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        Boolean removeCoverPage
+        Boolean removeCoverPage,
+
+        @Nullable
+        @Schema(description = "Id of an earlier race (e.g. run 1 of a two-run slalom) this race derives its start order from. Null/omitted means no link.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Long previousRaceId,
+
+        @Nullable
+        @Schema(description = "How the start order is derived from previousRaceId; only relevant when previousRaceId is set", example = "REVERSE_TOP_N", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        StartOrderMode startOrderMode,
+
+        @Nullable
+        @Schema(description = "Number of top-placed previousRaceId finishers (per age group) to start in reverse order when startOrderMode is REVERSE_TOP_N", example = "15", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Integer startOrderReverseTopCount
 ) {
 }

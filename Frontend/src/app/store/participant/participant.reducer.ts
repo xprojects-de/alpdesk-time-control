@@ -150,6 +150,19 @@ export const participantReducer = createReducer(
         error
     })),
 
+    // Apply a start order derived from a linked previous race's results
+    on(ParticipantActions.applyStartOrderFromPreviousRace, startLoading),
+    on(ParticipantActions.applyStartOrderFromPreviousRaceSuccess, (state, {participants}) => ({
+        ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        loadingCount: endLoading(state)
+    })),
+    on(ParticipantActions.applyStartOrderFromPreviousRaceFailure, (state, {error}) => ({
+        ...state,
+        loadingCount: endLoading(state),
+        error
+    })),
+
     // Import participants from CSV, or via a mapped import (CSV any delimiter / DSV-Wettkampfdatei
     // XML) - both produce the same ParticipantImportResponse, so they share import state.
     on(ParticipantActions.importParticipantsCsv, ParticipantActions.importParticipantsMapped, state => ({

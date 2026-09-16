@@ -60,8 +60,8 @@ public class PointsScaleService {
         if (!force) {
             long inUse = gaudiModeRepository.countByPointsScaleId(id);
             if (inUse > 0) {
-                throw new IllegalStateException(inUse + " Gaudi-Modus/-Modi verwenden dieses Punkteschema. " +
-                        "Beim Löschen fällt die Wertung dort automatisch auf das Standard-Schema (FIS-Schema) zurück. Trotzdem löschen?");
+                throw new IllegalStateException(inUse + " Gaudi-Modus instance(s) use this points scale. " +
+                        "Deleting it will make their scoring automatically fall back to the default scale (FIS-Schema). Delete anyway?");
             }
         }
         repository.deleteById(id);
@@ -83,7 +83,7 @@ public class PointsScaleService {
 
     /**
      * @throws IllegalStateException if the stored CSV is empty or contains a non-numeric entry -
-     *                                defensive: {@link x.timecontrol.Controller.PointsScaleController#isValid}
+     *                                defensive: x.timecontrol.Controller.PointsScaleController#isValid
      *                                already rejects a request that would produce this at save time, but this
      *                                is also reached from ranking calculations reading whatever is already
      *                                persisted, so a corrupt row must fail with a clear message here rather

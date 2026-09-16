@@ -19,7 +19,7 @@ export class CategoryEffects {
                 this.categoryService.getAll().pipe(
                     map(categories => CategoryActions.loadCategoriesSuccess({categories})),
                     catchError(error => of(CategoryActions.loadCategoriesFailure({
-                        error: extractErrorMessage(error, 'Failed to load categories')
+                        error: extractErrorMessage(error, 'Kategorien konnten nicht geladen werden')
                     })))
                 )
             )
@@ -33,7 +33,7 @@ export class CategoryEffects {
                 this.categoryService.create(category).pipe(
                     map(created => CategoryActions.createCategorySuccess({category: created})),
                     catchError(error => of(CategoryActions.createCategoryFailure({
-                        error: extractErrorMessage(error, 'Failed to create category')
+                        error: extractErrorMessage(error, 'Kategorie konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -47,7 +47,7 @@ export class CategoryEffects {
                 this.categoryService.update(id, category).pipe(
                     map(updated => CategoryActions.updateCategorySuccess({category: updated})),
                     catchError(error => of(CategoryActions.updateCategoryFailure({
-                        error: extractErrorMessage(error, 'Failed to update category')
+                        error: extractErrorMessage(error, 'Kategorie konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -64,11 +64,11 @@ export class CategoryEffects {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
                             return of(CategoryActions.deleteCategoryConflict({
                                 id,
-                                message: extractErrorMessage(error, 'Failed to delete category')
+                                message: extractErrorMessage(error, 'Kategorie konnte nicht gelöscht werden')
                             }));
                         }
                         return of(CategoryActions.deleteCategoryFailure({
-                            error: extractErrorMessage(error, 'Failed to delete category')
+                            error: extractErrorMessage(error, 'Kategorie konnte nicht gelöscht werden')
                         }));
                     })
                 )

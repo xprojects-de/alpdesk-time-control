@@ -26,7 +26,7 @@ class LosModeCalculatorSpec extends Specification {
     LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(), teamService)
 
     Race race = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
-            null, null, null, ResultUnit.TIME, null, SortDirection.ASC)
+            null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
 
     private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
         new Participant(id, 1L, id, null, null, null, durationMs, penalty, null, null)

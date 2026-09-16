@@ -18,7 +18,7 @@ export class AgeGroupEffects {
                 this.ageGroupService.getAll().pipe(
                     map(ageGroups => AgeGroupActions.loadAgeGroupsSuccess({ageGroups})),
                     catchError(error => of(AgeGroupActions.loadAgeGroupsFailure({
-                        error: extractErrorMessage(error, 'Failed to load age groups')
+                        error: extractErrorMessage(error, 'Altersgruppen konnten nicht geladen werden')
                     })))
                 )
             )
@@ -32,7 +32,7 @@ export class AgeGroupEffects {
                 this.ageGroupService.create(ageGroup).pipe(
                     map(created => AgeGroupActions.createAgeGroupSuccess({ageGroup: created})),
                     catchError(error => of(AgeGroupActions.createAgeGroupFailure({
-                        error: extractErrorMessage(error, 'Failed to create age group')
+                        error: extractErrorMessage(error, 'Altersgruppe konnte nicht erstellt werden')
                     })))
                 )
             )
@@ -46,7 +46,7 @@ export class AgeGroupEffects {
                 this.ageGroupService.update(id, ageGroup).pipe(
                     map(updated => AgeGroupActions.updateAgeGroupSuccess({ageGroup: updated})),
                     catchError(error => of(AgeGroupActions.updateAgeGroupFailure({
-                        error: extractErrorMessage(error, 'Failed to update age group')
+                        error: extractErrorMessage(error, 'Altersgruppe konnte nicht aktualisiert werden')
                     })))
                 )
             )
@@ -60,7 +60,7 @@ export class AgeGroupEffects {
                 this.ageGroupService.delete(id).pipe(
                     map(() => AgeGroupActions.deleteAgeGroupSuccess({id})),
                     catchError(error => of(AgeGroupActions.deleteAgeGroupFailure({
-                        error: extractErrorMessage(error, 'Failed to delete age group')
+                        error: extractErrorMessage(error, 'Altersgruppe konnte nicht gelöscht werden')
                     })))
                 )
             )

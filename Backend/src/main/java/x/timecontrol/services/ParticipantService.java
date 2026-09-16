@@ -66,9 +66,10 @@ public class ParticipantService {
     private final CategoryService categoryService;
     private final PersonService personService;
     private final AutoAssignService autoAssignService;
+    private final RankingService rankingService;
     private final TransactionOperations<Connection> transactionOperations;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, TransactionOperations<Connection> transactionOperations) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
@@ -76,6 +77,7 @@ public class ParticipantService {
         this.categoryService = categoryService;
         this.personService = personService;
         this.autoAssignService = autoAssignService;
+        this.rankingService = rankingService;
         this.transactionOperations = transactionOperations;
     }
 
@@ -119,13 +121,17 @@ public class ParticipantService {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
             validate(participant, id);
-            // durationMs/penalty/measuredAt/status are omitted by most update flows (e.g. editing name/team) and
-            // must not wipe out a time (or a DSQ/DNF/DNS status) that was already assigned; only overwrite when provided.
+            // durationMs/penalty/measuredAt/status/startSequence are omitted by most update flows
+            // (e.g. editing name/team) and must not wipe out a time (or a DSQ/DNF/DNS status, or a
+            // derived start-order position) that was already assigned; only overwrite when provided.
+            // startSequence in particular is never exposed in the participant edit form, so it must
+            // always fall through to "keep existing" or every unrelated edit would silently clear it.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
             Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
             DisqualificationStatus status = resolveStatus(participant, existing.get().status());
-            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment(), status);
+            Integer startSequence = participant.startSequence() != null ? participant.startSequence() : existing.get().startSequence();
+            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment(), status, startSequence);
             try {
                 return Optional.of(repository.update(updated));
             } catch (DataAccessException e) {
@@ -179,7 +185,7 @@ public class ParticipantService {
             toUpdate.add(new Participant(
                     existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt(),
-                    existing.comment(), existing.status()
+                    existing.comment(), existing.status(), existing.startSequence()
             ));
         }
 
@@ -266,6 +272,34 @@ public class ParticipantService {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Groups participants by their computed age group (from birthDate/gender via
+     * {@link #findMatchingAgeGroup}) - oldest age group first (by birthYearTo descending), with a
+     * null-keyed bucket for participants without a matching age group appended last. Shared by
+     * {@link #assignRaceNumbers} (random shuffle within each group) and
+     * {@link #applyStartOrderFromPreviousRace} (per-group reversal), so the age-group ordering
+     * convention can't drift between the two. {@code personsById} is caller-provided since both
+     * callers already need to batch-load it for other purposes too.
+     */
+    private Map<Long, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
+        List<AgeGroup> ageGroups = allAgeGroups().stream()
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .toList();
+
+        Map<Long, List<Participant>> byAgeGroup = new LinkedHashMap<>();
+        for (AgeGroup ageGroup : ageGroups) {
+            byAgeGroup.put(ageGroup.id(), new ArrayList<>());
+        }
+        byAgeGroup.put(null, new ArrayList<>());
+
+        for (Participant participant : participants) {
+            Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
+            Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
+            byAgeGroup.get(ageGroup.map(AgeGroup::id).orElse(null)).add(participant);
+        }
+        return byAgeGroup;
     }
 
     /**
@@ -423,35 +457,20 @@ public class ParticipantService {
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
-                .toList();
-
-        Map<Long, List<Participant>> byAgeGroup = new LinkedHashMap<>();
-        for (AgeGroup ageGroup : ageGroups) {
-            byAgeGroup.put(ageGroup.id(), new ArrayList<>());
-        }
-        List<Participant> withoutAgeGroup = new ArrayList<>();
-
-        for (Participant participant : participants) {
-            Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
-            Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
-            if (ageGroup.isPresent()) {
-                byAgeGroup.get(ageGroup.get().id()).add(participant);
-            } else {
-                withoutAgeGroup.add(participant);
-            }
-        }
+        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
-        for (AgeGroup ageGroup : ageGroups) {
-            List<Participant> group = byAgeGroup.get(ageGroup.id());
+        for (Map.Entry<Long, List<Participant>> entry : byAgeGroup.entrySet()) {
+            if (entry.getKey() == null) {
+                continue; // handled separately below, sorted by birthdate instead of shuffled
+            }
+            List<Participant> group = entry.getValue();
             Collections.shuffle(group, random);
             ordered.addAll(group);
         }
 
+        List<Participant> withoutAgeGroup = byAgeGroup.get(null);
         withoutAgeGroup.sort(Comparator.comparing(
                 (Participant p) -> {
                     Person person = personsById.get(p.personId());
@@ -460,15 +479,152 @@ public class ParticipantService {
                 Comparator.nullsLast(Comparator.reverseOrder())));
         ordered.addAll(withoutAgeGroup);
 
-        // Assigning race numbers touches every participant of the race; if a write fails partway
-        // through, the whole batch must roll back rather than leaving some participants renumbered
-        // and others not (which risks duplicate/missing race numbers right before a start list is printed).
-        //
-        // Re-shuffling an already-numbered race (the normal case) reassigns numbers that are
-        // currently held by OTHER participants in this same race. Since race_number is now
-        // constrained UNIQUE per race, writing the new numbers directly would collide with a
-        // not-yet-updated participant still holding that number. Clearing every number to NULL
-        // first (SQLite treats each NULL as distinct, so this never collides) avoids that.
+        return renumberSequentially(ordered);
+    }
+
+    /**
+     * Derives the {@code startSequence} (start ORDER, never the {@code raceNumber} bib itself -
+     * see the field's own doc on {@link Participant}) for {@code raceId} from the ranking of its
+     * linked {@link Race#previousRaceId()} race: per age group (computed from birthDate/gender,
+     * same convention as {@link #assignRaceNumbers} - oldest age group first, participants
+     * without a matching age group grouped last; {@code Category} plays no role here at all,
+     * independent of the reversal), the top {@link Race#startOrderReverseTopCount()} placed
+     * finishers of the previous race start in reverse order, followed by the rest of that age
+     * group in normal placement order - e.g. a slalom run 2 start order built from run 1's
+     * results, where bib 30 can end up starting before bib 5. Only participants entered in *both*
+     * races are reordered this way; a
+     * participant of this race whose person wasn't reordered (not in the previous race) is
+     * appended last, keeping their current relative race-number order rather than being dropped.
+     * <p>
+     * A previous-race participant with no result (DSQ/DNF/DNS, or simply not yet measured) is
+     * either appended at the end of their age group's block ({@code includeUnranked=true}) or
+     * excluded from this race's start order entirely and marked
+     * {@link DisqualificationStatus#DNS} here ({@code includeUnranked=false}) - they didn't start
+     * the previous race, so they don't start this one either.
+     * <p>
+     * If the previous race has no results at all yet, every one of its participants counts as
+     * "no result", so the derived order falls back to the previous race's own race-number order
+     * (or, with includeUnranked=false, nobody is ordered at all) - calling this before the linked
+     * race is actually finished produces a start order that isn't actually reversed by result.
+     * <p>
+     * {@link AutoAssignService} picks this up automatically: it matches incoming measurements by
+     * startSequence when a participant has one, falling back to raceNumber otherwise, so this
+     * method needs no separate wiring into auto-assign.
+     *
+     * @throws IllegalArgumentException if the race (or its linked previous race) doesn't exist, or
+     *                                   the race has no previousRaceId set
+     * @throws IllegalStateException    if live auto-assign mode is currently active for this race -
+     *                                   see {@link AutoAssignService#isActiveFor}.
+     */
+    public List<Participant> applyStartOrderFromPreviousRace(Long raceId, boolean includeUnranked) {
+        Race race = raceService.findById(raceId)
+                .orElseThrow(() -> new IllegalArgumentException("Race with id " + raceId + " does not exist"));
+        if (race.previousRaceId() == null) {
+            throw new IllegalArgumentException("Race " + raceId + " has no linked previous race");
+        }
+        if (autoAssignService.isActiveFor(raceId)) {
+            throw new IllegalStateException("Auto-assign mode is active for this race. Disable it before changing the start order.");
+        }
+        Race previousRace = raceService.findById(race.previousRaceId())
+                .orElseThrow(() -> new IllegalArgumentException("Linked race with id " + race.previousRaceId() + " does not exist"));
+
+        List<Participant> previousParticipants = StreamSupport.stream(repository.findByRaceId(previousRace.id()).spliterator(), false).toList();
+        List<Participant> targetParticipants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        // (a, b) -> a: if the same person was somehow entered twice in the target race (shouldn't
+        // happen, race_id+person_id is unique), keep the first rather than failing the whole reorder.
+        Map<Long, Participant> targetByPersonId = targetParticipants.stream()
+                .collect(Collectors.toMap(Participant::personId, p -> p, (a, _) -> a));
+
+        int reverseTopCount = race.startOrderReverseTopCount() != null ? Math.max(0, race.startOrderReverseTopCount()) : 0;
+
+        // Grouped and reversed per age group, independent of Category - see groupByAgeGroup for
+        // the shared ordering convention (oldest age group first, no-match bucket last).
+        Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
+        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
+
+        List<Participant> ordered = new ArrayList<>();
+        Set<Long> matchedPersonIds = new HashSet<>();
+        // Previous-race participants with no result, deliberately excluded via includeUnranked=false:
+        // their target-race counterpart (if any) is collected here so it can be marked DNS and its
+        // stale start sequence cleared below, instead of silently getting a start position anyway.
+        List<Participant> excludedTargets = new ArrayList<>();
+
+        for (List<Participant> group : byAgeGroup.values()) {
+            if (group.isEmpty()) {
+                continue;
+            }
+            Map<Long, Integer> places = rankingService.computePlaces(previousRace, group);
+
+            List<Participant> ranked = new ArrayList<>(group.stream()
+                    .filter(p -> places.containsKey(p.id()))
+                    .sorted(Comparator.comparing(p -> places.get(p.id())))
+                    .toList());
+            // Cut by PLACE VALUE, not raw index: two participants tied for the same "1224" place
+            // (e.g. both placed 15th on an identical time) must move together, never split across
+            // the reversed/normal boundary just because of arbitrary list order.
+            int splitIndex = Math.min(reverseTopCount, ranked.size());
+            if (splitIndex > 0 && splitIndex < ranked.size()) {
+                int cutoffPlace = places.get(ranked.get(splitIndex - 1).id());
+                while (splitIndex < ranked.size() && places.get(ranked.get(splitIndex).id()) == cutoffPlace) {
+                    splitIndex++;
+                }
+            }
+            List<Participant> top = new ArrayList<>(ranked.subList(0, splitIndex));
+            Collections.reverse(top);
+
+            List<Participant> ageGroupBlock = new ArrayList<>(top);
+            ageGroupBlock.addAll(ranked.subList(splitIndex, ranked.size()));
+
+            List<Participant> unranked = group.stream()
+                    .filter(p -> !places.containsKey(p.id()))
+                    .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .toList();
+            if (includeUnranked) {
+                ageGroupBlock.addAll(unranked);
+            } else {
+                for (Participant p : unranked) {
+                    Participant target = targetByPersonId.get(p.personId());
+                    if (target != null) {
+                        excludedTargets.add(target);
+                    }
+                }
+            }
+
+            for (Participant sourceParticipant : ageGroupBlock) {
+                Participant target = targetByPersonId.get(sourceParticipant.personId());
+                if (target != null && matchedPersonIds.add(sourceParticipant.personId())) {
+                    ordered.add(target);
+                }
+            }
+        }
+
+        // Participants of this race whose person wasn't part of the previous race at all (not
+        // excluded, just never entered there) still need a start position - appended last, keeping
+        // their current relative race-number order rather than being silently dropped.
+        Set<Long> excludedPersonIds = excludedTargets.stream().map(Participant::personId).collect(Collectors.toSet());
+        List<Participant> unmatched = targetParticipants.stream()
+                .filter(p -> !matchedPersonIds.contains(p.personId()) && !excludedPersonIds.contains(p.personId()))
+                .sorted(Comparator.comparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        ordered.addAll(unmatched);
+
+        return applyStartSequence(ordered, excludedTargets);
+    }
+
+    /**
+     * Randomly assigns race numbers 1..n to all participants of a race, shuffled within each age
+     * group; participants without a matching age group are appended at the end, ordered by
+     * ascending age (youngest first). Clears every participant's race number first, then
+     * reassigns 1..n, all in one transaction so a write failing partway through rolls back rather
+     * than leaving some participants renumbered and others not (which risks duplicate/missing race
+     * numbers right before a start list is printed). Re-numbering an already-numbered race (the
+     * normal case) reassigns numbers currently held by OTHER participants of the same race; since
+     * race_number is UNIQUE per race, writing the new numbers directly would collide with a
+     * not-yet-updated participant still holding that number. Clearing every number to NULL first
+     * (SQLite treats each NULL as distinct, so this never collides) avoids that.
+     */
+    private List<Participant> renumberSequentially(List<Participant> ordered) {
         return transactionOperations.executeWrite(_ -> {
             for (Participant participant : ordered) {
                 if (participant.raceNumber() != null) {
@@ -479,6 +635,32 @@ public class ParticipantService {
             int raceNumber = 1;
             for (Participant participant : ordered) {
                 result.add(repository.update(withRaceNumber(participant, raceNumber++)));
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Same clear-then-reassign shape as {@link #renumberSequentially}, but for
+     * {@link Participant#startSequence()} instead of {@link Participant#raceNumber()} - the bib
+     * itself is never touched here. {@code excluded} participants are cleared the same way but
+     * never given a start position, and are marked {@link DisqualificationStatus#DNS} instead:
+     * they didn't have a result in the linked race, so they're not starting this one either.
+     */
+    private List<Participant> applyStartSequence(List<Participant> ordered, List<Participant> excluded) {
+        return transactionOperations.executeWrite(_ -> {
+            for (Participant participant : ordered) {
+                if (participant.startSequence() != null) {
+                    repository.update(withStartSequence(participant, null));
+                }
+            }
+            List<Participant> result = new ArrayList<>();
+            for (Participant participant : excluded) {
+                result.add(repository.update(withStartSequenceAndStatus(participant, null, DisqualificationStatus.DNS)));
+            }
+            int sequence = 1;
+            for (Participant participant : ordered) {
+                result.add(repository.update(withStartSequence(participant, sequence++)));
             }
             return result;
         });
@@ -496,7 +678,29 @@ public class ParticipantService {
                 participant.penalty(),
                 participant.measuredAt(),
                 participant.comment(),
-                participant.status()
+                participant.status(),
+                participant.startSequence()
+        );
+    }
+
+    private static Participant withStartSequence(Participant participant, Integer startSequence) {
+        return withStartSequenceAndStatus(participant, startSequence, participant.status());
+    }
+
+    private static Participant withStartSequenceAndStatus(Participant participant, Integer startSequence, DisqualificationStatus status) {
+        return new Participant(
+                participant.id(),
+                participant.raceId(),
+                participant.personId(),
+                participant.raceNumber(),
+                participant.teamId(),
+                participant.categoryId(),
+                participant.durationMs(),
+                participant.penalty(),
+                participant.measuredAt(),
+                participant.comment(),
+                status,
+                startSequence
         );
     }
 
@@ -687,20 +891,20 @@ public class ParticipantService {
 
             String raceNumberRaw = valueFor(row, effectiveMapping, "raceNumber");
             if (raceNumberRaw == null || raceNumberRaw.isBlank()) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "raceNumber is missing"));
                 continue;
             }
             Integer raceNumber;
             try {
                 raceNumber = Integer.parseInt(raceNumberRaw.trim());
             } catch (NumberFormatException e) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Startnummer ist keine gültige Zahl: " + raceNumberRaw));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "raceNumber is not a valid number: " + raceNumberRaw));
                 continue;
             }
 
             Participant existing = existingByRaceNumber.get(raceNumber);
             if (existing == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Kein Teilnehmer mit Startnummer " + raceNumber + " in diesem Rennen gefunden"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "No participant with raceNumber " + raceNumber + " found in this race"));
                 continue;
             }
 
@@ -718,16 +922,16 @@ public class ParticipantService {
                         durationMs = parseResultTime(timeRaw.trim(), timeFormat);
                     } catch (IllegalArgumentException e) {
                         errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                                "Zeit \"" + timeRaw + "\" konnte nicht als " + timeFormat + " gelesen werden"));
+                                "Time \"" + timeRaw + "\" could not be read as " + timeFormat));
                         continue;
                     }
                     if (ValidationUtils.isNegative(durationMs)) {
-                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit darf nicht negativ sein"));
+                        errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time must not be negative"));
                         continue;
                     }
                 }
             } else if (status == null) {
-                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Zeit fehlt"));
+                errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "time is missing"));
                 continue;
             }
 
@@ -741,11 +945,11 @@ public class ParticipantService {
                 try {
                     penalty = Integer.parseInt(penaltyRaw.trim());
                 } catch (NumberFormatException e) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit \"" + penaltyRaw + "\" ist keine gültige Zahl"));
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty \"" + penaltyRaw + "\" is not a valid number"));
                     continue;
                 }
                 if (ValidationUtils.isNegative(penalty)) {
-                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "Strafzeit darf nicht negativ sein"));
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty must not be negative"));
                     continue;
                 }
             }
@@ -757,7 +961,7 @@ public class ParticipantService {
                     measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
                 } catch (DateTimeParseException e) {
                     errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
-                            "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
+                            "measuredAt has an invalid format (expected e.g. 2026-08-13T10:30:00)"));
                     continue;
                 }
             }
@@ -771,7 +975,8 @@ public class ParticipantService {
                     penalty,
                     measuredAt != null ? measuredAt : existing.measuredAt(),
                     comment,
-                    status != null ? status : existing.status()));
+                    status != null ? status : existing.status(),
+                    existing.startSequence()));
         }
 
         if (!toUpdate.isEmpty()) {

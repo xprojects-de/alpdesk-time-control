@@ -46,6 +46,7 @@ import {personReducer} from "./store/person/person.reducer";
 import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
 import {versionReducer} from "./store/version/version.reducer";
 import {settingsReducer} from "./store/settings/settings.reducer";
+import {pointsScaleReducer} from "./store/points-scale/points-scale.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {RaceMeasurementEffects} from "./store/race-measurement/race-measurement.effects";
@@ -58,7 +59,9 @@ import {PersonEffects} from "./store/person/person.effects";
 import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {VersionEffects} from "./store/version/version.effects";
 import {SettingsEffects} from "./store/settings/settings.effects";
+import {PointsScaleEffects} from "./store/points-scale/points-scale.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
+import {timeoutInterceptor} from "./interceptors/timeout.interceptor";
 
 registerLocaleData(localeDe);
 
@@ -78,7 +81,7 @@ export const appConfig: ApplicationConfig = {
     providers: [
         provideBrowserGlobalErrorListeners(),
         provideRouter(routes),
-        provideHttpClient(withXhr(), withInterceptors([authInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([authInterceptor, timeoutInterceptor])),
         provideAnimationsAsync(),
         {provide: LOCALE_ID, useValue: "de-DE"},
         {provide: MAT_DATE_LOCALE, useValue: "de-DE"},
@@ -98,8 +101,9 @@ export const appConfig: ApplicationConfig = {
             gaudiMode: gaudiModeReducer,
             version: versionReducer,
             settings: settingsReducer,
+            pointsScale: pointsScaleReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects, PointsScaleEffects]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
         ...(isDevMode() ? [provideStoreDevtools({

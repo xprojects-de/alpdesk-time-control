@@ -9,14 +9,32 @@ import io.micronaut.data.annotation.Query;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @JdbcRepository(dialect = Dialect.SQLITE)
 public interface MeasurementRepository extends CrudRepository<Measurement, Long> {
 
     List<Measurement> findByParticipantId(Long participantId);
 
-    @Query(value = "INSERT OR REPLACE INTO measurement (id, participant_id, duration_ms, measured_at) VALUES (:id, :participantId, :durationMs, :measuredAt)", nativeQuery = true)
-    void insertOrReplaceWithId(Long id, @Nullable Long participantId, Integer durationMs, LocalDateTime measuredAt);
+    Optional<Measurement> findByDeviceMeasurementId(Long deviceMeasurementId);
+
+    // Used by MeasurementService#create to synthesize a device_measurement_id for rows with no real
+    // one - null when the table is empty (or has no negative/synthetic ids yet), a Long otherwise.
+    @Query(value = "SELECT MIN(device_measurement_id) FROM measurement", nativeQuery = true)
+    @Nullable
+    Long findMinDeviceMeasurementId();
+
+    // Upserts on the unique device_measurement_id index (see V1__create_participant.sql) instead
+    // of writing `id` directly - re-polling the same device measurement (e.g. its duration is
+    // corrected after a re-transmission) updates the existing row instead of colliding with
+    // whatever unrelated row this device id's numeric value might otherwise coincide with in the
+    // app's own autoincrement sequence.
+    @Query(value = "INSERT INTO measurement (device_measurement_id, participant_id, duration_ms, measured_at) " +
+            "VALUES (:deviceMeasurementId, :participantId, :durationMs, :measuredAt) " +
+            "ON CONFLICT (device_measurement_id) DO UPDATE SET " +
+            "participant_id = excluded.participant_id, duration_ms = excluded.duration_ms, measured_at = excluded.measured_at",
+            nativeQuery = true)
+    void upsertByDeviceMeasurementId(Long deviceMeasurementId, @Nullable Long participantId, Integer durationMs, LocalDateTime measuredAt);
 
     @Query(value = "DELETE FROM measurement", nativeQuery = true)
     void deleteAll();

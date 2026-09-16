@@ -26,7 +26,7 @@ class TeamModeCalculatorSpec extends Specification {
 
     private static Race race(SortDirection direction) {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
-                null, null, null, ResultUnit.TIME, null, direction)
+                null, null, null, ResultUnit.TIME, null, direction, null, null, null, null)
     }
 
     private static Participant participant(Long id, Long teamId, Integer durationMs, Integer penalty = null) {

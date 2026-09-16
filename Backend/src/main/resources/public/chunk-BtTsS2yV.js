@@ -1,0 +1,1 @@
+import{En as rx,W as Op}from"./chunk-CmjjVoXL.js";var c=rx(`race`);var l=Op(c,e=>e.races);var n=Op(c,e=>e.loading);Op(c,e=>e.error);var s=Op(c,e=>e.selectedRaceId);Op(l,s,(e,a)=>a?e.find(o=>o.id===a):null);export{n,s as r,l as t};

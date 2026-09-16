@@ -37,7 +37,7 @@ public class GlobalExceptionHandler {
         if (lower.contains("unique constraint")) {
             LOG.warn("Uniqueness violation on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
             return HttpResponse.status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse("Die Aktion steht im Konflikt mit einem bestehenden Eintrag und konnte nicht ausgeführt werden."));
+                    .body(new ErrorResponse("The action conflicts with an existing entry and could not be completed."));
         }
         // NOT NULL / CHECK / FOREIGN KEY violations mean the request itself was missing or
         // referencing invalid data, not that it conflicts with an existing entry - 400 fits
@@ -45,11 +45,25 @@ public class GlobalExceptionHandler {
         if (lower.contains("not null constraint") || lower.contains("check constraint") || lower.contains("foreign key constraint")) {
             LOG.warn("Invalid data on {} {}: {}", request.getMethod(), request.getPath(), rootMessage);
             return HttpResponse.status(HttpStatus.BAD_REQUEST)
-                    .body(new ErrorResponse("Die Anfrage enthält ungültige oder unvollständige Daten."));
+                    .body(new ErrorResponse("The request contains invalid or incomplete data."));
         }
         LOG.error("Unhandled persistence error on {} {}", request.getMethod(), request.getPath(), exception);
         return HttpResponse.<ErrorResponse>serverError()
-                .body(new ErrorResponse("Ein unerwarteter Fehler ist aufgetreten."));
+                .body(new ErrorResponse("An unexpected error occurred."));
+    }
+
+    /**
+     * Catch-all for anything that isn't a {@link DataAccessException} (e.g. an NPE from an
+     * unguarded optional-FK dereference, or a bug in request handling) - without this, such a
+     * failure bypasses the sanitizing above entirely and falls through to Micronaut's own default
+     * error handler, whose verbosity depends on the active environment.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = Throwable.class)
+    public HttpResponse<ErrorResponse> handleUnexpectedException(HttpRequest<?> request, Throwable exception) {
+        LOG.error("Unhandled exception on {} {}", request.getMethod(), request.getPath(), exception);
+        return HttpResponse.<ErrorResponse>serverError()
+                .body(new ErrorResponse("An unexpected error occurred."));
     }
 
     private static String rootCauseMessage(Throwable throwable) {

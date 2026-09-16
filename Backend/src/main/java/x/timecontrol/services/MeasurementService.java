@@ -26,8 +26,53 @@ public class MeasurementService {
         this.measurementTableLock = measurementTableLock;
     }
 
+    /**
+     * @throws IllegalStateException if participantId is already assigned to another measurement
+     */
     public Measurement create(Measurement measurement) {
-        return measurementTableLock.get(() -> repository.save(measurement));
+        return measurementTableLock.get(() -> {
+            if (measurement.participantId() != null) {
+                assertParticipantNotAlreadyAssigned(measurement.participantId(), null);
+            }
+            Measurement toSave = measurement;
+            if (toSave.deviceMeasurementId() == null) {
+                // device_measurement_id is NOT NULL (see V1__create_participant.sql), so this must be
+                // resolved before the insert, not after - repository.save() would otherwise fail the
+                // constraint outright. Covers every creation path with no real device id: manual entry
+                // (MeasurementController#add), CSV import (#importMapped), and any future
+                // TimingDataImporter that can't supply a stable one (it should call create() rather
+                // than MeasurementService#upsertByDeviceMeasurementId in that case, since there's no
+                // id to upsert against anyway).
+                toSave = new Measurement(
+                        toSave.id(), nextSyntheticDeviceMeasurementId(), toSave.participantId(), toSave.durationMs(), toSave.measuredAt()
+                );
+            }
+            return repository.save(toSave);
+        });
+    }
+
+    // Always negative so it can never collide with a real (always positive) device counter; one
+    // below the lowest existing id (real or synthetic) keeps it unique without a dedicated sequence.
+    // Called only while measurementTableLock is held, so the read-then-use here can't race with a
+    // concurrent create().
+    private long nextSyntheticDeviceMeasurementId() {
+        Long min = repository.findMinDeviceMeasurementId();
+        return min == null ? -1L : Math.min(min, 0) - 1;
+    }
+
+    // Mirrors RaceMeasurementService's equivalent guard for archived measurements. Without this, an
+    // operator correcting a mismatched row in the "Messungen" dialog (or a CSV import with a
+    // duplicate participantId column value) can point two raw measurement rows at the same
+    // participant; there's no unique index on participant_id to catch it at the DB level (unlike
+    // device_measurement_id), so the second one would silently coexist until archiving picks
+    // whichever one "wins" in an unspecified order - overwriting the participant's correct finish
+    // time with the wrong one.
+    private void assertParticipantNotAlreadyAssigned(Long participantId, Long excludingMeasurementId) {
+        boolean conflict = repository.findByParticipantId(participantId).stream()
+                .anyMatch(m -> excludingMeasurementId == null || !m.id().equals(excludingMeasurementId));
+        if (conflict) {
+            throw new IllegalStateException("Participant with id " + participantId + " is already assigned to another measurement");
+        }
     }
 
     public Iterable<Measurement> findAll() {
@@ -42,12 +87,29 @@ public class MeasurementService {
         return repository.findById(id);
     }
 
+    public Optional<Measurement> findByDeviceMeasurementId(Long deviceMeasurementId) {
+        return repository.findByDeviceMeasurementId(deviceMeasurementId);
+    }
+
+    /**
+     * @throws IllegalStateException if participantId is already assigned to another measurement
+     */
     public Optional<Measurement> update(Long id, Measurement measurement) {
         return measurementTableLock.get(() -> {
             Optional<Measurement> existing = repository.findById(id);
             if (existing.isPresent()) {
+                if (measurement.participantId() != null) {
+                    assertParticipantNotAlreadyAssigned(measurement.participantId(), id);
+                }
                 Measurement updated = new Measurement(
                         id,
+                        // Always carried over from the existing row, never taken from the incoming
+                        // request (which never carries one - see MeasurementController) and never
+                        // cleared by a manual edit: if a device-sourced row's deviceMeasurementId
+                        // were wiped here, the next poll of that same device measurement would find
+                        // no match on the unique index and INSERT a duplicate row instead of
+                        // updating this (just corrected) one.
+                        existing.get().deviceMeasurementId(),
                         measurement.participantId(),
                         measurement.durationMs(),
                         measurement.measuredAt()
@@ -70,10 +132,10 @@ public class MeasurementService {
         });
     }
 
-    public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
+    public Measurement upsertByDeviceMeasurementId(Long deviceMeasurementId, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
         return measurementTableLock.get(() -> {
-            repository.insertOrReplaceWithId(id, participantId, durationMs, measuredAt);
-            return repository.findById(id).orElseThrow();
+            repository.upsertByDeviceMeasurementId(deviceMeasurementId, participantId, durationMs, measuredAt);
+            return repository.findByDeviceMeasurementId(deviceMeasurementId).orElseThrow();
         });
     }
 
@@ -96,7 +158,7 @@ public class MeasurementService {
      * {@code {sourceField: value}} rows via {@link MeasurementImportParsers}, then applies
      * {@code mapping} (our field name -> source field name) to pull out the values for each new
      * measurement. A field left out of {@code mapping} is simply not imported for any row - since
-     * durationMs is required, an explicitly empty {@code mapping} just reports "durationMs fehlt" for
+     * durationMs is required, an explicitly empty {@code mapping} just reports "durationMs is missing" for
      * every row rather than silently importing anything. {@code mapping} is used as given - including
      * an explicitly empty map, meaning "map nothing" - and only falls back to the auto-suggested
      * mapping when it's entirely omitted ({@code null}), mirroring
@@ -122,18 +184,18 @@ public class MeasurementService {
             String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
 
             if (durationRaw == null || durationRaw.isBlank()) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs fehlt"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs is missing"));
                 continue;
             }
             Integer durationMs;
             try {
                 durationMs = Integer.parseInt(durationRaw.trim());
             } catch (NumberFormatException e) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs ist keine gültige Zahl"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs is not a valid number"));
                 continue;
             }
             if (ValidationUtils.isNegative(durationMs)) {
-                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs darf nicht negativ sein"));
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "durationMs must not be negative"));
                 continue;
             }
 
@@ -144,7 +206,7 @@ public class MeasurementService {
                 try {
                     measuredAt = LocalDateTime.parse(measuredAtRaw.trim());
                 } catch (DateTimeParseException e) {
-                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "measuredAt hat ein ungültiges Format (erwartet z. B. 2026-08-13T10:30:00)"));
+                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "measuredAt has an invalid format (expected e.g. 2026-08-13T10:30:00)"));
                     continue;
                 }
             }
@@ -154,12 +216,16 @@ public class MeasurementService {
                 try {
                     participantId = Long.parseLong(participantIdRaw.trim());
                 } catch (NumberFormatException e) {
-                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "participantId ist keine gültige Zahl"));
+                    errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "participantId is not a valid number"));
                     continue;
                 }
             }
 
-            imported.add(create(new Measurement(null, participantId, durationMs, measuredAt)));
+            try {
+                imported.add(create(new Measurement(null, null, participantId, durationMs, measuredAt)));
+            } catch (IllegalStateException e) {
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), e.getMessage()));
+            }
         }
 
         return new MeasurementImportResult(imported, errors);

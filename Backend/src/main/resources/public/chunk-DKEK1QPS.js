@@ -1,0 +1,1 @@
+var r=(e=>(e.TIME=`TIME`,e.POINTS=`POINTS`,e))(r||{});var t={TIME:`Zeit`,POINTS:`Punkte/Sonstiges`};var n={ASC:`Niedriger ist besser`,DESC:`Höher ist besser`};export{r as n,t as r,n as t};

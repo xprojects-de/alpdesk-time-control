@@ -25,6 +25,7 @@ import * as RaceActions from '../../store/race/race.actions';
 import * as RaceSelectors from '../../store/race/race.selectors';
 import * as ParticipantActions from '../../store/participant/participant.actions';
 import {RaceDialogComponent} from './race-dialog.component';
+import {RaceLiveLinksDialogComponent} from './race-live-links-dialog.component';
 import {
     ParticipantImportMappingDialogComponent,
     ParticipantImportMappingDialogResult
@@ -122,6 +123,13 @@ import {Actions, ofType} from '@ngrx/effects';
                     <ng-container matColumnDef="actions">
                         <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                         <td mat-cell *matCellDef="let race">
+                            <button
+                                    mat-icon-button
+                                    (click)="openLiveLinksDialog(race)"
+                                    matTooltip="Live-Ergebnisse-Links"
+                            >
+                                <mat-icon>link</mat-icon>
+                            </button>
                             <button
                                     mat-icon-button
                                     (click)="exportResults(race)"
@@ -299,6 +307,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     openCreateDialog(): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
             width: '500px',
+            data: {race: null, races: this.dataSource.data},
         });
 
         dialogRef
@@ -316,7 +325,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     openEditDialog(race: Race): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
             width: '500px',
-            data: race,
+            data: {race, races: this.dataSource.data},
         });
 
         dialogRef.afterClosed()
@@ -359,13 +368,23 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
         }));
     }
 
+    openLiveLinksDialog(race: Race): void {
+        this.dialog.open(RaceLiveLinksDialogComponent, {
+            width: '500px',
+            data: {race},
+        });
+    }
+
     /**
      * Full race migration from another instance: create a new race here (name/date decided locally,
      * not carried from the export - the source instance's export doesn't include them), then import
      * the roster+results CSV into it via the same mapping dialog the participant list uses.
      */
     async importRaceResults(): Promise<void> {
-        const raceDialogRef = this.dialog.open(RaceDialogComponent, {width: '500px'});
+        const raceDialogRef = this.dialog.open(RaceDialogComponent, {
+            width: '500px',
+            data: {race: null, races: this.dataSource.data},
+        });
         const raceRequest: RaceRequest | undefined = await firstValueFrom(raceDialogRef.afterClosed());
         if (!raceRequest) {
             return;

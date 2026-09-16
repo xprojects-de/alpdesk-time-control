@@ -129,6 +129,8 @@ public class RaceMeasurementController {
             List<RaceMeasurement> raceMeasurements = service.findByRaceId(raceId);
             ParticipantService.SyncMeasurementsResult result = participantService.syncMeasurementsToParticipants(raceMeasurements);
             return HttpResponse.ok(SyncMeasurementsResponse.of(result.synced(), result.skipped()));
+        } catch (io.micronaut.data.exceptions.DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             SyncMeasurementsResponse errorResponse = new SyncMeasurementsResponse(
                     0, 0, 0, "Sync failed: " + e.getMessage()

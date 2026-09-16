@@ -9,6 +9,7 @@ import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Person;
+import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
 import x.timecontrol.services.PersonService;
@@ -117,7 +118,14 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             results.add(new PersonResult(label, externalId, total, legs, team));
         }
 
-        results.sort(Comparator.comparingInt(PersonResult::totalMs));
+        // GaudiModeService.validate() guarantees every combined race shares the same sortDirection,
+        // so the first race's direction applies to the combined total too - without this, a
+        // TIME_COMBINATION over DESC (higher-is-better, e.g. points) races would always rank
+        // ascending and award the win to the worst total instead of the best, mirroring the
+        // direction-aware sort TeamModeCalculator already applies.
+        SortDirection sortDirection = races.getFirst().race().sortDirection();
+        Comparator<PersonResult> byTotalAscending = Comparator.comparingInt(PersonResult::totalMs);
+        results.sort(sortDirection == SortDirection.DESC ? byTotalAscending.reversed() : byTotalAscending);
         List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(r -> (double) r.totalMs()).toList());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();

@@ -56,7 +56,11 @@ public record ParticipantResponse(
         String comment,
 
         @Schema(description = "Disqualification/no-result status; NONE means a normal, rankable result", example = "NONE")
-        DisqualificationStatus status
+        DisqualificationStatus status,
+
+        @Nullable
+        @Schema(description = "Position in this race's actual start order, when it differs from raceNumber (e.g. derived from a linked previous race's results). Null means this participant starts in raceNumber order.", example = "3", nullable = true)
+        Integer startSequence
 ) {
     public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
         return new ParticipantResponse(
@@ -71,7 +75,8 @@ public record ParticipantResponse(
                 participant.penalty(),
                 participant.measuredAt(),
                 participant.comment(),
-                Objects.requireNonNullElse(participant.status(), DisqualificationStatus.NONE)
+                Objects.requireNonNullElse(participant.status(), DisqualificationStatus.NONE),
+                participant.startSequence()
         );
     }
 }
