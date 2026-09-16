@@ -105,3 +105,9 @@ Once all seven agents have returned:
    of the findings above.
 4. Write the summary in German (matching this project's audience), keep file/method names and
    code identifiers as-is, and use `file:line` refs so they're clickable.
+
+## Sprache
+
+Present the final summary to the user in German — headings, severity labels, and finding
+descriptions in German. Keep file/method names, code identifiers, and file:line references
+as-is.

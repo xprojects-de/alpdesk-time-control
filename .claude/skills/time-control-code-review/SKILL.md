@@ -35,3 +35,9 @@ same way, instead of using whatever categories the underlying tool picks.
    race-timing app used live at events. Drop headings with no findings rather than showing them
    empty. Keep each finding's file:line reference and description as reported by the underlying
    review.
+
+## Sprache
+
+Present the final summary to the user in German (this project's audience is German-speaking ski
+club officials) — headings, category names, and finding descriptions in German. Keep file/method
+names, code identifiers, and file:line references as-is.

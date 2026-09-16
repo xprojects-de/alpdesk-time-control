@@ -59,7 +59,8 @@ found.
       same cleanup.
 4. Report a summary table: suite → ran/skipped, pass/fail, and for any failure point at
    `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and the
-   failing script's output.
+   failing script's output. Present this summary in German — table labels and any prose around
+   it in German, but keep suite names, file paths, and quoted log/script output as-is.
 
 ## Notes
 
