@@ -172,6 +172,20 @@ public class PdfExportService {
     }
 
     /**
+     * Formats a "Rückstand" (gap-to-leader) with an explicit sign rather than always prefixing "+":
+     * a DESC-sorted (higher-is-better) Zeit-Kombination - explicitly supported, see
+     * {@code TimeCombinationModeCalculator} - has a negative {@code diffMs} for every non-leader
+     * entry, which an unconditional "+" plus {@code formatValue()}'s negative-number handling would
+     * otherwise render as a garbled string (e.g. "+0:-05.-00") instead of "-0:05.00".
+     */
+    private static String formatSignedDiff(Race race, Integer diffMs) {
+        if (diffMs == null) {
+            return "-";
+        }
+        return (diffMs >= 0 ? "+" : "-") + RankingViewService.formatValue(race, Math.abs(diffMs));
+    }
+
+    /**
      * Sorted by each participant's {@link Participant#effectiveStartOrder()} - their derived
      * start position when this race has one (e.g. a slalom run 2 whose order was built from run
      * 1's results, so bib 30 can be printed above bib 5), otherwise plain race-number order. A
@@ -370,13 +384,7 @@ public class PdfExportService {
                 // All legRaces share one ResultUnit (enforced by GaudiModeService.validate()), so the
                 // aggregate columns can be formatted using any one of them - headerRace is one of the legs.
                 new PdfColumn<>("Gesamt", 1.2f, e -> RankingViewService.formatValue(headerRace, e.valueMs())),
-                // Signed explicitly rather than always prefixing "+": a DESC-sorted (higher-is-better)
-                // Zeit-Kombination - explicitly supported, see TimeCombinationModeCalculator - has a
-                // negative diffMs for every non-leader entry, which formatValue()/formatTime() would
-                // otherwise render as a garbled negative time string (e.g. "+0:-05.-00").
-                new PdfColumn<>("Rückstand", 1.1f, e -> e.diffMs() != null
-                        ? (e.diffMs() >= 0 ? "+" : "-") + RankingViewService.formatValue(headerRace, Math.abs(e.diffMs()))
-                        : "-")
+                new PdfColumn<>("Rückstand", 1.1f, e -> formatSignedDiff(headerRace, e.diffMs()))
         ));
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
