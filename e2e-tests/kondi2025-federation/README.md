@@ -62,6 +62,28 @@ pkill -f 'time-control.jar'; rm -rf /tmp/kondi-normal
 pkill -f 'time-control.jar'; rm -rf /tmp/kondi-phased
 ```
 
+### Ergebnis-Backup/Restore-Variante (`run_phased_results.sh`)
+
+Testet gezielt das **Ergebnisse**-Export/Import-Feature (`/participants/export/results-csv` +
+`/participants/import-results-mapped`) als eigenständigen Wiederherstellungsweg - **nicht** den
+Roster-Export/Import (`/export/csv` + `/import-mapped`), der Identitätsdaten mitschleppt. Läuft den
+gleichen Ablauf wie `run_all.sh`, exportiert danach MAINs Ergebnisse je Rennen, **leert sie direkt in
+MAINs SQLite-Datei** (dafür gibt es bewusst keinen API-Weg - siehe
+`phase4b_results_backup_restore.py`) und importiert sie anschließend rein aus der zuvor exportierten
+CSV zurück. Prüft danach Teilnehmer-für-Teilnehmer, dass jedes Ergebnis exakt wie vor dem Leeren
+wiederhergestellt wurde, plus einen erneuten `phase5_reconcile.py`-Lauf und die volle
+Ranking-Verifikation (Phasen 6-10) - simuliert damit, dass ein Wettkampfleiter Ergebnisse von Hand
+aus einer CSV-Sicherung wiederherstellt, ohne die Teilnehmerliste selbst anzufassen.
+
+Braucht - anders als `run_all.sh`/`run_phased.sh` - den Work-Dir als Argument, um MAINs SQLite-Datei
+direkt zu finden. Auch diese Variante braucht **frische** Instanzen (siehe oben):
+
+```bash
+./start_instances.sh /pfad/zu/time-control.jar /tmp/kondi-results
+./run_phased_results.sh /tmp/kondi-results
+pkill -f 'time-control.jar'; rm -rf /tmp/kondi-results
+```
+
 Sowohl `run_all.sh` als auch `run_phased.sh` schließen automatisch mit einem Abgleich gegen ein
 echtes offizielles Ergebnis-PDF ab (`verify_against_official.py`, Phase 10), sofern
 `sample-data/official_result.pdf` vorhanden ist — fehlt die Datei (z.B. weil sie aus
@@ -117,6 +139,8 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase3_phased_results.py` | Wie phase3, aber nur ein Drittel des Feldes pro Aufruf (`station<N> <phase 1\|2\|3>`) |
 | `phase4_phased_export_import.py` | Wie phase4, aber pro Phase (`<phase 1\|2\|3>`) - prüft insb. `errorCount == 0` bei unvollständigem Zwischenstand |
 | `run_phased.sh` | Orchestriert phase1+phase2 wie gewohnt, dann 3x phase3_phased+phase4_phased, dann phase5-9 |
+| `phase4b_results_backup_restore.py` | MAIN: Ergebnisse je Rennen exportieren (Ergebnis-CSV), direkt in der DB leeren, aus der CSV zurückimportieren, gegen den Vorher-Stand verifizieren |
+| `run_phased_results.sh` | Orchestriert phase1-5 wie `run_all.sh`, dann phase4b, dann erneut phase5, dann phase6-9 |
 | `phase5_reconcile.py` | Datenintegrität Station ↔ Hauptinstanz prüfen |
 | `phase6_verify_rankings.py` | Gesamt-Platzierung unabhängig nachrechnen und mit PDF abgleichen |
 | `phase7_verify_gender_agegroup.py` | Dasselbe für Geschlecht/Altersklassen-Aufschlüsselung |

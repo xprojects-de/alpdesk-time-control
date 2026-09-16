@@ -1,0 +1,100 @@
+"""Phase 4b (run on MAIN once phase4/phase5 have established that MAIN's results already match
+every station): for every race, exports MAIN's results via the RESULTS-ONLY CSV export
+(/participants/export/results-csv - NOT /export/csv, which also carries the roster/identity data),
+wipes every participant's result fields directly in MAIN's own SQLite file, then restores them
+purely via the RESULTS-ONLY import (/participants/import-results-mapped) and checks every
+participant's result comes back exactly as it was before the wipe. Simulates an operator restoring
+a race's results from a CSV backup (e.g. after the database had to be rebuilt) using only the
+manual results import/export feature - the participant/roster list itself is never touched.
+
+Why a direct DB wipe instead of going through the API: PUT /participants/{id}
+(ParticipantService#update) always falls back to the participant's EXISTING durationMs/penalty/
+measuredAt whenever the request's value is null - there is no way for a JSON body to distinguish
+"explicitly clear this" from "field omitted" for those three fields (see that method's own
+comment), so no API call can actually null out an already-entered result. Directly clearing the
+row here is safe because this is the suite's own throwaway, isolated SQLite file (see
+start_instances.sh) - never the real database.
+"""
+import os, sys, json, sqlite3
+sys.path.insert(0, '.')
+import common as c
+import config
+
+if not config.MAIN_DB_PATH:
+    sys.exit(
+        "KONDI_MAIN_DB_PATH is not set - run this via run_phased_results.sh <work-dir>, or export "
+        "it yourself pointing at MAIN's database/time-control.db"
+    )
+
+main_token = c.login(config.MAIN)
+with open(c.results_path("state.json")) as f:
+    race_ids = json.load(f)["race_ids"]
+
+RESULT_FIELDS = ["durationMs", "penalty", "status", "comment"]
+total_mismatches = 0
+
+for name, unit, label, direction, csv_file, key in config.RACES:
+    race_id = race_ids[name]
+
+    # 1) snapshot the current (post phase4/5) state, by raceNumber - this is what must come back
+    #    unchanged after the wipe + reimport.
+    _, before = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
+    before_by_rn = {p["raceNumber"]: {f: p.get(f) for f in RESULT_FIELDS} for p in before}
+
+    # 2) export via the RESULTS-ONLY CSV export.
+    status, body = c.get_raw(config.MAIN, main_token, f"/participants/export/results-csv/{race_id}")
+    assert status == 200, status
+    fname = c.results_path(f"backup_results_{key}.csv")
+    with open(fname, "wb") as f:
+        f.write(body)
+    print(f"{name}: Ergebnisse exportiert -> {fname} ({len(body)} bytes)")
+
+    # 3) wipe every participant's result columns directly in MAIN's SQLite file - identity columns
+    #    (person/team/category/raceNumber) are left untouched.
+    conn = sqlite3.connect(config.MAIN_DB_PATH, timeout=10)
+    try:
+        cur = conn.execute(
+            "UPDATE participant SET duration_ms=NULL, penalty=NULL, measured_at=NULL, comment=NULL, status='NONE' "
+            "WHERE race_id=?",
+            (race_id,),
+        )
+        conn.commit()
+        print(f"{name}: {cur.rowcount} Teilnehmer-Ergebnisse in der DB geleert")
+    finally:
+        conn.close()
+
+    # sanity check: the API must now report every participant of this race as blank/unranked.
+    _, cleared = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
+    still_set = [p["raceNumber"] for p in cleared if p.get("durationMs") is not None or p.get("status") != "NONE"]
+    assert not still_set, f"{name}: Ergebnisse nicht vollstaendig geleert, raceNumbers={still_set}"
+
+    # 4) restore purely via the RESULTS-ONLY import (matched by raceNumber, never touches identity).
+    status, resp = c.post_multipart(
+        config.MAIN, main_token, f"/participants/import-results-mapped/{race_id}",
+        {"timeFormat": "CLOCK"},
+        {"file": (os.path.basename(fname), body, "text/csv")},
+    )
+    print(f"{name}: reimport status={status} updated={resp.get('updatedCount')} errors={resp.get('errorCount')}")
+    if resp.get("errors"):
+        print("   errors:", resp["errors"])
+    assert status == 200, (status, resp)
+    assert resp.get("errorCount", 0) == 0, resp["errors"]
+
+    # 5) compare against the pre-wipe snapshot.
+    _, after = c.get(config.MAIN, main_token, f"/participants?raceId={race_id}")
+    after_by_rn = {p["raceNumber"]: {f: p.get(f) for f in RESULT_FIELDS} for p in after}
+    assert set(before_by_rn) == set(after_by_rn), f"{name}: raceNumber-Menge hat sich veraendert!"
+
+    mismatches = [
+        (rn, before_by_rn[rn], after_by_rn[rn])
+        for rn in before_by_rn
+        if before_by_rn[rn] != after_by_rn[rn]
+    ]
+    print(f"{name}: {len(before_by_rn)} Teilnehmer verglichen, {len(mismatches)} Abweichungen")
+    for rn, bv, av in mismatches:
+        print(f"   MISMATCH raceNumber={rn}: vorher={bv} nachher={av}")
+    total_mismatches += len(mismatches)
+
+print()
+print(f"TOTAL ABWEICHUNGEN NACH EXPORT/LEEREN/REIMPORT: {total_mismatches}")
+assert total_mismatches == 0, "Ergebnis-Backup/Restore hat Daten veraendert!"
