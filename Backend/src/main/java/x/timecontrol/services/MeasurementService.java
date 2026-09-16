@@ -27,7 +27,31 @@ public class MeasurementService {
     }
 
     public Measurement create(Measurement measurement) {
-        return measurementTableLock.get(() -> repository.save(measurement));
+        return measurementTableLock.get(() -> {
+            Measurement toSave = measurement;
+            if (toSave.deviceMeasurementId() == null) {
+                // device_measurement_id is NOT NULL (see V1__create_participant.sql), so this must be
+                // resolved before the insert, not after - repository.save() would otherwise fail the
+                // constraint outright. Covers every creation path with no real device id: manual entry
+                // (MeasurementController#add), CSV import (#importMapped), and any future
+                // TimingDataImporter that can't supply a stable one (it should call create() rather
+                // than MeasurementService#upsertByDeviceMeasurementId in that case, since there's no
+                // id to upsert against anyway).
+                toSave = new Measurement(
+                        toSave.id(), nextSyntheticDeviceMeasurementId(), toSave.participantId(), toSave.durationMs(), toSave.measuredAt()
+                );
+            }
+            return repository.save(toSave);
+        });
+    }
+
+    // Always negative so it can never collide with a real (always positive) device counter; one
+    // below the lowest existing id (real or synthetic) keeps it unique without a dedicated sequence.
+    // Called only while measurementTableLock is held, so the read-then-use here can't race with a
+    // concurrent create().
+    private long nextSyntheticDeviceMeasurementId() {
+        Long min = repository.findMinDeviceMeasurementId();
+        return min == null ? -1L : Math.min(min, 0) - 1;
     }
 
     public Iterable<Measurement> findAll() {

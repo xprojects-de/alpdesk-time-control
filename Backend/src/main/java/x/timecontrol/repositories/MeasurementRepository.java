@@ -18,6 +18,12 @@ public interface MeasurementRepository extends CrudRepository<Measurement, Long>
 
     Optional<Measurement> findByDeviceMeasurementId(Long deviceMeasurementId);
 
+    // Used by MeasurementService#create to synthesize a device_measurement_id for rows with no real
+    // one - null when the table is empty (or has no negative/synthetic ids yet), a Long otherwise.
+    @Query(value = "SELECT MIN(device_measurement_id) FROM measurement", nativeQuery = true)
+    @Nullable
+    Long findMinDeviceMeasurementId();
+
     // Upserts on the unique device_measurement_id index (see V1__create_participant.sql) instead
     // of writing `id` directly - re-polling the same device measurement (e.g. its duration is
     // corrected after a re-transmission) updates the existing row instead of colliding with

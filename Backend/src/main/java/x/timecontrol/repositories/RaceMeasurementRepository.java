@@ -18,7 +18,11 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
 
     // Upserts on the unique (race_id, device_measurement_id) index so that copying/archiving the
     // same race again is safe: it neither duplicates already-copied rows nor discards a re-measured
-    // value, it overwrites the existing row with the current measurement data instead.
+    // value, it overwrites the existing row with the current measurement data instead. Copying
+    // measurement.device_measurement_id (real or app-generated - see MeasurementService#create and
+    // its NOT NULL constraint in V1__create_participant.sql) rather than measurement.id means the
+    // value archived here is both a stable idempotency key AND the actual value shown to race
+    // officials as "Geräte-ID" - unlike the raw row's own internal id, which is meaningless to them.
     // The LEFT JOIN (rather than copying measurement.participant_id directly) guards against a raw
     // measurement whose participantId belongs to a *different* race than :raceId - e.g. live
     // auto-assign was switched to another race mid-stream, or a measurement was manually assigned to
@@ -35,7 +39,7 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
     // SQLite ambiguity - see the "Parsing Ambiguity" note in the UPSERT documentation). Verified this
     // still holds with the added LEFT JOIN's own ON clause present.
     @Query(value = "INSERT INTO race_measurement (race_id, device_measurement_id, participant_id, duration_ms, measured_at) " +
-            "SELECT :raceId, m.id, p.id, m.duration_ms, m.measured_at " +
+            "SELECT :raceId, m.device_measurement_id, p.id, m.duration_ms, m.measured_at " +
             "FROM measurement m " +
             "LEFT JOIN participant p ON p.id = m.participant_id AND p.race_id = :raceId " +
             "WHERE true " +
