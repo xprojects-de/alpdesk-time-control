@@ -33,6 +33,21 @@ public interface TimingDataImporter {
         // no-op for providers without configurable overrides
     }
 
+    /**
+     * Pulls new measurements from the device and persists them, returning whatever was
+     * created/updated by this call.
+     * <p>
+     * Persist via {@link MeasurementService#upsertByDeviceMeasurementId} only when the id you have
+     * identifies a single physical measurement event and stays stable if that event is re-polled
+     * (e.g. the device's own line-local counter - see {@link AlpdeskTimeControlDataImportService}).
+     * If a provider instead reports something that identifies a participant rather than an event -
+     * e.g. a chip-timing system delivering the athlete's start number/bib per crossing - that value
+     * must NOT be used as the device measurement id: the same participant can cross multiple times,
+     * and upserting on it would silently overwrite an earlier crossing instead of recording a new
+     * one. Such a provider should call {@link MeasurementService#create} instead, resolving
+     * participantId itself (e.g. by looking up the start number against the active race) and
+     * passing a null deviceMeasurementId so a safe synthetic one is generated.
+     */
     List<Measurement> importDataFromDevice();
 
     boolean resetDevice();
