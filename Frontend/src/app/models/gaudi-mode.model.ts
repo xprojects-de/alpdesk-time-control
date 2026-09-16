@@ -31,6 +31,10 @@ export interface GaudiMode {
     name: string;
     teamSize?: number;
     pointsScaleId?: number;
+    /** POINTS_COMBINATION only: each independently keeps a person with at least one valid combined-race result in the ranking despite a leg of that specific status (0 points, status marked in the PDF sub-table) instead of excluding them as "nicht gewertet". A person with no valid result anywhere is still excluded either way. */
+    keepDnsInRanking: boolean;
+    keepDnfInRanking: boolean;
+    keepDsqInRanking: boolean;
     createdAt: string;
     /** Whether a cover page PDF is set for this Gaudi-Modus instance - the PDF content itself is never included here. */
     hasCoverPage: boolean;
@@ -42,6 +46,10 @@ export interface GaudiModeRequest {
     name: string;
     teamSize?: number;
     pointsScaleId?: number;
+    /** POINTS_COMBINATION only: each independently keeps a person with at least one valid combined-race result in the ranking despite a leg of that specific status (0 points, status marked in the PDF sub-table) instead of excluding them as "nicht gewertet". A person with no valid result anywhere is still excluded either way. */
+    keepDnsInRanking?: boolean;
+    keepDnfInRanking?: boolean;
+    keepDsqInRanking?: boolean;
     /** Base64-encoded PDF content (prepended to every PDF generated for this instance). Omit to leave the current cover page (if any) unchanged. */
     coverPagePdf?: string;
     /** Removes the current cover page (if any); takes precedence over coverPagePdf. */
@@ -64,6 +72,8 @@ export interface GaudiRankingLeg {
     adjustedValue?: number;
     place?: number;
     points?: number;
+    /** The participant's explicit DSQ/DNF/DNS status in this race, if any. */
+    status?: string;
 }
 
 export interface GaudiTeamMember {

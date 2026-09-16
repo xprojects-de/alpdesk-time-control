@@ -444,6 +444,9 @@ export class GaudiModeDetailComponent implements OnDestroy {
 
     legValueDisplay(entry: GaudiRankingEntry, raceId: number): string {
         const leg = this.legFor(entry, raceId);
+        if (leg?.status) {
+            return leg.status;
+        }
         if (!leg || leg.rawValue === undefined || leg.rawValue === null) {
             return "-";
         }

@@ -16,6 +16,7 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
+import {MatCheckboxModule} from "@angular/material/checkbox";
 import {MatIconModule} from "@angular/material/icon";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
@@ -54,6 +55,7 @@ export interface GaudiModeDialogData {
         MatInputModule,
         MatButtonModule,
         MatSelectModule,
+        MatCheckboxModule,
         MatIconModule,
         MatTooltipModule,
         MatSnackBarModule,
@@ -120,6 +122,13 @@ export interface GaudiModeDialogData {
                             <button mat-icon-button type="button" (click)="openNewPointsScale()" matTooltip="Neues Punkteschema anlegen">
                                 <mat-icon>add</mat-icon>
                             </button>
+                        </div>
+
+                        <div class="dnf-options">
+                            <span class="weights-label">Nicht platzierte Teilnehmer trotzdem werten (0 Punkte statt Ausschluss)</span>
+                            <mat-checkbox formControlName="keepDnsInRanking">DNS in Wertung belassen</mat-checkbox>
+                            <mat-checkbox formControlName="keepDnfInRanking">DNF in Wertung belassen</mat-checkbox>
+                            <mat-checkbox formControlName="keepDsqInRanking">DSQ in Wertung belassen</mat-checkbox>
                         </div>
                     }
                 } @else {
@@ -206,6 +215,13 @@ export interface GaudiModeDialogData {
           .weights-label {
             font-size: 12px;
             color: rgba(0, 0, 0, 0.6);
+          }
+
+          .dnf-options {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: -8px;
           }
 
           .weight-row {
@@ -297,6 +313,9 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
         name: ["", Validators.required],
         teamSize: [5, Validators.min(1)],
         pointsScaleId: [null],
+        keepDnsInRanking: [false],
+        keepDnfInRanking: [false],
+        keepDsqInRanking: [false],
     });
 
     get isEdit(): boolean {
@@ -316,6 +335,9 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
                 name: editing.name,
                 teamSize: editing.teamSize ?? 5,
                 pointsScaleId: editing.pointsScaleId ?? null,
+                keepDnsInRanking: editing.keepDnsInRanking,
+                keepDnfInRanking: editing.keepDnfInRanking,
+                keepDsqInRanking: editing.keepDsqInRanking,
             });
         } else if (this.data?.raceId) {
             this.selectedRaceIds = [this.data.raceId];
@@ -426,6 +448,9 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
             name: formValue.name,
             teamSize: formValue.type === GaudiModeType.TEAM ? Number(formValue.teamSize) : undefined,
             pointsScaleId: formValue.type === GaudiModeType.POINTS_COMBINATION ? Number(formValue.pointsScaleId) : undefined,
+            keepDnsInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnsInRanking : undefined,
+            keepDnfInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnfInRanking : undefined,
+            keepDsqInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDsqInRanking : undefined,
             coverPagePdf: this.coverPagePdfBase64,
             removeCoverPage: this.removeCoverPage || undefined,
         };
