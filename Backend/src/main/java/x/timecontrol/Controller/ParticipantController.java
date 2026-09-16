@@ -131,7 +131,7 @@ public class ParticipantController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/{id}/clear-result")
-    @Operation(summary = "Clear a participant's result", description = "Resets durationMs/penalty/measuredAt/comment to empty and status back to NONE, leaving identity (race/person/raceNumber/team/category/startSequence) untouched. Unlike PUT /participants/{id}, which always keeps an already-entered value when the corresponding field is left out of the request, this is the only way to actually clear a result that was entered by mistake.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Clear a participant's result", description = "Resets durationMs/penalty/measuredAt to empty, leaving comment/status and identity (race/person/raceNumber/team/category/startSequence) untouched. Unlike PUT /participants/{id}, which always keeps an already-entered value when the corresponding field is left out of the request, this is the only way to actually clear a result that was entered by mistake.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Result cleared", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "404", description = "Participant not found")
     public HttpResponse<?> clearResult(@PathVariable Long id) {

@@ -147,8 +147,8 @@ public class ParticipantService {
     }
 
     /**
-     * Resets a participant's result (durationMs/penalty/measuredAt/comment to null, status back to
-     * NONE) while leaving its identity (race/person/raceNumber/team/category/startSequence)
+     * Resets a participant's result (durationMs/penalty/measuredAt to null) while leaving its
+     * identity (race/person/raceNumber/team/category/startSequence) and its comment/status
      * untouched - the counterpart to {@link #update}'s deliberate "null means keep existing"
      * behaviour, which makes it impossible to actually clear an already-entered result through that
      * endpoint. No {@link #validate} call needed: identity fields are carried over unchanged from
@@ -161,8 +161,8 @@ public class ParticipantService {
             return Optional.empty();
         }
         Participant cleared = new Participant(id, existing.get().raceId(), existing.get().personId(), existing.get().raceNumber(),
-                existing.get().teamId(), existing.get().categoryId(), null, null, null, null,
-                DisqualificationStatus.NONE, existing.get().startSequence());
+                existing.get().teamId(), existing.get().categoryId(), null, null, null, existing.get().comment(),
+                existing.get().status(), existing.get().startSequence());
         return Optional.of(repository.update(cleared));
     }
 

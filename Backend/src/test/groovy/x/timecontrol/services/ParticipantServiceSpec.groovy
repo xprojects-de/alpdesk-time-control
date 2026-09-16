@@ -182,7 +182,7 @@ class ParticipantServiceSpec extends Specification {
         result.isPresent()
     }
 
-    def "clearResult resets durationMs/penalty/measuredAt/comment/status but keeps identity fields"() {
+    def "clearResult resets durationMs/penalty/measuredAt but keeps identity, comment and status"() {
         given:
         def existing = new Participant(10L, 1L, 1L, 5, 2L, 3L, 125000, 2000,
                 LocalDateTime.of(2026, 1, 1, 10, 30), "Ski gebrochen", DisqualificationStatus.DNF, 7)
@@ -204,8 +204,8 @@ class ParticipantServiceSpec extends Specification {
         cleared.durationMs() == null
         cleared.penalty() == null
         cleared.measuredAt() == null
-        cleared.comment() == null
-        cleared.status() == DisqualificationStatus.NONE
+        cleared.comment() == "Ski gebrochen"
+        cleared.status() == DisqualificationStatus.DNF
     }
 
     def "clearResult returns empty for an unknown participant id"() {
