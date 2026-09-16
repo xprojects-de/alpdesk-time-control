@@ -11,7 +11,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 anton_person_id = state["persons"]["1"]
 boris_person_id = state["persons"]["2"]
 
@@ -78,9 +78,9 @@ else:
 print("\n=== DESC-PDF exportieren und Vorzeichen im gedruckten Text pruefen ===")
 status, pdf_bytes = c.get_raw(config.BASE, token, f"/gaudi-modes/{desc_gm_id}/export/pdf")
 assert status == 200
-with open("kombi_desc.pdf", "wb") as f:
+with open(c.results_path("kombi_desc.pdf"), "wb") as f:
     f.write(pdf_bytes)
-text = subprocess.run(["pdftotext", "-layout", "kombi_desc.pdf", "-"], capture_output=True, text=True).stdout
+text = subprocess.run(["pdftotext", "-layout", c.results_path("kombi_desc.pdf"), "-"], capture_output=True, text=True).stdout
 if config.KOMBI_DESC_EXPECTED_PDF_TEXT not in text:
     problems.append(("DESC-PDF Rueckstand-Text", f"'{config.KOMBI_DESC_EXPECTED_PDF_TEXT}' nicht gefunden im PDF-Text"))
 # The old bug always prefixed "+", so a negative diff rendered as "+0:-29..." - explicitly rule that

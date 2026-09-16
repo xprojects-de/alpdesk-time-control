@@ -7,14 +7,14 @@ import common as c
 import config
 
 main_token = c.login(config.MAIN)
-with open("state.json") as f:
+with open(c.results_path("state.json")) as f:
     race_ids = json.load(f)["race_ids"]
 
 total_mismatches = 0
 for name, unit, label, direction, csv_file, key in config.RACES:
     BASE = config.STATION_BASES[key]
     token = c.login(BASE)
-    with open(f"state_{key}.json") as f:
+    with open(c.results_path(f"state_{key}.json")) as f:
         station_race_id = json.load(f)["race_id"]
 
     _, station_ps = c.get(BASE, token, f"/participants?raceId={station_race_id}")

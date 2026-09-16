@@ -11,7 +11,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race1_id = state["race1_id"]
 
 bib_by_lastname = {last: rn for rn, (first, last, birth_year) in config.PARTICIPANTS.items()}
@@ -65,7 +65,7 @@ for p in problems:
 print("\n=== Endergebnis-PDF exportieren (Checkpoint-Artefakt) ===")
 status, pdf = c.get_raw(config.BASE, token, f"/participants/export/pdf/all/{race1_id}")
 assert status == 200
-with open("lauf1_endergebnis.pdf", "wb") as f:
+with open(c.results_path("lauf1_endergebnis.pdf"), "wb") as f:
     f.write(pdf)
 print(f"PDF generiert ({len(pdf)} bytes)")
 

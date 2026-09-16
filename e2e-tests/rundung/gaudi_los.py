@@ -100,7 +100,7 @@ for p in problems:
 
 status, pdf_bytes = c.get_raw(config.BASE, token, f"/gaudi-modes/{gm_id}/export/pdf")
 assert status == 200
-with open("los_ranking.pdf", "wb") as f:
+with open(c.results_path("los_ranking.pdf"), "wb") as f:
     f.write(pdf_bytes)
 print(f"\nPDF-Export erfolgreich ({len(pdf_bytes)} bytes)")
 

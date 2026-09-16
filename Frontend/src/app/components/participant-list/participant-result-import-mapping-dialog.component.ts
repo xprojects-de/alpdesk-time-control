@@ -69,7 +69,7 @@ export interface ParticipantResultImportMappingDialogResult {
                                 <mat-option [value]="option.value">{{ option.label }}</mat-option>
                             }
                         </mat-select>
-                        <mat-hint>nur relevant bei Zeit-Rennen; bei Punkte-Rennen wird "Zeit/Wert" immer als Dezimalzahl gelesen</mat-hint>
+                        <mat-hint>nur bei Zeit-Rennen</mat-hint>
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">

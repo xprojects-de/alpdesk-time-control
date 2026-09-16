@@ -7,8 +7,8 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
-lauf2_expected = json.load(open("lauf2_expected.json"))
+state = json.load(open(c.results_path("state.json")))
+lauf2_expected = json.load(open(c.results_path("lauf2_expected.json")))
 race2_id = state["race2_id"]
 
 print("=== Lauf 2 archivieren + synchronisieren ===")
@@ -42,7 +42,7 @@ for p in problems:
 print("\n=== Endergebnis-PDF exportieren (Abschluss-Artefakt) ===")
 status, pdf = c.get_raw(config.BASE, token, f"/participants/export/pdf/all/{race2_id}")
 assert status == 200
-with open("endergebnis_lauf2.pdf", "wb") as f:
+with open(c.results_path("endergebnis_lauf2.pdf"), "wb") as f:
     f.write(pdf)
 print(f"Endergebnis-PDF generiert ({len(pdf)} bytes)")
 

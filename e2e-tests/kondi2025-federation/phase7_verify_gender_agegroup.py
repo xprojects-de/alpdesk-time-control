@@ -8,7 +8,7 @@ import config
 from phase6_verify_rankings import adjusted_value, compute_expected_places, parse_pdf_places, RACE_DIRECTIONS
 
 token = c.login(config.MAIN)
-race_ids = json.load(open("state.json"))["race_ids"]
+race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
 all_ok = True
 
 print("=" * 70)
@@ -45,9 +45,10 @@ for race_name, direction in RACE_DIRECTIONS.items():
 
     status, pdf_bytes = c.get_raw(config.MAIN, token, f"/participants/export/pdf/agegroups/all/{race_id}")
     assert status == 200
-    with open(f"verify_{race_name}_agegroups.pdf", "wb") as f:
+    fname = c.results_path(f"verify_{race_name}_agegroups.pdf")
+    with open(fname, "wb") as f:
         f.write(pdf_bytes)
-    text = subprocess.run(["pdftotext", "-layout", f"verify_{race_name}_agegroups.pdf", "-"], capture_output=True, text=True).stdout
+    text = subprocess.run(["pdftotext", "-layout", fname, "-"], capture_output=True, text=True).stdout
 
     sections = re.split(r"\nWertung ([\w ]+?) (weiblich|männlich)\n", "\n" + text)
     total_expected_ranked = total_pdf_ranked = section_mismatches = 0

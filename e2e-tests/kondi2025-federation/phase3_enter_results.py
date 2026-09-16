@@ -15,7 +15,7 @@ token = c.login(BASE)
 _, _, _, _, csv_file, _ = next(r for r in config.RACES if r[5] == key)
 injected_status = config.INJECTED_STATUS.get(key, {})
 
-with open(f"state_{key}.json") as f:
+with open(c.results_path(f"state_{key}.json")) as f:
     state = json.load(f)
 race_id = state["race_id"]
 

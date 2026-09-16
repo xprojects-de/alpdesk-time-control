@@ -9,7 +9,7 @@ import config
 from phase6_verify_rankings import compute_expected_places, RACE_DIRECTIONS
 
 token = c.login(config.MAIN)
-race_ids = json.load(open("state.json"))["race_ids"]
+race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
 
 # The FIS-Schema seeded by Flyway migration V1 (31 places; anything beyond that scores 0).
 FIS_SCHEMA = [100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]
@@ -89,8 +89,8 @@ print("GAUDI PUNKTE-MISCHUNG: " + ("KORREKT" if ok else "ABWEICHUNGEN GEFUNDEN")
 status, pdf_bytes = c.get_raw(config.MAIN, token, f"/gaudi-modes/{gm_id}/export/pdf")
 print(f"PDF export status={status} size={len(pdf_bytes) if isinstance(pdf_bytes, (bytes, bytearray)) else 'N/A'}")
 if isinstance(pdf_bytes, (bytes, bytearray)):
-    with open("gaudi_combo.pdf", "wb") as f:
+    with open(c.results_path("gaudi_combo.pdf"), "wb") as f:
         f.write(pdf_bytes)
 
-with open("gaudi_state.json", "w") as f:
+with open(c.results_path("gaudi_state.json"), "w") as f:
     json.dump({"gm_id": gm_id, "expected_totals": expected_totals, "expected_places": expected_places}, f)

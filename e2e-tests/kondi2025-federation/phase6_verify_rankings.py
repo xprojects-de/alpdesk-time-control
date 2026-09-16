@@ -56,6 +56,7 @@ def compute_expected_places(participants, direction):
     return places, scored
 
 def parse_pdf_places(pdf_bytes, tmp_name):
+    tmp_name = c.results_path(tmp_name)
     with open(tmp_name, "wb") as f:
         f.write(pdf_bytes)
     text = subprocess.run(["pdftotext", "-layout", tmp_name, "-"], capture_output=True, text=True).stdout
@@ -78,7 +79,7 @@ def parse_pdf_places(pdf_bytes, tmp_name):
 
 if __name__ == "__main__":
     token = c.login(config.MAIN)
-    race_ids = json.load(open("state.json"))["race_ids"]
+    race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
 
     print("=" * 70)
     print("GESAMT-Auswertung: automatischer Abgleich Python-Berechnung vs. PDF")

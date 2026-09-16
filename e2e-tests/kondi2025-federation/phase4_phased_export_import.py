@@ -10,7 +10,7 @@ errors, and does re-importing the SAME already-imported rows again in a later ph
 export is the station's full current state, not just what's new) leave already-correct data alone
 instead of corrupting it?
 """
-import sys, json
+import os, sys, json
 sys.path.insert(0, '.')
 import common as c
 import config
@@ -19,18 +19,18 @@ phase = int(sys.argv[1])
 assert phase in (1, 2, 3), "phase must be 1, 2 or 3"
 
 main_token = c.login(config.MAIN)
-with open("state.json") as f:
+with open(c.results_path("state.json")) as f:
     race_ids = json.load(f)["race_ids"]
 
 print(f"=== Phase {phase}/3: Teil-Export/Import je Station ===")
 for name, unit, label, direction, csv_file, key in config.RACES:
     BASE = config.STATION_BASES[key]
     token = c.login(BASE)
-    with open(f"state_{key}.json") as f:
+    with open(c.results_path(f"state_{key}.json")) as f:
         station_race_id = json.load(f)["race_id"]
 
     status, body = c.get_raw(BASE, token, f"/participants/export/results-csv/{station_race_id}")
-    fname = f"results_export_{key}_phase{phase}.csv"
+    fname = c.results_path(f"results_export_{key}_phase{phase}.csv")
     with open(fname, "wb") as f:
         f.write(body)
 
@@ -38,7 +38,7 @@ for name, unit, label, direction, csv_file, key in config.RACES:
     status, resp = c.post_multipart(
         config.MAIN, main_token, f"/participants/import-results-mapped/{main_race_id}",
         {"timeFormat": "CLOCK"},
-        {"file": (fname, body, "text/csv")},
+        {"file": (os.path.basename(fname), body, "text/csv")},
     )
     print(f"{key} -> MAIN/{name}: import status={status} updated={resp.get('updatedCount')} errors={resp.get('errorCount')}")
     if resp.get("errors"):

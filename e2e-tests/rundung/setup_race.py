@@ -58,7 +58,7 @@ for rn, duration_ms in config.RACE1_TIMES_MS.items():
     assert status == 200, (rn, updated)
     print(f"  bib{rn}: {duration_ms}ms")
 
-with open("state.json", "w") as f:
+with open(c.results_path("state.json"), "w") as f:
     json.dump({
         "race1_id": race1_id, "race2_id": race2_id, "persons": persons,
         "participants_by_race": participants_by_race,

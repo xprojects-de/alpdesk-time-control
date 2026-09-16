@@ -8,7 +8,7 @@ import common as c
 import config
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race2_id = state["race2_id"]
 
 print("=== Startreihenfolge aus Lauf 1 ableiten ===")

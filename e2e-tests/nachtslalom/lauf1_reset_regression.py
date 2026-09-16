@@ -21,14 +21,14 @@ def set_device_lines(lines):
     urllib.request.urlopen(req)
 
 token = c.login(config.BASE)
-state = json.load(open("state.json"))
+state = json.load(open(c.results_path("state.json")))
 race1_id = state["race1_id"]
 pid = {int(rn): part_id for rn, part_id in state["participants_by_race"][str(race1_id)].items()}
 
 print("=== Messungen Lauf 1 als CSV sichern ===")
 status, body = c.get_raw(config.BASE, token, "/measurements/export/csv")
 assert status == 200
-with open("lauf1_measurements_backup.csv", "wb") as f:
+with open(c.results_path("lauf1_measurements_backup.csv"), "wb") as f:
     f.write(body)
 print(f"Backup exportiert: {len(body)} bytes")
 

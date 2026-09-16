@@ -2,23 +2,23 @@
 import it back into the matching race on MAIN via import-results-mapped (matched by raceNumber),
 simulating each station handing its results back to the main instance after the event.
 """
-import sys, json
+import os, sys, json
 sys.path.insert(0, '.')
 import common as c
 import config
 
 main_token = c.login(config.MAIN)
-with open("state.json") as f:
+with open(c.results_path("state.json")) as f:
     race_ids = json.load(f)["race_ids"]
 
 for name, unit, label, direction, csv_file, key in config.RACES:
     BASE = config.STATION_BASES[key]
     token = c.login(BASE)
-    with open(f"state_{key}.json") as f:
+    with open(c.results_path(f"state_{key}.json")) as f:
         station_race_id = json.load(f)["race_id"]
 
     status, body = c.get_raw(BASE, token, f"/participants/export/results-csv/{station_race_id}")
-    fname = f"results_export_{key}.csv"
+    fname = c.results_path(f"results_export_{key}.csv")
     with open(fname, "wb") as f:
         f.write(body)
     print(f"{key}: exported results -> {fname} ({len(body)} bytes)")
@@ -27,7 +27,7 @@ for name, unit, label, direction, csv_file, key in config.RACES:
     status, resp = c.post_multipart(
         config.MAIN, main_token, f"/participants/import-results-mapped/{main_race_id}",
         {"timeFormat": "CLOCK"},
-        {"file": (fname, body, "text/csv")},
+        {"file": (os.path.basename(fname), body, "text/csv")},
     )
     print(f"{key} -> MAIN/{name}: import status={status} updated={resp.get('updatedCount')} errors={resp.get('errorCount')}")
     if resp.get("errors"):
