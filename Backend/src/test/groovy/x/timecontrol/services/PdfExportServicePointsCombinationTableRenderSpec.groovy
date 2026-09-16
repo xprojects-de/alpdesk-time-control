@@ -3,6 +3,7 @@ package x.timecontrol.services
 import spock.lang.Specification
 import x.timecontrol.dto.GaudiRankingEntryResponse
 import x.timecontrol.dto.GaudiRankingLegResponse
+import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
@@ -21,6 +22,10 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
     private static Race race(Long id, String name, ResultUnit unit, String unitLabel) {
         new Race(id, name, LocalDate.of(2026, 9, 12), null, null, null, null, null, null,
                 null, null, null, unit, unitLabel, SortDirection.ASC, null, null, null, null)
+    }
+
+    private static GaudiMode gaudiMode(String name) {
+        new GaudiMode(null, null, name, null, null, null, null)
     }
 
     private static GaudiRankingEntryResponse entry(int place, String label, String team, int totalPoints,
@@ -46,7 +51,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
+        byte[] pdf = service.generatePointsCombinationRanking(gaudiMode("Kondiwettkamp"), entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
@@ -62,7 +67,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         ]
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
+        byte[] pdf = service.generatePointsCombinationRanking(gaudiMode("Kondiwettkamp"), entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
@@ -82,7 +87,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
         }
 
         when:
-        byte[] pdf = service.generatePointsCombinationRanking("Kondiwettkamp", entries, legRaces, legRaces.first(), [])
+        byte[] pdf = service.generatePointsCombinationRanking(gaudiMode("Kondiwettkamp"), entries, legRaces, legRaces.first(), [])
 
         then:
         pdf.length > 0
