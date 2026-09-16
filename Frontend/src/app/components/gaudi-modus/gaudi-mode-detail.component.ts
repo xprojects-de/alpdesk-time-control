@@ -127,14 +127,14 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
                             <mat-divider></mat-divider>
 
-                            <button mat-menu-item (click)="exportByGenderPdf('MALE')">
-                                <mat-icon>male</mat-icon>
-                                <span>Alle Herren</span>
-                            </button>
-
                             <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
                                 <mat-icon>female</mat-icon>
                                 <span>Alle Damen</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportByGenderPdf('MALE')">
+                                <mat-icon>male</mat-icon>
+                                <span>Alle Herren</span>
                             </button>
 
                             <mat-divider></mat-divider>

@@ -25,6 +25,11 @@ class RankingServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, direction, null, null, null, null)
     }
 
+    private static Race race(SortDirection direction, ResultUnit resultUnit) {
+        new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, resultUnit, null, direction, null, null, null, null)
+    }
+
     private static Participant participant(Long id, Integer durationMs, Integer penalty = null) {
         new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null, null)
     }
@@ -153,6 +158,67 @@ class RankingServiceSpec extends Specification {
         places == [1L: 1, 2L: 1, 3L: 3]
     }
 
+    def "computePlaces shares a place when raw durations round to the same displayed time"() {
+        given: "36430ms and 36432ms both round to 0:36.43, so they must be printed with the same place"
+        def participants = [
+                participant(1L, 36430),
+                participant(2L, 36432),
+                participant(3L, 36460), // rounds to 0:36.46 -> distinct, place 3
+        ]
+
+        when:
+        def places = rankingService.computePlaces(raceAsc, participants)
+
+        then:
+        places == [1L: 1, 2L: 1, 3L: 3]
+    }
+
+    def "computePlaces does not round POINTS races, where the stored value is already the printed precision"() {
+        given:
+        def racePoints = race(SortDirection.ASC, ResultUnit.POINTS)
+        def participants = [
+                participant(1L, 1000),
+                participant(2L, 1004), // would round to the same 10ms bucket as #1 for a TIME race, but must stay distinct here
+        ]
+
+        when:
+        def places = rankingService.computePlaces(racePoints, participants)
+
+        then:
+        places == [1L: 1, 2L: 2]
+    }
+
+    def "roundForDisplay rounds a TIME race's value to the nearest 10ms (hundredth of a second)"() {
+        expect:
+        rankingService.roundForDisplay(raceAsc, rawValue) == expected
+
+        where:
+        rawValue || expected
+        4083     || 4080  // 0:04.08
+        33525    || 33530 // 0:33.53
+        36432    || 36430 // 0:36.43
+        1005     || 1010  // exact half-a-hundredth boundary: rounds up, matching formatTime's own rounding
+        0        || 0
+        null     || null
+    }
+
+    def "roundForDisplay does not round a POINTS race's value"() {
+        given:
+        def racePoints = race(SortDirection.ASC, ResultUnit.POINTS)
+
+        expect:
+        rankingService.roundForDisplay(racePoints, 1004) == 1004
+    }
+
+    def "roundForDisplay makes a diff of already-rounded totals consistent with the printed values"() {
+        given: "4083ms and 33525ms print as 0:04.08 and 0:33.53 - their raw gap (29442ms) would round to 0:29.44 on its own, but the difference of the printed totals is 0:29.45"
+        def leader = rankingService.roundForDisplay(raceAsc, 4083)
+        def other = rankingService.roundForDisplay(raceAsc, 33525)
+
+        expect:
+        other - leader == 29450
+    }
+
     def "assignStandardPlaces shares a place for ties and skips the next place accordingly"() {
         expect:
         rankingService.assignStandardPlaces([100.0d, 100.0d, 90.0d, 80.0d, 80.0d]) == [1, 1, 3, 4, 4]
@@ -161,5 +227,18 @@ class RankingServiceSpec extends Specification {
     def "assignStandardPlaces returns an empty list for no entries"() {
         expect:
         rankingService.assignStandardPlaces([]) == []
+    }
+
+    def "assignStandardPlaces(..., TIME) shares a place for values that round to the same displayed time"() {
+        given: "36430ms and 36432ms both round to 0:36.43, mirroring the computePlaces rounding-tie fix for Gaudi-Modus totals (Zeit-Kombination/Mannschaftswertung/Los-Verfahren)"
+        def values = [36430.0d, 36432.0d, 36460.0d]
+
+        expect:
+        rankingService.assignStandardPlaces(values, ResultUnit.TIME) == [1, 1, 3]
+    }
+
+    def "assignStandardPlaces(..., POINTS) does not round, unlike the TIME overload"() {
+        expect:
+        rankingService.assignStandardPlaces([1000.0d, 1004.0d], ResultUnit.POINTS) == [1, 2]
     }
 }

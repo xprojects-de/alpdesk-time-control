@@ -82,8 +82,16 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         double overallAverage = allValues.stream().mapToInt(Integer::intValue).average().orElse(0);
+        int overallAverageMs = (int) Math.round(overallAverage);
+        // Rounded to the same display precision as the printed "Ø-Wert Gesamt"/"Ø-Wert Paar"
+        // columns (RankingService#roundForDisplay), so "Abweichung" is derived from what's actually
+        // printed there instead of independently rounding the raw gap - matching the analogous
+        // Zeit-Kombination "Rückstand" fix: rounding does not distribute over subtraction, so a diff
+        // computed from the raw values first and rounded once at the end can differ by a printed
+        // hundredth from the difference of the two already-rounded printed values.
+        Integer overallAverageDisplay = rankingService.roundForDisplay(race, overallAverageMs);
 
-        record PairResult(String label, Integer value1, Integer value2, double pairAverage, double diff, String team) {
+        record PairResult(String label, Integer value1, Integer value2, int pairAverageMs, int diffDisplay, String team) {
         }
 
         List<PairResult> results = new ArrayList<>();
@@ -105,6 +113,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
             double pairAverage = (value2 != null)
                     ? (value1 + value2) / 2.0
                     : value1;
+            int pairAverageMs = (int) Math.round(pairAverage);
+            Integer pairAverageDisplay = rankingService.roundForDisplay(race, pairAverageMs);
+            int diffDisplay = Math.abs(pairAverageDisplay - overallAverageDisplay);
 
             String label = (value2 != null)
                     ? formatName(p1, personsById) + " & " + formatName(p2, personsById)
@@ -114,14 +125,15 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     label,
                     value1,
                     value2,
-                    pairAverage,
-                    Math.abs(pairAverage - overallAverage),
+                    pairAverageMs,
+                    diffDisplay,
                     formatTeam(p1, p2, teamsById)
             ));
         }
 
-        results.sort(Comparator.comparingDouble(PairResult::diff));
-        List<Integer> places = rankingService.assignStandardPlaces(results.stream().map(PairResult::diff).toList());
+        results.sort(Comparator.comparingInt(PairResult::diffDisplay));
+        List<Integer> places = rankingService.assignStandardPlaces(
+                results.stream().map(r -> (double) r.diffDisplay()).toList(), race.resultUnit());
 
         List<GaudiRankingEntryResponse> entries = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
@@ -131,9 +143,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     r.label(),
                     r.value1(),
                     r.value2(),
-                    (int) Math.round(r.pairAverage()),
-                    (int) Math.round(overallAverage),
-                    (int) Math.round(r.diff()),
+                    r.pairAverageMs(),
+                    overallAverageMs,
+                    r.diffDisplay(),
                     null,
                     null,
                     r.team(),

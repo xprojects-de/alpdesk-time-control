@@ -560,9 +560,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.deviceStatus$ = this.store.select(
             MeasurementSelectors.selectDeviceStatus,
         );
-        this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
         this.autoAssignStatus$ = this.store.select(
             MeasurementSelectors.selectAutoAssignStatus,
+        );
+        // Deliberately NOT bound to the app-wide RaceSelectors.selectSelectedRaceId (used by
+        // participant-list/race-measurement-list/gaudi-modus to filter by race): this select
+        // doubles as the auto-assign on/off switch, so showing it pre-filled from another
+        // screen's race choice risks silently auto-assigning measurements to the wrong race.
+        // It must reflect only the race auto-assign is actually running for.
+        this.selectedRaceId$ = this.autoAssignStatus$.pipe(
+            map((status) => (status.active ? status.raceId : null)),
+            distinctUntilChanged(),
         );
         this.importLoading$ = this.store.select(
             MeasurementSelectors.selectImportLoading,

@@ -131,11 +131,16 @@ public class RankingViewService {
 
     /**
      * Age group names, sorted youngest-first (by birthYearTo descending) - the order every
-     * by-age-group view iterates sections in.
+     * by-age-group view iterates sections in. Age groups sharing the same birthYearTo (e.g. a
+     * same-Jahrgang "U14m"/"U14w" pair) are tie-broken by gender, female before male, matching
+     * {@link ParticipantService#groupByAgeGroup} and the female-before-male convention used
+     * throughout {@link PdfExportService} - without this, two same-year different-gender age
+     * groups would print in whatever order {@code ageGroupService.findAll()} happens to return.
      */
     public List<String> uniqueAgeGroupNamesYoungestFirst() {
         return StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
+                        .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
                 .distinct()
                 .toList();
@@ -229,7 +234,8 @@ public class RankingViewService {
 
         // Create ranking entries with place and difference to the leader of this ranking
         List<RankingEntry> entries = new ArrayList<>();
-        Integer leaderValue = sortedParticipants.isEmpty() ? null : rankingService.adjustedValue(race, sortedParticipants.getFirst().participant());
+        Integer leaderDisplayValue = sortedParticipants.isEmpty() ? null
+                : rankingService.roundForDisplay(race, rankingService.adjustedValue(race, sortedParticipants.getFirst().participant()));
 
         for (int i = 0; i < sortedParticipants.size(); i++) {
             Participant p = sortedParticipants.get(i).participant();
@@ -241,7 +247,9 @@ public class RankingViewService {
                     ? Optional.ofNullable(lookup.teamsById().get(p.teamId())).map(Team::name).orElse("-")
                     : "-";
             Integer adjustedValue = rankingService.adjustedValue(race, p);
-            Integer diff = (i > 0) ? adjustedValue - leaderValue : null;
+            // Diffed from the already-rounded display value (not the raw one) so "Rückstand" always
+            // equals the difference of the two printed totals - see RankingService#roundForDisplay.
+            Integer diff = (i > 0) ? rankingService.roundForDisplay(race, adjustedValue) - leaderDisplayValue : null;
 
             entries.add(new RankingEntry(
                     places.get(p.id()),

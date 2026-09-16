@@ -275,29 +275,51 @@ public class ParticipantService {
     }
 
     /**
-     * Groups participants by their computed age group (from birthDate/gender via
-     * {@link #findMatchingAgeGroup}) - oldest age group first (by birthYearTo descending), with a
-     * null-keyed bucket for participants without a matching age group appended last. Shared by
-     * {@link #assignRaceNumbers} (random shuffle within each group) and
-     * {@link #applyStartOrderFromPreviousRace} (per-group reversal), so the age-group ordering
-     * convention can't drift between the two. {@code personsById} is caller-provided since both
-     * callers already need to batch-load it for other purposes too.
+     * Identifies one ordered bucket in {@link #groupByAgeGroup}: a single age group's participants
+     * of one gender. {@code ageGroupId == null} is the catch-all "no matching age group" bucket
+     * ({@code gender} unused/null in that case).
      */
-    private Map<Long, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
+    private record AgeGroupBucketKey(Long ageGroupId, Gender gender) {
+        private static final AgeGroupBucketKey NO_AGE_GROUP = new AgeGroupBucketKey(null, null);
+    }
+
+    /**
+     * Groups participants by their computed age group (from birthDate/gender via
+     * {@link #findMatchingAgeGroup}) and then by the participant's own gender within that age
+     * group - youngest age group first (by birthYearTo descending, with age groups sharing the
+     * same birthYearTo, e.g. a same-Jahrgang "U14m"/"U14w" pair, tie-broken by the age group's own
+     * gender), female participants before male participants within each age group. This
+     * gender split matters even for a single mixed-gender ("BOTH") age group - e.g. a club's only
+     * "U16" age group covering both boys and girls - since without it, per-age-group ranking/start
+     * order would rank and reverse boys and girls together as one field instead of as two separate
+     * fields, matching the female-before-male convention used throughout {@link PdfExportService}.
+     * A no-age-group bucket ({@link AgeGroupBucketKey#NO_AGE_GROUP}) for participants without a
+     * matching age group is appended last. Shared by {@link #assignRaceNumbers} (random shuffle
+     * within each bucket) and {@link #applyStartOrderFromPreviousRace} (per-bucket reversal), so
+     * the ordering convention can't drift between the two. {@code personsById} is caller-provided
+     * since both callers already need to batch-load it for other purposes too.
+     */
+    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
         List<AgeGroup> ageGroups = allAgeGroups().stream()
-                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed())
+                .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
+                        .thenComparing(AgeGroup::gender))
                 .toList();
 
-        Map<Long, List<Participant>> byAgeGroup = new LinkedHashMap<>();
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = new LinkedHashMap<>();
         for (AgeGroup ageGroup : ageGroups) {
-            byAgeGroup.put(ageGroup.id(), new ArrayList<>());
+            for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
+                byAgeGroup.put(new AgeGroupBucketKey(ageGroup.id(), gender), new ArrayList<>());
+            }
         }
-        byAgeGroup.put(null, new ArrayList<>());
+        byAgeGroup.put(AgeGroupBucketKey.NO_AGE_GROUP, new ArrayList<>());
 
         for (Participant participant : participants) {
             Person person = participant.personId() != null ? personsById.get(participant.personId()) : null;
             Optional<AgeGroup> ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups) : Optional.empty();
-            byAgeGroup.get(ageGroup.map(AgeGroup::id).orElse(null)).add(participant);
+            AgeGroupBucketKey key = ageGroup.isPresent()
+                    ? new AgeGroupBucketKey(ageGroup.get().id(), person.gender())
+                    : AgeGroupBucketKey.NO_AGE_GROUP;
+            byAgeGroup.get(key).add(participant);
         }
         return byAgeGroup;
     }
@@ -457,12 +479,12 @@ public class ParticipantService {
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
-        for (Map.Entry<Long, List<Participant>> entry : byAgeGroup.entrySet()) {
-            if (entry.getKey() == null) {
+        for (Map.Entry<AgeGroupBucketKey, List<Participant>> entry : byAgeGroup.entrySet()) {
+            if (entry.getKey().equals(AgeGroupBucketKey.NO_AGE_GROUP)) {
                 continue; // handled separately below, sorted by birthdate instead of shuffled
             }
             List<Participant> group = entry.getValue();
@@ -470,7 +492,7 @@ public class ParticipantService {
             ordered.addAll(group);
         }
 
-        List<Participant> withoutAgeGroup = byAgeGroup.get(null);
+        List<Participant> withoutAgeGroup = byAgeGroup.get(AgeGroupBucketKey.NO_AGE_GROUP);
         withoutAgeGroup.sort(Comparator.comparing(
                 (Participant p) -> {
                     Person person = personsById.get(p.personId());
@@ -486,8 +508,9 @@ public class ParticipantService {
      * Derives the {@code startSequence} (start ORDER, never the {@code raceNumber} bib itself -
      * see the field's own doc on {@link Participant}) for {@code raceId} from the ranking of its
      * linked {@link Race#previousRaceId()} race: per age group (computed from birthDate/gender,
-     * same convention as {@link #assignRaceNumbers} - oldest age group first, participants
-     * without a matching age group grouped last; {@code Category} plays no role here at all,
+     * same convention as {@link #assignRaceNumbers} - youngest age group first, gender-tie-broken
+     * female before male, participants without a matching age group grouped last; {@code Category}
+     * plays no role here at all,
      * independent of the reversal), the top {@link Race#startOrderReverseTopCount()} placed
      * finishers of the previous race start in reverse order, followed by the rest of that age
      * group in normal placement order - e.g. a slalom run 2 start order built from run 1's
@@ -538,10 +561,11 @@ public class ParticipantService {
         int reverseTopCount = race.startOrderReverseTopCount() != null ? Math.max(0, race.startOrderReverseTopCount()) : 0;
 
         // Grouped and reversed per age group, independent of Category - see groupByAgeGroup for
-        // the shared ordering convention (oldest age group first, no-match bucket last).
+        // the shared ordering convention (youngest age group first, female before male, no-match
+        // bucket last).
         Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
-        Map<Long, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
 
         List<Participant> ordered = new ArrayList<>();
         Set<Long> matchedPersonIds = new HashSet<>();
