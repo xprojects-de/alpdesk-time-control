@@ -57,10 +57,18 @@ found.
    e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d once more with
       `./run_phased.sh` instead of `./run_all.sh` — fresh instances/work dir again, same CSVs,
       same cleanup.
-4. Report a summary table: suite → ran/skipped, pass/fail, and for any failure point at
-   `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and the
-   failing script's output. Present this summary in German — table labels and any prose around
-   it in German, but keep suite names, file paths, and quoted log/script output as-is.
+4. Report a final summary with three parts:
+   a. A short recap of what was actually done — whether the jar was (re)built or reused, which
+      suites ran, which were skipped and why (e.g. missing CSVs), and whether `run_phased.sh`
+      also ran for `kondi2025-federation`.
+   b. A summary table: suite → ran/skipped, pass/fail, and for any failure point at
+      `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and
+      the failing script's output.
+   c. An explicit, unambiguous overall verdict as the closing line — e.g. "Alle gelaufenen Suiten
+      erfolgreich" or "Fehlgeschlagen: <suite(s)>" — don't make the user infer success from the
+      table alone.
+   Present this summary in German — prose, table labels, and the verdict in German, but keep
+   suite names, file paths, and quoted log/script output as-is.
 
 ## Notes
 
