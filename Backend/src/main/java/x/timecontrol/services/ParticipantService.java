@@ -896,6 +896,12 @@ public class ParticipantService {
      * so this is picked explicitly rather than guessed. A time value that's actually a DNF/DNS/DSQ
      * keyword (see {@link #parseExplicitStatus}) sets that status instead of a duration, regardless of
      * the chosen format.
+     * <p>
+     * The mapped "status" column has three outcomes: not mapped at all leaves the existing status
+     * untouched; mapped but blank for this row resolves to an explicit {@code NONE} ("NONE oder leer
+     * als gewertet") - including undoing a previously imported DNF/DNS/DSQ by clearing the cell; a
+     * mapped, non-blank value that isn't NONE/DNF/DNS/DSQ (any casing) is a row error rather than
+     * being silently dropped.
      */
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat,
@@ -943,7 +949,24 @@ public class ParticipantService {
 
             String timeRaw = valueFor(row, effectiveMapping, "time");
             String statusRaw = valueFor(row, effectiveMapping, "status");
-            DisqualificationStatus status = parseExplicitStatus(statusRaw);
+            // Distinguishes "status column not mapped at all" (null - no status info requested,
+            // leave the existing one untouched) from "mapped but this row's cell is blank" ("" -
+            // explicitly means NONE/gewertet, e.g. to undo a previously imported DNF by clearing the
+            // cell) - matching the original "NONE oder leer als gewertet" spec. An unrecognized
+            // non-blank value is a row error rather than being silently dropped.
+            DisqualificationStatus status;
+            if (statusRaw == null) {
+                status = null;
+            } else if (statusRaw.isBlank()) {
+                status = DisqualificationStatus.NONE;
+            } else {
+                status = parseExplicitStatus(statusRaw);
+                if (status == null) {
+                    errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(),
+                            "status \"" + statusRaw + "\" is not recognized (expected NONE/DNF/DNS/DSQ, or empty)"));
+                    continue;
+                }
+            }
 
             Integer durationMs = null;
             if (timeRaw != null && !timeRaw.isBlank()) {
@@ -1183,11 +1206,22 @@ public class ParticipantService {
                     formatResultValueForExport(p.durationMs(), resultUnit),
                     formatResultValueForExport(p.penalty(), resultUnit),
                     sanitizeForExport(p.comment()),
-                    Objects.requireNonNullElse(p.status(), DisqualificationStatus.NONE).name()
+                    formatStatusForExport(p.status())
             );
             csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
         }
         return csv.toString();
+    }
+
+    /**
+     * Renders a status for {@link #exportResultsCsv} - blank for {@code NONE} (the normal, ranked
+     * case) rather than the literal "NONE", so the column reads as empty-unless-flagged in Excel.
+     * Round-trips correctly through {@link #importResultsByRaceNumber}'s blank-means-NONE handling
+     * (including letting a cleared cell undo a previously imported DNF/DNS/DSQ).
+     */
+    private static String formatStatusForExport(DisqualificationStatus status) {
+        DisqualificationStatus resolved = Objects.requireNonNullElse(status, DisqualificationStatus.NONE);
+        return resolved == DisqualificationStatus.NONE ? "" : resolved.name();
     }
 
     /**

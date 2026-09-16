@@ -910,10 +910,10 @@ class ParticipantServiceSpec extends Specification {
         when:
         def lines = service.exportResultsCsv(5L, ResultUnit.TIME).readLines()
 
-        then: "the header carries raceNumber + informational identity fields + the result fields, and time/value/penalty are human-readable clock strings"
+        then: "the header carries raceNumber + informational identity fields + the result fields, and time/value/penalty are human-readable clock strings; a NONE status is blank, not the literal word"
         lines[0] == "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status"
-        lines[1] == "42;Mustermann;Max;TEAM A;EXT-1;2:05.000;0:05.000;Ski gebrochen;NONE"
-        lines[2] == ";Musterfrau;Erika;;;;;;NONE"
+        lines[1] == "42;Mustermann;Max;TEAM A;EXT-1;2:05.000;0:05.000;Ski gebrochen;"
+        lines[2] == ";Musterfrau;Erika;;;;;;"
     }
 
     def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
@@ -927,7 +927,21 @@ class ParticipantServiceSpec extends Specification {
         raceService.findByIds(_ as Set) >> [:]
 
         expect:
-        service.exportResultsCsv(5L, ResultUnit.POINTS).readLines()[1] == "42;Mustermann;Max;;;85.50;;;NONE"
+        service.exportResultsCsv(5L, ResultUnit.POINTS).readLines()[1] == "42;Mustermann;Max;;;85.50;;;"
+    }
+
+    def "exportResultsCsv writes DNF/DNS/DSQ as the literal word, not blank"() {
+        given:
+        def dsq = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.DSQ)
+        def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
+        repository.findByRaceId(5L) >> [dsq]
+        personService.findByIds(_ as Set) >> [1L: person]
+        teamService.findByIds(_ as Set) >> [:]
+        categoryService.findByIds(_ as Set) >> [:]
+        raceService.findByIds(_ as Set) >> [:]
+
+        expect:
+        service.exportResultsCsv(5L, ResultUnit.TIME).readLines()[1] == "42;Mustermann;Max;;;;;;DSQ"
     }
 
     def "importResultsByRaceNumber reimports exportResultsCsv's own output with no manual mapping (self-round-trip)"() {
@@ -937,7 +951,7 @@ class ParticipantServiceSpec extends Specification {
         repository.updateAll(_) >> { List<Participant> list -> list }
 
         def csv = "raceNumber;lastName;firstName;team;externalId;time/value;penalty;comment;status\n" +
-                "42;Mustermann;Max;;;2:05.000;0:05.000;Ski gebrochen;NONE\n"
+                "42;Mustermann;Max;;;2:05.000;0:05.000;Ski gebrochen;\n"
 
         when: "no mapping is passed - it must be derivable from the header alone, and the informational identity columns are ignored"
         def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.CLOCK, ResultUnit.TIME)
@@ -948,6 +962,59 @@ class ParticipantServiceSpec extends Specification {
         result.updated().first().durationMs() == 125000
         result.updated().first().penalty() == 5000
         result.updated().first().comment() == "Ski gebrochen"
+        result.updated().first().status() == DisqualificationStatus.NONE
+    }
+
+    def "importResultsByRaceNumber treats a mapped-but-blank status cell as an explicit NONE, undoing a previous DSQ/DNF/DNS"() {
+        given: "the status column IS mapped, so a blank cell is an explicit 'gewertet' rather than 'leave untouched'"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.DSQ)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time;status\n42;120000;\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", status: "status"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().status() == DisqualificationStatus.NONE
+    }
+
+    def "importResultsByRaceNumber leaves status untouched when the status column isn't mapped at all"() {
+        given: "no 'status' key in mapping at all - as opposed to mapped-but-blank, this must not touch the existing DSQ"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.DSQ)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time\n42;120000\n"
+        def mapping = [raceNumber: "raceNumber", time: "time"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().status() == DisqualificationStatus.DSQ
+    }
+
+    def "importResultsByRaceNumber reports an unrecognized status value as a row error instead of silently dropping it"() {
+        given:
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+
+        def csv = "raceNumber;time;status\n42;120000;VERLETZT\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", status: "status"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        0 * repository.updateAll(_)
+        result.updated().isEmpty()
+        result.errors().size() == 1
+        result.errors()[0].reason().contains("status")
     }
 
     def "importResultsByRaceNumber stamps measuredAt with the import's own timestamp on every updated row"() {
