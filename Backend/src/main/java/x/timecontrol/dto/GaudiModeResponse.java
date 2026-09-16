@@ -32,6 +32,15 @@ public record GaudiModeResponse(
         @Schema(description = "Points scale used (only relevant for type POINTS_COMBINATION)", example = "1", nullable = true)
         Long pointsScaleId,
 
+        @Schema(description = "POINTS_COMBINATION only: if true, a person with at least one valid result across the combined races stays in the ranking despite an explicitly-DNS leg (marked \"DNS\", 0 points, in the PDF sub-table) instead of being excluded as \"nicht gewertet\". A person with no valid result in any combined race is still excluded either way.", example = "false")
+        boolean keepDnsInRanking,
+
+        @Schema(description = "Same as keepDnsInRanking, but for an explicitly-DNF leg.", example = "false")
+        boolean keepDnfInRanking,
+
+        @Schema(description = "Same as keepDnsInRanking, but for an explicitly-DSQ leg.", example = "false")
+        boolean keepDsqInRanking,
+
         @Schema(description = "Timestamp when this Gaudi-Modus instance was created")
         LocalDateTime createdAt,
 
@@ -46,6 +55,9 @@ public record GaudiModeResponse(
                 gaudiMode.name(),
                 gaudiMode.teamSize(),
                 gaudiMode.pointsScaleId(),
+                gaudiMode.keepDnsInRanking(),
+                gaudiMode.keepDnfInRanking(),
+                gaudiMode.keepDsqInRanking(),
                 gaudiMode.createdAt(),
                 gaudiMode.coverPagePdf() != null
         );

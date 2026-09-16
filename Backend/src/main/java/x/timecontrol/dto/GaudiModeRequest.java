@@ -28,6 +28,18 @@ public record GaudiModeRequest(
         Long pointsScaleId,
 
         @Nullable
+        @Schema(description = "POINTS_COMBINATION only: if true, a person with at least one valid result across the combined races stays in the ranking despite an explicitly-DNS leg (marked \"DNS\", 0 points, in the PDF sub-table) instead of being excluded as \"nicht gewertet\". A person with no valid result in any combined race is still excluded either way. Defaults to false if omitted.", example = "false", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Boolean keepDnsInRanking,
+
+        @Nullable
+        @Schema(description = "Same as keepDnsInRanking, but for an explicitly-DNF leg.", example = "false", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Boolean keepDnfInRanking,
+
+        @Nullable
+        @Schema(description = "Same as keepDnsInRanking, but for an explicitly-DSQ leg.", example = "false", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        Boolean keepDsqInRanking,
+
+        @Nullable
         @Schema(description = "Cover page PDF content (prepended to every PDF generated for this Gaudi-Modus instance), base64-encoded. Omit/null to leave the current cover page (if any) unchanged.", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         byte[] coverPagePdf,
 

@@ -134,6 +134,9 @@ public class GaudiModeService {
                     gaudiMode.name(),
                     gaudiMode.teamSize(),
                     gaudiMode.pointsScaleId(),
+                    gaudiMode.keepDnsInRanking(),
+                    gaudiMode.keepDnfInRanking(),
+                    gaudiMode.keepDsqInRanking(),
                     existing.get().createdAt(),
                     coverPagePdf
             );
@@ -161,7 +164,8 @@ public class GaudiModeService {
             validateCoverPagePdf(request.coverPagePdf());
         }
         return new GaudiMode(null, request.type(), request.name(), request.teamSize(), request.pointsScaleId(),
-                LocalDateTime.now(), request.coverPagePdf());
+                Boolean.TRUE.equals(request.keepDnsInRanking()), Boolean.TRUE.equals(request.keepDnfInRanking()),
+                Boolean.TRUE.equals(request.keepDsqInRanking()), LocalDateTime.now(), request.coverPagePdf());
     }
 
     private static void validateCoverPagePdf(byte[] pdfBytes) {
