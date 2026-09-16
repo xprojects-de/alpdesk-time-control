@@ -33,14 +33,17 @@ export interface ParticipantResultImportTargetField {
 
 // This import never creates a participant - every row is matched onto an *existing* one via
 // raceNumber (Startnummer). Only these result fields are ever written; identity data (name, team,
-// category, ...) is left untouched. See Backend ParticipantResultImportParsers /
-// ParticipantController import-results-preview and import-results-mapped endpoints.
+// category, ...) is left untouched. Labels are deliberately generic ("Zeit/Wert" rather than
+// "Zeit" or "Punkte") since this dialog never knows the race's resultUnit - the backend decides
+// whether a TIME or POINTS race is being imported into. There's no "measuredAt" field to map;
+// the backend stamps it with the import's own timestamp instead. See Backend
+// ParticipantResultImportParsers / ParticipantController import-results-preview and
+// import-results-mapped endpoints.
 export const PARTICIPANT_RESULT_IMPORT_TARGET_FIELDS: ParticipantResultImportTargetField[] = [
     {key: 'raceNumber', label: 'Startnummer', required: true},
-    {key: 'time', label: 'Zeit', required: true},
-    {key: 'penalty', label: 'Strafzeit', required: false},
+    {key: 'time', label: 'Zeit/Wert', required: true},
+    {key: 'penalty', label: 'Strafe Zeit/Wert', required: false},
     {key: 'status', label: 'Status (DSQ/DNF/DNS)', required: false},
-    {key: 'measuredAt', label: 'Gemessen am', required: false},
     {key: 'comment', label: 'Kommentar', required: false},
 ];
 
