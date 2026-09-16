@@ -14,6 +14,13 @@ public record Measurement(
         @GeneratedValue
         Long id,
 
+        // Set only for device-imported rows, to the device's own line-local measurement counter -
+        // null for manually entered/CSV-imported rows. Kept separate from `id` (a plain
+        // autoincrement) so the device's counter and this table's own PK can never collide/overwrite
+        // each other after a reset restarts both at 1 - see V1__create_participant.sql.
+        @Nullable
+        Long deviceMeasurementId,
+
         @Nullable
         Long participantId,
 

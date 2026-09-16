@@ -95,6 +95,7 @@ public class RaceService {
      *                        otherwise a null {@code race.coverPagePdf()} leaves the existing cover
      *                        page (if any) untouched instead of wiping it on every unrelated edit -
      *                        the frontend only ever sends a non-null one when the user picks a new file.
+     * @throws IllegalArgumentException if {@code race.coverPagePdf()} is set but isn't a parseable PDF
      */
     public Optional<Race> update(Long id, Race race, boolean removeCoverPage) {
         Optional<Race> existing = repository.findById(id);
@@ -102,6 +103,9 @@ public class RaceService {
             assertNameAvailable(race.name(), id);
             assertValidPreviousRace(id, race.previousRaceId());
             assertValidStartOrderReverseTopCount(race.startOrderReverseTopCount());
+            if (!removeCoverPage && race.coverPagePdf() != null) {
+                validateCoverPagePdf(race.coverPagePdf());
+            }
             byte[] coverPagePdf = removeCoverPage ? null
                     : race.coverPagePdf() != null ? race.coverPagePdf()
                     : existing.get().coverPagePdf();

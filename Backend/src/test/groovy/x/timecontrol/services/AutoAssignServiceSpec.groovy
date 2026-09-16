@@ -31,7 +31,7 @@ class AutoAssignServiceSpec extends Specification {
     }
 
     private static Measurement measurement(Long id, Long participantId, int durationMs) {
-        new Measurement(id, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0))
+        new Measurement(id, null, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0))
     }
 
     def setup() {
@@ -319,6 +319,32 @@ class AutoAssignServiceSpec extends Specification {
 
         then: "the pending measurement is NOT credited to the now-excluded bib 5 - nobody is left in the queue"
         0 * measurementRepository.update(_)
+        service.getStatus().nextRaceNumber() == null
+    }
+
+    def "processNewMeasurements advances past a cursor marked DSQ/DNF/DNS to the next real participant instead of freezing"() {
+        given: "cursor is manually pointed at bib 5 (e.g. an explicit re-match), which is then marked DNF; bib 7 is still active after it"
+        // Both stubs use a single interaction with a mutable captured variable, re-assigned below,
+        // rather than a second `>>` - see the identical pattern/reasoning a few tests up.
+        def participants = [participant(11L, 5), participant(12L, 7)]
+        participantRepository.findByRaceId(1L) >> { participants }
+        def pendingMeasurements = []
+        measurementRepository.findAll() >> { pendingMeasurements }
+        service.enable(1L, 5)
+        assert service.getStatus().nextRaceNumber() == 5
+
+        and: "bib 5 is then marked DNF - loadRoster's raceNumbersInStartOrder no longer contains it at all"
+        participants = [
+                new Participant(11L, 1L, 11L, 5, null, null, null, null, null, null, DisqualificationStatus.DNF, null),
+                participant(12L, 7)
+        ]
+        pendingMeasurements = [measurement(101L, null, 5000)]
+
+        when:
+        service.processNewMeasurements()
+
+        then: "the pending measurement is matched to bib 7 - the cursor must not get stuck returning null forever just because 5 (its own last value) is no longer in the start-order list"
+        1 * measurementRepository.update({ Measurement m -> m.id() == 101L && m.participantId() == 12L })
         service.getStatus().nextRaceNumber() == null
     }
 

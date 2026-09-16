@@ -52,6 +52,20 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("An unexpected error occurred."));
     }
 
+    /**
+     * Catch-all for anything that isn't a {@link DataAccessException} (e.g. an NPE from an
+     * unguarded optional-FK dereference, or a bug in request handling) - without this, such a
+     * failure bypasses the sanitizing above entirely and falls through to Micronaut's own default
+     * error handler, whose verbosity depends on the active environment.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = Throwable.class)
+    public HttpResponse<ErrorResponse> handleUnexpectedException(HttpRequest<?> request, Throwable exception) {
+        LOG.error("Unhandled exception on {} {}", request.getMethod(), request.getPath(), exception);
+        return HttpResponse.<ErrorResponse>serverError()
+                .body(new ErrorResponse("An unexpected error occurred."));
+    }
+
     private static String rootCauseMessage(Throwable throwable) {
         Throwable cause = throwable;
         while (cause.getCause() != null && cause.getCause() != cause) {

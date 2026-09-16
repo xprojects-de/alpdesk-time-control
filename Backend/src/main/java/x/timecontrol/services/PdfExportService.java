@@ -1076,6 +1076,14 @@ public class PdfExportService {
                 .replace('đ', 'd').replace('Đ', 'D');
         StringBuilder result = new StringBuilder(withKnownSubstitutions.length());
         withKnownSubstitutions.codePoints().forEach(cp -> {
+            // C0/C1 control characters (e.g. a stray tab/newline pasted from an Excel cell) have no
+            // glyph in the standard-14 fonts either, despite being <= 0xFF - showText() throws for
+            // these exactly like it does for the out-of-range case below, so they must be filtered
+            // here too rather than falling through the Latin-1 fast path.
+            if (Character.isISOControl(cp)) {
+                result.append(' ');
+                return;
+            }
             // Already within WinAnsi/Latin-1 (e.g. ä, ö, ü, ß, é, ñ, ç) - keep as-is. NFKD would
             // canonically decompose these into a base letter + combining mark same as it does for
             // out-of-range characters below, which would incorrectly strip umlauts/accents that the

@@ -135,7 +135,7 @@ public class AutoAssignService {
         return measurementTableLock.get(() -> {
             Long raceId = requireActive();
             RaceRoster roster = loadRoster(raceId);
-            nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster.raceNumbersInStartOrder(), nextRaceNumber), assignedParticipantIds());
+            nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster, nextRaceNumber), assignedParticipantIds());
             return currentStatus();
         });
     }
@@ -221,10 +221,11 @@ public class AutoAssignService {
                     break;
                 }
                 measurementRepository.update(new Measurement(
-                        measurement.id(), participant.id(), measurement.durationMs(), measurement.measuredAt()
+                        measurement.id(), measurement.deviceMeasurementId(), participant.id(),
+                        measurement.durationMs(), measurement.measuredAt()
                 ));
                 assignedParticipantIds.add(participant.id());
-                nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster.raceNumbersInStartOrder(), nextRaceNumber), assignedParticipantIds);
+                nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster, nextRaceNumber), assignedParticipantIds);
             }
         });
     }
@@ -283,7 +284,7 @@ public class AutoAssignService {
             if (participant != null && participant.effectiveStartOrder() != null && !assignedParticipantIds.contains(participant.id())) {
                 return candidate;
             }
-            candidate = firstAfter(roster.raceNumbersInStartOrder(), candidate);
+            candidate = firstAfter(roster, candidate);
         }
         return null;
     }
@@ -298,15 +299,38 @@ public class AutoAssignService {
     /**
      * The race number immediately after {@code current} in the queue's actual start order - not a
      * numeric "next greater bib" comparison, since start order need not be bib-ascending.
+     * <p>
+     * Compares by each participant's start-order key (startSequence if set, else raceNumber)
+     * rather than {@code current}'s position within {@code roster.raceNumbersInStartOrder()}:
+     * {@link #setNextRaceNumber} explicitly allows pointing the cursor at any known bib, including
+     * one currently marked DSQ/DNF/DNS, whose {@link Participant#effectiveStartOrder()} is null and
+     * which is therefore absent from that list entirely. A position lookup would find no match and
+     * return null forever, silently freezing auto-assign for the rest of the race; resolving by key
+     * instead always finds the next starting participant, whether or not {@code current} itself is
+     * one.
      */
-    private static Integer firstAfter(List<Integer> raceNumbersInStartOrder, Integer current) {
+    private static Integer firstAfter(RaceRoster roster, Integer current) {
         if (current == null) {
             return null;
         }
-        int index = raceNumbersInStartOrder.indexOf(current);
-        if (index < 0 || index + 1 >= raceNumbersInStartOrder.size()) {
-            return null;
+        Participant currentParticipant = roster.byRaceNumber().get(current);
+        int currentOrderKey = currentParticipant != null ? orderKey(currentParticipant) : current;
+        for (Integer raceNumber : roster.raceNumbersInStartOrder()) {
+            if (orderKey(roster.byRaceNumber().get(raceNumber)) > currentOrderKey) {
+                return raceNumber;
+            }
         }
-        return raceNumbersInStartOrder.get(index + 1);
+        return null;
+    }
+
+    /**
+     * A participant's position in the start order, ignoring DSQ/DNF/DNS status - unlike
+     * {@link Participant#effectiveStartOrder()}, which is null for such a participant precisely
+     * because they're excluded from the auto-assign queue. {@link #firstAfter} needs this
+     * status-independent key to place an excluded participant relative to the queue even though
+     * they're not part of it themselves.
+     */
+    private static int orderKey(Participant participant) {
+        return participant.startSequence() != null ? participant.startSequence() : participant.raceNumber();
     }
 }

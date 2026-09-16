@@ -123,6 +123,7 @@ public class MeasurementController {
         }
         Measurement measurement = new Measurement(
                 null,
+                null,
                 request.participantId(),
                 request.durationMs(),
                 request.measuredAt()
@@ -151,6 +152,10 @@ public class MeasurementController {
             return validationError;
         }
         Measurement measurement = new Measurement(
+                null,
+                // Ignored by MeasurementService#update, which always carries the existing row's
+                // deviceMeasurementId forward instead - passed as null here only to satisfy the
+                // constructor.
                 null,
                 request.participantId(),
                 request.durationMs(),
@@ -205,7 +210,7 @@ public class MeasurementController {
 
     @Delete("/reset")
     @Operation(summary = "Delete all measurements and optionally reset device",
-            description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, the device is reset first. If device reset fails, database is not deleted.",
+            description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, any pending measurements are pulled from the device first, then the device is reset. If the pull or the device reset fails (e.g. device unreachable), database is not deleted.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")

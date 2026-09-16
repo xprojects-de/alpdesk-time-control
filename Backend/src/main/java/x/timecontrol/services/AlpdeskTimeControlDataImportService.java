@@ -101,76 +101,81 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         List<Measurement> createdMeasurements = new ArrayList<>();
         String dataUrl = dataUrl();
 
+        LOG.info("Fetching data from {}", dataUrl);
+
+        // Deliberately NOT swallowed (unlike the per-line parsing below): a caller doing a
+        // safety pull right before wiping the device/DB (MeasurementController#resetAll,
+        // RaceController#archiveMeasurements) needs to know the pull actually reached the device
+        // and completed, not just get back an empty list indistinguishable from "device had
+        // nothing new". DataImportScheduler's periodic poll already wraps this whole call in its
+        // own try/catch, so propagating here doesn't change its "retry every 5s" behavior, just
+        // what it logs.
+        String response;
         try {
+            response = httpClient.toBlocking().retrieve(HttpRequest.GET(dataUrl));
+        } catch (HttpClientException e) {
+            throw new IllegalStateException("Could not connect to device at " + dataUrl + ": " + e.getMessage(), e);
+        }
 
-            LOG.info("Fetching data from {}", dataUrl);
+        if (response.trim().isEmpty()) {
+            LOG.debug("No data received from device");
+            return createdMeasurements;
+        }
 
-            String response = httpClient.toBlocking().retrieve(HttpRequest.GET(dataUrl));
+        String[] lines = response.split("\\r?\\n");
+        LocalDateTime now = LocalDateTime.now();
 
-            if (response.trim().isEmpty()) {
-                LOG.debug("No data received from device");
-                return createdMeasurements;
-            }
+        // Locked so a concurrent archive/reset can't observe or clear the measurement table
+        // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
+        // device can't block archive/reset operations.
+        measurementTableLock.run(() -> {
+            for (String line : lines) {
 
-            String[] lines = response.split("\\r?\\n");
-            LocalDateTime now = LocalDateTime.now();
+                String trimmedLine = line.trim();
+                if (trimmedLine.isEmpty()) {
+                    continue;
+                }
 
-            // Locked so a concurrent archive/reset can't observe or clear the measurement table
-            // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
-            // device can't block archive/reset operations.
-            measurementTableLock.run(() -> {
-                for (String line : lines) {
+                try {
 
-                    String trimmedLine = line.trim();
-                    if (trimmedLine.isEmpty()) {
+                    String[] parts = trimmedLine.split(",");
+                    if (parts.length != 2) {
+                        LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
                         continue;
                     }
 
-                    try {
+                    long deviceId = Long.parseLong(parts[0].trim());
+                    double timeValue = Double.parseDouble(parts[1].trim());
+                    int durationMs = (int) Math.round(timeValue);
 
-                        String[] parts = trimmedLine.split(",");
-                        if (parts.length != 2) {
-                            LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
-                            continue;
-                        }
-
-                        long id = Long.parseLong(parts[0].trim());
-                        double timeValue = Double.parseDouble(parts[1].trim());
-                        int durationMs = (int) Math.round(timeValue);
-
-                        if (durationMs < 0) {
-                            LOG.warn("Ignoring negative duration from device for ID {}: {} ms", id, durationMs);
-                            continue;
-                        }
-
-                        var existingMeasurement = measurementService.findById(id);
-                        Long existingParticipantId = existingMeasurement
-                                .map(Measurement::participantId)
-                                .orElse(null);
-                        LocalDateTime timestamp = existingMeasurement
-                                .map(Measurement::measuredAt)
-                                .orElse(now);
-
-                        Measurement saved = measurementService.upsertWithId(id, existingParticipantId, durationMs, timestamp);
-                        createdMeasurements.add(saved);
-                        LOG.debug("Upserted measurement ID {}: {} ms", id, durationMs);
-
-                    } catch (NumberFormatException e) {
-                        LOG.warn("Could not parse line: {}", trimmedLine);
-                    } catch (Exception e) {
-                        LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+                    if (durationMs < 0) {
+                        LOG.warn("Ignoring negative duration from device for ID {}: {} ms", deviceId, durationMs);
+                        continue;
                     }
+
+                    // Looked up (and upserted below) by the device's own id, kept in a column
+                    // separate from this table's own `id` PK - see Measurement#deviceMeasurementId.
+                    var existingMeasurement = measurementService.findByDeviceMeasurementId(deviceId);
+                    Long existingParticipantId = existingMeasurement
+                            .map(Measurement::participantId)
+                            .orElse(null);
+                    LocalDateTime timestamp = existingMeasurement
+                            .map(Measurement::measuredAt)
+                            .orElse(now);
+
+                    Measurement saved = measurementService.upsertByDeviceMeasurementId(deviceId, existingParticipantId, durationMs, timestamp);
+                    createdMeasurements.add(saved);
+                    LOG.debug("Upserted measurement, device ID {}: {} ms", deviceId, durationMs);
+
+                } catch (NumberFormatException e) {
+                    LOG.warn("Could not parse line: {}", trimmedLine);
+                } catch (Exception e) {
+                    LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
                 }
-            });
+            }
+        });
 
-            LOG.info("Successfully imported {} measurements", createdMeasurements.size());
-
-        } catch (HttpClientException e) {
-            LOG.debug("Could not connect to device at {}: {}", dataUrl, e.getMessage());
-        } catch (Exception e) {
-            LOG.warn("Error importing data from device: {}", e.getMessage());
-        }
-
+        LOG.info("Successfully imported {} measurements", createdMeasurements.size());
         return createdMeasurements;
     }
 

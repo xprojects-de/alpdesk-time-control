@@ -106,15 +106,27 @@ CREATE UNIQUE INDEX idx_participant_race_person_unique ON participant (race_id, 
 
 CREATE TABLE measurement
 (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    participant_id INTEGER,
-    duration_ms    INTEGER   NOT NULL,
-    measured_at    TIMESTAMP NOT NULL,
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Set only for device-imported rows, to the device's own line-local measurement counter - null
+    -- for manually entered/CSV-imported rows. Kept separate from `id` (a plain autoincrement) so the
+    -- device's counter and this table's own PK can never collide/overwrite each other: both the
+    -- app's sequence (reset via DELETE FROM sqlite_sequence, see MeasurementService#deleteAll) and
+    -- the device's own counter (reset via its /reset endpoint) restart at 1 together whenever an
+    -- operator resets/archives-and-clears.
+    device_measurement_id INTEGER,
+    participant_id         INTEGER,
+    duration_ms             INTEGER   NOT NULL,
+    measured_at             TIMESTAMP NOT NULL,
 
     FOREIGN KEY (participant_id)
         REFERENCES participant (id)
         ON DELETE SET NULL
 );
+
+-- SQLite treats every NULL as distinct in a unique index, so any number of manually entered/
+-- CSV-imported rows (device_measurement_id = NULL) remain unrestricted; only actual device ids
+-- must be unique.
+CREATE UNIQUE INDEX idx_measurement_device_measurement_id ON measurement (device_measurement_id);
 
 CREATE TABLE race_measurement
 (

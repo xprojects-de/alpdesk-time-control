@@ -42,12 +42,23 @@ public class MeasurementService {
         return repository.findById(id);
     }
 
+    public Optional<Measurement> findByDeviceMeasurementId(Long deviceMeasurementId) {
+        return repository.findByDeviceMeasurementId(deviceMeasurementId);
+    }
+
     public Optional<Measurement> update(Long id, Measurement measurement) {
         return measurementTableLock.get(() -> {
             Optional<Measurement> existing = repository.findById(id);
             if (existing.isPresent()) {
                 Measurement updated = new Measurement(
                         id,
+                        // Always carried over from the existing row, never taken from the incoming
+                        // request (which never carries one - see MeasurementController) and never
+                        // cleared by a manual edit: if a device-sourced row's deviceMeasurementId
+                        // were wiped here, the next poll of that same device measurement would find
+                        // no match on the unique index and INSERT a duplicate row instead of
+                        // updating this (just corrected) one.
+                        existing.get().deviceMeasurementId(),
                         measurement.participantId(),
                         measurement.durationMs(),
                         measurement.measuredAt()
@@ -70,10 +81,10 @@ public class MeasurementService {
         });
     }
 
-    public Measurement upsertWithId(Long id, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
+    public Measurement upsertByDeviceMeasurementId(Long deviceMeasurementId, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {
         return measurementTableLock.get(() -> {
-            repository.insertOrReplaceWithId(id, participantId, durationMs, measuredAt);
-            return repository.findById(id).orElseThrow();
+            repository.upsertByDeviceMeasurementId(deviceMeasurementId, participantId, durationMs, measuredAt);
+            return repository.findByDeviceMeasurementId(deviceMeasurementId).orElseThrow();
         });
     }
 
@@ -159,7 +170,7 @@ public class MeasurementService {
                 }
             }
 
-            imported.add(create(new Measurement(null, participantId, durationMs, measuredAt)));
+            imported.add(create(new Measurement(null, null, participantId, durationMs, measuredAt)));
         }
 
         return new MeasurementImportResult(imported, errors);

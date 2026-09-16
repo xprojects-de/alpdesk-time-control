@@ -37,6 +37,12 @@ public class DataImportScheduler {
     private int pauseDepth = 0;
     private boolean pausedTargetActive = false;
 
+    // Only touched from the single scheduler thread invoking importDataPeriodically() - tracks
+    // whether the last cycle failed, so a failure is logged at WARN once (not swallowed at a level
+    // nobody sees in production) without spamming the log every 5s for as long as the failure
+    // persists (e.g. device unplugged for the rest of the race).
+    private boolean lastImportSucceeded = true;
+
     public boolean isScheduledImportActive() {
         return scheduledImportActive;
     }
@@ -124,8 +130,17 @@ public class DataImportScheduler {
             // itself.
             autoAssignService.processNewMeasurements();
 
+            if (!lastImportSucceeded) {
+                LOG.info("Scheduled data import recovered");
+                lastImportSucceeded = true;
+            }
         } catch (Exception e) {
-            LOG.debug("Scheduled data import failed (will retry in 5s): {}", e.getMessage());
+            if (lastImportSucceeded) {
+                LOG.warn("Scheduled data import failed (will keep retrying every 5s): {}", e.getMessage());
+                lastImportSucceeded = false;
+            } else {
+                LOG.debug("Scheduled data import still failing: {}", e.getMessage());
+            }
         }
     }
 }
