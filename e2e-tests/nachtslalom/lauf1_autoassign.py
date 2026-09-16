@@ -89,11 +89,22 @@ print("\n=== Zielrichter-Korrektur: bib 2 und bib 3 wurden vom Geraet vertauscht
 bib2, bib3 = config.SWAP_BIBS
 m_for_bib2 = next(m for m in ms if m.get("participantId") == pid[bib2])
 m_for_bib3 = next(m for m in ms if m.get("participantId") == pid[bib3])
-for m, new_participant_id in [(m_for_bib2, pid[bib3]), (m_for_bib3, pid[bib2])]:
-    status, resp = c.put(config.BASE, token, f"/measurements/{m['id']}", {
-        "participantId": new_participant_id, "durationMs": m["durationMs"], "measuredAt": m["measuredAt"],
-    })
-    assert status == 200, resp
+# A direct pairwise swap (m_for_bib2 -> pid[bib3], m_for_bib3 -> pid[bib2]) 409s in either order:
+# MeasurementService#update rejects assigning a participant that's still held by the other,
+# not-yet-updated row (see assertParticipantNotAlreadyAssigned). A real Zielrichter correction
+# hits the same guard, so free one side first, then assign both - three PUTs, not two.
+status, resp = c.put(config.BASE, token, f"/measurements/{m_for_bib3['id']}", {
+    "participantId": None, "durationMs": m_for_bib3["durationMs"], "measuredAt": m_for_bib3["measuredAt"],
+})
+assert status == 200, resp
+status, resp = c.put(config.BASE, token, f"/measurements/{m_for_bib2['id']}", {
+    "participantId": pid[bib3], "durationMs": m_for_bib2["durationMs"], "measuredAt": m_for_bib2["measuredAt"],
+})
+assert status == 200, resp
+status, resp = c.put(config.BASE, token, f"/measurements/{m_for_bib3['id']}", {
+    "participantId": pid[bib2], "durationMs": m_for_bib3["durationMs"], "measuredAt": m_for_bib3["measuredAt"],
+})
+assert status == 200, resp
 print(f"Messung {m_for_bib2['id']} -> Teilnehmer bib{bib3}, Messung {m_for_bib3['id']} -> Teilnehmer bib{bib2}")
 
 print("\n=== Geraet meldet unveraendert dieselben Daten erneut (naechster Tick) ===")
