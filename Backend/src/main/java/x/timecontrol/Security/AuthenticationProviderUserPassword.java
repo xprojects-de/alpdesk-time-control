@@ -49,7 +49,7 @@ class AuthenticationProviderUserPassword<B> implements HttpRequestAuthentication
             @Nullable HttpRequest<B> httpRequest,
             @NonNull @org.jspecify.annotations.NonNull AuthenticationRequest<String, String> authenticationRequest
     ) {
-        LoginAttemptState state = attemptsByClient.computeIfAbsent(clientKey(httpRequest), key -> new LoginAttemptState());
+        LoginAttemptState state = attemptsByClient.computeIfAbsent(clientKey(httpRequest), _ -> new LoginAttemptState());
 
         Instant now = Instant.now();
         if (now.isBefore(state.lockedUntil.get())) {

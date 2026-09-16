@@ -35,14 +35,6 @@ public record Participant(
         @Nullable
         DisqualificationStatus status,
 
-        /**
-         * Position in this race's actual start order, when it differs from raceNumber (e.g. a
-         * slalom run 2 whose start order was derived from run 1's results, so bib 30 might start
-         * before bib 5). raceNumber is the athlete's fixed bib and is never changed by that
-         * derivation - see {@code ParticipantService#applyStartOrderFromPreviousRace} and
-         * {@code AutoAssignService}. Null means "this participant starts in raceNumber order",
-         * which is every participant of every race that never had a start order derived for it.
-         */
         @Nullable
         Integer startSequence
 ) {

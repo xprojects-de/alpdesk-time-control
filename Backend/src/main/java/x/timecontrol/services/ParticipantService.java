@@ -533,7 +533,7 @@ public class ParticipantService {
         // (a, b) -> a: if the same person was somehow entered twice in the target race (shouldn't
         // happen, race_id+person_id is unique), keep the first rather than failing the whole reorder.
         Map<Long, Participant> targetByPersonId = targetParticipants.stream()
-                .collect(Collectors.toMap(Participant::personId, p -> p, (a, b) -> a));
+                .collect(Collectors.toMap(Participant::personId, p -> p, (a, _) -> a));
 
         int reverseTopCount = race.startOrderReverseTopCount() != null ? Math.max(0, race.startOrderReverseTopCount()) : 0;
 

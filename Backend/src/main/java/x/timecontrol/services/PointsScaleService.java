@@ -83,7 +83,7 @@ public class PointsScaleService {
 
     /**
      * @throws IllegalStateException if the stored CSV is empty or contains a non-numeric entry -
-     *                                defensive: {@link x.timecontrol.Controller.PointsScaleController#isValid}
+     *                                defensive: x.timecontrol.Controller.PointsScaleController#isValid
      *                                already rejects a request that would produce this at save time, but this
      *                                is also reached from ranking calculations reading whatever is already
      *                                persisted, so a corrupt row must fail with a clear message here rather

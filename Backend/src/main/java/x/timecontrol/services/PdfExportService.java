@@ -29,8 +29,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 @Singleton
 public class PdfExportService {
@@ -770,7 +768,7 @@ public class PdfExportService {
      * Draws the "nicht gewertet" (DNS) list once at the end of a PDF - a no-op when there's nobody
      * to list, so a PDF with no non-starters doesn't grow an empty section. Always drawn as a
      * document-level closing section (one list per race/Gaudi-Modus, not per ranking sub-section -
-     * see {@link #createDnsRows}), so unlike {@link #drawSection} it has only one title size.
+     * see createDnsRows, so unlike {@link #drawSection} it has only one title size.
      */
     private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows) throws IOException {
         if (rows.isEmpty()) {

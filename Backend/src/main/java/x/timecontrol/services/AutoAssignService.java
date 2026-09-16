@@ -239,7 +239,7 @@ public class AutoAssignService {
      * {@code byRaceNumber} includes every participant with a bib, regardless of whether they're
      * actually starting - an explicit {@link #setNextRaceNumber} override is allowed to point at
      * any known bib. {@code raceNumbersInStartOrder} is the actual auto-assign queue: only
-     * participants who are starting (see {@link #effectiveStartOrder}), in that start order - not
+     * participants who are starting (see effectiveStartOrder), in that start order - not
      * necessarily ascending bib order, see the class javadoc.
      */
     private record RaceRoster(List<Integer> raceNumbersInStartOrder, Map<Integer, Participant> byRaceNumber) {
