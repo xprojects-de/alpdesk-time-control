@@ -197,6 +197,8 @@ class RankingServiceSpec extends Specification {
         4083     || 4080  // 0:04.08
         33525    || 33530 // 0:33.53
         36432    || 36430 // 0:36.43
+        1005     || 1010  // exact half-a-hundredth boundary: rounds up, matching formatTime's own rounding
+        0        || 0
         null     || null
     }
 
