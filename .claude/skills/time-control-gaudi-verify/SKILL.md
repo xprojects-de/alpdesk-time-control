@@ -19,7 +19,8 @@ shaped) check — this skill's algorithm below doesn't apply to those.
 
 ## Inputs to collect first
 
-Ask for whatever is missing before computing anything — don't guess at weights, scale, or flags.
+Ask for whatever is missing before computing anything — don't guess at weights or flags, and
+don't silently skip a question just because a reasonable default exists.
 
 1. **Per-race raw results**, one file per leg race. In order of preference:
    - **Best**: the CSV from `GET /participants/export/results-csv/{raceId}` (Einstellungen/race
@@ -35,13 +36,27 @@ Ask for whatever is missing before computing anything — don't guess at weights
    - For each race also get: **sort direction** (TIME races sort ascending/lower-is-better,
      POINTS races descending/higher-is-better — ask if unclear from the export) and its **Gaudi
      weight** (`GaudiModeRace.weight`, default `1.0` if the user never set one).
-2. **Points scale**: the name and the place→points list (`PointsScale.pointsCsv`, e.g.
-   `100,80,60,50,45,40,36,32,29,26,...`) — from Einstellungen → Punkteschema, or ask the user to
-   paste the CSV values. If they say "Standard"/default, that's the scale named `FIS-Schema`.
-3. **The three toggle flags** on this Gaudi-Modus instance: `keepDnsInRanking`,
-   `keepDnfInRanking`, `keepDsqInRanking` (each true/false — ask directly, these are easy to get
-   backwards from memory).
-4. **Reference output to diff against**: the app's own combined-ranking PDF (preferred — the
+2. **Points scale**: default to the club's fixed **"FIS-Schema"** place→points table unless told
+   otherwise —
+   `100, 80, 60, 50, 45, 40, 36, 32, 29, 26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6,
+   5, 4, 3, 2, 1, 0` (index 0 = place 1; any place beyond this 31-entry list scores 0). Only ask
+   if the user says a different scale was configured for this Gaudi-Modus instance.
+3. **The three toggle flags** on this Gaudi-Modus instance — `keepDnsInRanking`,
+   `keepDnfInRanking`, `keepDsqInRanking` — **must always be asked explicitly, every time**, e.g.
+   with a direct multi-part question (AskUserQuestion or equivalent). Never assume a default or
+   infer them from the data (a field with no DNF/DNS/DSQ rows tells you nothing about how the
+   flags are set). Getting this wrong silently changes who is even included in the ranking, so
+   do not proceed to computation before this is answered.
+4. **Gender per person**, if the reference output is split by category (see next section) — the
+   results-only CSV above has no gender column. Ask for the roster export instead:
+   `GET /participants/export/csv/{raceId}` (any one leg race is enough, since gender doesn't
+   change per race) — it includes `gender` (`MALE`/`FEMALE`) alongside identity data. If the user
+   can't get that export, ask them to state gender per person directly (or per team/group if that's
+   faster) rather than guessing from first names. **Never read the live `time-control.db` SQLite
+   file to get this (or anything else)** — it's real production data from actual club events, and
+   this skill only ever works from exports/files the user explicitly hands over, never by querying
+   the app or its database directly.
+5. **Reference output to diff against**: the app's own combined-ranking PDF (preferred — the
    user already has these) or a JSON export of the Gaudi ranking. PDF is fine here since it's only
    used for comparison, not as computation input — a text-extraction slip shows up immediately as
    a diff against the independently-computed table.
@@ -50,11 +65,49 @@ If the user only has PDFs for everything (no CSV export), proceed anyway with th
 path for the per-race inputs, but say explicitly that place-assignment itself isn't independently
 verified in that case.
 
+## Category-split rankings (Altersklasse × Geschlecht) — check this before computing anything
+
+Look at the reference output first: if it has separate sections per age-group and gender (e.g.
+"Wertung U14 weiblich", "Wertung U14 männlich", "Wertung U16 weiblich", ...) rather than one flat
+table, this is `GaudiModeService.computeRankingForCategory` — **and it is not a display-time
+filter of one global ranking**. It restricts every leg race's participant field to just that
+category's persons and **reruns the entire algorithm from Step 1** on that subset alone: a
+person's place in "Station 1" *within their category* can be completely different from their
+place among the full field, because the whole race gets re-sorted and re-placed with everyone
+outside the category removed first. This was a confirmed source of false-positive mismatches in
+an earlier ASV Kondiwettkampf verification (see project memory
+`verification-technique-ranking-crosscheck`) — assuming one global ranking and just re-labeling
+places per group gives wrong numbers even when the underlying data and logic are otherwise right.
+
+So when the reference is category-split:
+- Determine each person's category as `(ageGroup, gender)` — `ageGroup` from the results CSV
+  (already computed the same way the app does it), `gender` from the roster CSV (input #4 above).
+- For **each category group independently**: take only that group's participants into every leg
+  race, then run Steps 1–4 below from scratch on that subset (including per-race place
+  assignment) — do not reuse places computed against the full field.
+- The unfiltered, whole-field ranking (if the app also exposes one) and each category's ranking
+  are genuinely different numbers for the same person; don't cross-check one against the other.
+- **The "nicht gewertet" (DNS) list is the one exception that stays global.**
+  `GaudiModeService.computeDnsEntries` always calls `buildRaceParticipants(gaudiMode, null)` —
+  unfiltered, across the whole field — regardless of category, and the app shows that *same* list
+  on every category's PDF page. So: recompute the ranking table itself once per category (as
+  above), but recompute "nicht gewertet" only **once**, over the whole unfiltered field, and
+  expect that identical list to match every category section's DNS block in the reference — don't
+  build a separate nicht-gewertet list per category, and don't be surprised if the reasoning for
+  why someone landed there doesn't quite match a per-category read of eligibility (it's evaluated
+  against full-field places, not the category subset's).
+
+If the reference is a single flat table instead, skip all of this and run Steps 1–4 once over the
+whole field as written below.
+
 ## The algorithm to reimplement (do not approximate — this must match the app exactly)
 
-Source of truth: `Backend/src/main/java/x/timecontrol/services/RankingService.java` and
-`Backend/src/main/java/x/timecontrol/services/gaudi/PointsCombinationModeCalculator.java` — reread
-those two files if anything below is ambiguous or the code has since changed.
+Source of truth: `Backend/src/main/java/x/timecontrol/services/RankingService.java`,
+`Backend/src/main/java/x/timecontrol/services/gaudi/PointsCombinationModeCalculator.java`, and
+`Backend/src/main/java/x/timecontrol/services/GaudiModeService.java` (`computeRankingForCategory`/
+`buildRaceParticipants` for the category-filtering behavior above) — reread these if anything
+below is ambiguous or the code has since changed. Run the following once per category group when
+categories apply, otherwise once over the whole field.
 
 **Step 1 — per-race place, for each leg race independently:**
 - A participant with no measured value, or with a non-`NONE` status (`DNF`/`DNS`/`DSQ`), gets no
@@ -79,6 +132,11 @@ those two files if anything below is ambiguous or the code has since changed.
   is either a valid place for them **or** a bad leg whose specific status is tolerated by the
   matching flag (`DNS`→`keepDnsInRanking`, `DNF`→`keepDnfInRanking`, `DSQ`→`keepDsqInRanking`).
   A bad leg whose flag is off drops the person even if they have valid places everywhere else.
+- When categories apply, run this eligibility check twice, on two different participant sets, per
+  the "nicht gewertet" exception above: once **within each category subset** to decide who appears
+  in that category's ranking table, and once **globally, over the whole unfiltered field** to
+  produce the single "nicht gewertet" list shared by every category page. These can legitimately
+  disagree on a given person — that's expected, not a bug to chase.
 
 **Step 3 — points and total, for each included person:**
 - Per race: `pointsForPlace(place) * race.weight`, where `pointsForPlace` looks up the scale's
@@ -97,19 +155,23 @@ those two files if anything below is ambiguous or the code has since changed.
 
 ## How to run the check
 
-1. Write a small standalone Python script (in the scratchpad dir) implementing steps 1–4 above
-   exactly, reading the per-race CSVs and the scale/weights/flags gathered above. Keep it a plain
-   script you can inspect and rerun, not something you compute by hand in your head — this is
-   arithmetic across potentially dozens of participants and multiple races, easy to slip on
-   manually.
-2. Run it, producing: the final ranking table (place, name, total points, per-leg points/place),
-   and the "nicht gewertet" list with each excluded person's reason.
-3. Extract the app's reference output the same way — parse the reference PDF (via the `pdf` skill)
-   into the same shape: place, name, total points, and its "nicht gewertet" section.
-4. Diff the two tables by person: flag any mismatch in place, total points, or nicht-gewertet
-   membership. For every mismatch, drill into that person's per-leg figures (place per race,
-   weighted points per race) so the user can see exactly which leg/step caused the divergence,
-   rather than just "totals don't match."
+1. First check the reference output for category sections (see above) and get the roster CSV for
+   gender if so — don't start writing the script until you know whether it needs to loop per
+   category or run once over the whole field.
+2. Write a small standalone Python script (in the scratchpad dir) implementing steps 1–4 above
+   exactly, reading the per-race CSVs and the scale/weights/flags gathered above — looping the
+   whole thing once per `(ageGroup, gender)` group when categories apply. Keep it a plain script
+   you can inspect and rerun, not something you compute by hand in your head — this is arithmetic
+   across potentially dozens of participants and multiple races/groups, easy to slip on manually.
+3. Run it, producing: the final ranking table(s) (place, name, total points, per-leg points/place),
+   and the "nicht gewertet" list with each excluded person's reason — per category if applicable.
+4. Extract the app's reference output the same way — parse the reference PDF (via the `pdf` skill)
+   into the same shape: place, name, total points, and its "nicht gewertet" section, per section/
+   category if the PDF has them.
+5. Diff by person within the matching category: flag any mismatch in place, total points, or
+   nicht-gewertet membership. For every mismatch, drill into that person's per-leg figures (place
+   per race, weighted points per race, and which category subset they were ranked in) so the user
+   can see exactly which leg/step caused the divergence, rather than just "totals don't match."
 
 ## Reporting
 
