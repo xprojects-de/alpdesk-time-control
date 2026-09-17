@@ -33,9 +33,12 @@ don't silently skip a question just because a reasonable default exists.
      place/name/time-or-value/status per row with the `pdf` skill. Weaker check — it trusts the
      app's own place assignment for that leg instead of re-deriving it from raw times, so tell the
      user this leg's *place* isn't independently verified, only the points built on top of it.
-   - For each race also get: **sort direction** (TIME races sort ascending/lower-is-better,
-     POINTS races descending/higher-is-better — ask if unclear from the export) and its **Gaudi
-     weight** (`GaudiModeRace.weight`, default `1.0` if the user never set one).
+   - For each race also get its **sort direction** (TIME races sort ascending/lower-is-better,
+     POINTS races descending/higher-is-better — ask if unclear from the export).
+   - **Always explicitly ask** whether every leg race was weighted `1.0`, or whether one or more
+     had a different `GaudiModeRace.weight` configured — this is an easy thing for the app admin
+     to have set and forgotten, so don't infer it from the data. Default to `1.0` for every race
+     only once the user confirms that, not as a silent assumption you never surfaced.
 2. **Points scale**: default to the club's fixed **"FIS-Schema"** place→points table unless told
    otherwise —
    `100, 80, 60, 50, 45, 40, 36, 32, 29, 26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6,
@@ -48,14 +51,21 @@ don't silently skip a question just because a reasonable default exists.
    flags are set). Getting this wrong silently changes who is even included in the ranking, so
    do not proceed to computation before this is answered.
 4. **Gender per person**, if the reference output is split by category (see next section) — the
-   results-only CSV above has no gender column. Ask for the roster export instead:
-   `GET /participants/export/csv/{raceId}` (any one leg race is enough, since gender doesn't
-   change per race) — it includes `gender` (`MALE`/`FEMALE`) alongside identity data. If the user
-   can't get that export, ask them to state gender per person directly (or per team/group if that's
-   faster) rather than guessing from first names. **Never read the live `time-control.db` SQLite
-   file to get this (or anything else)** — it's real production data from actual club events, and
-   this skill only ever works from exports/files the user explicitly hands over, never by querying
-   the app or its database directly.
+   results-only CSV above has no gender column. Ask the user which source to use, in this order of
+   independence:
+   - **Preferred**: the roster export, `GET /participants/export/csv/{raceId}` (any one leg race
+     is enough, since gender doesn't change per race) — it includes `gender` (`MALE`/`FEMALE`)
+     alongside identity data. Independent of the PDF being verified.
+   - **Accepted fallback, if the user prefers**: take each person's category straight from which
+     "Wertung <Altersklasse> <weiblich/männlich>" section they appear under in the reference PDF
+     itself. This is fine for checking the *ranking/points math within* each category — that's
+     what this skill verifies — but say explicitly that it means the category assignment itself
+     (whether that person was correctly bucketed as e.g. U14 weiblich in the first place) is
+     *not* independently checked this way, only the computation built on top of it.
+   Either way, ask which one the user wants rather than picking silently, and **never read the
+   live `time-control.db` SQLite file to get this (or anything else)** — it's real production data
+   from actual club events, and this skill only ever works from exports/files the user explicitly
+   hands over, never by querying the app or its database directly.
 5. **Reference output to diff against**: the app's own combined-ranking PDF (preferred — the
    user already has these) or a JSON export of the Gaudi ranking. PDF is fine here since it's only
    used for comparison, not as computation input — a text-extraction slip shows up immediately as
@@ -102,11 +112,19 @@ whole field as written below.
 
 ## The algorithm to reimplement (do not approximate — this must match the app exactly)
 
-Source of truth: `Backend/src/main/java/x/timecontrol/services/RankingService.java`,
-`Backend/src/main/java/x/timecontrol/services/gaudi/PointsCombinationModeCalculator.java`, and
-`Backend/src/main/java/x/timecontrol/services/GaudiModeService.java` (`computeRankingForCategory`/
-`buildRaceParticipants` for the category-filtering behavior above) — reread these if anything
-below is ambiguous or the code has since changed. Run the following once per category group when
+**Always read these three files fresh at the start of every run, in full, before writing the
+verification script — every time, not just when something below seems unclear.** The summary
+below is a snapshot and can silently go stale the moment someone touches ranking logic; trusting
+it instead of the real code is exactly the mistake this skill exists to avoid making about the
+*app's* correctness:
+- `Backend/src/main/java/x/timecontrol/services/RankingService.java`
+- `Backend/src/main/java/x/timecontrol/services/gaudi/PointsCombinationModeCalculator.java`
+- `Backend/src/main/java/x/timecontrol/services/GaudiModeService.java` (`computeRankingForCategory`
+  / `buildRaceParticipants` for the category-filtering behavior above)
+
+If what you read differs from the steps below in any way, the code wins — update your mental
+model (and flag the discrepancy to the user, since it likely means this skill needs a follow-up
+edit) rather than silently reconciling the two. Run the algorithm once per category group when
 categories apply, otherwise once over the whole field.
 
 **Step 1 — per-race place, for each leg race independently:**
