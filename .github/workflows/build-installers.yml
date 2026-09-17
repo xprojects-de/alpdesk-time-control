@@ -395,11 +395,206 @@ jobs:
           path: dist/Time-Control-macOS-Intel-v*.zip
           retention-days: 14
 
+  build-macos-intel-poorman-bundle:
+    name: Build macOS Intel (x64) Poor-Man Bundle
+    # Installer-free companion to the .app bundle above, for Intel Mac users who'd rather
+    # inspect/run a plain folder (jre/ + jar + .command launcher) than a double-clickable .app.
+    # Same unsigned Gatekeeper caveat as the .app bundle - this doesn't avoid that, it's purely
+    # an alternate, more transparent packaging of the same JRE+jar combo.
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS x64 JRE (Temurin, Java 25)
+        run: |
+          BUNDLE="Time-Control-macOS-Intel-PoorMan"
+          mkdir -p "$BUNDLE/jre"
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/mac/x64/jre/hotspot/normal/eclipse" -o jre-mac-x64.tar.gz
+          tar xzf jre-mac-x64.tar.gz -C "$BUNDLE/jre" --strip-components=1
+
+      - name: Assemble Bundle
+        run: |
+          BUNDLE="Time-Control-macOS-Intel-PoorMan"
+          cp shadow-jar/Time-Control-java-v*.jar "$BUNDLE/time-control.jar"
+
+          # Mirrors the jpackage build's --java-options (see build.gradle jpackageArgs): keeps
+          # the data directory (SQLite DB, JWT secret) anchored to the user's home instead of
+          # the process's working directory, and enables the AWT/Swing startup status window.
+          cat > "$BUNDLE/start.command" <<'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          "$DIR/jre/Contents/Home/bin/java" -Dapp.packaged=true -Djava.awt.headless=false -jar "$DIR/time-control.jar"
+          SCRIPT
+          chmod +x "$BUNDLE/start.command"
+
+          cat > "$BUNDLE/README.txt" <<'EOF'
+          Time Control - manueller Start (ohne Installer)
+
+          1. Diesen Ordner an einen beliebigen Ort entpacken.
+          2. Doppelklick auf "start.command".
+             Beim ersten Start ggf. Rechtsklick > Oeffnen waehlen (Gatekeeper).
+          3. Browser oeffnet sich automatisch, sonst http://localhost:18000 aufrufen.
+          EOF
+
+      - name: Zip Bundle
+        run: |
+          mkdir -p dist
+          zip -r -X -y "dist/Time-Control-macOS-Intel-PoorMan-v${{ steps.read_version.outputs.version }}.zip" Time-Control-macOS-Intel-PoorMan
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-poorman-bundle
+          path: dist/Time-Control-macOS-Intel-PoorMan-v*.zip
+          retention-days: 14
+
+  build-macos-applesilicon-poorman-bundle:
+    name: Build macOS Apple Silicon (arm64) Poor-Man Bundle
+    # Poor-man bundle for Apple Silicon Macs. Not a cross-arch workaround like the Intel .app
+    # above (build-jpackage-installer already produces a native arm64 .dmg on GitHub's arm64
+    # runners) - it's the same installer-free JRE+jar+script alternative, for consistency with
+    # the Intel and Windows poor-man bundles.
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS arm64 JRE (Temurin, Java 25)
+        run: |
+          BUNDLE="Time-Control-macOS-AppleSilicon-PoorMan"
+          mkdir -p "$BUNDLE/jre"
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/mac/aarch64/jre/hotspot/normal/eclipse" -o jre-mac-aarch64.tar.gz
+          tar xzf jre-mac-aarch64.tar.gz -C "$BUNDLE/jre" --strip-components=1
+
+      - name: Assemble Bundle
+        run: |
+          BUNDLE="Time-Control-macOS-AppleSilicon-PoorMan"
+          cp shadow-jar/Time-Control-java-v*.jar "$BUNDLE/time-control.jar"
+
+          # Mirrors the jpackage build's --java-options (see build.gradle jpackageArgs): keeps
+          # the data directory (SQLite DB, JWT secret) anchored to the user's home instead of
+          # the process's working directory, and enables the AWT/Swing startup status window.
+          cat > "$BUNDLE/start.command" <<'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          "$DIR/jre/Contents/Home/bin/java" -Dapp.packaged=true -Djava.awt.headless=false -jar "$DIR/time-control.jar"
+          SCRIPT
+          chmod +x "$BUNDLE/start.command"
+
+          cat > "$BUNDLE/README.txt" <<'EOF'
+          Time Control - manueller Start (ohne Installer)
+
+          1. Diesen Ordner an einen beliebigen Ort entpacken.
+          2. Doppelklick auf "start.command".
+             Beim ersten Start ggf. Rechtsklick > Oeffnen waehlen (Gatekeeper).
+          3. Browser oeffnet sich automatisch, sonst http://localhost:18000 aufrufen.
+          EOF
+
+      - name: Zip Bundle
+        run: |
+          mkdir -p dist
+          zip -r -X -y "dist/Time-Control-macOS-AppleSilicon-PoorMan-v${{ steps.read_version.outputs.version }}.zip" Time-Control-macOS-AppleSilicon-PoorMan
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-applesilicon-poorman-bundle
+          path: dist/Time-Control-macOS-AppleSilicon-PoorMan-v*.zip
+          retention-days: 14
+
+  build-windows-poorman-bundle:
+    name: Build Windows Poor-Man Bundle (JRE + Shadow JAR)
+    # Companion to the jpackage .exe/.msi for Windows users hit by AV/SmartScreen false
+    # positives: a freshly-built, unsigned native launcher has zero reputation and gets flagged
+    # by heuristic engines regardless of installer format. This wraps the shadow JAR with an
+    # already-signed, widely-trusted Adoptium JRE and a plain .bat launcher instead - no native
+    # executable of ours in the bundle at all, so there's nothing for AV heuristics to flag.
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows x64 JRE (Temurin, Java 25)
+        run: |
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/windows/x64/jre/hotspot/normal/eclipse" -o jre-windows-x64.zip
+          mkdir -p jre-extracted bundle/jre
+          unzip -q jre-windows-x64.zip -d jre-extracted
+          mv jre-extracted/*/* bundle/jre/
+
+      - name: Assemble Bundle
+        run: |
+          cp shadow-jar/Time-Control-java-v*.jar bundle/time-control.jar
+
+          # Mirrors the jpackage build's --java-options (see build.gradle jpackageArgs): keeps
+          # the data directory (SQLite DB, JWT secret) anchored to the user's home instead of
+          # the process's working directory. "pause" at the end keeps the console window open
+          # if the app exits/crashes immediately, so errors stay visible instead of flashing by.
+          cat > bundle/start.bat <<'SCRIPT'
+          @echo off
+          "%~dp0jre\bin\java.exe" -Dapp.packaged=true -jar "%~dp0time-control.jar"
+          pause
+          SCRIPT
+
+          cat > bundle/README.txt <<'EOF'
+          Time Control - manueller Start (ohne Installer)
+
+          1. Diesen Ordner an einen beliebigen Ort entpacken.
+          2. Doppelklick auf "start.bat".
+             Falls Windows SmartScreen warnt: "Weitere Informationen" > "Trotzdem ausfuehren".
+          3. Browser oeffnet sich automatisch, sonst http://localhost:18000 aufrufen.
+          EOF
+
+      - name: Zip Bundle
+        run: |
+          mkdir -p dist
+          (cd bundle && zip -r -X -y "../dist/Time-Control-Windows-PoorMan-v${{ steps.read_version.outputs.version }}.zip" .)
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-poorman-bundle
+          path: dist/Time-Control-Windows-PoorMan-v*.zip
+          retention-days: 14
+
   create-release:
     name: Create GitHub Release
     # build-native-installer is currently skipped (see above) - not listed here, otherwise
     # this job would be skipped too since a skipped dependency doesn't count as successful.
-    needs: [ build-jpackage-installer, build-shadow-jar, build-macos-intel-bundle ]
+    needs: [ build-jpackage-installer, build-shadow-jar, build-macos-intel-bundle, build-macos-intel-poorman-bundle, build-macos-applesilicon-poorman-bundle, build-windows-poorman-bundle ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -416,6 +611,9 @@ jobs:
           cp release-assets/*-installer/* final-assets/
           cp release-assets/shadow-jar/* final-assets/
           cp release-assets/macos-intel-bundle/* final-assets/
+          cp release-assets/macos-intel-poorman-bundle/* final-assets/
+          cp release-assets/macos-applesilicon-poorman-bundle/* final-assets/
+          cp release-assets/windows-poorman-bundle/* final-assets/
 
       - name: Read App Version
         id: read_version
