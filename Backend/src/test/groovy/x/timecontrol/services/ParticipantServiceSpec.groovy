@@ -650,11 +650,14 @@ class ParticipantServiceSpec extends Specification {
         repository.findByRaceId(6L) >> [target1, targetUnmatched]
 
         when:
-        service.copyStartGroupAssignment(5L, [6L])
+        def result = service.copyStartGroupAssignment(5L, [6L])
 
         then: "target1 (matching person) gets source1's group/sequence; targetUnmatched (no matching person) is never written"
         1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 }) >> { Participant p -> p }
         0 * repository.update({ Participant p -> p.id() == 3L })
+
+        and: "every target-race participant is returned, matched or not, so the frontend can refresh its full participant list"
+        result*.id() as Set == [2L, 3L] as Set
     }
 
     def "copyStartGroupAssignment clears an unmatched target participant's own startSequence when it collides with a value being copied in, instead of failing on the unique index"() {
@@ -669,11 +672,15 @@ class ParticipantServiceSpec extends Specification {
         repository.update(_ as Participant) >> { Participant p -> p }
 
         when:
-        service.copyStartGroupAssignment(5L, [6L])
+        def result = service.copyStartGroupAssignment(5L, [6L])
 
         then: "the colliding participant's stale startSequence is cleared (not left at 1) before target1 is written with the copied startSequence 1"
-        1 * repository.update({ Participant p -> p.id() == 3L && p.startSequence() == null })
-        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 })
+        1 * repository.update({ Participant p -> p.id() == 3L && p.startSequence() == null }) >> { Participant p -> p }
+        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 }) >> { Participant p -> p }
+
+        and: "the returned list reflects the cleared value too, not the stale pre-clear startSequence of 1"
+        result.find { it.id() == 3L }.startSequence() == null
+        result*.id() as Set == [2L, 3L] as Set
     }
 
     def "CSV import reports a row-level error instead of aborting the whole import"() {

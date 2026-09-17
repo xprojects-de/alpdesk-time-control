@@ -133,7 +133,7 @@ import {Actions, ofType} from "@ngrx/effects";
                         </button>
 
                         <mat-menu #moreActionsMenu="matMenu">
-                            <button mat-menu-item [matMenuTriggerFor]="startOrderMenu">
+                            <button mat-menu-item [matMenuTriggerFor]="startOrderMenu" [disabled]="pdfExportLoading$ | async">
                                 <mat-icon>format_list_numbered</mat-icon>
                                 <span>Startnummern</span>
                             </button>
@@ -147,7 +147,7 @@ import {Actions, ofType} from "@ngrx/effects";
                                 <mat-icon>upload_file</mat-icon>
                                 <span>Teilnehmer importieren</span>
                             </button>
-                            <button mat-menu-item [matMenuTriggerFor]="resultsMenu">
+                            <button mat-menu-item [matMenuTriggerFor]="resultsMenu" [disabled]="resultImportLoading$ | async">
                                 <mat-icon>update</mat-icon>
                                 <span>Ergebnisse</span>
                             </button>
@@ -156,7 +156,7 @@ import {Actions, ofType} from "@ngrx/effects";
                                 <span>In andere Rennen kopieren</span>
                             </button>
                             <mat-divider></mat-divider>
-                            <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+                            <button mat-menu-item [matMenuTriggerFor]="exportMenu" [disabled]="pdfExportLoading$ | async">
                                 <mat-icon>picture_as_pdf</mat-icon>
                                 <span>PDF Export</span>
                             </button>

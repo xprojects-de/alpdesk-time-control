@@ -230,12 +230,12 @@ public class ParticipantController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Post("/start-groups/copy")
     @Operation(summary = "Copy a start-group assignment into other races", description = "Copies startGroupId and startSequence from the source race's participants into each target race, matched by person. A target-race participant whose person isn't in the source race keeps its current assignment untouched.", security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Start-group assignment copied")
+    @ApiResponse(responseCode = "200", description = "Start-group assignment copied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
     public HttpResponse<?> copyStartGroupAssignment(@Body StartGroupCopyRequest request) {
         try {
-            service.copyStartGroupAssignment(request.sourceRaceId(), request.targetRaceIds());
-            return HttpResponse.noContent();
+            List<Participant> updated = service.copyStartGroupAssignment(request.sourceRaceId(), request.targetRaceIds());
+            return HttpResponse.ok(service.toResponses(updated));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
         }
@@ -243,7 +243,7 @@ public class ParticipantController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Post("/race/{raceId}/generate-race-numbers-from-start-groups")
-    @Operation(summary = "Assign race numbers from a race's start-group order", description = "Assigns race numbers 1..n ordered by (start-group position, startSequence within the group); participants without a start-group land last. Neither startGroupId nor startSequence are touched.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Assign race numbers from a race's start-group order", description = "Assigns race numbers 1..n ordered by startSequence (the board's saved order within and across groups); participants without a startSequence land last. Neither startGroupId nor startSequence are touched.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "409", description = "The race already has results")

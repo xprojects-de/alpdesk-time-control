@@ -189,10 +189,13 @@ export const participantReducer = createReducer(
         error
     })),
 
-    // Copy a start-group assignment into other races - doesn't affect this race's own state
+    // Copy a start-group assignment into other races - merges every target race's participants
+    // (whether or not the copy actually touched them) so a target race being viewed right now
+    // reflects the copy immediately instead of showing stale pre-copy counts until a reload.
     on(ParticipantActions.copyStartGroupAssignment, startLoading),
-    on(ParticipantActions.copyStartGroupAssignmentSuccess, state => ({
+    on(ParticipantActions.copyStartGroupAssignmentSuccess, (state, {participants}) => ({
         ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.copyStartGroupAssignmentFailure, (state, {error}) => ({

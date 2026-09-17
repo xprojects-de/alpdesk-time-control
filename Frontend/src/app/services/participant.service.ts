@@ -85,8 +85,8 @@ export class ParticipantService {
      * Copies a race's start-group assignment (startGroupId + startSequence) into one or more
      * other races, matched by person - the "Von Rennen übernehmen" action.
      */
-    copyStartGroupAssignment(request: StartGroupCopyRequest): Observable<void> {
-        return this.http.post<void>(`${this.apiUrl}/start-groups/copy`, request);
+    copyStartGroupAssignment(request: StartGroupCopyRequest): Observable<Participant[]> {
+        return this.http.post<Participant[]>(`${this.apiUrl}/start-groups/copy`, request);
     }
 
     /**

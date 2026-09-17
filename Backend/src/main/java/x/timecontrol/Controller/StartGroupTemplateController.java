@@ -63,8 +63,12 @@ public class StartGroupTemplateController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new ErrorResponse("label and color are required"));
         }
-        StartGroupTemplate created = service.create(service.createFromRequest(request));
-        return HttpResponse.created(StartGroupTemplateResponse.from(created));
+        try {
+            StartGroupTemplate created = service.create(service.createFromRequest(request));
+            return HttpResponse.created(StartGroupTemplateResponse.from(created));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -78,7 +82,12 @@ public class StartGroupTemplateController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new ErrorResponse("label and color are required"));
         }
-        Optional<StartGroupTemplate> updated = service.update(id, service.createFromRequest(request));
+        Optional<StartGroupTemplate> updated;
+        try {
+            updated = service.update(id, service.createFromRequest(request));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
         return updated.map(t -> HttpResponse.ok((Object) StartGroupTemplateResponse.from(t)))
                 .orElse(HttpResponse.notFound());
     }

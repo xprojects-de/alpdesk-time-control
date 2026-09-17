@@ -159,7 +159,8 @@ export const copyStartGroupAssignment = createAction(
     props<{ request: StartGroupCopyRequest }>()
 );
 export const copyStartGroupAssignmentSuccess = createAction(
-    '[Participant] Copy Start Group Assignment Success'
+    '[Participant] Copy Start Group Assignment Success',
+    props<{ participants: Participant[] }>()
 );
 export const copyStartGroupAssignmentFailure = createAction(
     '[Participant] Copy Start Group Assignment Failure',

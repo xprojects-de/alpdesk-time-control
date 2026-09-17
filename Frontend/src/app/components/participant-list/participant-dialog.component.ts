@@ -25,6 +25,7 @@ import {
     ParticipantRequest,
 } from "../../models/participant.model";
 import {Person} from "../../models/person.model";
+import {formatPersonName} from "../../utils/person-name.util";
 import {Store} from "@ngrx/store";
 import {selectAllRaces, selectSelectedRaceId} from "../../store/race/race.selectors";
 import {selectAllTeams} from "../../store/team/team.selectors";
@@ -415,10 +416,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
     }
 
     displayPerson(person: Person | null): string {
-        if (!person) {
-            return "";
-        }
-        return `${person.lastName} ${person.firstName}`;
+        return formatPersonName(person);
     }
 
     formatRaceDate(dateString: string): string {

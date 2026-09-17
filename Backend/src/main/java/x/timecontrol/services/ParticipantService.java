@@ -587,6 +587,16 @@ public class ParticipantService {
 
         List<Participant> previousParticipants = StreamSupport.stream(repository.findByRaceId(previousRace.id()).spliterator(), false).toList();
         List<Participant> targetParticipants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        // This derives a fresh startSequence for the whole race purely from previous-race
+        // placement, with no awareness of start-group membership - running it on a race that
+        // already has a start-group assignment (see applyStartGroupAssignment) would scramble each
+        // group's block order, and the board's own next "Speichern" would then silently overwrite
+        // this method's carefully-computed order with a naive walk of the now-scrambled columns.
+        // The two features are for different race formats (individual-start reordering vs.
+        // block-start groups) and were never meant to be combined on the same race.
+        if (targetParticipants.stream().anyMatch(p -> p.startGroupId() != null)) {
+            throw new IllegalStateException("This race already has a start-group assignment. Remove it before deriving the start order from a previous race.");
+        }
         // (a, b) -> a: if the same person was somehow entered twice in the target race (shouldn't
         // happen, race_id+person_id is unique), keep the first rather than failing the whole reorder.
         Map<Long, Participant> targetByPersonId = targetParticipants.stream()
@@ -710,9 +720,7 @@ public class ParticipantService {
 
         return transactionOperations.executeWrite(_ -> {
             for (Participant participant : existingById.values()) {
-                if (participant.startSequence() != null) {
-                    repository.update(withStartSequence(participant, null));
-                }
+                clearStartSequenceIfSet(participant);
             }
             List<Participant> result = new ArrayList<>();
             for (StartGroupAssignmentRequest.Entry entry : assignments) {
@@ -739,7 +747,7 @@ public class ParticipantService {
      *
      * @throws IllegalArgumentException if the source race or any target race doesn't exist
      */
-    public void copyStartGroupAssignment(Long sourceRaceId, List<Long> targetRaceIds) {
+    public List<Participant> copyStartGroupAssignment(Long sourceRaceId, List<Long> targetRaceIds) {
         if (raceService.findById(sourceRaceId).isEmpty()) {
             throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
         }
@@ -753,7 +761,13 @@ public class ParticipantService {
         Map<Long, Participant> sourceByPersonId = sourceParticipants.stream()
                 .collect(Collectors.toMap(Participant::personId, p -> p, (a, _) -> a));
 
-        transactionOperations.executeWrite(_ -> {
+        return transactionOperations.executeWrite(_ -> {
+            // Every target participant is returned (not just the ones actually copied into),
+            // matching applyStartGroupAssignment's shape - the frontend merges whatever comes back
+            // into its own participants array by id, so a target race someone happens to be
+            // viewing reflects the copy immediately instead of showing stale pre-copy data until a
+            // manual reload.
+            List<Participant> allUpdated = new ArrayList<>();
             for (Long targetRaceId : targetRaceIds) {
                 List<Participant> targetParticipants = StreamSupport.stream(repository.findByRaceId(targetRaceId).spliterator(), false).toList();
                 // The source and target race can have different rosters (e.g. late registrations
@@ -768,21 +782,24 @@ public class ParticipantService {
                         .map(Participant::startSequence)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
+                // Tracks each target's current state through the clear pass below, so a
+                // cleared-but-unmatched participant is returned with its actual (nulled)
+                // startSequence instead of the stale pre-clear value.
+                Map<Long, Participant> currentById = new HashMap<>();
                 for (Participant target : targetParticipants) {
                     boolean matched = sourceByPersonId.containsKey(target.personId());
                     boolean collidesWithIncoming = !matched && target.startSequence() != null && incomingSequences.contains(target.startSequence());
-                    if ((matched || collidesWithIncoming) && target.startSequence() != null) {
-                        repository.update(withStartSequence(target, null));
-                    }
+                    currentById.put(target.id(), (matched || collidesWithIncoming) ? clearStartSequenceIfSet(target) : target);
                 }
                 for (Participant target : targetParticipants) {
                     Participant source = sourceByPersonId.get(target.personId());
-                    if (source != null) {
-                        repository.update(withStartGroupAndSequence(target, source.startGroupId(), source.startSequence()));
-                    }
+                    Participant current = currentById.get(target.id());
+                    allUpdated.add(source != null
+                            ? repository.update(withStartGroupAndSequence(current, source.startGroupId(), source.startSequence()))
+                            : current);
                 }
             }
-            return null;
+            return allUpdated;
         });
     }
 
@@ -856,9 +873,7 @@ public class ParticipantService {
     private List<Participant> applyStartSequence(List<Participant> ordered, List<Participant> excluded) {
         return transactionOperations.executeWrite(_ -> {
             for (Participant participant : ordered) {
-                if (participant.startSequence() != null) {
-                    repository.update(withStartSequence(participant, null));
-                }
+                clearStartSequenceIfSet(participant);
             }
             List<Participant> result = new ArrayList<>();
             for (Participant participant : excluded) {
@@ -872,7 +887,15 @@ public class ParticipantService {
         });
     }
 
-    private static Participant withRaceNumber(Participant participant, Integer raceNumber) {
+    /**
+     * The single place every "copy this participant with 1-2 fields changed" helper below
+     * delegates to, so the next field added to {@link Participant} (already grown from 10 to 13
+     * constructor args across this feature) only has one reconstruction site to update instead of
+     * several - see {@link #withRaceNumber}/{@link #withStartSequenceAndStatus}/
+     * {@link #withStartGroupAndSequence}.
+     */
+    private static Participant with(Participant participant, Integer raceNumber, DisqualificationStatus status,
+                                     Integer startSequence, Long startGroupId) {
         return new Participant(
                 participant.id(),
                 participant.raceId(),
@@ -884,10 +907,14 @@ public class ParticipantService {
                 participant.penalty(),
                 participant.measuredAt(),
                 participant.comment(),
-                participant.status(),
-                participant.startSequence(),
-                participant.startGroupId()
+                status,
+                startSequence,
+                startGroupId
         );
+    }
+
+    private static Participant withRaceNumber(Participant participant, Integer raceNumber) {
+        return with(participant, raceNumber, participant.status(), participant.startSequence(), participant.startGroupId());
     }
 
     private static Participant withStartSequence(Participant participant, Integer startSequence) {
@@ -895,39 +922,21 @@ public class ParticipantService {
     }
 
     private static Participant withStartSequenceAndStatus(Participant participant, Integer startSequence, DisqualificationStatus status) {
-        return new Participant(
-                participant.id(),
-                participant.raceId(),
-                participant.personId(),
-                participant.raceNumber(),
-                participant.teamId(),
-                participant.categoryId(),
-                participant.durationMs(),
-                participant.penalty(),
-                participant.measuredAt(),
-                participant.comment(),
-                status,
-                startSequence,
-                participant.startGroupId()
-        );
+        return with(participant, participant.raceNumber(), status, startSequence, participant.startGroupId());
     }
 
     private static Participant withStartGroupAndSequence(Participant participant, Long startGroupId, Integer startSequence) {
-        return new Participant(
-                participant.id(),
-                participant.raceId(),
-                participant.personId(),
-                participant.raceNumber(),
-                participant.teamId(),
-                participant.categoryId(),
-                participant.durationMs(),
-                participant.penalty(),
-                participant.measuredAt(),
-                participant.comment(),
-                participant.status(),
-                startSequence,
-                startGroupId
-        );
+        return with(participant, participant.raceNumber(), participant.status(), startSequence, startGroupId);
+    }
+
+    /**
+     * Shared clear-then-reassign guard used by {@link #applyStartSequence},
+     * {@link #applyStartGroupAssignment}, and {@link #copyStartGroupAssignment}: nulls out a
+     * participant's startSequence if it's currently set, so a value about to be handed to someone
+     * else can't collide with it on the {@code (race_id, start_sequence)} unique index.
+     */
+    private Participant clearStartSequenceIfSet(Participant participant) {
+        return participant.startSequence() != null ? repository.update(withStartSequence(participant, null)) : participant;
     }
 
     /**

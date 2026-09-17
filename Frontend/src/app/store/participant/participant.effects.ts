@@ -156,7 +156,7 @@ export class ParticipantEffects {
             ofType(ParticipantActions.copyStartGroupAssignment),
             mergeMap(({request}) =>
                 this.participantService.copyStartGroupAssignment(request).pipe(
-                    map(() => ParticipantActions.copyStartGroupAssignmentSuccess()),
+                    map(participants => ParticipantActions.copyStartGroupAssignmentSuccess({participants})),
                     catchError(error => of(ParticipantActions.copyStartGroupAssignmentFailure({
                         error: extractErrorMessage(error, 'Startgruppen-Zuordnung konnte nicht übernommen werden')
                     })))

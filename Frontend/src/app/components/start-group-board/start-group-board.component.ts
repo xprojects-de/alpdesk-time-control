@@ -1,4 +1,4 @@
-import {Component, HostListener, OnDestroy, OnInit, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, HostListener, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject, combineLatest, firstValueFrom} from "rxjs";
@@ -12,7 +12,7 @@ import {
 import {MatCardModule} from "@angular/material/card";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
-import {MatSelectModule} from "@angular/material/select";
+import {MatSelect, MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatTooltipModule} from "@angular/material/tooltip";
@@ -21,6 +21,7 @@ import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {Actions, ofType} from "@ngrx/effects";
 import {Participant} from "../../models/participant.model";
+import {formatPersonName} from "../../utils/person-name.util";
 import {Gender} from "../../models/gender.model";
 import {Race} from "../../models/race.model";
 import {StartGroupTemplate, StartGroupAssignmentEntry} from "../../models/start-group.model";
@@ -73,7 +74,7 @@ interface BoardColumn {
                 <div class="filter-section">
                     <mat-form-field appearance="outline">
                         <mat-label>Rennen</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async"
+                        <mat-select #raceSelect="matSelect" [value]="selectedRaceId$ | async"
                                     (selectionChange)="onRaceChange($event.value)">
                             <mat-option [value]="null">Rennen auswählen...</mat-option>
                             @for (race of races$ | async; track race.id) {
@@ -114,14 +115,20 @@ interface BoardColumn {
                             <button mat-menu-item (click)="confirmAutoSuggest('blocks')">
                                 <span>Nach Startnummer (Blöcke)</span>
                             </button>
-                            <button mat-menu-item (click)="confirmAutoSuggest('gender')">
-                                <span>Nach Geschlecht gemischt</span>
+                            <button mat-menu-item (click)="confirmAutoSuggest('genderAge')">
+                                <span>Nach Geschlecht und Alter</span>
                             </button>
-                            <button mat-menu-item (click)="confirmAutoSuggest('mixed')">
-                                <span>Nach Altersklasse/Geschlecht gemischt</span>
+                            <button mat-menu-item (click)="confirmAutoSuggest('ageGroupGender')">
+                                <span>Nach Altersklasse und Geschlecht</span>
+                            </button>
+                            <button mat-menu-item (click)="confirmAutoSuggest('club')">
+                                <span>Nach Verein</span>
+                            </button>
+                            <button mat-menu-item (click)="confirmAutoSuggest('clubShuffled')">
+                                <span>Nach Verein (zufällig gewürfelt)</span>
                             </button>
                             <button mat-menu-item (click)="confirmAutoSuggest('category')">
-                                <span>Nach Kategorie gemischt</span>
+                                <span>Nach Kategorie</span>
                             </button>
                         </mat-menu>
 
@@ -218,7 +225,7 @@ interface BoardColumn {
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.Default,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [
         `
           mat-card {
@@ -226,9 +233,11 @@ interface BoardColumn {
           }
 
           .filter-section {
+            margin-top: 20px;
+            margin-bottom: 12px;
             display: flex;
             gap: 12px;
-            margin-bottom: 12px;
+            align-items: center;
           }
 
           .hint {
@@ -386,6 +395,8 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
     dirty = false;
     hasResults = false;
 
+    @ViewChild('raceSelect') raceSelect?: MatSelect;
+
     private currentRaceId: number | null = null;
     private latestTemplates: StartGroupTemplate[] = [];
 
@@ -469,12 +480,33 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
     }
 
     onRaceChange(raceId: number | null): void {
-        this.store.dispatch(RaceActions.selectRace({id: raceId}));
+        if (!this.dirty) {
+            this.store.dispatch(RaceActions.selectRace({id: raceId}));
+            return;
+        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: 'Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Wechsel des Rennens gehen sie verloren. Fortfahren?',
+                confirmLabel: 'Wechseln',
+            },
+        }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(confirmed => {
+            if (confirmed) {
+                this.store.dispatch(RaceActions.selectRace({id: raceId}));
+            } else {
+                // mat-select already updated its own displayed selection to the clicked race on
+                // the (selectionChange) event, independently of the [value] binding. Since we
+                // never dispatch here, selectedRaceId$ never re-emits, so the binding's own
+                // value/reference is unchanged from Angular's point of view and it wouldn't push
+                // a "new" value back into mat-select - writeValue bypasses that and forces it to
+                // redisplay the still-current race directly.
+                this.raceSelect?.writeValue(this.currentRaceId ?? null);
+            }
+        });
     }
 
     personName(participant: Participant): string {
-        const person = participant.person;
-        return person ? `${person.lastName} ${person.firstName}` : '-';
+        return formatPersonName(participant.person, '-');
     }
 
     participantMeta(participant: Participant): string {
@@ -619,7 +651,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
         }
     }
 
-    confirmAutoSuggest(mode: 'blocks' | 'gender' | 'mixed' | 'category'): void {
+    confirmAutoSuggest(mode: 'blocks' | 'genderAge' | 'ageGroupGender' | 'club' | 'clubShuffled' | 'category'): void {
         this.dialog.open(ConfirmDialogComponent, {
             width: '450px',
             data: {
@@ -634,14 +666,20 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
                 case 'blocks':
                     this.applyAutoSuggestByRaceNumberBlocks();
                     break;
-                case 'gender':
-                    this.applyAutoSuggestByGenderMixed();
+                case 'genderAge':
+                    this.applyAutoSuggestByGenderAgeBlocks();
                     break;
-                case 'mixed':
-                    this.applyAutoSuggestByAgeGroupGenderMixed();
+                case 'ageGroupGender':
+                    this.applyAutoSuggestByAgeGroupGenderBlocks();
+                    break;
+                case 'club':
+                    this.applyAutoSuggestByClubBlocks();
+                    break;
+                case 'clubShuffled':
+                    this.applyAutoSuggestByClubShuffledBlocks();
                     break;
                 case 'category':
-                    this.applyAutoSuggestByCategoryMixed();
+                    this.applyAutoSuggestByCategoryBlocks();
                     break;
             }
         });
@@ -651,36 +689,83 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
         return [...this.unassignedColumn.entries, ...this.groupColumns.flatMap(c => c.entries)];
     }
 
+    private static readonly GENDER_RANK = (participant: Participant): number =>
+        participant.person?.gender === Gender.FEMALE ? 0 : 1;
+
     private applyAutoSuggestByRaceNumberBlocks(): void {
-        const sorted = this.allEntries().sort((a, b) => (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0));
-        this.distributeContiguous(sorted);
+        this.applyAutoSuggestBlocks((a, b) => (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0));
     }
 
     /**
-     * Sorted by gender alone (female before male, per the female-before-male convention used
-     * throughout the backend), then race number - round-robin distribution then gives every group
-     * roughly the same female/male ratio, without weighting by age group like the mixed suggestion
-     * below.
+     * Female block first, then male block (the female-before-male convention used throughout the
+     * backend); within each gender block, youngest first - birthDate is a "yyyy-MM-dd" string, so
+     * a later (larger) date sorts first via descending string comparison.
      */
-    private applyAutoSuggestByGenderMixed(): void {
-        const sorted = this.allEntries().sort((a, b) => {
-            const ag = a.participant.person?.gender === Gender.FEMALE ? 0 : 1;
-            const bg = b.participant.person?.gender === Gender.FEMALE ? 0 : 1;
-            if (ag !== bg) {
-                return ag - bg;
+    private applyAutoSuggestByGenderAgeBlocks(): void {
+        this.applyAutoSuggestBlocks((a, b) => {
+            const genderDiff = StartGroupBoardComponent.GENDER_RANK(a.participant) - StartGroupBoardComponent.GENDER_RANK(b.participant);
+            if (genderDiff !== 0) {
+                return genderDiff;
             }
-            return (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0);
+            const ad = a.participant.person?.birthDate ?? '';
+            const bd = b.participant.person?.birthDate ?? '';
+            return bd.localeCompare(ad);
         });
-        this.distributeRoundRobin(sorted);
     }
 
     /**
-     * Sorted by category name (participants without a category last), then race number -
-     * round-robin distribution mixes every category evenly across the active groups instead of
-     * one group ending up with a single category's entire field.
+     * Youngest age group first (higher birthYearTo sorts first); within each age group, girls
+     * block then boys block.
      */
-    private applyAutoSuggestByCategoryMixed(): void {
-        const sorted = this.allEntries().sort((a, b) => {
+    private applyAutoSuggestByAgeGroupGenderBlocks(): void {
+        this.applyAutoSuggestBlocks((a, b) => {
+            const ay = a.participant.ageGroup?.birthYearTo ?? -Infinity;
+            const by = b.participant.ageGroup?.birthYearTo ?? -Infinity;
+            if (ay !== by) {
+                return by - ay;
+            }
+            return StartGroupBoardComponent.GENDER_RANK(a.participant) - StartGroupBoardComponent.GENDER_RANK(b.participant);
+        });
+    }
+
+    /**
+     * Sorted by club name alphabetically (participants without a club last) - contiguous blocks
+     * keep every club's members together instead of spreading them across groups.
+     */
+    private applyAutoSuggestByClubBlocks(): void {
+        this.applyAutoSuggestBlocks((a, b) => this.compareByClubName(a, b, (x, y) => x.localeCompare(y)));
+    }
+
+    /**
+     * Same club-block shape as above, but the block order itself is randomized per club instead
+     * of alphabetical - drawn once per invocation so every club's members still land contiguously.
+     */
+    private applyAutoSuggestByClubShuffledBlocks(): void {
+        const clubNames = [...new Set(this.allEntries().map(e => e.participant.team?.name).filter((n): n is string => !!n))];
+        for (let i = clubNames.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clubNames[i], clubNames[j]] = [clubNames[j], clubNames[i]];
+        }
+        const order = new Map(clubNames.map((name, index) => [name, index]));
+        this.applyAutoSuggestBlocks((a, b) => this.compareByClubName(a, b, (x, y) => (order.get(x) ?? Infinity) - (order.get(y) ?? Infinity)));
+    }
+
+    private compareByClubName(a: DraftEntry, b: DraftEntry, compare: (x: string, y: string) => number): number {
+        const ac = a.participant.team?.name;
+        const bc = b.participant.team?.name;
+        if (ac == null && bc == null) return 0;
+        if (ac == null) return 1;
+        if (bc == null) return -1;
+        return compare(ac, bc);
+    }
+
+    /**
+     * Sorted by category name (participants without a category last) - contiguous blocks keep
+     * every category's field together in one group instead of spreading it evenly (round-robin)
+     * across all active groups.
+     */
+    private applyAutoSuggestByCategoryBlocks(): void {
+        this.applyAutoSuggestBlocks((a, b) => {
             const ac = a.participant.category?.name;
             const bc = b.participant.category?.name;
             if (ac !== bc) {
@@ -690,24 +775,11 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
             }
             return (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0);
         });
-        this.distributeRoundRobin(sorted);
     }
 
-    private applyAutoSuggestByAgeGroupGenderMixed(): void {
-        const sorted = this.allEntries().sort((a, b) => {
-            const ay = a.participant.ageGroup?.birthYearTo ?? -Infinity;
-            const by = b.participant.ageGroup?.birthYearTo ?? -Infinity;
-            if (ay !== by) {
-                return by - ay;
-            }
-            const ag = a.participant.person?.gender === Gender.FEMALE ? 0 : 1;
-            const bg = b.participant.person?.gender === Gender.FEMALE ? 0 : 1;
-            if (ag !== bg) {
-                return ag - bg;
-            }
-            return (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0);
-        });
-        this.distributeRoundRobin(sorted);
+    private applyAutoSuggestBlocks(comparator: (a: DraftEntry, b: DraftEntry) => number): void {
+        const sorted = this.allEntries().sort(comparator);
+        this.distributeContiguous(sorted);
     }
 
     private distributeContiguous(sorted: DraftEntry[]): void {
@@ -720,21 +792,6 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
             column.entries = sorted.slice(index, index + size);
             column.entries.forEach(e => e.startGroupId = column.id);
             index += size;
-        });
-        this.unassignedColumn.entries = [];
-        this.updateAllListIds();
-        this.recomputeTargets();
-        this.recomputeSequences();
-        this.dirty = true;
-    }
-
-    private distributeRoundRobin(sorted: DraftEntry[]): void {
-        const n = this.groupColumns.length;
-        this.groupColumns.forEach(column => column.entries = []);
-        sorted.forEach((entry, i) => {
-            const column = this.groupColumns[i % n];
-            entry.startGroupId = column.id;
-            column.entries.push(entry);
         });
         this.unassignedColumn.entries = [];
         this.updateAllListIds();
