@@ -561,11 +561,13 @@ jobs:
 
           # Mirrors the jpackage build's --java-options (see build.gradle jpackageArgs): keeps
           # the data directory (SQLite DB, JWT secret) anchored to the user's home instead of
-          # the process's working directory. "pause" at the end keeps the console window open
+          # the process's working directory, and explicitly enables the AWT/Swing startup
+          # status window (matches the Mac bundles' -Djava.awt.headless=false, rather than
+          # relying on Windows' own default). "pause" at the end keeps the console window open
           # if the app exits/crashes immediately, so errors stay visible instead of flashing by.
           cat > bundle/start.bat <<'SCRIPT'
           @echo off
-          "%~dp0jre\bin\java.exe" -Dapp.packaged=true -jar "%~dp0time-control.jar"
+          "%~dp0jre\bin\java.exe" -Dapp.packaged=true -Djava.awt.headless=false -jar "%~dp0time-control.jar"
           pause
           SCRIPT
 
