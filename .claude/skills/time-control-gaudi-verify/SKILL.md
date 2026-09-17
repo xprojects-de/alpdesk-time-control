@@ -22,6 +22,17 @@ shaped) check — this skill's algorithm below doesn't apply to those.
 Ask for whatever is missing before computing anything — don't guess at weights or flags, and
 don't silently skip a question just because a reasonable default exists.
 
+**Hard gate before writing a single line of the verification script**: points scale (#2), all
+three keep-in-ranking flags (#3), and weight per leg race (#1) are configuration that lives only
+on this specific Gaudi-Modus instance — none of it is visible in the CSVs/PDF the user hands you,
+so there is nothing to infer it from. Ask for all three explicitly, in one go if convenient (e.g.
+one `AskUserQuestion` covering scale/flags/weights together), and get an explicit answer for
+*this* run before proceeding to Step 1 — even if a prior run (same event series, same club, same
+skill session) already answered them, a config value can change between Gaudi-Modus instances or
+get edited between runs, so never reuse a previous answer silently. A silently-wrong assumption
+here doesn't fail loudly: it produces a plausible-looking but wrong comparison table that reads
+exactly like a real app bug.
+
 1. **Per-race raw results**, one file per leg race. In order of preference:
    - **Best**: the CSV from `GET /participants/export/results-csv/{raceId}` (Einstellungen/race
      export in the UI). Columns: `raceNumber, lastName, firstName, team, ageGroup, externalId,
@@ -39,11 +50,14 @@ don't silently skip a question just because a reasonable default exists.
      had a different `GaudiModeRace.weight` configured — this is an easy thing for the app admin
      to have set and forgotten, so don't infer it from the data. Default to `1.0` for every race
      only once the user confirms that, not as a silent assumption you never surfaced.
-2. **Points scale**: default to the club's fixed **"FIS-Schema"** place→points table unless told
-   otherwise —
+2. **Points scale**: **always explicitly confirm** which scale is configured for *this*
+   Gaudi-Modus instance — don't silently default and don't wait for the user to volunteer it
+   unprompted. The club's fixed **"FIS-Schema"** place→points table is the common case —
    `100, 80, 60, 50, 45, 40, 36, 32, 29, 26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6,
-   5, 4, 3, 2, 1, 0` (index 0 = place 1; any place beyond this 31-entry list scores 0). Only ask
-   if the user says a different scale was configured for this Gaudi-Modus instance.
+   5, 4, 3, 2, 1, 0` (index 0 = place 1; any place beyond this 31-entry list scores 0) — but only
+   use it once the user has actively confirmed that's what's set here, e.g. by asking directly
+   "Nutzt ihr das FIS-Schema, oder eine andere Punkte-Skala für diese Punkte-Mischwertung?" rather
+   than assuming silence means yes.
 3. **The three toggle flags** on this Gaudi-Modus instance — `keepDnsInRanking`,
    `keepDnfInRanking`, `keepDsqInRanking` — **must always be asked explicitly, every time**, e.g.
    with a direct multi-part question (AskUserQuestion or equivalent). Never assume a default or
@@ -51,18 +65,23 @@ don't silently skip a question just because a reasonable default exists.
    flags are set). Getting this wrong silently changes who is even included in the ranking, so
    do not proceed to computation before this is answered.
 4. **Gender per person**, if the reference output is split by category (see next section) — the
-   results-only CSV above has no gender column. Ask the user which source to use, in this order of
-   independence:
-   - **Preferred**: the roster export, `GET /participants/export/csv/{raceId}` (any one leg race
-     is enough, since gender doesn't change per race) — it includes `gender` (`MALE`/`FEMALE`)
-     alongside identity data. Independent of the PDF being verified.
-   - **Accepted fallback, if the user prefers**: take each person's category straight from which
-     "Wertung <Altersklasse> <weiblich/männlich>" section they appear under in the reference PDF
-     itself. This is fine for checking the *ranking/points math within* each category — that's
-     what this skill verifies — but say explicitly that it means the category assignment itself
-     (whether that person was correctly bucketed as e.g. U14 weiblich in the first place) is
-     *not* independently checked this way, only the computation built on top of it.
-   Either way, ask which one the user wants rather than picking silently, and **never read the
+   results-only CSV above has no gender column. **Ask for the roster export up front as a
+   standard input alongside the per-race result CSVs whenever the reference is category-split —
+   don't wait until you hit a missing-gender error to ask for it.** In order of independence:
+   - **Preferred, and the default expectation**: the roster export,
+     `GET /participants/export/csv/{raceId}` (any one leg race is enough, since gender doesn't
+     change per race) — it includes `gender` (`MALE`/`FEMALE`) alongside identity data.
+     Independent of the PDF being verified, and this project's primary user routinely has this
+     file on hand, so ask for it by name ("die Teilnehmerliste/Roster-CSV") rather than only
+     describing what it contains.
+   - **Accepted fallback, only if the user can't provide the roster export**: take each person's
+     category straight from which "Wertung <Altersklasse> <weiblich/männlich>" section they
+     appear under in the reference PDF itself. This is fine for checking the *ranking/points math
+     within* each category — that's what this skill verifies — but say explicitly that it means
+     the category assignment itself (whether that person was correctly bucketed as e.g. U14
+     weiblich in the first place) is *not* independently checked this way, only the computation
+     built on top of it.
+   Either way, confirm which one you're using rather than picking silently, and **never read the
    live `time-control.db` SQLite file to get this (or anything else)** — it's real production data
    from actual club events, and this skill only ever works from exports/files the user explicitly
    hands over, never by querying the app or its database directly.
