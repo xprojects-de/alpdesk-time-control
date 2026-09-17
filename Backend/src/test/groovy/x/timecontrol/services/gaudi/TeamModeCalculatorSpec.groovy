@@ -13,6 +13,7 @@ import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.Team
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.StartGroupTemplateService
 import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
@@ -22,7 +23,8 @@ class TeamModeCalculatorSpec extends Specification {
 
     TeamService teamService = Mock()
     PersonService personService = Mock()
-    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(), personService)
+    StartGroupTemplateService startGroupTemplateService = Mock()
+    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(startGroupTemplateService), personService)
 
     private static Race race(SortDirection direction) {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,

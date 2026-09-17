@@ -47,6 +47,7 @@ import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
 import {versionReducer} from "./store/version/version.reducer";
 import {settingsReducer} from "./store/settings/settings.reducer";
 import {pointsScaleReducer} from "./store/points-scale/points-scale.reducer";
+import {startGroupTemplateReducer} from "./store/start-group-template/start-group-template.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {RaceMeasurementEffects} from "./store/race-measurement/race-measurement.effects";
@@ -60,6 +61,7 @@ import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {VersionEffects} from "./store/version/version.effects";
 import {SettingsEffects} from "./store/settings/settings.effects";
 import {PointsScaleEffects} from "./store/points-scale/points-scale.effects";
+import {StartGroupTemplateEffects} from "./store/start-group-template/start-group-template.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 import {timeoutInterceptor} from "./interceptors/timeout.interceptor";
 
@@ -102,8 +104,9 @@ export const appConfig: ApplicationConfig = {
             version: versionReducer,
             settings: settingsReducer,
             pointsScale: pointsScaleReducer,
+            startGroupTemplate: startGroupTemplateReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects, PointsScaleEffects]),
+        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects, PointsScaleEffects, StartGroupTemplateEffects]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
         ...(isDevMode() ? [provideStoreDevtools({

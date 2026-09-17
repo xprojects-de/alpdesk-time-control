@@ -137,6 +137,48 @@ export class ParticipantEffects {
         )
     );
 
+    saveStartGroupAssignment$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.saveStartGroupAssignment),
+            mergeMap(({raceId, assignments}) =>
+                this.participantService.saveStartGroupAssignment(raceId, assignments).pipe(
+                    map(participants => ParticipantActions.saveStartGroupAssignmentSuccess({participants})),
+                    catchError(error => of(ParticipantActions.saveStartGroupAssignmentFailure({
+                        error: extractErrorMessage(error, 'Startgruppen-Zuordnung konnte nicht gespeichert werden')
+                    })))
+                )
+            )
+        )
+    );
+
+    copyStartGroupAssignment$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.copyStartGroupAssignment),
+            mergeMap(({request}) =>
+                this.participantService.copyStartGroupAssignment(request).pipe(
+                    map(() => ParticipantActions.copyStartGroupAssignmentSuccess()),
+                    catchError(error => of(ParticipantActions.copyStartGroupAssignmentFailure({
+                        error: extractErrorMessage(error, 'Startgruppen-Zuordnung konnte nicht übernommen werden')
+                    })))
+                )
+            )
+        )
+    );
+
+    generateRaceNumbersFromStartGroups$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.generateRaceNumbersFromStartGroups),
+            mergeMap(({raceId}) =>
+                this.participantService.generateRaceNumbersFromStartGroups(raceId).pipe(
+                    map(participants => ParticipantActions.generateRaceNumbersFromStartGroupsSuccess({participants})),
+                    catchError(error => of(ParticipantActions.generateRaceNumbersFromStartGroupsFailure({
+                        error: extractErrorMessage(error, 'Startnummern konnten nicht aus der Gruppierung vergeben werden')
+                    })))
+                )
+            )
+        )
+    );
+
     importParticipantsCsv$ = createEffect(() =>
         this.actions$.pipe(
             ofType(ParticipantActions.importParticipantsCsv),

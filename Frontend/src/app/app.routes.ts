@@ -43,6 +43,16 @@ export const routes: Routes = [
                     .then(m => m.ParticipantListComponent)
             },
             {
+                path: 'start-group-templates',
+                loadComponent: () => import('./components/start-group-template-list/start-group-template-list.component')
+                    .then(m => m.StartGroupTemplateListComponent)
+            },
+            {
+                path: 'start-groups',
+                loadComponent: () => import('./components/start-group-board/start-group-board.component')
+                    .then(m => m.StartGroupBoardComponent)
+            },
+            {
                 path: 'measurements',
                 loadComponent: () => import('./components/measurement-list/measurement-list.component')
                     .then(m => m.MeasurementListComponent)

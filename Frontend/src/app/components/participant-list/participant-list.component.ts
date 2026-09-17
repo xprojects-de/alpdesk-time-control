@@ -8,6 +8,7 @@ import {
     ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
+import {RouterLink} from "@angular/router";
 import {Store} from "@ngrx/store";
 import {Observable, Subject, firstValueFrom, combineLatest} from "rxjs";
 import {MatTableModule, MatTableDataSource} from "@angular/material/table";
@@ -50,6 +51,7 @@ import {Actions, ofType} from "@ngrx/effects";
     standalone: true,
     imports: [
         CommonModule,
+        RouterLink,
         MatTableModule,
         MatButtonModule,
         MatIconModule,
@@ -116,18 +118,49 @@ import {Actions, ofType} from "@ngrx/effects";
                     @if ((selectedRaceId$ | async) !== null) {
                         <button
                                 mat-raised-button
-                                [matMenuTriggerFor]="startOrderMenu"
-                                [disabled]="pdfExportLoading$ | async"
-                                matTooltip="Startnummern zuweisen, Startreihenfolge übernehmen oder Startliste exportieren"
+                                color="accent"
+                                [matMenuTriggerFor]="moreActionsMenu"
+                                [disabled]="anyActionLoading$ | async"
+                                matTooltip="Startnummern, Startgruppen, Import/Export und weitere Aktionen für dieses Rennen"
                         >
-                            @if (pdfExportLoading$ | async) {
+                            @if (anyActionLoading$ | async) {
                                 <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
                             } @else {
-                                <mat-icon>format_list_numbered</mat-icon>
+                                <mat-icon>more_horiz</mat-icon>
                             }
-                            Startnummern
+                            Weitere Aktionen
                             <mat-icon>arrow_drop_down</mat-icon>
                         </button>
+
+                        <mat-menu #moreActionsMenu="matMenu">
+                            <button mat-menu-item [matMenuTriggerFor]="startOrderMenu">
+                                <mat-icon>format_list_numbered</mat-icon>
+                                <span>Startnummern</span>
+                            </button>
+                            <button mat-menu-item routerLink="/dashboard/start-groups"
+                                    matTooltip="Teilnehmer per Drag-and-drop in Startgruppen (Blockstart) einteilen"
+                                    matTooltipPosition="left">
+                                <mat-icon>groups_3</mat-icon>
+                                <span>Startgruppen</span>
+                            </button>
+                            <button mat-menu-item (click)="openImportDialog()" [disabled]="importLoading$ | async">
+                                <mat-icon>upload_file</mat-icon>
+                                <span>Teilnehmer importieren</span>
+                            </button>
+                            <button mat-menu-item [matMenuTriggerFor]="resultsMenu">
+                                <mat-icon>update</mat-icon>
+                                <span>Ergebnisse</span>
+                            </button>
+                            <button mat-menu-item (click)="openCopyDialog()" [disabled]="copyLoading$ | async">
+                                <mat-icon>content_copy</mat-icon>
+                                <span>In andere Rennen kopieren</span>
+                            </button>
+                            <mat-divider></mat-divider>
+                            <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+                                <mat-icon>picture_as_pdf</mat-icon>
+                                <span>PDF Export</span>
+                            </button>
+                        </mat-menu>
 
                         <mat-menu #startOrderMenu="matMenu">
                             <button mat-menu-item (click)="assignRaceNumbers()"
@@ -154,35 +187,6 @@ import {Actions, ofType} from "@ngrx/effects";
                             </button>
                         </mat-menu>
 
-                        <button
-                                mat-raised-button
-                                (click)="openImportDialog()"
-                                [disabled]="importLoading$ | async"
-                                matTooltip="Teilnehmer importieren (CSV mit beliebigem Trennzeichen oder DSV-Wettkampfdatei, mit Spalten-Zuordnung)"
-                        >
-                            @if (importLoading$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
-                            } @else {
-                                <mat-icon>upload_file</mat-icon>
-                            }
-                            Teilnehmer importieren
-                        </button>
-
-                        <button
-                                mat-raised-button
-                                [matMenuTriggerFor]="resultsMenu"
-                                [disabled]="resultImportLoading$ | async"
-                                matTooltip="Ergebnisse per Startnummer importieren oder als CSV exportieren"
-                        >
-                            @if (resultImportLoading$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
-                            } @else {
-                                <mat-icon>update</mat-icon>
-                            }
-                            Ergebnisse
-                            <mat-icon>arrow_drop_down</mat-icon>
-                        </button>
-
                         <mat-menu #resultsMenu="matMenu">
                             <button mat-menu-item (click)="openResultImportDialog()"
                                     matTooltip="Ergebnisse (Zeit/Status) für bereits vorhandene Teilnehmer per Startnummer importieren - legt keine neuen Teilnehmer an"
@@ -198,82 +202,52 @@ import {Actions, ofType} from "@ngrx/effects";
                             </button>
                         </mat-menu>
 
-                        <button
-                                mat-raised-button
-                                (click)="openCopyDialog()"
-                                [disabled]="copyLoading$ | async"
-                                matTooltip="Alle Teilnehmer dieses Rennens in andere Rennen kopieren"
-                        >
-                            @if (copyLoading$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
-                            } @else {
-                                <mat-icon>content_copy</mat-icon>
-                            }
-                            In andere Rennen kopieren
-                        </button>
+                        <mat-menu #exportMenu="matMenu">
+                            <button mat-menu-item (click)="exportAllPdf()">
+                                <mat-icon>groups</mat-icon>
+                                <span>Gesamtwertung (Alle)</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportAllByCategoryPdf()">
+                                <mat-icon>category</mat-icon>
+                                <span>Gesamtwertung (Alle) nach Kategorie</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
+                                <mat-icon>female</mat-icon>
+                                <span>Alle Damen</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportByGenderByCategoryPdf('FEMALE')">
+                                <mat-icon>category</mat-icon>
+                                <span>Alle Damen nach Kategorie</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportByGenderPdf('MALE')">
+                                <mat-icon>male</mat-icon>
+                                <span>Alle Herren</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportByGenderByCategoryPdf('MALE')">
+                                <mat-icon>category</mat-icon>
+                                <span>Alle Herren nach Kategorie</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
+                                <mat-icon>view_list</mat-icon>
+                                <span>Nach Altersklassen aufgeteilt</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportAllAgeGroupsByCategoryPdf()">
+                                <mat-icon>category</mat-icon>
+                                <span>Nach Altersklassen aufgeteilt nach Kategorie</span>
+                            </button>
+                        </mat-menu>
                     }
-
-                    <button
-                            mat-raised-button
-                            color="accent"
-                            [matMenuTriggerFor]="exportMenu"
-                            [disabled]="pdfExportLoading$ | async"
-                            matTooltip="PDF Export Optionen"
-                    >
-                        @if (pdfExportLoading$ | async) {
-                            <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
-                        } @else {
-                            <mat-icon>picture_as_pdf</mat-icon>
-                        }
-                        PDF Export
-                        <mat-icon>arrow_drop_down</mat-icon>
-                    </button>
-                    
-                    <mat-menu #exportMenu="matMenu">
-                        <button mat-menu-item (click)="exportAllPdf()">
-                            <mat-icon>groups</mat-icon>
-                            <span>Gesamtwertung (Alle)</span>
-                        </button>
-
-                        <button mat-menu-item (click)="exportAllByCategoryPdf()">
-                            <mat-icon>category</mat-icon>
-                            <span>Gesamtwertung (Alle) nach Kategorie</span>
-                        </button>
-
-                        <mat-divider></mat-divider>
-
-                        <button mat-menu-item (click)="exportByGenderPdf('FEMALE')">
-                            <mat-icon>female</mat-icon>
-                            <span>Alle Damen</span>
-                        </button>
-
-                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('FEMALE')">
-                            <mat-icon>category</mat-icon>
-                            <span>Alle Damen nach Kategorie</span>
-                        </button>
-
-                        <button mat-menu-item (click)="exportByGenderPdf('MALE')">
-                            <mat-icon>male</mat-icon>
-                            <span>Alle Herren</span>
-                        </button>
-
-                        <button mat-menu-item (click)="exportByGenderByCategoryPdf('MALE')">
-                            <mat-icon>category</mat-icon>
-                            <span>Alle Herren nach Kategorie</span>
-                        </button>
-
-                        <mat-divider></mat-divider>
-
-                        <button mat-menu-item (click)="exportAllAgeGroupsPdf()">
-                            <mat-icon>view_list</mat-icon>
-                            <span>Nach Altersklassen aufgeteilt</span>
-                        </button>
-
-                        <button mat-menu-item (click)="exportAllAgeGroupsByCategoryPdf()">
-                            <mat-icon>category</mat-icon>
-                            <span>Nach Altersklassen aufgeteilt nach Kategorie</span>
-                        </button>
-                    </mat-menu>
                 </div>
 
                 @if ((selectedRaceId$ | async) === null) {
@@ -576,6 +550,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     importLoading$: Observable<boolean>;
     resultImportLoading$: Observable<boolean>;
     copyLoading$: Observable<boolean>;
+    /** Combines every loading flag behind the consolidated "Weitere Aktionen" menu into one spinner. */
+    anyActionLoading$: Observable<boolean>;
     displayedColumns = [
         "id",
         "firstName",
@@ -666,6 +642,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.copyLoading$ = this.store.select(
             ParticipantSelectors.selectCopyLoading,
         );
+        this.anyActionLoading$ = combineLatest([
+            this.pdfExportLoading$, this.importLoading$, this.resultImportLoading$, this.copyLoading$
+        ]).pipe(map(([pdf, imp, resultImp, copy]) => pdf || imp || resultImp || copy));
 
         this.actions$.pipe(
             ofType(ParticipantActions.createParticipantSuccess),

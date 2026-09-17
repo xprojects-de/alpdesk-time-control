@@ -6,6 +6,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.entities.StartGroupTemplate;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,9 +24,18 @@ import java.util.Map;
 @Singleton
 public class RankingService {
 
+    private final StartGroupTemplateService startGroupTemplateService;
+
+    public RankingService(StartGroupTemplateService startGroupTemplateService) {
+        this.startGroupTemplateService = startGroupTemplateService;
+    }
+
     /**
-     * The value that actually counts for ranking: the raw measured result adjusted by the penalty.
-     * A penalty always makes the result worse, regardless of sort direction. Null if no result was measured.
+     * The value that actually counts for ranking: the raw measured result, first netted of the
+     * participant's start-group offset (if any - see {@link StartGroupTemplate#offsetSeconds()},
+     * resolved live via {@link Participant#startGroupId()} so editing a template's offset applies
+     * to every result already recorded under it), then adjusted by the penalty. A penalty always
+     * makes the result worse, regardless of sort direction. Null if no result was measured.
      */
     public Integer adjustedValue(Race race, Participant participant) {
         // A DSQ/DNF/DNS participant may well have a measured durationMs (e.g. disqualified after
@@ -34,15 +44,30 @@ public class RankingService {
                 || (participant.status() != null && participant.status() != DisqualificationStatus.NONE)) {
             return null;
         }
+        int durationMs = participant.durationMs();
+        // A points race has no notion of a start-time offset, so this only ever applies to TIME
+        // races. Nets out the head start a staggered block-start signal already gave this
+        // participant against a single shared race clock - without this, a participant in a group
+        // that started later would show a duration inflated by exactly their group's offset, even
+        // though they ran the same course in the same time as someone in an earlier group.
+        if (race.resultUnit() == ResultUnit.TIME && participant.startGroupId() != null) {
+            Integer offsetSeconds = startGroupTemplateService.findById(participant.startGroupId())
+                    .map(StartGroupTemplate::offsetSeconds)
+                    .orElse(null);
+            if (offsetSeconds != null) {
+                durationMs -= offsetSeconds * 1000;
+            }
+        }
         int penalty = participant.penalty() != null ? participant.penalty() : 0;
         int adjusted = race.sortDirection() == SortDirection.DESC
-                ? participant.durationMs() - penalty
-                : participant.durationMs() + penalty;
-        // A penalty larger than the raw result on a DESC race (higher-is-better, e.g. points)
-        // would otherwise go negative here; ParticipantService only rejects a negative penalty,
-        // not one that exceeds the result, and formatTime()/formatDuration() render a negative
-        // value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly. Floor at 0
-        // to keep that impossible regardless of which direction the caller's race sorts in.
+                ? durationMs - penalty
+                : durationMs + penalty;
+        // A penalty larger than the raw result on a DESC race (higher-is-better, e.g. points), or
+        // a start-group offset larger than the raw result (e.g. a mismeasured or misconfigured
+        // offset), would otherwise go negative here; formatTime()/formatDuration() render a
+        // negative value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly.
+        // Floor at 0 to keep that impossible regardless of which direction the caller's race sorts
+        // in.
         return Math.max(0, adjusted);
     }
 

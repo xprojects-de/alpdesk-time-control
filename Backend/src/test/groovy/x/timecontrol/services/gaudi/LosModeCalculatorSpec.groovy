@@ -13,6 +13,7 @@ import x.timecontrol.entities.SortDirection
 import x.timecontrol.repositories.GaudiLosPairingRepository
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.StartGroupTemplateService
 import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
@@ -23,7 +24,8 @@ class LosModeCalculatorSpec extends Specification {
     GaudiLosPairingRepository pairingRepository = Mock()
     PersonService personService = Mock()
     TeamService teamService = Mock()
-    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(), teamService)
+    StartGroupTemplateService startGroupTemplateService = Mock()
+    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(startGroupTemplateService), teamService)
 
     Race race = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)

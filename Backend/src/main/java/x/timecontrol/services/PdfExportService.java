@@ -88,7 +88,8 @@ public class PdfExportService {
             new PdfColumn<>("Geschl.", 0.7f, RankingViewService.StartListEntry::gender),
             new PdfColumn<>("Alterskl.", 1.5f, e -> truncate(e.ageGroup(), 20)),
             new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
-            new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20))
+            new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20)),
+            new PdfColumn<>("Gruppe", 1.1f, e -> truncate(e.startGroupLabel(), 16))
     );
 
     /**
@@ -124,19 +125,41 @@ public class PdfExportService {
      */
     public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
         List<RankingViewService.StartListEntry> entries = rankingViewService.createStartListEntries(participants);
+        boolean anyStartGroup = entries.stream().anyMatch(RankingViewService.StartListEntry::hasStartGroup);
+        Function<RankingViewService.StartListEntry, Color> rowColorFn = anyStartGroup
+                ? e -> e.startGroupColor() != null ? parseHexColor(e.startGroupColor()) : null
+                : null;
         return renderDocument(race, race.name(), null, false,
-                ctx -> drawSection(ctx, startListColumns(entries), "Startliste", entries, true));
+                ctx -> drawSection(ctx, startListColumns(entries), "Startliste", entries, true, rowColorFn));
     }
 
     /**
-     * Drops the "Kategorie" column when none of the entries have an assigned category, instead of
-     * always reserving space for a column that would otherwise show "-" for every row.
+     * Drops the "Kategorie"/"Gruppe" columns when none of the entries have an assigned category/
+     * start group, instead of always reserving space for a column that would otherwise show "-" for
+     * every row.
      */
     private List<PdfColumn<RankingViewService.StartListEntry>> startListColumns(List<RankingViewService.StartListEntry> entries) {
-        if (entries.stream().anyMatch(RankingViewService.StartListEntry::hasCategory)) {
-            return START_LIST_COLUMNS;
+        List<PdfColumn<RankingViewService.StartListEntry>> columns = START_LIST_COLUMNS;
+        if (entries.stream().noneMatch(RankingViewService.StartListEntry::hasCategory)) {
+            columns = columns.stream().filter(c -> !c.header().equals("Kategorie")).toList();
         }
-        return START_LIST_COLUMNS.stream().filter(c -> !c.header().equals("Kategorie")).toList();
+        if (entries.stream().noneMatch(RankingViewService.StartListEntry::hasStartGroup)) {
+            columns = columns.stream().filter(c -> !c.header().equals("Gruppe")).toList();
+        }
+        return columns;
+    }
+
+    /**
+     * Parses a "#rrggbb" start-group color (see StartGroupTemplate#color) into an AWT Color for the
+     * start list's per-row group marker; falls back to null (no marker drawn) for anything that
+     * isn't a well-formed hex color, rather than failing the whole PDF export over a bad value.
+     */
+    private static Color parseHexColor(String hex) {
+        try {
+            return Color.decode(hex);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -761,6 +784,18 @@ public class PdfExportService {
      */
     private <T> void drawSection(PdfContext ctx, List<PdfColumn<T>> columns, String title,
                                   List<T> entries, boolean mainTitle) throws IOException {
+        drawSection(ctx, columns, title, entries, mainTitle, null);
+    }
+
+    /**
+     * Same as the 5-arg overload, plus an optional {@code rowColorFn} that draws a small colored
+     * marker to the left of each row whose entry maps to a non-null {@link Color} - used by the
+     * start list to visualize each participant's start-group color (see
+     * {@link #generateStartList}). {@code null} (the 5-arg overload's default) draws no marker at
+     * all, so every other export (rankings, DNS list) is unaffected.
+     */
+    private <T> void drawSection(PdfContext ctx, List<PdfColumn<T>> columns, String title,
+                                  List<T> entries, boolean mainTitle, Function<T, Color> rowColorFn) throws IOException {
         ctx.ensureSpace(mainTitle ? 90 : 100);
 
         ctx.y -= mainTitle ? 10 : 15;
@@ -769,7 +804,7 @@ public class PdfExportService {
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
-        drawRows(ctx, columns, colX, entries);
+        drawRows(ctx, columns, colX, entries, rowColorFn);
 
         ctx.y -= 10;
     }
@@ -823,10 +858,20 @@ public class PdfExportService {
     }
 
     private <T> void drawRows(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries) throws IOException {
+        drawRows(ctx, columns, colX, entries, null);
+    }
+
+    private <T> void drawRows(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries, Function<T, Color> rowColorFn) throws IOException {
         for (T entry : entries) {
             if (ctx.y < PAGE_BREAK_THRESHOLD) {
                 ctx.newPage();
                 drawTableHeader(ctx, columns, colX);
+            }
+            if (rowColorFn != null) {
+                Color color = rowColorFn.apply(entry);
+                if (color != null) {
+                    ctx.fillRect(MARGIN - 12, ctx.y - 2, 7, 7, color);
+                }
             }
             for (int i = 0; i < columns.size(); i++) {
                 ctx.text(FONT_REGULAR, 8, colX[i], ctx.y, columns.get(i).valueFn().apply(entry));

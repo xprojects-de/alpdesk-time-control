@@ -1,5 +1,6 @@
 package x.timecontrol.services;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
 import x.timecontrol.entities.AgeGroup;
@@ -9,6 +10,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.StartGroupTemplate;
 import x.timecontrol.entities.Team;
 
 import java.time.LocalDate;
@@ -45,13 +47,15 @@ public class RankingViewService {
     private final TeamService teamService;
     private final PersonService personService;
     private final RankingService rankingService;
+    private final StartGroupTemplateService startGroupTemplateService;
 
-    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService) {
+    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService) {
         this.ageGroupService = ageGroupService;
         this.categoryService = categoryService;
         this.teamService = teamService;
         this.personService = personService;
         this.rankingService = rankingService;
+        this.startGroupTemplateService = startGroupTemplateService;
     }
 
     @Serdeable
@@ -62,7 +66,8 @@ public class RankingViewService {
 
     @Serdeable
     public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
-                                  String ageGroup, String team, String category, boolean hasCategory) {
+                                  String ageGroup, String team, String category, boolean hasCategory,
+                                  String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup) {
     }
 
     /**
@@ -179,6 +184,8 @@ public class RankingViewService {
         Map<Long, Person> personsById = loadPersonsByIds(sorted, Participant::personId);
         Map<Long, Team> teamsById = loadTeamsByIds(sorted, Participant::teamId);
         Map<Long, Category> categoriesById = loadCategoriesByIds(sorted, Participant::categoryId);
+        Set<Long> startGroupIds = sorted.stream().map(Participant::startGroupId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
 
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
@@ -194,8 +201,12 @@ public class RankingViewService {
             String category = p.categoryId() != null
                     ? Optional.ofNullable(categoriesById.get(p.categoryId())).map(Category::name).orElse("-")
                     : "-";
+            StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
+            String startGroupLabel = startGroup != null ? startGroup.label() : "-";
+            String startGroupColor = startGroup != null ? startGroup.color() : null;
 
-            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null));
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null,
+                    startGroupLabel, startGroupColor, startGroup != null));
         }
         return entries;
     }

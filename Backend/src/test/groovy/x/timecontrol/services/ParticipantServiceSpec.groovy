@@ -5,6 +5,7 @@ import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
 import x.timecontrol.dto.ParticipantImportFormat
 import x.timecontrol.dto.ResultTimeFormat
+import x.timecontrol.dto.StartGroupAssignmentRequest
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
@@ -14,6 +15,7 @@ import x.timecontrol.entities.Person
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.entities.StartGroupTemplate
 import x.timecontrol.entities.Team
 import x.timecontrol.repositories.ParticipantRepository
 
@@ -30,11 +32,12 @@ class ParticipantServiceSpec extends Specification {
     CategoryService categoryService = Mock()
     PersonService personService = Mock()
     AutoAssignService autoAssignService = Mock()
-    RankingService rankingService = new RankingService()
+    StartGroupTemplateService startGroupTemplateService = Mock()
+    RankingService rankingService = new RankingService(startGroupTemplateService)
     TransactionOperations<Connection> transactionOperations = Mock()
 
     ParticipantService service = new ParticipantService(
-            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, transactionOperations)
+            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations)
 
     // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_)/
     // ageGroupService.findAll() with a more specific interaction - a single closure-based
@@ -555,6 +558,122 @@ class ParticipantServiceSpec extends Specification {
         then:
         thrown(IllegalStateException)
         0 * repository.update(_)
+    }
+
+    def "applyStartGroupAssignment sets startGroupId and startSequence for the listed participants"() {
+        given:
+        def p1 = new Participant(1L, 5L, 1L, 10, null, null, null, null, null, null)
+        def p2 = new Participant(2L, 5L, 2L, 20, null, null, null, null, null, null)
+        repository.findByIdIn(_) >> [p1, p2]
+        startGroupTemplateService.findByIds(_) >> [7L: new StartGroupTemplate(7L, "Grün", "#92D050", 0, null)]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        def result = service.applyStartGroupAssignment(5L, [
+                new StartGroupAssignmentRequest.Entry(1L, 7L, 1),
+                new StartGroupAssignmentRequest.Entry(2L, 7L, 2),
+        ])
+
+        then:
+        result*.id() == [1L, 2L]
+        result*.startGroupId() == [7L, 7L]
+        result*.startSequence() == [1, 2]
+    }
+
+    def "applyStartGroupAssignment rejects a participant that does not belong to this race"() {
+        given:
+        def other = new Participant(9L, 6L, 1L, 10, null, null, null, null, null, null)
+        repository.findByIdIn(_) >> [other]
+
+        when:
+        service.applyStartGroupAssignment(5L, [new StartGroupAssignmentRequest.Entry(9L, null, 1)])
+
+        then:
+        thrown(IllegalArgumentException)
+        0 * repository.update(_)
+    }
+
+    def "applyStartGroupAssignment rejects an unknown start-group template id"() {
+        given:
+        def p1 = new Participant(1L, 5L, 1L, 10, null, null, null, null, null, null)
+        repository.findByIdIn(_) >> [p1]
+        startGroupTemplateService.findByIds(_) >> [:]
+
+        when:
+        service.applyStartGroupAssignment(5L, [new StartGroupAssignmentRequest.Entry(1L, 99L, 1)])
+
+        then:
+        thrown(IllegalArgumentException)
+        0 * repository.update(_)
+    }
+
+    def "generateRaceNumbersFromStartGroups orders purely by startSequence, never consulting the group template's own position"() {
+        given: "group A's template position (0) is lower than group B's (1), but A was reordered to start LATER on the board, so its members carry the higher startSequence values - the board itself, not the template, is the source of truth for a race's group order (see applyStartGroupAssignment)"
+        def pA1 = new Participant(1L, 5L, 1L, null, null, null, null, null, null, null, null, 4, 10L)
+        def pA2 = new Participant(2L, 5L, 2L, null, null, null, null, null, null, null, null, 5, 10L)
+        def pB1 = new Participant(3L, 5L, 3L, null, null, null, null, null, null, null, null, 1, 20L)
+        def pB2 = new Participant(4L, 5L, 4L, null, null, null, null, null, null, null, null, 2, 20L)
+        def pUnassigned = new Participant(5L, 5L, 5L, 99, null, null, null, null, null, null, null, null, null)
+        repository.findByRaceId(5L) >> [pA1, pA2, pB1, pB2, pUnassigned]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        def result = service.generateRaceNumbersFromStartGroups(5L)
+
+        then: "group B's participants (startSequence 1,2) get the lowest race numbers, then group A's (4,5); the unassigned participant (no startSequence) lands last"
+        result*.id() == [3L, 4L, 1L, 2L, 5L]
+        result*.raceNumber() == [1, 2, 3, 4, 5]
+        0 * startGroupTemplateService.findByIds(_)
+    }
+
+    def "generateRaceNumbersFromStartGroups refuses when the race already has results"() {
+        given:
+        def p1 = new Participant(1L, 5L, 1L, null, null, null, 12345, null, null, null)
+        repository.findByRaceId(5L) >> [p1]
+
+        when:
+        service.generateRaceNumbersFromStartGroups(5L)
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.update(_)
+    }
+
+    def "copyStartGroupAssignment copies group and sequence matched by person, leaving an unmatched target participant untouched"() {
+        given:
+        raceService.findById(5L) >> Optional.of(race())
+        raceService.findById(6L) >> Optional.of(race())
+        def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
+        repository.findByRaceId(5L) >> [source1]
+        def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
+        def targetUnmatched = new Participant(3L, 6L, 200L, null, null, null, null, null, null, null, null, 5, 9L)
+        repository.findByRaceId(6L) >> [target1, targetUnmatched]
+
+        when:
+        service.copyStartGroupAssignment(5L, [6L])
+
+        then: "target1 (matching person) gets source1's group/sequence; targetUnmatched (no matching person) is never written"
+        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 }) >> { Participant p -> p }
+        0 * repository.update({ Participant p -> p.id() == 3L })
+    }
+
+    def "copyStartGroupAssignment clears an unmatched target participant's own startSequence when it collides with a value being copied in, instead of failing on the unique index"() {
+        given: "the target race already has an unrelated participant (person 200, not in the source race) sitting on startSequence 1 - the exact value about to be copied in for the matched person 100"
+        raceService.findById(5L) >> Optional.of(race())
+        raceService.findById(6L) >> Optional.of(race())
+        def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
+        repository.findByRaceId(5L) >> [source1]
+        def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
+        def targetColliding = new Participant(3L, 6L, 200L, null, null, null, null, null, null, null, null, 1, null)
+        repository.findByRaceId(6L) >> [target1, targetColliding]
+        repository.update(_ as Participant) >> { Participant p -> p }
+
+        when:
+        service.copyStartGroupAssignment(5L, [6L])
+
+        then: "the colliding participant's stale startSequence is cleared (not left at 1) before target1 is written with the copied startSequence 1"
+        1 * repository.update({ Participant p -> p.id() == 3L && p.startSequence() == null })
+        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 })
     }
 
     def "CSV import reports a row-level error instead of aborting the whole import"() {

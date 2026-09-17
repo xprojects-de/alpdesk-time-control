@@ -26,9 +26,10 @@ class RaceLiveServiceSpec extends Specification {
     AgeGroupService ageGroupService = Mock()
     TeamService teamService = Mock()
     PersonService personService = Mock()
+    StartGroupTemplateService startGroupTemplateService = Mock()
 
     RankingViewService rankingViewService = new RankingViewService(
-            ageGroupService, categoryService, teamService, personService, new RankingService())
+            ageGroupService, categoryService, teamService, personService, new RankingService(startGroupTemplateService), startGroupTemplateService)
     RaceLiveService raceLiveService = new RaceLiveService(participantService, categoryService, rankingViewService)
 
     private static Race race() {

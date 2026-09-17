@@ -3,6 +3,7 @@ import {Participant, ParticipantRequest} from '../../models/participant.model';
 import {ParticipantImportFileFormat, ParticipantImportResponse} from '../../models/participant-import.model';
 import {ParticipantResultImportResponse, ResultTimeFormat} from '../../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../../models/participant-copy.model';
+import {StartGroupAssignmentEntry, StartGroupCopyRequest} from '../../models/start-group.model';
 
 // Load all participants
 export const loadParticipants = createAction('[Participant] Load Participants');
@@ -133,6 +134,50 @@ export const applyStartOrderFromPreviousRaceSuccess = createAction(
 );
 export const applyStartOrderFromPreviousRaceFailure = createAction(
     '[Participant] Apply Start Order From Previous Race Failure',
+    props<{ error: string }>()
+);
+
+// Apply a start-group assignment (startGroupId + the resulting startSequence) to a race's
+// participants - only participants listed in `assignments` are touched.
+export const saveStartGroupAssignment = createAction(
+    '[Participant] Save Start Group Assignment',
+    props<{ raceId: number; assignments: StartGroupAssignmentEntry[] }>()
+);
+export const saveStartGroupAssignmentSuccess = createAction(
+    '[Participant] Save Start Group Assignment Success',
+    props<{ participants: Participant[] }>()
+);
+export const saveStartGroupAssignmentFailure = createAction(
+    '[Participant] Save Start Group Assignment Failure',
+    props<{ error: string }>()
+);
+
+// Copy a start-group assignment (startGroupId + startSequence) into one or more other races,
+// matched by person.
+export const copyStartGroupAssignment = createAction(
+    '[Participant] Copy Start Group Assignment',
+    props<{ request: StartGroupCopyRequest }>()
+);
+export const copyStartGroupAssignmentSuccess = createAction(
+    '[Participant] Copy Start Group Assignment Success'
+);
+export const copyStartGroupAssignmentFailure = createAction(
+    '[Participant] Copy Start Group Assignment Failure',
+    props<{ error: string }>()
+);
+
+// Assign race numbers (bibs) from a race's current start-group order (group position, then
+// startSequence within the group) - the "Startnummern aus Gruppierung vergeben" action.
+export const generateRaceNumbersFromStartGroups = createAction(
+    '[Participant] Generate Race Numbers From Start Groups',
+    props<{ raceId: number }>()
+);
+export const generateRaceNumbersFromStartGroupsSuccess = createAction(
+    '[Participant] Generate Race Numbers From Start Groups Success',
+    props<{ participants: Participant[] }>()
+);
+export const generateRaceNumbersFromStartGroupsFailure = createAction(
+    '[Participant] Generate Race Numbers From Start Groups Failure',
     props<{ error: string }>()
 );
 

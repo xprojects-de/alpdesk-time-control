@@ -11,6 +11,8 @@ import x.timecontrol.dto.ParticipantResponse;
 import x.timecontrol.dto.ParticipantResultImportPreviewResponse;
 import x.timecontrol.dto.ParticipantResultImportResponse;
 import x.timecontrol.dto.ResultTimeFormat;
+import x.timecontrol.dto.StartGroupAssignmentRequest;
+import x.timecontrol.dto.StartGroupCopyRequest;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.ParticipantService;
@@ -204,6 +206,54 @@ public class ParticipantController {
             return HttpResponse.ok(service.toResponses(updated));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Put("/race/{raceId}/start-groups")
+    @Operation(summary = "Apply a start-group assignment to a race's participants", description = "Sets startGroupId and the resulting startSequence (e.g. group A's members get 1..28, group B's 29..55, ...) for the listed participants. Only participants listed in the request are touched; anyone left out keeps their current startGroupId/startSequence.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Start-group assignment applied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "400", description = "A participant does not belong to this race, or references a start-group template that does not exist")
+    public HttpResponse<?> applyStartGroupAssignment(@PathVariable Long raceId, @Body StartGroupAssignmentRequest request) {
+        try {
+            List<Participant> updated = service.applyStartGroupAssignment(raceId, request.assignments());
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/start-groups/copy")
+    @Operation(summary = "Copy a start-group assignment into other races", description = "Copies startGroupId and startSequence from the source race's participants into each target race, matched by person. A target-race participant whose person isn't in the source race keeps its current assignment untouched.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Start-group assignment copied")
+    @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
+    public HttpResponse<?> copyStartGroupAssignment(@Body StartGroupCopyRequest request) {
+        try {
+            service.copyStartGroupAssignment(request.sourceRaceId(), request.targetRaceIds());
+            return HttpResponse.noContent();
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/race/{raceId}/generate-race-numbers-from-start-groups")
+    @Operation(summary = "Assign race numbers from a race's start-group order", description = "Assigns race numbers 1..n ordered by (start-group position, startSequence within the group); participants without a start-group land last. Neither startGroupId nor startSequence are touched.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "409", description = "The race already has results")
+    public HttpResponse<?> generateRaceNumbersFromStartGroups(@PathVariable Long raceId) {
+        if (raceService.findById(raceId).isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        try {
+            List<Participant> updated = service.generateRaceNumbersFromStartGroups(raceId);
+            return HttpResponse.ok(service.toResponses(updated));
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }

@@ -60,9 +60,13 @@ public record ParticipantResponse(
 
         @Nullable
         @Schema(description = "Position in this race's actual start order, when it differs from raceNumber (e.g. derived from a linked previous race's results). Null means this participant starts in raceNumber order.", example = "3", nullable = true)
-        Integer startSequence
+        Integer startSequence,
+
+        @Nullable
+        @Schema(description = "Start-group template this participant is assigned to in this race, if any", nullable = true)
+        StartGroupTemplateResponse startGroup
 ) {
-    public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup) {
+    public static ParticipantResponse from(Participant participant, PersonResponse person, RaceResponse race, TeamResponse team, CategoryResponse category, AgeGroupResponse ageGroup, StartGroupTemplateResponse startGroup) {
         return new ParticipantResponse(
                 participant.id(),
                 race,
@@ -76,7 +80,8 @@ public record ParticipantResponse(
                 participant.measuredAt(),
                 participant.comment(),
                 Objects.requireNonNullElse(participant.status(), DisqualificationStatus.NONE),
-                participant.startSequence()
+                participant.startSequence(),
+                startGroup
         );
     }
 }

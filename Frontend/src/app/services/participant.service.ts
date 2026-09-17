@@ -13,6 +13,7 @@ import {
     ResultTimeFormat
 } from '../models/participant-result-import.model';
 import {ParticipantCopyRequest, ParticipantCopyResponse} from '../models/participant-copy.model';
+import {StartGroupAssignmentEntry, StartGroupCopyRequest} from '../models/start-group.model';
 import {environment} from '../../environments/environment';
 import {buildImportFormData} from '../utils/import-form-data.util';
 
@@ -69,6 +70,31 @@ export class ParticipantService {
             {},
             {params: {includeUnranked}}
         );
+    }
+
+    /**
+     * Applies a start-group assignment to a race's participants - sets startGroupId and the
+     * resulting startSequence for every listed entry; anyone left out keeps their current
+     * assignment. See StartGroupTemplate / StartGroupAssignmentEntry.
+     */
+    saveStartGroupAssignment(raceId: number, assignments: StartGroupAssignmentEntry[]): Observable<Participant[]> {
+        return this.http.put<Participant[]>(`${this.apiUrl}/race/${raceId}/start-groups`, {assignments});
+    }
+
+    /**
+     * Copies a race's start-group assignment (startGroupId + startSequence) into one or more
+     * other races, matched by person - the "Von Rennen übernehmen" action.
+     */
+    copyStartGroupAssignment(request: StartGroupCopyRequest): Observable<void> {
+        return this.http.post<void>(`${this.apiUrl}/start-groups/copy`, request);
+    }
+
+    /**
+     * Assigns race numbers (bibs) from a race's current start-group order (group position, then
+     * startSequence within the group) - the "Startnummern aus Gruppierung vergeben" action.
+     */
+    generateRaceNumbersFromStartGroups(raceId: number): Observable<Participant[]> {
+        return this.http.post<Participant[]>(`${this.apiUrl}/race/${raceId}/generate-race-numbers-from-start-groups`, {});
     }
 
     importCsv(raceId: number, file: File): Observable<ParticipantImportResponse> {

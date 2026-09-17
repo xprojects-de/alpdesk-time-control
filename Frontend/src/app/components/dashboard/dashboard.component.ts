@@ -210,6 +210,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         {path: 'categories', label: 'Kategorien', icon: 'category'},
         {path: 'persons', label: 'Personen', icon: 'badge'},
         {path: 'participants', label: 'Teilnehmer', icon: 'person'},
+        {path: 'start-group-templates', label: 'Startgruppen', icon: 'palette'},
         {path: 'measurements', label: 'Messungen', icon: 'timer'},
         {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
         {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},

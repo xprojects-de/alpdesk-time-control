@@ -176,6 +176,44 @@ export const participantReducer = createReducer(
         error
     })),
 
+    // Apply a start-group assignment to a race's participants
+    on(ParticipantActions.saveStartGroupAssignment, startLoading),
+    on(ParticipantActions.saveStartGroupAssignmentSuccess, (state, {participants}) => ({
+        ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        loadingCount: endLoading(state)
+    })),
+    on(ParticipantActions.saveStartGroupAssignmentFailure, (state, {error}) => ({
+        ...state,
+        loadingCount: endLoading(state),
+        error
+    })),
+
+    // Copy a start-group assignment into other races - doesn't affect this race's own state
+    on(ParticipantActions.copyStartGroupAssignment, startLoading),
+    on(ParticipantActions.copyStartGroupAssignmentSuccess, state => ({
+        ...state,
+        loadingCount: endLoading(state)
+    })),
+    on(ParticipantActions.copyStartGroupAssignmentFailure, (state, {error}) => ({
+        ...state,
+        loadingCount: endLoading(state),
+        error
+    })),
+
+    // Assign race numbers from a race's current start-group order
+    on(ParticipantActions.generateRaceNumbersFromStartGroups, startLoading),
+    on(ParticipantActions.generateRaceNumbersFromStartGroupsSuccess, (state, {participants}) => ({
+        ...state,
+        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        loadingCount: endLoading(state)
+    })),
+    on(ParticipantActions.generateRaceNumbersFromStartGroupsFailure, (state, {error}) => ({
+        ...state,
+        loadingCount: endLoading(state),
+        error
+    })),
+
     // Import participants from CSV, or via a mapped import (CSV any delimiter / DSV-Wettkampfdatei
     // XML) - both produce the same ParticipantImportResponse, so they share import state.
     on(ParticipantActions.importParticipantsCsv, ParticipantActions.importParticipantsMapped, state => ({
