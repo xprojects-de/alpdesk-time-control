@@ -171,6 +171,10 @@ export const importParticipantsMappedFailure = createAction(
     props<{ error: string }>()
 );
 
+// Clears the last import result once it has been shown to the user, so re-mounting the
+// participant list (e.g. by navigating away and back) doesn't re-display stale import errors.
+export const clearImportResult = createAction('[Participant] Clear Import Result');
+
 // Import results (time/status) for existing participants, matched by race number - never creates a
 // participant. Kept entirely separate from the roster import above (different response shape,
 // different state slice) so it can't regress it.

@@ -27,6 +27,7 @@ import * as GaudiModeActions from "../../store/gaudi-mode/gaudi-mode.actions";
 import {Actions, ofType} from "@ngrx/effects";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
 import {GaudiModeDialogComponent} from "./gaudi-mode-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {GaudiModeDetailComponent} from "./gaudi-mode-detail.component";
 import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.component";
 
@@ -305,8 +306,20 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteGaudiMode(gaudiMode: GaudiMode): void {
-        if (confirm(`Möchten Sie den Gaudi-Modus "${gaudiMode.name}" wirklich löschen?`)) {
-            this.store.dispatch(GaudiModeActions.deleteGaudiMode({id: gaudiMode.id}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie den Gaudi-Modus "${gaudiMode.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(GaudiModeActions.deleteGaudiMode({id: gaudiMode.id}));
+                }
+            });
     }
 }

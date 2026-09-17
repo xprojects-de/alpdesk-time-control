@@ -42,6 +42,7 @@ import * as ParticipantActions from "../../store/participant/participant.actions
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
 import {MeasurementDialogComponent} from "./measurement-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {
     ArchiveMeasurementsDialogComponent,
     ArchiveMeasurementsDialogResult,
@@ -838,7 +839,15 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 const details = errors
                     .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
                     .join('\n');
-                alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+                this.dialog.open(ConfirmDialogComponent, {
+                    width: '500px',
+                    data: {
+                        title: 'Übersprungene Zeilen',
+                        message: details,
+                        confirmLabel: 'OK',
+                        hideCancel: true,
+                    },
+                });
             }
             this.loadData();
         });
@@ -1028,13 +1037,23 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteMeasurement(measurement: Measurement): void {
-        if (
-            confirm(`Möchten Sie die Messung #${measurement.id} wirklich löschen?`)
-        ) {
-            this.store.dispatch(
-                MeasurementActions.deleteMeasurement({id: measurement.id}),
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie die Messung #${measurement.id} wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        MeasurementActions.deleteMeasurement({id: measurement.id}),
+                    );
+                }
+            });
     }
 
 
@@ -1043,9 +1062,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ? 'Möchten Sie wirklich ALLE Messungen löschen? Dies betrifft auch die Messungen auf dem Gerät!'
             : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
 
-        if (confirm(message)) {
-            this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
+                }
+            });
     }
 
     toggleContinuousMode(enable: boolean): void {
@@ -1053,9 +1080,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             ? 'Möchten Sie den kontinuierlichen Modus wirklich aktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!'
             : 'Möchten Sie den kontinuierlichen Modus wirklich deaktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!';
 
-        if (confirm(message)) {
-            this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {message, confirmLabel: 'Bestätigen'},
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
+                }
+            });
     }
 
     toggleScheduledImport(enable: boolean): void {
@@ -1081,9 +1116,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     discardOldestStart(): void {
-        if (confirm('Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.')) {
-            this.store.dispatch(MeasurementActions.discardOldestStart());
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: 'Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.',
+                confirmLabel: 'Verwerfen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(MeasurementActions.discardOldestStart());
+                }
+            });
     }
 
     exportMeasurementsCsv(): void {

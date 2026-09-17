@@ -24,6 +24,7 @@ import {Category} from "../../models/category.model";
 import * as CategoryActions from "../../store/category/category.actions";
 import * as CategorySelectors from "../../store/category/category.selectors";
 import {CategoryDialogComponent} from "./category-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -222,9 +223,17 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
             ofType(CategoryActions.deleteCategoryConflict),
             takeUntil(this.destroy$),
         ).subscribe(({id, message}) => {
-            if (confirm(message)) {
-                this.store.dispatch(CategoryActions.deleteCategory({id, force: true}));
-            }
+            this.dialog.open(ConfirmDialogComponent, {
+                width: '450px',
+                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
+            })
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((confirmed) => {
+                    if (confirmed) {
+                        this.store.dispatch(CategoryActions.deleteCategory({id, force: true}));
+                    }
+                });
         });
 
         effect(() => {
@@ -295,9 +304,21 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteCategory(category: Category): void {
-        if (confirm(`Möchten Sie die Kategorie "${category.name}" wirklich löschen?`)) {
-            this.store.dispatch(CategoryActions.deleteCategory({id: category.id}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie die Kategorie "${category.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(CategoryActions.deleteCategory({id: category.id}));
+                }
+            });
     }
 
     refreshData(): void {

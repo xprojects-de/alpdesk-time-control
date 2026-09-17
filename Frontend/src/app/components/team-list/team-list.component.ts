@@ -24,6 +24,7 @@ import {Team} from "../../models/team.model";
 import * as TeamActions from "../../store/team/team.actions";
 import * as TeamSelectors from "../../store/team/team.selectors";
 import {TeamDialogComponent} from "./team-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -222,9 +223,17 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
             ofType(TeamActions.deleteTeamConflict),
             takeUntil(this.destroy$),
         ).subscribe(({id, message}) => {
-            if (confirm(message)) {
-                this.store.dispatch(TeamActions.deleteTeam({id, force: true}));
-            }
+            this.dialog.open(ConfirmDialogComponent, {
+                width: '450px',
+                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
+            })
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((confirmed) => {
+                    if (confirmed) {
+                        this.store.dispatch(TeamActions.deleteTeam({id, force: true}));
+                    }
+                });
         });
 
         effect(() => {
@@ -295,9 +304,21 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteTeam(team: Team): void {
-        if (confirm(`Möchten Sie das Team "${team.name}" wirklich löschen?`)) {
-            this.store.dispatch(TeamActions.deleteTeam({id: team.id}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie das Team "${team.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(TeamActions.deleteTeam({id: team.id}));
+                }
+            });
     }
 
     refreshData(): void {
