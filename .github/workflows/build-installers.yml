@@ -590,11 +590,189 @@ jobs:
           path: dist/Time-Control-Windows-PoorMan-v*.zip
           retention-days: 14
 
+  build-linux-x64-server-bundle:
+    name: Build Linux x64 Server Bundle (headless)
+    # Headless server companion to the desktop bundles above: no browser auto-open, explicit
+    # java.awt.headless instead of relying on auto-detection (the code already degrades
+    # gracefully without a display - see DesktopWindowStartupListener/BrowserStartupListener -
+    # this just makes the intent explicit), plus a systemd unit template for running as a
+    # proper boot-time service on a headless Linux box instead of a desktop app.
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux x64 JRE (Temurin, Java 25)
+        run: |
+          BUNDLE="Time-Control-Linux-x64-Server"
+          mkdir -p "$BUNDLE/jre"
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jre/hotspot/normal/eclipse" -o jre-linux-x64.tar.gz
+          tar xzf jre-linux-x64.tar.gz -C "$BUNDLE/jre" --strip-components=1
+
+      - name: Assemble Bundle
+        run: |
+          BUNDLE="Time-Control-Linux-x64-Server"
+          cp shadow-jar/Time-Control-java-v*.jar "$BUNDLE/time-control.jar"
+
+          cat > "$BUNDLE/start.sh" <<'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          exec "$DIR/jre/bin/java" -Dapp.packaged=true -Djava.awt.headless=true -Dapp.openBrowser=false -jar "$DIR/time-control.jar"
+          SCRIPT
+          chmod +x "$BUNDLE/start.sh"
+
+          cat > "$BUNDLE/time-control.service" <<'EOF'
+          [Unit]
+          Description=Time Control Zeitmessung
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/opt/time-control/start.sh
+          WorkingDirectory=/opt/time-control
+          Restart=on-failure
+          User=pi
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          cat > "$BUNDLE/README.txt" <<'EOF'
+          Time Control - Server-Betrieb (headless, ohne Installer)
+
+          1. Ordner nach /opt/time-control entpacken, z.B.:
+             sudo mkdir -p /opt/time-control
+             sudo tar xzf Time-Control-Linux-x64-Server-*.tar.gz --strip-components=1 -C /opt/time-control
+
+          2. time-control.service pruefen/anpassen (Pfad/User falls abweichend) und installieren:
+             sudo cp /opt/time-control/time-control.service /etc/systemd/system/
+             sudo systemctl daemon-reload
+             sudo systemctl enable --now time-control
+
+          3. Status/Logs pruefen:
+             systemctl status time-control
+             journalctl -u time-control -f
+
+          4. Ohne systemd testweise manuell starten:
+             ./start.sh
+          EOF
+
+      - name: Tar Bundle
+        run: |
+          mkdir -p dist
+          tar czf "dist/Time-Control-Linux-x64-Server-v${{ steps.read_version.outputs.version }}.tar.gz" Time-Control-Linux-x64-Server
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-server-bundle
+          path: dist/Time-Control-Linux-x64-Server-v*.tar.gz
+          retention-days: 14
+
+  build-linux-aarch64-server-bundle:
+    name: Build Linux AArch64 Server Bundle (headless, e.g. Raspberry Pi)
+    # Same as the x64 server bundle above, for arm64 boards (Raspberry Pi 4/5 on 64-bit
+    # Raspberry Pi OS) - currently the only Linux target with zero coverage otherwise
+    # (build-jpackage-installer only runs on ubuntu-latest, which is x64).
+    needs: build-shadow-jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Shadow JAR Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shadow-jar
+          path: shadow-jar
+
+      - name: Read App Version
+        id: read_version
+        run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux arm64 JRE (Temurin, Java 25)
+        run: |
+          BUNDLE="Time-Control-Linux-AArch64-Server"
+          mkdir -p "$BUNDLE/jre"
+          curl -fL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/aarch64/jre/hotspot/normal/eclipse" -o jre-linux-aarch64.tar.gz
+          tar xzf jre-linux-aarch64.tar.gz -C "$BUNDLE/jre" --strip-components=1
+
+      - name: Assemble Bundle
+        run: |
+          BUNDLE="Time-Control-Linux-AArch64-Server"
+          cp shadow-jar/Time-Control-java-v*.jar "$BUNDLE/time-control.jar"
+
+          cat > "$BUNDLE/start.sh" <<'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          exec "$DIR/jre/bin/java" -Dapp.packaged=true -Djava.awt.headless=true -Dapp.openBrowser=false -jar "$DIR/time-control.jar"
+          SCRIPT
+          chmod +x "$BUNDLE/start.sh"
+
+          cat > "$BUNDLE/time-control.service" <<'EOF'
+          [Unit]
+          Description=Time Control Zeitmessung
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/opt/time-control/start.sh
+          WorkingDirectory=/opt/time-control
+          Restart=on-failure
+          User=pi
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          cat > "$BUNDLE/README.txt" <<'EOF'
+          Time Control - Server-Betrieb (headless, ohne Installer)
+
+          1. Ordner nach /opt/time-control entpacken, z.B.:
+             sudo mkdir -p /opt/time-control
+             sudo tar xzf Time-Control-Linux-AArch64-Server-*.tar.gz --strip-components=1 -C /opt/time-control
+
+          2. time-control.service pruefen/anpassen (Pfad/User falls abweichend) und installieren:
+             sudo cp /opt/time-control/time-control.service /etc/systemd/system/
+             sudo systemctl daemon-reload
+             sudo systemctl enable --now time-control
+
+          3. Status/Logs pruefen:
+             systemctl status time-control
+             journalctl -u time-control -f
+
+          4. Ohne systemd testweise manuell starten:
+             ./start.sh
+          EOF
+
+      - name: Tar Bundle
+        run: |
+          mkdir -p dist
+          tar czf "dist/Time-Control-Linux-AArch64-Server-v${{ steps.read_version.outputs.version }}.tar.gz" Time-Control-Linux-AArch64-Server
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-aarch64-server-bundle
+          path: dist/Time-Control-Linux-AArch64-Server-v*.tar.gz
+          retention-days: 14
+
   create-release:
     name: Create GitHub Release
     # build-native-installer is currently skipped (see above) - not listed here, otherwise
     # this job would be skipped too since a skipped dependency doesn't count as successful.
-    needs: [ build-jpackage-installer, build-shadow-jar, build-macos-intel-bundle, build-macos-intel-poorman-bundle, build-macos-applesilicon-poorman-bundle, build-windows-poorman-bundle ]
+    needs: [ build-jpackage-installer, build-shadow-jar, build-macos-intel-bundle, build-macos-intel-poorman-bundle, build-macos-applesilicon-poorman-bundle, build-windows-poorman-bundle, build-linux-x64-server-bundle, build-linux-aarch64-server-bundle ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -614,6 +792,8 @@ jobs:
           cp release-assets/macos-intel-poorman-bundle/* final-assets/
           cp release-assets/macos-applesilicon-poorman-bundle/* final-assets/
           cp release-assets/windows-poorman-bundle/* final-assets/
+          cp release-assets/linux-x64-server-bundle/* final-assets/
+          cp release-assets/linux-aarch64-server-bundle/* final-assets/
 
       - name: Read App Version
         id: read_version
