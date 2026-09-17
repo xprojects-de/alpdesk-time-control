@@ -25,6 +25,7 @@ import {Gender, GenderLabels} from "../../models/gender.model";
 import * as AgeGroupActions from "../../store/age-group/age-group.actions";
 import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {AgeGroupDialogComponent} from "./age-group-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -342,15 +343,23 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteAgeGroup(ageGroup: AgeGroup): void {
-        if (
-            confirm(
-                `Möchten Sie die Altersgruppe "${ageGroup.name}" wirklich löschen?`,
-            )
-        ) {
-            this.store.dispatch(
-                AgeGroupActions.deleteAgeGroup({id: ageGroup.id}),
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie die Altersgruppe "${ageGroup.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        AgeGroupActions.deleteAgeGroup({id: ageGroup.id}),
+                    );
+                }
+            });
     }
 
     refreshData(): void {

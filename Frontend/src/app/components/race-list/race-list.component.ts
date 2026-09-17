@@ -32,6 +32,7 @@ import {
 } from '../participant-list/participant-import-mapping-dialog.component';
 import {RaceService} from '../../services/race.service';
 import {ParticipantService} from '../../services/participant.service';
+import {ConfirmDialogComponent} from '../shared/confirm-dialog/confirm-dialog.component';
 import {takeUntil} from 'rxjs/operators';
 import {Actions, ofType} from '@ngrx/effects';
 
@@ -263,9 +264,17 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
             ofType(RaceActions.deleteRaceConflict),
             takeUntil(this.destroy$),
         ).subscribe(({id, message}) => {
-            if (confirm(message)) {
-                this.store.dispatch(RaceActions.deleteRace({id, force: true}));
-            }
+            this.dialog.open(ConfirmDialogComponent, {
+                width: '450px',
+                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
+            })
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((confirmed) => {
+                    if (confirmed) {
+                        this.store.dispatch(RaceActions.deleteRace({id, force: true}));
+                    }
+                });
         });
 
         // Setup sort when signal changes
@@ -343,15 +352,23 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteRace(race: Race): void {
-        if (
-            confirm(
-                `Möchten Sie das Rennen "${race.name}" wirklich löschen?`
-            )
-        ) {
-            this.store.dispatch(
-                RaceActions.deleteRace({id: race.id})
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie das Rennen "${race.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        RaceActions.deleteRace({id: race.id})
+                    );
+                }
+            });
     }
 
     refreshData(): void {
@@ -417,7 +434,15 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
                                         const details = errors
                                             .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
                                             .join('\n');
-                                        alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+                                        this.dialog.open(ConfirmDialogComponent, {
+                                            width: '500px',
+                                            data: {
+                                                title: 'Übersprungene Zeilen',
+                                                message: details,
+                                                confirmLabel: 'OK',
+                                                hideCancel: true,
+                                            },
+                                        });
                                     }
                                 },
                                 error: (err) => {

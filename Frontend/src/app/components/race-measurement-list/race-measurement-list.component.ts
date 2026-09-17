@@ -35,6 +35,7 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {RaceMeasurementDialogComponent} from "./race-measurement-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
 interface RaceMeasurementWithParticipant extends RaceMeasurement {
@@ -449,13 +450,23 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteRaceMeasurement(raceMeasurement: RaceMeasurement): void {
-        if (
-            confirm(`Möchten Sie die archivierte Messung #${raceMeasurement.id} wirklich löschen?`)
-        ) {
-            this.store.dispatch(
-                RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}),
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie die archivierte Messung #${raceMeasurement.id} wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}),
+                    );
+                }
+            });
     }
 
     syncToParticipants(raceId: number): void {

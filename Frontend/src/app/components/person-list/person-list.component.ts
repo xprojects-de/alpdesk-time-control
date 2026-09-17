@@ -27,6 +27,7 @@ import * as PersonSelectors from "../../store/person/person.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import {PersonWithActiveRaces} from "../../store/person/person.selectors";
 import {PersonDialogComponent} from "./person-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {map, take, takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -370,9 +371,21 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         if (person.activeRaces.length > 0) {
             return;
         }
-        if (confirm(`Möchten Sie die Person "${person.lastName} ${person.firstName}" wirklich löschen?`)) {
-            this.store.dispatch(PersonActions.deletePerson({id: person.id}));
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Möchten Sie die Person "${person.lastName} ${person.firstName}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(PersonActions.deletePerson({id: person.id}));
+                }
+            });
     }
 
     deleteUnusedPersons(): void {
@@ -380,9 +393,21 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             if (count === 0) {
                 return;
             }
-            if (confirm(`Möchten Sie wirklich alle ${count} Person(en) löschen, die keinem Rennen / Teilnehmer zugewiesen sind?`)) {
-                this.store.dispatch(PersonActions.deleteUnusedPersons());
-            }
+            this.dialog.open(ConfirmDialogComponent, {
+                width: '450px',
+                data: {
+                    message: `Möchten Sie wirklich alle ${count} Person(en) löschen, die keinem Rennen / Teilnehmer zugewiesen sind?`,
+                    confirmLabel: 'Löschen',
+                    confirmColor: 'warn',
+                },
+            })
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((confirmed) => {
+                    if (confirmed) {
+                        this.store.dispatch(PersonActions.deleteUnusedPersons());
+                    }
+                });
         });
     }
 

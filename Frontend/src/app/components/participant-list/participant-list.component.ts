@@ -41,6 +41,7 @@ import {
     ParticipantResultImportMappingDialogComponent,
     ParticipantResultImportMappingDialogResult
 } from "./participant-result-import-mapping-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil, take, map} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -874,8 +875,17 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     const details = errors
                         .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
                         .join('\n');
-                    alert(`Folgende Zeilen wurden übersprungen:\n\n${details}`);
+                    this.dialog.open(ConfirmDialogComponent, {
+                        width: '500px',
+                        data: {
+                            title: 'Übersprungene Zeilen',
+                            message: details,
+                            confirmLabel: 'OK',
+                            hideCancel: true,
+                        },
+                    });
                 }
+                this.store.dispatch(ParticipantActions.clearImportResult());
             });
 
         this.store.select(ParticipantSelectors.selectCopyResult)
@@ -1008,30 +1018,46 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         const name = participant.person
             ? `${participant.person.firstName} ${participant.person.lastName}`
             : `#${participant.id}`;
-        if (
-            confirm(
-                `Möchten Sie das Ergebnis von "${name}" wirklich zurücksetzen?`,
-            )
-        ) {
-            this.store.dispatch(
-                ParticipantActions.clearParticipantResult({id: participant.id}),
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '400px',
+            data: {
+                message: `Möchten Sie das Ergebnis von "${name}" wirklich zurücksetzen?`,
+                confirmLabel: 'Zurücksetzen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        ParticipantActions.clearParticipantResult({id: participant.id}),
+                    );
+                }
+            });
     }
 
     deleteParticipant(participant: Participant): void {
         const name = participant.person
             ? `${participant.person.firstName} ${participant.person.lastName}`
             : `#${participant.id}`;
-        if (
-            confirm(
-                `Möchten Sie den Teilnehmer "${name}" wirklich löschen?`,
-            )
-        ) {
-            this.store.dispatch(
-                ParticipantActions.deleteParticipant({id: participant.id}),
-            );
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '400px',
+            data: {
+                message: `Möchten Sie den Teilnehmer "${name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        ParticipantActions.deleteParticipant({id: participant.id}),
+                    );
+                }
+            });
     }
 
     deleteParticipantsByRace(): void {
@@ -1041,15 +1067,23 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 if (raceId === null) return;
 
                 const raceName = this.dataSource.data[0]?.race?.name || 'diesem Rennen';
-                if (
-                    confirm(
-                        `Möchten Sie wirklich ALLE Teilnehmer von "${raceName}" löschen? Diese Aktion kann nicht rückgängig gemacht werden!`,
-                    )
-                ) {
-                    this.store.dispatch(
-                        ParticipantActions.deleteParticipantsByRaceId({raceId}),
-                    );
-                }
+                this.dialog.open(ConfirmDialogComponent, {
+                    width: '450px',
+                    data: {
+                        message: `Möchten Sie wirklich ALLE Teilnehmer von "${raceName}" löschen? Diese Aktion kann nicht rückgängig gemacht werden!`,
+                        confirmLabel: 'Alle löschen',
+                        confirmColor: 'warn',
+                    },
+                })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe((confirmed) => {
+                        if (confirmed) {
+                            this.store.dispatch(
+                                ParticipantActions.deleteParticipantsByRaceId({raceId}),
+                            );
+                        }
+                    });
             });
     }
 
@@ -1181,16 +1215,24 @@ async openImportDialog(): Promise<void> {
             return;
         }
 
-        if (
-            confirm(
-                'Möchten Sie die Startnummern für dieses Rennen wirklich neu zuweisen? Bereits vergebene Startnummern werden überschrieben.',
-            )
-        ) {
-            this.store.dispatch(ParticipantActions.assignRaceNumbers({raceId}));
-            this.snackBar.open('Startnummern werden zugewiesen...', 'OK', {
-                duration: 2000,
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: 'Möchten Sie die Startnummern für dieses Rennen wirklich neu zuweisen? Bereits vergebene Startnummern werden überschrieben.',
+                confirmLabel: 'Neu zuweisen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(ParticipantActions.assignRaceNumbers({raceId}));
+                    this.snackBar.open('Startnummern werden zugewiesen...', 'OK', {
+                        duration: 2000,
+                    });
+                }
             });
-        }
     }
 
     async applyStartOrderFromPreviousRace(): Promise<void> {
@@ -1203,22 +1245,42 @@ async openImportDialog(): Promise<void> {
             return;
         }
 
-        if (!confirm(
-            'Möchten Sie die Startreihenfolge dieses Rennens aus dem verknüpften Durchgang übernehmen? ' +
-            'Die Startnummern (Bibs) bleiben unverändert - es wird nur die Reihenfolge, in der gestartet wird, neu gesetzt.'
-        )) {
-            return;
-        }
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '500px',
+            data: {
+                message: 'Möchten Sie die Startreihenfolge dieses Rennens aus dem verknüpften Durchgang übernehmen? ' +
+                    'Die Startnummern (Bibs) bleiben unverändert - es wird nur die Reihenfolge, in der gestartet wird, neu gesetzt.',
+                confirmLabel: 'Übernehmen',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (!confirmed) {
+                    return;
+                }
 
-        const includeUnranked = confirm(
-            'Teilnehmer ohne Ergebnis (DSQ/DNF/DNS) im verknüpften Durchgang ans Ende der jeweiligen Altersgruppe ' +
-            'anhängen? "Abbrechen" markiert sie stattdessen als "Nicht gestartet" und nimmt sie von der Startliste.'
-        );
-
-        this.store.dispatch(ParticipantActions.applyStartOrderFromPreviousRace({raceId, includeUnranked}));
-        this.snackBar.open('Startreihenfolge wird übernommen...', 'OK', {
-            duration: 2000,
-        });
+                this.dialog.open(ConfirmDialogComponent, {
+                    width: '500px',
+                    data: {
+                        message: 'Teilnehmer ohne Ergebnis (DSQ/DNF/DNS) im verknüpften Durchgang ans Ende der jeweiligen ' +
+                            'Altersgruppe anhängen, oder stattdessen als "Nicht gestartet" markieren und von der Startliste nehmen?',
+                        confirmLabel: 'Ans Ende anhängen',
+                        cancelLabel: 'Als "Nicht gestartet" markieren',
+                    },
+                })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe((includeUnranked) => {
+                        this.store.dispatch(ParticipantActions.applyStartOrderFromPreviousRace({
+                            raceId,
+                            includeUnranked: !!includeUnranked,
+                        }));
+                        this.snackBar.open('Startreihenfolge wird übernommen...', 'OK', {
+                            duration: 2000,
+                        });
+                    });
+            });
     }
 
     async exportStartListPdf(): Promise<void> {

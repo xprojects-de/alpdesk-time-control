@@ -15,6 +15,7 @@ import {PointsScale} from "../../models/points-scale.model";
 import * as PointsScaleActions from "../../store/points-scale/points-scale.actions";
 import * as PointsScaleSelectors from "../../store/points-scale/points-scale.selectors";
 import {PointsScaleDialogComponent} from "./points-scale-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 
 @Component({
     selector: "app-points-scale-manager-dialog",
@@ -149,9 +150,17 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
             // Backend rejects with 409 when a Gaudi-Modus still references this scale unless
             // force=true - surface its message (which already asks "delete anyway?") as a second
             // confirmation instead of a dead-end error.
-            if (confirm(message)) {
-                this.store.dispatch(PointsScaleActions.deletePointsScale({id, force: true}));
-            }
+            this.dialog.open(ConfirmDialogComponent, {
+                width: '450px',
+                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
+            })
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((confirmed) => {
+                    if (confirmed) {
+                        this.store.dispatch(PointsScaleActions.deletePointsScale({id, force: true}));
+                    }
+                });
         });
     }
 
@@ -183,10 +192,21 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
     }
 
     delete(scale: PointsScale): void {
-        if (!confirm(`Punkteschema "${scale.name}" wirklich löschen?`)) {
-            return;
-        }
-        this.store.dispatch(PointsScaleActions.deletePointsScale({id: scale.id}));
+        this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: `Punkteschema "${scale.name}" wirklich löschen?`,
+                confirmLabel: 'Löschen',
+                confirmColor: 'warn',
+            },
+        })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((confirmed) => {
+                if (confirmed) {
+                    this.store.dispatch(PointsScaleActions.deletePointsScale({id: scale.id}));
+                }
+            });
     }
 
     close(): void {

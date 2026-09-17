@@ -201,6 +201,10 @@ export const participantReducer = createReducer(
         importLoading: false,
         error
     })),
+    on(ParticipantActions.clearImportResult, state => ({
+        ...state,
+        importResult: null
+    })),
 
     // Import results (time/status) for existing participants, matched by race number - unlike the
     // roster import above this never adds participants, it merges the returned rows into the
