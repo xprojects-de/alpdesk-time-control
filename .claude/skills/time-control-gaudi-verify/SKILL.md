@@ -181,6 +181,11 @@ categories apply, otherwise once over the whole field.
    whole thing once per `(ageGroup, gender)` group when categories apply. Keep it a plain script
    you can inspect and rerun, not something you compute by hand in your head — this is arithmetic
    across potentially dozens of participants and multiple races/groups, easy to slip on manually.
+   [`reference_script.py`](reference_script.py) in this skill's own folder is a worked example of
+   the right shape (per-category recomputation, the always-global nicht-gewertet pass, tie
+   rounding) from a past run — copy it as a starting point, but its `CONFIG`-block values (weights,
+   keep-flags, gender source, points scale) are that run's answers, not defaults: replace every one
+   of them with what *this* run's user actually said, never carry them over unasked.
 3. Run it, producing: the final ranking table(s) (place, name, total points, per-leg points/place),
    and the "nicht gewertet" list with each excluded person's reason — per category if applicable.
 4. Extract the app's reference output the same way — parse the reference PDF (via the `pdf` skill)
