@@ -1,0 +1,1 @@
+import{L as Mp,Sn as qE}from"./chunk-Ca0Gg2no.js";var r=qE(`category`);var c=Mp(r,e=>e.categories);var s=Mp(r,e=>e.loading);Mp(r,e=>e.error);export{s as n,c as t};
