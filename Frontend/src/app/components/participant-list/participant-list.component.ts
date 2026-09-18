@@ -927,11 +927,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             return "-";
         }
         const hasPenalty = participant.penalty !== undefined && participant.penalty !== null && participant.penalty !== 0;
+        const penaltySign = this.penaltySign(participant);
         if (participant.race?.resultUnit === ResultUnit.POINTS) {
             const label = participant.race?.resultUnitLabel ? ` ${participant.race.resultUnitLabel}` : "";
             const value = `${(participant.durationMs / 100).toFixed(2)}${label}`;
             if (hasPenalty) {
-                return `${value} (+${(participant.penalty! / 100).toFixed(2)}${label})`;
+                return `${value} (${penaltySign}${(participant.penalty! / 100).toFixed(2)}${label})`;
             }
             return value;
         }
@@ -941,9 +942,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             value += ` (−${this.formatDuration(offsetMs)})`;
         }
         if (hasPenalty) {
-            value += ` (+${this.formatDuration(participant.penalty!)})`;
+            value += ` (${penaltySign}${this.formatDuration(participant.penalty!)})`;
         }
         return value;
+    }
+
+    /** Mirrors RankingService#adjustedValue: a penalty is subtracted on DESC (higher-is-better) races. */
+    private penaltySign(participant: Participant): string {
+        return participant.race?.sortDirection === SortDirection.DESC ? "−" : "+";
     }
 
     /** Mirrors RankingService#startGroupOffsetMs: only TIME races have a block-start offset. */
@@ -969,7 +975,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             parts.push(label ? `(− Zeitversatz Startgruppe ${label})` : "(− Zeitversatz Startgruppe)");
         }
         if (hasPenalty) {
-            parts.push("(+ Strafe)");
+            parts.push(`(${this.penaltySign(participant)} Strafe)`);
         }
         return parts.join(" ");
     }

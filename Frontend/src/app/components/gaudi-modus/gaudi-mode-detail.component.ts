@@ -28,7 +28,7 @@ import {
     GaudiRankingEntry,
     GaudiRankingLeg,
 } from "../../models/gaudi-mode.model";
-import {Race, ResultUnit} from "../../models/race.model";
+import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as GaudiModeActions from "../../store/gaudi-mode/gaudi-mode.actions";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
 import {selectAllRaces} from "../../store/race/race.selectors";
@@ -452,19 +452,25 @@ export class GaudiModeDetailComponent implements OnDestroy {
         }
         const race = this.races.find(r => r.id === raceId);
         const hasPenalty = leg.penalty !== undefined && leg.penalty !== null && leg.penalty !== 0;
+        const penaltySign = this.penaltySign(race);
         if (race && race.resultUnit === ResultUnit.POINTS) {
             const label = race.resultUnitLabel ? ` ${race.resultUnitLabel}` : "";
             const value = `${(leg.rawValue / 100).toFixed(2)}${label}`;
-            return hasPenalty ? `${value} (+${(leg.penalty! / 100).toFixed(2)}${label})` : value;
+            return hasPenalty ? `${value} (${penaltySign}${(leg.penalty! / 100).toFixed(2)}${label})` : value;
         }
         let value = this.formatDuration(leg.rawValue);
         if (leg.startGroupOffsetMs) {
             value += ` (−${this.formatDuration(leg.startGroupOffsetMs)})`;
         }
         if (hasPenalty) {
-            value += ` (+${this.formatDuration(leg.penalty)})`;
+            value += ` (${penaltySign}${this.formatDuration(leg.penalty)})`;
         }
         return value;
+    }
+
+    /** Mirrors RankingService#adjustedValue: a penalty is subtracted on DESC (higher-is-better) races. */
+    private penaltySign(race: Race | undefined): string {
+        return race?.sortDirection === SortDirection.DESC ? "−" : "+";
     }
 
     legValueTooltip(entry: GaudiRankingEntry, raceId: number): string {
@@ -477,7 +483,7 @@ export class GaudiModeDetailComponent implements OnDestroy {
         if (!hasOffset && !hasPenalty) {
             return "";
         }
-        return ["Messwert", hasOffset ? "(− Zeitversatz Startgruppe)" : "", hasPenalty ? "(+ Strafe)" : ""]
+        return ["Messwert", hasOffset ? "(− Zeitversatz Startgruppe)" : "", hasPenalty ? `(${this.penaltySign(this.races.find(r => r.id === raceId))} Strafe)` : ""]
             .filter(Boolean).join(" ");
     }
 
