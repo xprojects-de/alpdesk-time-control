@@ -9,6 +9,7 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Error;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.authentication.AuthorizationException;
 import io.micronaut.security.rules.SecurityRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,10 +54,31 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Catch-all for anything that isn't a {@link DataAccessException} (e.g. an NPE from an
-     * unguarded optional-FK dereference, or a bug in request handling) - without this, such a
-     * failure bypasses the sanitizing above entirely and falls through to Micronaut's own default
-     * error handler, whose verbosity depends on the active environment.
+     * Without this, an {@link AuthorizationException} - thrown by Micronaut's own security filter
+     * for both "no/invalid credentials" and "unknown route" (micronaut.security.reject-not-found
+     * deliberately makes the two indistinguishable to an unauthenticated caller) - falls through to
+     * the Throwable catch-all below instead of Micronaut's built-in security exception handling,
+     * turning what should be a clean 401/403 into a generic 500. The frontend's auth interceptor
+     * (Frontend/src/app/interceptors/auth.interceptor.ts) already keys off exactly these two status
+     * codes to force a logout, so restoring them here also fixes session-expiry handling, not just
+     * the status code.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = AuthorizationException.class)
+    public HttpResponse<ErrorResponse> handleAuthorizationException(HttpRequest<?> request, AuthorizationException exception) {
+        HttpStatus status = exception.isForbidden() ? HttpStatus.FORBIDDEN : HttpStatus.UNAUTHORIZED;
+        LOG.debug("{} on {} {}", status, request.getMethod(), request.getPath());
+        return HttpResponse.status(status)
+                .body(new ErrorResponse(status == HttpStatus.FORBIDDEN
+                        ? "You are not allowed to perform this action."
+                        : "Authentication is required."));
+    }
+
+    /**
+     * Catch-all for anything that isn't a {@link DataAccessException} or {@link AuthorizationException}
+     * (e.g. an NPE from an unguarded optional-FK dereference, or a bug in request handling) - without
+     * this, such a failure bypasses the sanitizing above entirely and falls through to Micronaut's own
+     * default error handler, whose verbosity depends on the active environment.
      */
     @Produces(MediaType.APPLICATION_JSON)
     @Error(global = true, exception = Throwable.class)
