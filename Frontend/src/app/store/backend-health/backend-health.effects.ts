@@ -1,7 +1,7 @@
 import {inject, Injectable} from '@angular/core';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {interval, of} from 'rxjs';
-import {catchError, map, mergeMap, switchMap, takeUntil} from 'rxjs/operators';
+import {catchError, exhaustMap, map, switchMap, takeUntil, timeout} from 'rxjs/operators';
 import {HealthService} from '../../services/health.service';
 import * as BackendHealthActions from './backend-health.actions';
 
@@ -29,8 +29,12 @@ export class BackendHealthEffects {
     checkBackendHealth$ = createEffect(() =>
         this.actions$.pipe(
             ofType(BackendHealthActions.checkBackendHealth),
-            mergeMap(() =>
+            // exhaustMap + a short timeout: against a hung (not refusing) backend, pings would
+            // otherwise pile up until the global 30s HTTP timeout, occupying the browser's per-host
+            // connection slots and delaying the "unreachable" banner to ~35s.
+            exhaustMap(() =>
                 this.healthService.ping().pipe(
+                    timeout(4000),
                     map(() => BackendHealthActions.checkBackendHealthSuccess()),
                     catchError(() => of(BackendHealthActions.checkBackendHealthFailure()))
                 )

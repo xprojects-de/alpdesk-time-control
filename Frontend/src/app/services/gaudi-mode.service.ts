@@ -5,6 +5,7 @@ import {
     GaudiLosPairing,
     GaudiMode,
     GaudiModeRequest,
+    GaudiNotRankedEntry,
     GaudiRankingEntry,
 } from '../models/gaudi-mode.model';
 import {environment} from '../../environments/environment';
@@ -47,6 +48,10 @@ export class GaudiModeService {
 
     getRanking(id: number): Observable<GaudiRankingEntry[]> {
         return this.http.get<GaudiRankingEntry[]>(`${this.apiUrl}/${id}/ranking`);
+    }
+
+    getNotRanked(id: number): Observable<GaudiNotRankedEntry[]> {
+        return this.http.get<GaudiNotRankedEntry[]>(`${this.apiUrl}/${id}/not-ranked`);
     }
 
     exportPdf(id: number): Observable<Blob> {

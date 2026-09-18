@@ -3,6 +3,7 @@ import {
     GaudiLosPairing,
     GaudiMode,
     GaudiModeRequest,
+    GaudiNotRankedEntry,
     GaudiRankingEntry,
 } from '../../models/gaudi-mode.model';
 
@@ -88,7 +89,7 @@ export const loadRanking = createAction(
 );
 export const loadRankingSuccess = createAction(
     '[GaudiMode] Load Ranking Success',
-    props<{ ranking: GaudiRankingEntry[] }>()
+    props<{ ranking: GaudiRankingEntry[]; notRanked: GaudiNotRankedEntry[] }>()
 );
 export const loadRankingFailure = createAction(
     '[GaudiMode] Load Ranking Failure',

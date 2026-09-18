@@ -2,6 +2,7 @@ import {Routes} from '@angular/router';
 import {DashboardComponent} from './components/dashboard/dashboard.component';
 import {LoginComponent} from './components/login/login.component';
 import {authGuard} from './guards/auth.guard';
+import {unsavedChangesGuard} from './guards/unsaved-changes.guard';
 
 export const routes: Routes = [
     {path: '', redirectTo: '/login', pathMatch: 'full'},
@@ -50,7 +51,8 @@ export const routes: Routes = [
             {
                 path: 'start-groups',
                 loadComponent: () => import('./components/start-group-board/start-group-board.component')
-                    .then(m => m.StartGroupBoardComponent)
+                    .then(m => m.StartGroupBoardComponent),
+                canDeactivate: [unsavedChangesGuard]
             },
             {
                 path: 'measurements',

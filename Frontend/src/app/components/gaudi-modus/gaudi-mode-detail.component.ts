@@ -25,6 +25,7 @@ import {
     GaudiLosPairing,
     GaudiMode,
     GaudiModeType,
+    GaudiNotRankedEntry,
     GaudiRankingEntry,
     GaudiRankingLeg,
 } from "../../models/gaudi-mode.model";
@@ -244,6 +245,30 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 } @else {
                     <p class="hint">Noch keine Wertung berechnet.</p>
                 }
+
+                @if ((notRanked$ | async)?.length) {
+                    <h3 class="not-ranked-title">Nicht gewertet</h3>
+                    <div class="table-container">
+                        <table mat-table [dataSource]="(notRanked$ | async) || []" class="detail-table">
+                            <ng-container matColumnDef="name">
+                                <th mat-header-cell *matHeaderCellDef>
+                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Paarung' : 'Name' }}
+                                </th>
+                                <td mat-cell *matCellDef="let e">{{ notRankedName(e) }}</td>
+                            </ng-container>
+                            <ng-container matColumnDef="team">
+                                <th mat-header-cell *matHeaderCellDef>Team</th>
+                                <td mat-cell *matCellDef="let e">{{ e.team || '-' }}</td>
+                            </ng-container>
+                            <ng-container matColumnDef="status">
+                                <th mat-header-cell *matHeaderCellDef>Status</th>
+                                <td mat-cell *matCellDef="let e">{{ e.status }}</td>
+                            </ng-container>
+                            <tr mat-header-row *matHeaderRowDef="notRankedColumns"></tr>
+                            <tr mat-row *matRowDef="let row; columns: notRankedColumns"></tr>
+                        </table>
+                    </div>
+                }
             </mat-card-content>
         </mat-card>
     `,
@@ -272,6 +297,10 @@ import {selectAllRaces} from "../../store/race/race.selectors";
             margin-bottom: 16px;
           }
 
+          .not-ranked-title {
+            margin: 8px 0;
+          }
+
           .hint {
             color: rgba(0, 0, 0, 0.6);
             font-style: italic;
@@ -296,6 +325,8 @@ export class GaudiModeDetailComponent implements OnDestroy {
 
     pairing$: Observable<GaudiLosPairing[]> = this.store.select(GaudiModeSelectors.selectPairing);
     ranking$: Observable<GaudiRankingEntry[]> = this.store.select(GaudiModeSelectors.selectRanking);
+    notRanked$: Observable<GaudiNotRankedEntry[]> = this.store.select(GaudiModeSelectors.selectNotRanked);
+    notRankedColumns = ["name", "team", "status"];
 
     trackByPairingId = (_index: number, pairing: GaudiLosPairing) => pairing.id;
 
@@ -413,6 +444,11 @@ export class GaudiModeDetailComponent implements OnDestroy {
     private buildFilename(gaudiMode: GaudiMode, suffix: string): string {
         const base = `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}`;
         return suffix ? `${base}_${suffix}.pdf` : `${base}.pdf`;
+    }
+
+    /** Los-Modus puts the whole pair label into lastName (firstName empty). */
+    notRankedName(entry: GaudiNotRankedEntry): string {
+        return `${entry.lastName} ${entry.firstName}`.trim();
     }
 
     memberSummary(entry: GaudiRankingEntry): string {

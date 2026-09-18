@@ -1,8 +1,8 @@
 import {inject, Injectable} from '@angular/core';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {catchError, map, mergeMap, tap} from 'rxjs/operators';
+import {forkJoin, of} from 'rxjs';
+import {catchError, map, mergeMap, switchMap, tap} from 'rxjs/operators';
 import {GaudiModeService} from '../../services/gaudi-mode.service';
 import * as GaudiModeActions from './gaudi-mode.actions';
 
@@ -84,7 +84,9 @@ export class GaudiModeEffects {
     loadPairing$ = createEffect(() =>
         this.actions$.pipe(
             ofType(GaudiModeActions.loadPairing),
-            mergeMap(({id}) =>
+            // switchMap: switching to another Gaudi-Modus cancels the previous request, so a slow
+            // response for mode A can't land in mode B's detail view.
+            switchMap(({id}) =>
                 this.gaudiModeService.getPairing(id).pipe(
                     map(pairing => GaudiModeActions.pairingSuccess({pairing})),
                     catchError(error => of(GaudiModeActions.pairingFailure({
@@ -98,9 +100,14 @@ export class GaudiModeEffects {
     loadRanking$ = createEffect(() =>
         this.actions$.pipe(
             ofType(GaudiModeActions.loadRanking),
-            mergeMap(({id}) =>
-                this.gaudiModeService.getRanking(id).pipe(
-                    map(ranking => GaudiModeActions.loadRankingSuccess({ranking})),
+            // switchMap: switching to another Gaudi-Modus cancels the previous request, so a slow
+            // response for mode A can't land in mode B's detail view.
+            switchMap(({id}) =>
+                forkJoin({
+                    ranking: this.gaudiModeService.getRanking(id),
+                    notRanked: this.gaudiModeService.getNotRanked(id),
+                }).pipe(
+                    map(({ranking, notRanked}) => GaudiModeActions.loadRankingSuccess({ranking, notRanked})),
                     catchError(error => of(GaudiModeActions.loadRankingFailure({
                         error: extractErrorMessage(error, 'Rangliste konnte nicht geladen werden')
                     })))

@@ -2,7 +2,8 @@ import {Component, HostListener, OnDestroy, OnInit, ViewChild, inject, ChangeDet
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject, combineLatest, firstValueFrom} from "rxjs";
-import {takeUntil} from "rxjs/operators";
+import {map, takeUntil} from "rxjs/operators";
+import {HasUnsavedChanges} from "../../guards/unsaved-changes.guard";
 import {
     DragDropModule,
     CdkDragDrop,
@@ -376,7 +377,7 @@ interface BoardColumn {
         `,
     ],
 })
-export class StartGroupBoardComponent implements OnInit, OnDestroy {
+export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedChanges {
     private store = inject(Store);
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
@@ -443,6 +444,19 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER: ${error}`, "OK", {duration: 5000});
         });
+    }
+
+    confirmDiscardChanges(): boolean | Observable<boolean> {
+        if (!this.dirty) {
+            return true;
+        }
+        return this.dialog.open(ConfirmDialogComponent, {
+            width: '450px',
+            data: {
+                message: 'Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Verlassen der Seite gehen sie verloren. Fortfahren?',
+                confirmLabel: 'Verlassen',
+            },
+        }).afterClosed().pipe(map(confirmed => !!confirmed));
     }
 
     @HostListener('window:beforeunload', ['$event'])

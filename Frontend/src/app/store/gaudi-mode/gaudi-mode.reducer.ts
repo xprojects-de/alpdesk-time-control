@@ -1,5 +1,5 @@
 import {createReducer, on} from '@ngrx/store';
-import {GaudiLosPairing, GaudiMode, GaudiRankingEntry} from '../../models/gaudi-mode.model';
+import {GaudiLosPairing, GaudiMode, GaudiNotRankedEntry, GaudiRankingEntry} from '../../models/gaudi-mode.model';
 import * as GaudiModeActions from './gaudi-mode.actions';
 
 export interface GaudiModeState {
@@ -7,6 +7,7 @@ export interface GaudiModeState {
     selectedGaudiModeId: number | null;
     pairing: GaudiLosPairing[];
     ranking: GaudiRankingEntry[];
+    notRanked: GaudiNotRankedEntry[];
     loading: boolean;
     pdfExportLoading: boolean;
     error: string | null;
@@ -17,6 +18,7 @@ export const initialState: GaudiModeState = {
     selectedGaudiModeId: null,
     pairing: [],
     ranking: [],
+    notRanked: [],
     loading: false,
     pdfExportLoading: false,
     error: null
@@ -94,7 +96,8 @@ export const gaudiModeReducer = createReducer(
         ...state,
         selectedGaudiModeId: id,
         pairing: [],
-        ranking: []
+        ranking: [],
+        notRanked: []
     })),
 
     on(GaudiModeActions.drawPairing, GaudiModeActions.loadPairing, state => ({
@@ -118,9 +121,10 @@ export const gaudiModeReducer = createReducer(
         loading: true,
         error: null
     })),
-    on(GaudiModeActions.loadRankingSuccess, (state, {ranking}) => ({
+    on(GaudiModeActions.loadRankingSuccess, (state, {ranking, notRanked}) => ({
         ...state,
         ranking,
+        notRanked,
         loading: false
     })),
     on(GaudiModeActions.loadRankingFailure, (state, {error}) => ({

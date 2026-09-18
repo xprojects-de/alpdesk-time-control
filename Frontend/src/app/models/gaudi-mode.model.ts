@@ -83,6 +83,16 @@ export interface GaudiTeamMember {
     valueMs?: number;
 }
 
+/** An entry excluded from a Gaudi-Modus ranking ("nicht gewertet"); for Los-Modus lastName carries the pair label. */
+export interface GaudiNotRankedEntry {
+    lastName: string;
+    firstName: string;
+    team?: string;
+    ageGroup: string;
+    externalId?: string;
+    status: string;
+}
+
 export interface GaudiRankingEntry {
     place: number;
     label: string;

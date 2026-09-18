@@ -72,6 +72,9 @@ export const raceReducer = createReducer(
     on(RaceActions.deleteRaceSuccess, (state, {id}) => ({
         ...state,
         races: state.races.filter(r => r.id !== id),
+        // Otherwise the participant/start-group pages keep filtering by (and acting on) a race
+        // that no longer exists.
+        selectedRaceId: state.selectedRaceId === id ? null : state.selectedRaceId,
         loading: false
     })),
     on(RaceActions.deleteRaceFailure, (state, {error}) => ({

@@ -49,3 +49,8 @@ export const selectRanking = createSelector(
     selectGaudiModeState,
     state => state.ranking
 );
+
+export const selectNotRanked = createSelector(
+    selectGaudiModeState,
+    state => state.notRanked
+);
