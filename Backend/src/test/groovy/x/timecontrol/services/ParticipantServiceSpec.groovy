@@ -653,8 +653,8 @@ class ParticipantServiceSpec extends Specification {
         def result = service.copyStartGroupAssignment(5L, [6L])
 
         then: "target1 (matching person) gets source1's group/sequence; targetUnmatched (no matching person) is never written"
-        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 }) >> { Participant p -> p }
-        0 * repository.update({ Participant p -> p.id() == 3L })
+        1 * repository.updateAll({ List<Participant> list -> list.size() == 1 && list[0].id() == 2L && list[0].startGroupId() == 7L && list[0].startSequence() == 1 }) >> { args -> args[0] }
+        0 * repository.updateAll({ List<Participant> list -> list.any { it.id() == 3L } })
 
         and: "every target-race participant is returned, matched or not, so the frontend can refresh its full participant list"
         result*.id() as Set == [2L, 3L] as Set
@@ -669,14 +669,13 @@ class ParticipantServiceSpec extends Specification {
         def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
         def targetColliding = new Participant(3L, 6L, 200L, null, null, null, null, null, null, null, null, 1, null)
         repository.findByRaceId(6L) >> [target1, targetColliding]
-        repository.update(_ as Participant) >> { Participant p -> p }
 
         when:
         def result = service.copyStartGroupAssignment(5L, [6L])
 
         then: "the colliding participant's stale startSequence is cleared (not left at 1) before target1 is written with the copied startSequence 1"
-        1 * repository.update({ Participant p -> p.id() == 3L && p.startSequence() == null }) >> { Participant p -> p }
-        1 * repository.update({ Participant p -> p.id() == 2L && p.startGroupId() == 7L && p.startSequence() == 1 }) >> { Participant p -> p }
+        1 * repository.updateAll({ List<Participant> list -> list.size() == 1 && list[0].id() == 3L && list[0].startSequence() == null }) >> { args -> args[0] }
+        1 * repository.updateAll({ List<Participant> list -> list.size() == 1 && list[0].id() == 2L && list[0].startGroupId() == 7L && list[0].startSequence() == 1 }) >> { args -> args[0] }
 
         and: "the returned list reflects the cleared value too, not the stale pre-clear startSequence of 1"
         result.find { it.id() == 3L }.startSequence() == null

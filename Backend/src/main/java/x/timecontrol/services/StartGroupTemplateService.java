@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Singleton
 public class StartGroupTemplateService {
@@ -31,7 +31,17 @@ public class StartGroupTemplateService {
     // every participant of every ranking computation, so serving it from memory instead of hitting
     // SQLite per lookup turns what would otherwise be a per-participant query into an O(1) map
     // lookup, without any caller needing to batch-load anything itself.
-    private final AtomicReference<Map<Long, StartGroupTemplate>> cache = new AtomicReference<>();
+    //
+    // version is bumped by invalidateCache() and stamped onto every snapshot loadCache() builds; a
+    // snapshot is only published if the version hasn't moved on since the load started. Without
+    // this check, a reader that started loading before a concurrent write's invalidateCache() could
+    // still publish its now-stale snapshot afterwards, permanently clobbering the invalidation until
+    // some unrelated future write happened to invalidate again.
+    private final AtomicLong version = new AtomicLong();
+    private volatile CacheSnapshot snapshot;
+
+    private record CacheSnapshot(long version, Map<Long, StartGroupTemplate> templates) {
+    }
 
     public StartGroupTemplateService(StartGroupTemplateRepository repository, ParticipantRepository participantRepository, TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
@@ -40,25 +50,26 @@ public class StartGroupTemplateService {
     }
 
     private Map<Long, StartGroupTemplate> loadCache() {
-        Map<Long, StartGroupTemplate> current = cache.get();
-        if (current != null) {
-            return current;
+        CacheSnapshot current = snapshot;
+        long observedVersion = version.get();
+        if (current != null && current.version() == observedVersion) {
+            return current.templates();
         }
         Map<Long, StartGroupTemplate> loaded = new HashMap<>();
         for (StartGroupTemplate template : repository.findAll()) {
             loaded.put(template.id(), template);
         }
-        cache.set(loaded);
+        if (version.get() == observedVersion) {
+            snapshot = new CacheSnapshot(observedVersion, loaded);
+        }
         return loaded;
     }
 
     /**
-     * Called after every write below so the next read rebuilds from the DB - a benign race where
-     * two threads both rebuild the cache at once just does the (cheap) load twice, never returns
-     * stale data.
+     * Called after every write below so the next read rebuilds from the DB.
      */
     private void invalidateCache() {
-        cache.set(null);
+        version.incrementAndGet();
     }
 
     public StartGroupTemplate create(StartGroupTemplate template) {

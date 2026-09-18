@@ -133,7 +133,7 @@ import {Actions, ofType} from "@ngrx/effects";
                         </button>
 
                         <mat-menu #moreActionsMenu="matMenu">
-                            <button mat-menu-item [matMenuTriggerFor]="startOrderMenu" [disabled]="pdfExportLoading$ | async">
+                            <button mat-menu-item [matMenuTriggerFor]="startOrderMenu" [disabled]="loading$ | async">
                                 <mat-icon>format_list_numbered</mat-icon>
                                 <span>Startnummern</span>
                             </button>

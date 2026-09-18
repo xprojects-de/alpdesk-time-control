@@ -753,10 +753,16 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
     private compareByClubName(a: DraftEntry, b: DraftEntry, compare: (x: string, y: string) => number): number {
         const ac = a.participant.team?.name;
         const bc = b.participant.team?.name;
-        if (ac == null && bc == null) return 0;
+        // Falls back to raceNumber so two participants of the same club (or both without one) get
+        // a deterministic order instead of keeping whatever position they happened to be in on the
+        // board before this sort - otherwise re-running the same suggestion after an unrelated
+        // board change (a manual drag, a different auto-suggest) would reshuffle same-club members
+        // relative to each other for no reason.
+        if (ac == null && bc == null) return (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0);
         if (ac == null) return 1;
         if (bc == null) return -1;
-        return compare(ac, bc);
+        const byName = compare(ac, bc);
+        return byName !== 0 ? byName : (a.participant.raceNumber ?? 0) - (b.participant.raceNumber ?? 0);
     }
 
     /**

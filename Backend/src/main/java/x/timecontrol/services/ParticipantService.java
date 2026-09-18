@@ -784,19 +784,41 @@ public class ParticipantService {
                         .collect(Collectors.toSet());
                 // Tracks each target's current state through the clear pass below, so a
                 // cleared-but-unmatched participant is returned with its actual (nulled)
-                // startSequence instead of the stale pre-clear value.
+                // startSequence instead of the stale pre-clear value. Both passes below batch
+                // their writes via updateAll instead of one repository.update() per participant.
                 Map<Long, Participant> currentById = new HashMap<>();
+                List<Participant> toClear = new ArrayList<>();
                 for (Participant target : targetParticipants) {
                     boolean matched = sourceByPersonId.containsKey(target.personId());
                     boolean collidesWithIncoming = !matched && target.startSequence() != null && incomingSequences.contains(target.startSequence());
-                    currentById.put(target.id(), (matched || collidesWithIncoming) ? clearStartSequenceIfSet(target) : target);
+                    if ((matched || collidesWithIncoming) && target.startSequence() != null) {
+                        toClear.add(withStartSequence(target, null));
+                    } else {
+                        currentById.put(target.id(), target);
+                    }
                 }
+                if (!toClear.isEmpty()) {
+                    for (Participant cleared : repository.updateAll(toClear)) {
+                        currentById.put(cleared.id(), cleared);
+                    }
+                }
+
+                List<Participant> toAssign = new ArrayList<>();
                 for (Participant target : targetParticipants) {
                     Participant source = sourceByPersonId.get(target.personId());
-                    Participant current = currentById.get(target.id());
-                    allUpdated.add(source != null
-                            ? repository.update(withStartGroupAndSequence(current, source.startGroupId(), source.startSequence()))
-                            : current);
+                    if (source != null) {
+                        toAssign.add(withStartGroupAndSequence(currentById.get(target.id()), source.startGroupId(), source.startSequence()));
+                    }
+                }
+                Map<Long, Participant> assignedById = new HashMap<>();
+                if (!toAssign.isEmpty()) {
+                    for (Participant assigned : repository.updateAll(toAssign)) {
+                        assignedById.put(assigned.id(), assigned);
+                    }
+                }
+                for (Participant target : targetParticipants) {
+                    Participant assigned = assignedById.get(target.id());
+                    allUpdated.add(assigned != null ? assigned : currentById.get(target.id()));
                 }
             }
             return allUpdated;
