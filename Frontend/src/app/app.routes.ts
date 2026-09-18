@@ -72,6 +72,11 @@ export const routes: Routes = [
                 loadComponent: () => import('./components/settings/settings.component')
                     .then(m => m.SettingsComponent)
             },
+            {
+                path: '**',
+                loadComponent: () => import('./components/dashboard-not-found/dashboard-not-found.component')
+                    .then(m => m.DashboardNotFoundComponent)
+            },
         ]
     },
     {path: '**', redirectTo: '/login'}
