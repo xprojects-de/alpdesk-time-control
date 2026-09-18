@@ -1,0 +1,1 @@
+import{f as Gl,vt as om}from"./chunk-1I-lyJg8.js";var r=om(`category`);var c=Gl(r,e=>e.categories);var s=Gl(r,e=>e.loading);Gl(r,e=>e.error);export{s as n,c as t};

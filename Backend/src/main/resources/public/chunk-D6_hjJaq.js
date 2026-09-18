@@ -1,1 +1,0 @@
-import{L as Mp,Sn as qE}from"./chunk-Ca0Gg2no.js";var r=qE(`team`);var c=Mp(r,e=>e.teams);var m=Mp(r,e=>e.loading);Mp(r,e=>e.error);export{m as n,c as t};

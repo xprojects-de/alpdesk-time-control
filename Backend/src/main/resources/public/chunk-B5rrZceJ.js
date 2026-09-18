@@ -1,1 +1,0 @@
-import{L as Mp,Sn as qE}from"./chunk-Ca0Gg2no.js";var r=qE(`startGroupTemplate`);var p=Mp(r,t=>t.templates);var l=Mp(r,t=>t.loading);Mp(r,t=>t.error);export{p as n,l as t};
