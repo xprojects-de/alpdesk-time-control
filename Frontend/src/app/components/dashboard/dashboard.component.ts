@@ -19,6 +19,8 @@ import * as VersionActions from "../../store/version/version.actions";
 import * as VersionSelectors from "../../store/version/version.selectors";
 import * as SettingsActions from "../../store/settings/settings.actions";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
+import * as BackendHealthActions from "../../store/backend-health/backend-health.actions";
+import * as BackendHealthSelectors from "../../store/backend-health/backend-health.selectors";
 import {VersionInfo} from "../../models/version.model";
 
 interface NavItem {
@@ -94,6 +96,19 @@ interface NavItem {
             </mat-menu>
         </mat-toolbar>
 
+        <!-- Only rendered once a check has actually failed (=== false, not just "not yet known"
+             which is null) - a lost backend connection risks silent data loss (nothing saves
+             while it's down), so this is a persistent banner rather than a small toolbar icon. -->
+        @if ((backendReachable$ | async) === false) {
+            <div class="backend-offline-banner">
+                <mat-icon>cloud_off</mat-icon>
+                <span>Backend nicht erreichbar - Änderungen werden möglicherweise nicht gespeichert.</span>
+                <button mat-icon-button (click)="retryBackendHealthCheck()" matTooltip="Jetzt erneut prüfen">
+                    <mat-icon>refresh</mat-icon>
+                </button>
+            </div>
+        }
+
         <mat-sidenav-container class="dashboard-container">
             <mat-sidenav mode="side" [opened]="navOpen()" class="app-nav">
                 <mat-nav-list class="nav-list">
@@ -129,6 +144,32 @@ interface NavItem {
           .dashboard-container {
             flex: 1 1 auto;
             min-height: 0;
+          }
+
+          .backend-offline-banner {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 8px 8px 16px;
+            background: #f44336;
+            color: white;
+            font-size: 13px;
+            flex: 0 0 auto;
+          }
+
+          .backend-offline-banner span {
+            flex: 1 1 auto;
+          }
+
+          .backend-offline-banner mat-icon {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+          }
+
+          .backend-offline-banner button {
+            color: white;
+            flex: 0 0 auto;
           }
 
           .app-nav {
@@ -202,6 +243,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     version$: Observable<VersionInfo | null>;
     // Emits only once the real value is known (see constructor / selectTimingProviderActive).
     timingProviderActive$: Observable<boolean>;
+    // null until the first health check completes (see BackendHealthState.reachable).
+    backendReachable$: Observable<boolean | null>;
 
     readonly navItems: NavItem[] = [
         {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
@@ -237,6 +280,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             filter((active): active is boolean => active !== null),
             distinctUntilChanged(),
         );
+        this.backendReachable$ = this.store.select(BackendHealthSelectors.selectBackendReachable);
     }
 
     toggleNav(): void {
@@ -263,6 +307,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.store.dispatch(VersionActions.loadVersion());
         this.store.dispatch(SettingsActions.loadTimingProvider());
 
+        // Unlike the timing-device poll below, this runs unconditionally - a missing backend
+        // matters regardless of whether a timing device is even configured.
+        this.store.dispatch(BackendHealthActions.startBackendHealthPolling());
+        this.store.dispatch(BackendHealthActions.checkBackendHealth());
+
         // Only poll device connection while a timing device is actually configured - starting
         // polling dispatches again on every change is safe (the effect's switchMap cancels the
         // previous interval), so this also picks up a provider switch made on the Settings page
@@ -284,9 +333,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.destroy$.complete();
         // Stop polling when component is destroyed
         this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
+        this.store.dispatch(BackendHealthActions.stopBackendHealthPolling());
     }
 
     logout(): void {
         this.store.dispatch(AuthActions.logout());
+    }
+
+    retryBackendHealthCheck(): void {
+        this.store.dispatch(BackendHealthActions.checkBackendHealth());
     }
 }
