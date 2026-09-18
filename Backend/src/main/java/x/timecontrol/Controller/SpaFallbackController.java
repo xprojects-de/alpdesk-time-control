@@ -40,7 +40,7 @@ public class SpaFallbackController {
     }
 
     @Get("/dashboard/{+path}")
-    public HttpResponse<?> dashboardChild(String path) {
+    public HttpResponse<?> dashboardChild(@SuppressWarnings("unused") String path) {
         return spaShell();
     }
 
