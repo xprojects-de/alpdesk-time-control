@@ -366,7 +366,8 @@ import {Actions, ofType} from "@ngrx/effects";
                      <!-- Duration/Value Column -->
                      <ng-container matColumnDef="durationMs">
                          <th mat-header-cell *matHeaderCellDef mat-sort-header>Ergebnis</th>
-                         <td mat-cell *matCellDef="let participant">
+                         <td mat-cell *matCellDef="let participant"
+                             [matTooltip]="resultValueTooltip(participant)">
                              {{ formatResultValue(participant) }}
                          </td>
                      </ng-container>
@@ -609,7 +610,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     }
                     const penalty = participant.penalty ?? 0;
                     const isDesc = participant.race?.sortDirection === SortDirection.DESC;
-                    const adjusted = isDesc ? participant.durationMs - penalty : participant.durationMs + penalty;
+                    // Nets out the start-group offset like RankingService#netDurationMs (TIME only).
+                    const offsetMs = participant.race?.resultUnit === ResultUnit.TIME
+                        ? (participant.startGroup?.offsetSeconds ?? 0) * 1000
+                        : 0;
+                    const netDuration = Math.max(0, participant.durationMs - offsetMs);
+                    const adjusted = isDesc ? netDuration - penalty : netDuration + penalty;
                     // Negate DESC (higher-is-better) races so ascending sort still means
                     // "best first" consistently with ASC races, matching RankingService.
                     return isDesc ? -adjusted : adjusted;
@@ -929,11 +935,43 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             }
             return value;
         }
-        const value = this.formatDuration(participant.durationMs);
+        const offsetMs = this.startGroupOffsetMs(participant);
+        let value = this.formatDuration(participant.durationMs);
+        if (offsetMs) {
+            value += ` (−${this.formatDuration(offsetMs)})`;
+        }
         if (hasPenalty) {
-            return `${value} (+${this.formatDuration(participant.penalty!)})`;
+            value += ` (+${this.formatDuration(participant.penalty!)})`;
         }
         return value;
+    }
+
+    /** Mirrors RankingService#startGroupOffsetMs: only TIME races have a block-start offset. */
+    private startGroupOffsetMs(participant: Participant): number {
+        if (participant.race?.resultUnit !== ResultUnit.TIME) {
+            return 0;
+        }
+        return (participant.startGroup?.offsetSeconds ?? 0) * 1000;
+    }
+
+    resultValueTooltip(participant: Participant): string {
+        if (participant.durationMs === undefined || participant.durationMs === null) {
+            return "";
+        }
+        const offsetMs = this.startGroupOffsetMs(participant);
+        const hasPenalty = participant.penalty !== undefined && participant.penalty !== null && participant.penalty !== 0;
+        if (!offsetMs && !hasPenalty) {
+            return "";
+        }
+        const parts = ["Messzeit"];
+        if (offsetMs) {
+            const label = participant.startGroup?.label;
+            parts.push(label ? `(− Zeitversatz Startgruppe ${label})` : "(− Zeitversatz Startgruppe)");
+        }
+        if (hasPenalty) {
+            parts.push("(+ Strafe)");
+        }
+        return parts.join(" ");
     }
 
     formatDuration(ms: number): string {

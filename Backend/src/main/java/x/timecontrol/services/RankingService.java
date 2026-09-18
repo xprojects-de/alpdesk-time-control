@@ -44,20 +44,7 @@ public class RankingService {
                 || (participant.status() != null && participant.status() != DisqualificationStatus.NONE)) {
             return null;
         }
-        int durationMs = participant.durationMs();
-        // A points race has no notion of a start-time offset, so this only ever applies to TIME
-        // races. Nets out the head start a staggered block-start signal already gave this
-        // participant against a single shared race clock - without this, a participant in a group
-        // that started later would show a duration inflated by exactly their group's offset, even
-        // though they ran the same course in the same time as someone in an earlier group.
-        if (race.resultUnit() == ResultUnit.TIME && participant.startGroupId() != null) {
-            Integer offsetSeconds = startGroupTemplateService.findById(participant.startGroupId())
-                    .map(StartGroupTemplate::offsetSeconds)
-                    .orElse(null);
-            if (offsetSeconds != null) {
-                durationMs -= offsetSeconds * 1000;
-            }
-        }
+        int durationMs = netDurationMs(race, participant);
         int penalty = participant.penalty() != null ? participant.penalty() : 0;
         int adjusted = race.sortDirection() == SortDirection.DESC
                 ? durationMs - penalty
@@ -69,6 +56,34 @@ public class RankingService {
         // Floor at 0 to keep that impossible regardless of which direction the caller's race sorts
         // in.
         return Math.max(0, adjusted);
+    }
+
+    /**
+     * The raw measured result netted of the participant's start-group offset (TIME races only),
+     * before any penalty - what a "Zeit" column must show so that Zeit + Strafe = Gesamt holds for
+     * block-start groups too. Null if no result was measured; floored at 0.
+     */
+    public Integer netDurationMs(Race race, Participant participant) {
+        if (participant.durationMs() == null) {
+            return null;
+        }
+        Integer offsetMs = startGroupOffsetMs(race, participant);
+        return Math.max(0, participant.durationMs() - (offsetMs != null ? offsetMs : 0));
+    }
+
+    /**
+     * The head start (in ms) a staggered block-start signal gave this participant's start group
+     * against a single shared race clock - null for a points race (no notion of a start-time
+     * offset), for a participant without a start group, or for a group without an offset.
+     */
+    public Integer startGroupOffsetMs(Race race, Participant participant) {
+        if (race.resultUnit() != ResultUnit.TIME || participant.startGroupId() == null) {
+            return null;
+        }
+        return startGroupTemplateService.findById(participant.startGroupId())
+                .map(StartGroupTemplate::offsetSeconds)
+                .map(seconds -> seconds * 1000)
+                .orElse(null);
     }
 
     /**

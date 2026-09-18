@@ -217,12 +217,15 @@ public class ParticipantController {
     @Operation(summary = "Apply a start-group assignment to a race's participants", description = "Sets startGroupId and the resulting startSequence (e.g. group A's members get 1..28, group B's 29..55, ...) for the listed participants. Only participants listed in the request are touched; anyone left out keeps their current startGroupId/startSequence.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Start-group assignment applied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "A participant does not belong to this race, or references a start-group template that does not exist")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
     public HttpResponse<?> applyStartGroupAssignment(@PathVariable Long raceId, @Body StartGroupAssignmentRequest request) {
         try {
             List<Participant> updated = service.applyStartGroupAssignment(raceId, request.assignments());
             return HttpResponse.ok(service.toResponses(updated));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
     }
 
@@ -232,12 +235,15 @@ public class ParticipantController {
     @Operation(summary = "Copy a start-group assignment into other races", description = "Copies startGroupId and startSequence from the source race's participants into each target race, matched by person. A target-race participant whose person isn't in the source race keeps its current assignment untouched.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Start-group assignment copied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
     @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for a target race")
     public HttpResponse<?> copyStartGroupAssignment(@Body StartGroupCopyRequest request) {
         try {
             List<Participant> updated = service.copyStartGroupAssignment(request.sourceRaceId(), request.targetRaceIds());
             return HttpResponse.ok(service.toResponses(updated));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
     }
 

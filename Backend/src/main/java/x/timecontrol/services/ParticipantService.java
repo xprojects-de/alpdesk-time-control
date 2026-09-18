@@ -695,8 +695,10 @@ public class ParticipantService {
      *
      * @throws IllegalArgumentException if a participantId doesn't belong to {@code raceId}, or a
      *                                    referenced start-group template doesn't exist
+     * @throws IllegalStateException    if live auto-assign mode is currently active for this race
      */
     public List<Participant> applyStartGroupAssignment(Long raceId, List<StartGroupAssignmentRequest.Entry> assignments) {
+        requireAutoAssignInactive(raceId);
         Set<Long> participantIds = assignments.stream().map(StartGroupAssignmentRequest.Entry::participantId).collect(Collectors.toSet());
         Map<Long, Participant> existingById = new HashMap<>();
         for (Participant participant : repository.findByIdIn(participantIds)) {
@@ -746,6 +748,7 @@ public class ParticipantService {
      * {@code (race_id, start_sequence)} unique index.
      *
      * @throws IllegalArgumentException if the source race or any target race doesn't exist
+     * @throws IllegalStateException    if live auto-assign mode is currently active for any target race
      */
     public List<Participant> copyStartGroupAssignment(Long sourceRaceId, List<Long> targetRaceIds) {
         if (raceService.findById(sourceRaceId).isEmpty()) {
@@ -755,6 +758,7 @@ public class ParticipantService {
             if (raceService.findById(targetRaceId).isEmpty()) {
                 throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
             }
+            requireAutoAssignInactive(targetRaceId);
         }
 
         List<Participant> sourceParticipants = StreamSupport.stream(repository.findByRaceId(sourceRaceId).spliterator(), false).toList();
@@ -791,7 +795,11 @@ public class ParticipantService {
                 for (Participant target : targetParticipants) {
                     boolean matched = sourceByPersonId.containsKey(target.personId());
                     boolean collidesWithIncoming = !matched && target.startSequence() != null && incomingSequences.contains(target.startSequence());
-                    if ((matched || collidesWithIncoming) && target.startSequence() != null) {
+                    if (collidesWithIncoming) {
+                        // Losing its position also drops its group, or it would keep showing in
+                        // that group's column/start list while sorting outside the group's block.
+                        toClear.add(withStartGroupAndSequence(target, null, null));
+                    } else if (matched && target.startSequence() != null) {
                         toClear.add(withStartSequence(target, null));
                     } else {
                         currentById.put(target.id(), target);
@@ -949,6 +957,16 @@ public class ParticipantService {
 
     private static Participant withStartGroupAndSequence(Participant participant, Long startGroupId, Integer startSequence) {
         return with(participant, participant.raceNumber(), participant.status(), startSequence, startGroupId);
+    }
+
+    /**
+     * Rewriting startSequence while live auto-assign is matching measurements against it would
+     * attach the next finish-line measurements to the wrong participants.
+     */
+    private void requireAutoAssignInactive(Long raceId) {
+        if (autoAssignService.isActiveFor(raceId)) {
+            throw new IllegalStateException("Auto-assign mode is active for race " + raceId + ". Disable it before changing the start order.");
+        }
     }
 
     /**

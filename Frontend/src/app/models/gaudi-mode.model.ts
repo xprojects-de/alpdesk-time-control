@@ -74,6 +74,8 @@ export interface GaudiRankingLeg {
     points?: number;
     /** The participant's explicit DSQ/DNF/DNS status in this race, if any. */
     status?: string;
+    /** Start-group block-start offset (ms) netted out of rawValue, if any - TIME races only. */
+    startGroupOffsetMs?: number | null;
 }
 
 export interface GaudiTeamMember {

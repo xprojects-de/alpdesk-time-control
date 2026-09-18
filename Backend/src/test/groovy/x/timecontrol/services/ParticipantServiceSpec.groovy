@@ -682,6 +682,52 @@ class ParticipantServiceSpec extends Specification {
         result*.id() as Set == [2L, 3L] as Set
     }
 
+    def "copyStartGroupAssignment also drops a colliding unmatched participant's start group, not just its startSequence"() {
+        given: "the colliding participant (person 200) sits in group 9 on startSequence 1"
+        raceService.findById(5L) >> Optional.of(race())
+        raceService.findById(6L) >> Optional.of(race())
+        def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
+        repository.findByRaceId(5L) >> [source1]
+        def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
+        def targetColliding = new Participant(3L, 6L, 200L, null, null, null, null, null, null, null, null, 1, 9L)
+        repository.findByRaceId(6L) >> [target1, targetColliding]
+        repository.updateAll(_) >> { args -> args[0] }
+
+        when:
+        def result = service.copyStartGroupAssignment(5L, [6L])
+
+        then:
+        def colliding = result.find { it.id() == 3L }
+        colliding.startSequence() == null
+        colliding.startGroupId() == null
+    }
+
+    def "applyStartGroupAssignment refuses while auto-assign is active for the race"() {
+        given:
+        autoAssignActiveForRace = true
+
+        when:
+        service.applyStartGroupAssignment(5L, [new StartGroupAssignmentRequest.Entry(1L, null, 1)])
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.update(_)
+    }
+
+    def "copyStartGroupAssignment refuses while auto-assign is active for a target race"() {
+        given:
+        autoAssignActiveForRace = true
+        raceService.findById(5L) >> Optional.of(race())
+        raceService.findById(6L) >> Optional.of(race())
+
+        when:
+        service.copyStartGroupAssignment(5L, [6L])
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.updateAll(_)
+    }
+
     def "CSV import reports a row-level error instead of aborting the whole import"() {
         given: "the second row's participant save fails (e.g. a transient DB error)"
         repository.findByRaceId(5L) >> []

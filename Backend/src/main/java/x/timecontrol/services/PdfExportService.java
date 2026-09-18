@@ -421,7 +421,7 @@ public class PdfExportService {
         for (int i = 0; i < legRaces.size(); i++) {
             Race legRace = legRaces.get(i);
             String raceLabel = truncate(legRace.name(), 16);
-            String zeit = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+            String zeit = RankingViewService.formatValue(legRace, legValue(entry, i, PdfExportService::netLegValue));
             String strafe = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             blocks.add(raceLabel + ": Zeit " + zeit + ", Strafe " + strafe);
         }
@@ -587,7 +587,7 @@ public class PdfExportService {
             String raceLabel = truncate(legRace.name(), 40);
             String legStatus = entry.legs() != null && i < entry.legs().size() ? entry.legs().get(i).status() : null;
             String wert = legStatus != null ? legStatus
-                    : RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::rawValue));
+                    : RankingViewService.formatValue(legRace, legValue(entry, i, PdfExportService::netLegValue));
             String strafe = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
             String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);
@@ -602,6 +602,17 @@ public class PdfExportService {
         }
         GaudiRankingLegResponse leg = entry.legs().get(idx);
         return leg != null ? getter.apply(leg) : null;
+    }
+
+    /**
+     * A leg's raw value netted of its start-group offset (see RankingService#netDurationMs), so a
+     * leg's printed Zeit + Strafe adds up to the value that actually counted.
+     */
+    private static Integer netLegValue(GaudiRankingLegResponse leg) {
+        if (leg.rawValue() == null || leg.startGroupOffsetMs() == null) {
+            return leg.rawValue();
+        }
+        return Math.max(0, leg.rawValue() - leg.startGroupOffsetMs());
     }
 
     private String legValueString(GaudiRankingEntryResponse entry, int idx, Function<GaudiRankingLegResponse, Integer> getter) {

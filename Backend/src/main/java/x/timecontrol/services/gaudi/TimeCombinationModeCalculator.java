@@ -109,7 +109,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                         adjusted,
                         p != null ? placesByRace.get(race.raceId()).get(p.id()) : null,
                         null,
-                        null
+                        null,
+                        p != null ? rankingService.startGroupOffsetMs(race.race(), p) : null
                 ));
             }
             int total = (int) Math.round(weightedTotal);

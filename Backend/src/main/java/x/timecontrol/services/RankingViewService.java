@@ -268,7 +268,7 @@ public class RankingViewService {
                     person != null ? person.externalId() : null,
                     ageGroup,
                     team,
-                    formatValue(race, p.durationMs()),
+                    formatValue(race, rankingService.netDurationMs(race, p)),
                     formatValue(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",

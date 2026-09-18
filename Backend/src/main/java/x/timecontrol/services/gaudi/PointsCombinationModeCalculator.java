@@ -125,7 +125,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                         adjusted,
                         place,
                         (int) Math.round(weightedPoints),
-                        legStatus
+                        legStatus,
+                        p != null ? rankingService.startGroupOffsetMs(race.race(), p) : null
                 ));
             }
             int totalPoints = (int) Math.round(weightedTotal);

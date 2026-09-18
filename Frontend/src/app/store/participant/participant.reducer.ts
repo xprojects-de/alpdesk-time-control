@@ -39,6 +39,11 @@ export const initialState: ParticipantState = {
     error: null
 };
 
+const mergeById = (existing: Participant[], updated: Participant[]): Participant[] => {
+    const updatedById = new Map(updated.map(u => [u.id, u]));
+    return existing.map(p => updatedById.get(p.id) ?? p);
+};
+
 const startLoading = (state: ParticipantState) => ({
     ...state,
     loadingCount: state.loadingCount + 1,
@@ -154,7 +159,7 @@ export const participantReducer = createReducer(
     on(ParticipantActions.assignRaceNumbers, startLoading),
     on(ParticipantActions.assignRaceNumbersSuccess, (state, {participants}) => ({
         ...state,
-        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        participants: mergeById(state.participants, participants),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.assignRaceNumbersFailure, (state, {error}) => ({
@@ -167,7 +172,7 @@ export const participantReducer = createReducer(
     on(ParticipantActions.applyStartOrderFromPreviousRace, startLoading),
     on(ParticipantActions.applyStartOrderFromPreviousRaceSuccess, (state, {participants}) => ({
         ...state,
-        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        participants: mergeById(state.participants, participants),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.applyStartOrderFromPreviousRaceFailure, (state, {error}) => ({
@@ -180,7 +185,7 @@ export const participantReducer = createReducer(
     on(ParticipantActions.saveStartGroupAssignment, startLoading),
     on(ParticipantActions.saveStartGroupAssignmentSuccess, (state, {participants}) => ({
         ...state,
-        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        participants: mergeById(state.participants, participants),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.saveStartGroupAssignmentFailure, (state, {error}) => ({
@@ -195,7 +200,7 @@ export const participantReducer = createReducer(
     on(ParticipantActions.copyStartGroupAssignment, startLoading),
     on(ParticipantActions.copyStartGroupAssignmentSuccess, (state, {participants}) => ({
         ...state,
-        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        participants: mergeById(state.participants, participants),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.copyStartGroupAssignmentFailure, (state, {error}) => ({
@@ -208,7 +213,7 @@ export const participantReducer = createReducer(
     on(ParticipantActions.generateRaceNumbersFromStartGroups, startLoading),
     on(ParticipantActions.generateRaceNumbersFromStartGroupsSuccess, (state, {participants}) => ({
         ...state,
-        participants: state.participants.map(p => participants.find(u => u.id === p.id) || p),
+        participants: mergeById(state.participants, participants),
         loadingCount: endLoading(state)
     })),
     on(ParticipantActions.generateRaceNumbersFromStartGroupsFailure, (state, {error}) => ({

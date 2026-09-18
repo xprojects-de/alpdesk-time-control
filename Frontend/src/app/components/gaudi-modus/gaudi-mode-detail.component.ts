@@ -176,7 +176,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                             @for (leg of legColumns; track leg.raceId) {
                                 <ng-container [matColumnDef]="'leg_' + leg.raceId + '_value'">
                                     <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }}</th>
-                                    <td mat-cell *matCellDef="let r">{{ legValueDisplay(r, leg.raceId) }}</td>
+                                    <td mat-cell *matCellDef="let r" [matTooltip]="legValueTooltip(r, leg.raceId)">{{ legValueDisplay(r, leg.raceId) }}</td>
                                 </ng-container>
                                 @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
                                     <ng-container [matColumnDef]="'leg_' + leg.raceId + '_place'">
@@ -451,11 +451,34 @@ export class GaudiModeDetailComponent implements OnDestroy {
             return "-";
         }
         const race = this.races.find(r => r.id === raceId);
+        const hasPenalty = leg.penalty !== undefined && leg.penalty !== null && leg.penalty !== 0;
         if (race && race.resultUnit === ResultUnit.POINTS) {
             const label = race.resultUnitLabel ? ` ${race.resultUnitLabel}` : "";
-            return `${(leg.rawValue / 100).toFixed(2)}${label}`;
+            const value = `${(leg.rawValue / 100).toFixed(2)}${label}`;
+            return hasPenalty ? `${value} (+${(leg.penalty! / 100).toFixed(2)}${label})` : value;
         }
-        return this.formatDuration(leg.rawValue);
+        let value = this.formatDuration(leg.rawValue);
+        if (leg.startGroupOffsetMs) {
+            value += ` (−${this.formatDuration(leg.startGroupOffsetMs)})`;
+        }
+        if (hasPenalty) {
+            value += ` (+${this.formatDuration(leg.penalty)})`;
+        }
+        return value;
+    }
+
+    legValueTooltip(entry: GaudiRankingEntry, raceId: number): string {
+        const leg = this.legFor(entry, raceId);
+        if (!leg || leg.status || leg.rawValue === undefined || leg.rawValue === null) {
+            return "";
+        }
+        const hasOffset = !!leg.startGroupOffsetMs;
+        const hasPenalty = leg.penalty !== undefined && leg.penalty !== null && leg.penalty !== 0;
+        if (!hasOffset && !hasPenalty) {
+            return "";
+        }
+        return ["Messwert", hasOffset ? "(− Zeitversatz Startgruppe)" : "", hasPenalty ? "(+ Strafe)" : ""]
+            .filter(Boolean).join(" ");
     }
 
     legPlaceDisplay(entry: GaudiRankingEntry, raceId: number): string {

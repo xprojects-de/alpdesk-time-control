@@ -171,6 +171,16 @@ class RankingServiceSpec extends Specification {
         rankingService.adjustedValue(raceAsc, participantWithStartGroup(1L, 5000, 9L)) == 0
     }
 
+    def "netDurationMs nets out the start-group offset but not the penalty, so Zeit + Strafe = Gesamt"() {
+        given:
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, 300))
+        def participant = participantWithStartGroup(1L, 400000, 9L, 1000)
+
+        expect:
+        rankingService.netDurationMs(raceAsc, participant) == 100000
+        rankingService.netDurationMs(raceAsc, participant) + 1000 == rankingService.adjustedValue(raceAsc, participant)
+    }
+
     def "comparator sorts ascending for ASC races (fastest time first)"() {
         given:
         def participants = [participant(1L, 90000), participant(2L, 60000), participant(3L, 75000)]

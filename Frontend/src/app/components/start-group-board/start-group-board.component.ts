@@ -523,7 +523,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
     }
 
     private rebuildFromParticipants(participants: Participant[], templates: StartGroupTemplate[]): void {
-        this.hasResults = participants.some(p => p.durationMs != null);
+        this.hasResults = participants.some(p => p.durationMs != null || p.measuredAt != null);
 
         const usedTemplateIds = new Set<number>();
         // Reconstructs each group's display order from the actual per-race startSequence already
@@ -565,6 +565,9 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
             const column = entry.startGroupId !== null
                 ? this.groupColumns.find(c => c.id === entry.startGroupId)
                 : undefined;
+            // A group whose template isn't (or no longer) loaded lands in "Nicht zugeordnet" -
+            // its id must go too, or the next save would write the stale group back.
+            entry.startGroupId = column?.id ?? null;
             (column ?? this.unassignedColumn).entries.push(entry);
         }
 
@@ -646,8 +649,12 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy {
                 entry.startSequence = sequence++;
             }
         }
+        // Once any group exists, unassigned participants continue the sequence after the last
+        // group instead of falling back to their bib - otherwise the backend's start order
+        // (startSequence ?? raceNumber) would interleave bibs with the groups' 1..n sequence.
+        const hasGroups = this.groupColumns.length > 0;
         for (const entry of this.unassignedColumn.entries) {
-            entry.startSequence = null;
+            entry.startSequence = hasGroups ? sequence++ : null;
         }
     }
 
