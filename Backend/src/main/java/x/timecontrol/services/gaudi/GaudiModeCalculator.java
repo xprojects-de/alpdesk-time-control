@@ -34,10 +34,10 @@ public interface GaudiModeCalculator {
     /**
      * Persons referenced by the combined races who were excluded from {@link #computeRanking} for
      * missing a valid result in at least one leg, so a PDF export can list them separately as "nicht
-     * gewertet" (DNS) instead of silently dropping them. Only meaningful for the two calculators that
-     * combine several races per person (Zeit-Kombination, Punkte-Mischwertung); Los-Modus and
-     * Mannschaftswertung rank pairs/teams rather than individuals, so there's no single person to
-     * report as DNS there - they keep this default empty implementation.
+     * gewertet" (DNS) instead of silently dropping them. Implemented by the two calculators that
+     * combine several races per person (Zeit-Kombination, Punkte-Mischwertung) and by Los-Modus,
+     * which reports whole pairs (label in lastName) with a member lacking a result. Mannschaftswertung
+     * keeps this default empty implementation.
      */
     default List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
         return List.of();

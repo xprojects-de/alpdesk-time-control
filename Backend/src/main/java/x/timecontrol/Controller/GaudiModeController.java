@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiLosPairingResponse;
 import x.timecontrol.dto.GaudiModeRaceResponse;
 import x.timecontrol.dto.GaudiModeRequest;
@@ -184,6 +185,18 @@ public class GaudiModeController {
         }
     }
 
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/{id}/not-ranked")
+    @Operation(summary = "Get the entries excluded from a Gaudi-Modus ranking (\"nicht gewertet\")",
+            description = "Persons (Zeit-Kombination / Punkte-Mischwertung) or pairs (Los-Modus) missing a valid result - the same list the PDF export prints below the ranking. Always empty for Mannschaftswertung.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Excluded entries", content = @Content(schema = @Schema(implementation = GaudiDnsEntryResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
+    public HttpResponse<List<GaudiDnsEntryResponse>> getNotRanked(@PathVariable Long id) {
+        Optional<GaudiMode> gaudiMode = service.findById(id);
+        return gaudiMode.map(g -> HttpResponse.ok(service.computeDnsEntries(g))).orElse(HttpResponse.notFound());
+    }
+
     @Produces("application/pdf")
     @Get("/{id}/export/pdf")
     @Operation(summary = "Export the computed ranking of a Gaudi-Modus instance as PDF", security = @SecurityRequirement(name = "BearerAuth"))
@@ -209,7 +222,8 @@ public class GaudiModeController {
         try {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
             byte[] pdfBytes = switch (gaudiMode.type()) {
-                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst());
+                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst(),
+                        service.computeDnsEntries(gaudiMode));
                 case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode, ranking, races.getFirst());
                 case TIME_COMBINATION ->
                         pdfExportService.generateTimeCombinationRanking(gaudiMode, ranking, races, races.getFirst(),

@@ -69,6 +69,18 @@ public class PdfExportService {
         return DNS_COLUMNS.stream().filter(c -> !c.header().equals("ID")).toList();
     }
 
+    /**
+     * "Nicht gewertet" columns for Los-Modus, whose rows are whole pairs (see
+     * LosModeCalculator#computeDnsEntries) - no single person's ID or age group to show, and the pair
+     * label needs the extra width instead.
+     */
+    private static final List<PdfColumn<RankingViewService.DnsRow>> LOS_DNS_COLUMNS = List.of(
+            new PdfColumn<>("Position", 0.6f, e -> String.valueOf(e.position())),
+            new PdfColumn<>("Paarung", 3.2f, e -> truncate(e.name(), 48)),
+            new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
+            new PdfColumn<>("Status", 0.8f, RankingViewService.DnsRow::status)
+    );
+
     private static final List<PdfColumn<RankingViewService.RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
             new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
@@ -340,7 +352,8 @@ public class PdfExportService {
         });
     }
 
-    public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+    public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race,
+                                         List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Paarung", 2.2f, e -> truncate(e.label(), 40)),
@@ -351,8 +364,10 @@ public class PdfExportService {
                 new PdfColumn<>("Ø-Wert Gesamt", 1f, e -> RankingViewService.formatValue(race, e.referenceMs())),
                 new PdfColumn<>("Abweichung", 1f, e -> RankingViewService.formatValue(race, e.diffMs()))
         );
-        return renderDocument(race, gaudiMode, true,
-                ctx -> drawSection(ctx, columns, gaudiMode.name(), entries, true));
+        return renderDocument(race, gaudiMode, true, ctx -> {
+            drawSection(ctx, columns, gaudiMode.name(), entries, true);
+            drawDnsSection(ctx, toDnsRows(dnsEntries), LOS_DNS_COLUMNS);
+        });
     }
 
     /**
@@ -422,7 +437,7 @@ public class PdfExportService {
             Race legRace = legRaces.get(i);
             String raceLabel = truncate(legRace.name(), 16);
             String zeit = RankingViewService.formatValue(legRace, legValue(entry, i, PdfExportService::netLegValue));
-            String strafe = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
+            String strafe = RankingViewService.formatPenalty(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             blocks.add(raceLabel + ": Zeit " + zeit + ", Strafe " + strafe);
         }
         return blocks;
@@ -588,7 +603,7 @@ public class PdfExportService {
             String legStatus = entry.legs() != null && i < entry.legs().size() ? entry.legs().get(i).status() : null;
             String wert = legStatus != null ? legStatus
                     : RankingViewService.formatValue(legRace, legValue(entry, i, PdfExportService::netLegValue));
-            String strafe = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
+            String strafe = RankingViewService.formatPenalty(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
             String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
             String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);
             rows.add(new PointsCombinationLegRow(raceLabel, wert, strafe, platz, pkt));
@@ -827,6 +842,11 @@ public class PdfExportService {
      * see createDnsRows, so unlike {@link #drawSection} it has only one title size.
      */
     private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows) throws IOException {
+        drawDnsSection(ctx, rows, dnsColumns(rows));
+    }
+
+    private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,
+                                List<PdfColumn<RankingViewService.DnsRow>> columns) throws IOException {
         if (rows.isEmpty()) {
             return;
         }
@@ -836,7 +856,6 @@ public class PdfExportService {
         ctx.text(FONT_BOLD, 12, MARGIN, ctx.y, "Nicht gewertet");
         ctx.y -= 22;
 
-        List<PdfColumn<RankingViewService.DnsRow>> columns = dnsColumns(rows);
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
         drawRows(ctx, columns, colX, rows);

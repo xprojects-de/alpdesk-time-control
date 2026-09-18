@@ -387,11 +387,13 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
                 Number(formValue.milliseconds || 0),
             );
 
+        // An empty penalty field alongside an entered time is sent as 0, which the backend treats as
+        // "remove the penalty" (stored as null) - undefined would mean "keep the existing penalty".
         const penalty = !timeEntered ? undefined : isPoints
             ? (formValue.penaltyPointsValue !== "" && formValue.penaltyPointsValue !== null
-                ? Math.round(Number(formValue.penaltyPointsValue) * 100) : undefined)
+                ? Math.round(Number(formValue.penaltyPointsValue) * 100) : 0)
             : (formValue.penaltySeconds !== "" && formValue.penaltySeconds !== null
-                ? Math.round(Number(formValue.penaltySeconds) * 1000) : undefined);
+                ? Math.round(Number(formValue.penaltySeconds) * 1000) : 0);
 
         const request: ParticipantRequest = {
             raceId: Number(formValue.race),

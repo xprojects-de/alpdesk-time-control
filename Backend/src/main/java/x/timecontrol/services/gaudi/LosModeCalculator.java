@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi;
 
 import jakarta.inject.Singleton;
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
@@ -17,6 +18,7 @@ import x.timecontrol.services.TeamService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -156,6 +158,76 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         return entries;
+    }
+
+    /**
+     * The complement of {@link #computeRanking}'s "both members need a result" rule: a pair in which
+     * a member exists in the race but has no valid result (DNS/DNF/DSQ, or simply no time yet) is
+     * not ranked at all - it's listed here as "nicht gewertet" instead of silently disappearing, with
+     * the status of the member(s) that didn't finish. A pairing whose first member no longer exists
+     * in the race (e.g. a stale pairing) is skipped, since there's nobody left to report.
+     */
+    @Override
+    public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
+        if (races.isEmpty()) {
+            return List.of();
+        }
+        Race race = races.getFirst().race();
+        Map<Long, Participant> participantsById = races.getFirst().participants().stream()
+                .collect(Collectors.toMap(Participant::id, p -> p));
+
+        List<Participant[]> excludedPairs = new ArrayList<>();
+        for (GaudiLosPairing pairing : pairingRepository.findByGaudiModeId(gaudiMode.id())) {
+            Participant p1 = participantsById.get(pairing.participant1Id());
+            Participant p2 = pairing.participant2Id() != null ? participantsById.get(pairing.participant2Id()) : null;
+            if (p1 == null) {
+                continue;
+            }
+            boolean p1Missing = rankingService.adjustedValue(race, p1) == null;
+            boolean p2Missing = p2 != null && rankingService.adjustedValue(race, p2) == null;
+            if (p1Missing || p2Missing) {
+                excludedPairs.add(new Participant[]{p1, p2});
+            }
+        }
+        if (excludedPairs.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> personIds = new HashSet<>();
+        Set<Long> teamIds = new HashSet<>();
+        for (Participant[] pair : excludedPairs) {
+            for (Participant p : pair) {
+                if (p != null) {
+                    personIds.add(p.personId());
+                    if (p.teamId() != null) {
+                        teamIds.add(p.teamId());
+                    }
+                }
+            }
+        }
+        Map<Long, Person> personsById = personService.findByIds(personIds);
+        Map<Long, Team> teamsById = teamService.findByIds(teamIds);
+
+        List<GaudiDnsEntryResponse> dns = new ArrayList<>();
+        for (Participant[] pair : excludedPairs) {
+            Participant p1 = pair[0];
+            Participant p2 = pair[1];
+            String label = p2 != null
+                    ? formatName(p1, personsById) + " & " + formatName(p2, personsById)
+                    : formatName(p1, personsById) + " (Einzel)";
+            List<Participant> withoutResult = new ArrayList<>();
+            for (Participant p : pair) {
+                if (p != null && rankingService.adjustedValue(race, p) == null) {
+                    withoutResult.add(p);
+                }
+            }
+            // Pairs aren't persons, so lastName carries the whole pair label (PdfExportService joins
+            // lastName + firstName into the printed name) and there's no single age group to show.
+            dns.add(new GaudiDnsEntryResponse(label, "", formatTeam(p1, p2, teamsById), "-", null,
+                    rankingService.dnsStatusLabel(withoutResult)));
+        }
+        dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
+        return dns;
     }
 
     private String formatName(Participant p, Map<Long, Person> personsById) {

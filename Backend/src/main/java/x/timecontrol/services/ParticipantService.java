@@ -19,6 +19,7 @@ import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Gender;
+import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
@@ -26,6 +27,7 @@ import x.timecontrol.entities.RaceMeasurement;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.StartGroupTemplate;
 import x.timecontrol.entities.Team;
+import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.repositories.ParticipantRepository;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.transaction.TransactionOperations;
@@ -36,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -74,8 +75,9 @@ public class ParticipantService {
     private final RankingService rankingService;
     private final StartGroupTemplateService startGroupTemplateService;
     private final TransactionOperations<Connection> transactionOperations;
+    private final GaudiLosPairingRepository losPairingRepository;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService, TransactionOperations<Connection> transactionOperations) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService, TransactionOperations<Connection> transactionOperations, GaudiLosPairingRepository losPairingRepository) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
         this.raceService = raceService;
@@ -86,6 +88,7 @@ public class ParticipantService {
         this.rankingService = rankingService;
         this.startGroupTemplateService = startGroupTemplateService;
         this.transactionOperations = transactionOperations;
+        this.losPairingRepository = losPairingRepository;
     }
 
     /**
@@ -99,7 +102,7 @@ public class ParticipantService {
     public Participant create(Participant participant) {
         validate(participant, null);
         Participant toSave = new Participant(participant.id(), participant.raceId(), participant.personId(), participant.raceNumber(),
-                participant.teamId(), participant.categoryId(), participant.durationMs(), participant.penalty(),
+                participant.teamId(), participant.categoryId(), participant.durationMs(), zeroPenaltyToNull(participant.penalty()),
                 participant.measuredAt(), participant.comment(), resolveStatus(participant, DisqualificationStatus.NONE));
         try {
             return repository.save(toSave);
@@ -109,6 +112,10 @@ public class ParticipantService {
             }
             throw e;
         }
+    }
+
+    private static Integer zeroPenaltyToNull(Integer penalty) {
+        return penalty != null && penalty == 0 ? null : penalty;
     }
 
     public Iterable<Participant> findAll() {
@@ -135,7 +142,10 @@ public class ParticipantService {
             // never exposed in the participant edit form, so they must always fall through to "keep
             // existing" or every unrelated edit would silently clear them.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
-            Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
+            // An explicit 0 is how the edit form says "remove the penalty" (null already means "keep
+            // existing" above) - stored as null so PDF/live views render "-" instead of "00:00,00".
+            Integer penalty = participant.penalty() == null ? existing.get().penalty()
+                    : participant.penalty() == 0 ? null : participant.penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
             DisqualificationStatus status = resolveStatus(participant, existing.get().status());
             Integer startSequence = participant.startSequence() != null ? participant.startSequence() : existing.get().startSequence();
@@ -275,8 +285,26 @@ public class ParticipantService {
         }
     }
 
+    /**
+     * Deleting a participant must not take their Los-Modus partner down with them: the pairing's FKs
+     * are ON DELETE CASCADE, which would silently drop the whole pair (and with it the partner, who
+     * may well have raced) from the Los ranking. The deleted participant is removed from each of
+     * their pairings first instead, leaving the partner as a single ("Einzel") pairing - which
+     * LosModeCalculator already ranks - and only a pairing with nobody left is deleted.
+     */
     public void delete(Long id) {
-        repository.deleteById(id);
+        transactionOperations.executeWrite(_ -> {
+            for (GaudiLosPairing pairing : losPairingRepository.findByParticipant1IdOrParticipant2Id(id, id)) {
+                Long partnerId = id.equals(pairing.participant1Id()) ? pairing.participant2Id() : pairing.participant1Id();
+                if (partnerId == null) {
+                    losPairingRepository.deleteById(pairing.id());
+                } else {
+                    losPairingRepository.update(new GaudiLosPairing(pairing.id(), pairing.gaudiModeId(), partnerId, null));
+                }
+            }
+            repository.deleteById(id);
+            return null;
+        });
     }
 
     private List<AgeGroup> allAgeGroups() {
@@ -1095,7 +1123,7 @@ public class ParticipantService {
 
     private static ParticipantImportParsers.ParsedRows parseImportFile(byte[] fileBytes, ParticipantImportFormat format, Character delimiter) throws IOException {
         return switch (format) {
-            case CSV -> ParticipantImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+            case CSV -> ParticipantImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
             case DSV_XML -> ParticipantImportParsers.parseDsvXml(new ByteArrayInputStream(fileBytes));
         };
     }
@@ -1105,7 +1133,7 @@ public class ParticipantService {
      * rows, for building/pre-filling the column-mapping UI. Never touches the database.
      */
     public ParticipantResultImportPreviewResponse previewResultsImport(byte[] fileBytes, Character delimiter) {
-        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> suggested = ParticipantResultImportParsers.suggestMapping(parsed.fields());
         List<Map<String, String>> sample = parsed.rows().stream().limit(5).toList();
         return new ParticipantResultImportPreviewResponse(parsed.fields(), suggested, sample);
@@ -1155,7 +1183,7 @@ public class ParticipantService {
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat,
                                                                      ResultUnit resultUnit) {
-        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> effectiveMapping = (mapping == null)
                 ? ParticipantResultImportParsers.suggestMapping(parsed.fields())
                 : mapping;
@@ -1265,7 +1293,7 @@ public class ParticipantService {
             toUpdate.add(new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(),
                     durationMs != null ? durationMs : existing.durationMs(),
-                    penalty,
+                    zeroPenaltyToNull(penalty),
                     LocalDateTime.now(),
                     comment,
                     status != null ? status : existing.status(),
@@ -1630,7 +1658,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, participantStatus);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, zeroPenaltyToNull(penalty), measuredAt, comment, participantStatus);
                 return repository.save(participant);
             });
             imported.add(saved);

@@ -42,8 +42,12 @@ public class RaceService {
         return repository.save(toSave);
     }
 
+    /**
+     * For the public live-results pages only: the returned Race never carries its cover page PDF
+     * (see {@link RaceRepository#findByLiveTokenWithoutCoverPage}).
+     */
     public Optional<Race> findByLiveToken(String liveToken) {
-        return repository.findByLiveToken(liveToken);
+        return repository.findByLiveTokenWithoutCoverPage(liveToken);
     }
 
     /**

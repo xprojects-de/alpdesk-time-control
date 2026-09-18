@@ -269,7 +269,7 @@ public class RankingViewService {
                     ageGroup,
                     team,
                     formatValue(race, rankingService.netDurationMs(race, p)),
-                    formatValue(race, p.penalty()),
+                    formatPenalty(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
                     p.penalty() != null && p.penalty() != 0
@@ -366,6 +366,14 @@ public class RankingViewService {
      * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SS) or a
      * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
      */
+    /**
+     * Like {@link #formatValue}, but a 0 penalty (legacy rows stored before 0 was normalized to
+     * null on save) renders as "-" too - "no penalty", not a printed "00:00,00".
+     */
+    public static String formatPenalty(Race race, Integer penalty) {
+        return formatValue(race, penalty != null && penalty == 0 ? null : penalty);
+    }
+
     public static String formatValue(Race race, Integer value) {
         if (value == null) {
             return "-";

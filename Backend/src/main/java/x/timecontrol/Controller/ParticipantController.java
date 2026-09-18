@@ -18,6 +18,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TextFileDecoder;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
@@ -38,7 +39,7 @@ import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -278,7 +279,7 @@ public class ParticipantController {
             return HttpResponse.notFound();
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(new StringReader(TextFileDecoder.decode(file.getBytes())))) {
             ParticipantService.ParticipantImportResult result = service.importFromCsv(raceId, reader);
 
             List<ParticipantResponse> imported = service.toResponses(result.imported());

@@ -9,6 +9,7 @@ import x.timecontrol.dto.StartGroupAssignmentRequest
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
+import x.timecontrol.entities.GaudiLosPairing
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Person
@@ -17,6 +18,7 @@ import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.StartGroupTemplate
 import x.timecontrol.entities.Team
+import x.timecontrol.repositories.GaudiLosPairingRepository
 import x.timecontrol.repositories.ParticipantRepository
 
 import java.sql.Connection
@@ -35,9 +37,10 @@ class ParticipantServiceSpec extends Specification {
     StartGroupTemplateService startGroupTemplateService = Mock()
     RankingService rankingService = new RankingService(startGroupTemplateService)
     TransactionOperations<Connection> transactionOperations = Mock()
+    GaudiLosPairingRepository losPairingRepository = Mock()
 
     ParticipantService service = new ParticipantService(
-            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations)
+            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations, losPairingRepository)
 
     // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_)/
     // ageGroupService.findAll() with a more specific interaction - a single closure-based
@@ -183,6 +186,77 @@ class ParticipantServiceSpec extends Specification {
         then:
         1 * repository.update(_) >> { Participant p -> p }
         result.isPresent()
+    }
+
+    def "update with an explicit 0 penalty removes an existing penalty (stored as null, not 0)"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        personService.findById(1L) >> Optional.of(person())
+        def existing = new Participant(10L, 1L, 1L, 5, null, null, 60000, 5000, null, null)
+        repository.findById(10L) >> Optional.of(existing)
+        repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(existing)
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(existing)
+
+        when:
+        def result = service.update(10L, new Participant(null, 1L, 1L, 5, null, null, 60000, 0, null, null))
+
+        then:
+        1 * repository.update(_) >> { Participant p -> p }
+        result.get().penalty() == null
+        result.get().durationMs() == 60000
+    }
+
+    def "update without a penalty keeps the existing penalty"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        personService.findById(1L) >> Optional.of(person())
+        def existing = new Participant(10L, 1L, 1L, 5, null, null, 60000, 5000, null, null)
+        repository.findById(10L) >> Optional.of(existing)
+        repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(existing)
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(existing)
+
+        when:
+        def result = service.update(10L, new Participant(null, 1L, 1L, 5, null, null, null, null, null, null))
+
+        then:
+        1 * repository.update(_) >> { Participant p -> p }
+        result.get().penalty() == 5000
+    }
+
+    def "create stores a 0 penalty as no penalty"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        personService.findById(1L) >> Optional.of(person())
+        repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.empty()
+        repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.empty()
+
+        when:
+        service.create(new Participant(null, 1L, 1L, 5, null, null, 60000, 0, null, null))
+
+        then:
+        1 * repository.save({ Participant p -> p.penalty() == null }) >> { Participant p -> p }
+    }
+
+    def "delete keeps the Los partner as a single pairing instead of cascading the whole pair away"() {
+        given: "participant 10 is second member of pairing 1, first member of pairing 2, and alone in pairing 3"
+        losPairingRepository.findByParticipant1IdOrParticipant2Id(10L, 10L) >> [
+                new GaudiLosPairing(1L, 7L, 20L, 10L),
+                new GaudiLosPairing(2L, 8L, 10L, 30L),
+                new GaudiLosPairing(3L, 9L, 10L, null),
+        ]
+
+        when:
+        service.delete(10L)
+
+        then: "the remaining partner becomes the pairing's only (first) member"
+        1 * losPairingRepository.update(new GaudiLosPairing(1L, 7L, 20L, null))
+        1 * losPairingRepository.update(new GaudiLosPairing(2L, 8L, 30L, null))
+
+        and: "a pairing with nobody left is deleted"
+        1 * losPairingRepository.deleteById(3L)
+
+        then: "the participant itself is deleted only after its pairings were detached"
+        1 * repository.deleteById(10L)
     }
 
     def "clearResult resets durationMs/penalty/measuredAt but keeps identity, comment and status"() {

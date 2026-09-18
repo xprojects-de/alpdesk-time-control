@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiLosPairing
 import x.timecontrol.entities.GaudiMode
@@ -164,5 +165,32 @@ class LosModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 11
         ranking[0].referenceMs() == 20
         ranking[0].diffMs() == 9
+    }
+
+    def "a pair with a member who didn't finish is listed as nicht gewertet with that member's status"() {
+        given:
+        def participants = [
+                participant(1L, 60000), participant(2L, 70000),               // both finished -> ranked
+                participant(3L, 80000),
+                new Participant(4L, 1L, 4L, null, null, null, null, null, null, null, DisqualificationStatus.DNF),
+                new Participant(5L, 1L, 5L, null, null, null, null, null, null, null, DisqualificationStatus.DNS), // single, no time
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [
+                new GaudiLosPairing(1L, 1L, 1L, 2L),
+                new GaudiLosPairing(2L, 1L, 3L, 4L),
+                new GaudiLosPairing(3L, 1L, 5L, null),
+        ]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C"), 4L: person(4L, "D"), 5L: person(5L, "E")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def dns = calculator.computeDnsEntries(losMode(), races)
+
+        then:
+        dns*.lastName() == ["C & D", "E (Einzel)"]
+        dns*.status() == ["DNF", "DNS"]
+
+        and: "the ranking itself still only contains the complete pair"
+        calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
 }
