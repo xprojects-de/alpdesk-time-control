@@ -30,8 +30,6 @@ import {
     ParticipantImportMappingDialogComponent,
     ParticipantImportMappingDialogResult
 } from '../participant-list/participant-import-mapping-dialog.component';
-import {RaceService} from '../../services/race.service';
-import {ParticipantService} from '../../services/participant.service';
 import {ConfirmDialogComponent} from '../shared/confirm-dialog/confirm-dialog.component';
 import {takeUntil} from 'rxjs/operators';
 import {Actions, ofType} from '@ngrx/effects';
@@ -203,8 +201,6 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
     private actions$ = inject(Actions);
-    private raceService = inject(RaceService);
-    private participantService = inject(ParticipantService);
     private destroy$ = new Subject<void>();
 
     races$: Observable<Race[]>;
@@ -233,6 +229,51 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
             takeUntil(this.destroy$),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Erstellen des Rennens: ${error}`, 'OK', {duration: 5000});
+        });
+
+        this.actions$.pipe(
+            ofType(RaceActions.createRaceForResultImportSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({race}) => this.openResultImportDialog(race));
+        this.actions$.pipe(
+            ofType(RaceActions.createRaceForResultImportFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Anlegen des Rennens: ${error}`, 'OK', {duration: 5000, panelClass: ['error-snackbar']});
+        });
+        // The import result lands in the participant slice (shared with the participant list's own
+        // import); show it here and clear it, so the participant list doesn't re-display it later.
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsMappedSuccess),
+            takeUntil(this.destroy$),
+        ).subscribe(({result}) => {
+            this.snackBar.open(
+                `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                'OK',
+                {duration: 5000},
+            );
+            const errors = result.errors ?? [];
+            if (errors.length > 0) {
+                const details = errors
+                    .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
+                    .join('\n');
+                this.dialog.open(ConfirmDialogComponent, {
+                    width: '500px',
+                    data: {
+                        title: 'Übersprungene Zeilen',
+                        message: details,
+                        confirmLabel: 'OK',
+                        hideCancel: true,
+                    },
+                });
+            }
+            this.store.dispatch(ParticipantActions.clearImportResult());
+        });
+        this.actions$.pipe(
+            ofType(ParticipantActions.importParticipantsMappedFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Import: ${error}`, 'OK', {duration: 5000, panelClass: ['error-snackbar']});
         });
 
         this.actions$.pipe(
@@ -396,6 +437,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
      * Full race migration from another instance: create a new race here (name/date decided locally,
      * not carried from the export - the source instance's export doesn't include them), then import
      * the roster+results CSV into it via the same mapping dialog the participant list uses.
+     * Continues in the createRaceForResultImportSuccess listener set up in the constructor.
      */
     async importRaceResults(): Promise<void> {
         const raceDialogRef = this.dialog.open(RaceDialogComponent, {
@@ -406,63 +448,25 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
         if (!raceRequest) {
             return;
         }
+        this.store.dispatch(RaceActions.createRaceForResultImport({race: raceRequest}));
+    }
 
-        this.raceService.create(raceRequest).subscribe({
-            next: (createdRace) => {
-                this.store.dispatch(RaceActions.loadRaces());
-                this.snackBar.open(`Rennen "${createdRace.name}" angelegt - jetzt die Ergebnisdatei wählen`, 'OK', {duration: 3000});
-
-                const importDialogRef = this.dialog.open(ParticipantImportMappingDialogComponent, {width: '900px'});
-                importDialogRef
-                    .afterClosed()
-                    .pipe(takeUntil(this.destroy$))
-                    .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
-                        if (!result) {
-                            return;
-                        }
-                        this.participantService
-                            .importMapped(createdRace.id, result.file, result.format, result.delimiter, result.mapping)
-                            .subscribe({
-                                next: (importResult) => {
-                                    this.snackBar.open(
-                                        `Import abgeschlossen: ${importResult.importedCount} importiert, ${importResult.skippedCount} übersprungen`,
-                                        'OK',
-                                        {duration: 5000},
-                                    );
-                                    const errors = importResult.errors ?? [];
-                                    if (errors.length > 0) {
-                                        const details = errors
-                                            .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
-                                            .join('\n');
-                                        this.dialog.open(ConfirmDialogComponent, {
-                                            width: '500px',
-                                            data: {
-                                                title: 'Übersprungene Zeilen',
-                                                message: details,
-                                                confirmLabel: 'OK',
-                                                hideCancel: true,
-                                            },
-                                        });
-                                    }
-                                },
-                                error: (err) => {
-                                    this.snackBar.open(
-                                        `FEHLER beim Import: ${err?.error?.message ?? 'Unbekannter Fehler'}`,
-                                        'OK',
-                                        {duration: 5000, panelClass: ['error-snackbar']},
-                                    );
-                                },
-                            });
-                    });
-            },
-            error: (err) => {
-                this.snackBar.open(
-                    `FEHLER beim Anlegen des Rennens: ${err?.error?.message ?? 'Unbekannter Fehler'}`,
-                    'OK',
-                    {duration: 5000, panelClass: ['error-snackbar']},
-                );
-            },
-        });
+    private openResultImportDialog(race: Race): void {
+        this.snackBar.open(`Rennen "${race.name}" angelegt - jetzt die Ergebnisdatei wählen`, 'OK', {duration: 3000});
+        this.dialog.open(ParticipantImportMappingDialogComponent, {width: '900px'})
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
+                if (!result) {
+                    return;
+                }
+                this.store.dispatch(ParticipantActions.importParticipantsMapped({
+                    raceId: race.id,
+                    file: result.file,
+                    format: result.format,
+                    delimiter: result.delimiter,
+                    mapping: result.mapping,
+                }));
+            });
     }
 }
-

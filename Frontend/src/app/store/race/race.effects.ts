@@ -40,6 +40,20 @@ export class RaceEffects {
         )
     );
 
+    createRaceForResultImport$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(RaceActions.createRaceForResultImport),
+            mergeMap(({race}) =>
+                this.raceService.create(race).pipe(
+                    map(race => RaceActions.createRaceForResultImportSuccess({race})),
+                    catchError(error => of(RaceActions.createRaceForResultImportFailure({
+                        error: extractErrorMessage(error, 'Rennen konnte nicht erstellt werden')
+                    })))
+                )
+            )
+        )
+    );
+
     updateRace$ = createEffect(() =>
         this.actions$.pipe(
             ofType(RaceActions.updateRace),

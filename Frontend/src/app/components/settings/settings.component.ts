@@ -105,7 +105,7 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
             display: flex;
             flex-direction: column;
             gap: 4px;
-            margin-top: 12px;
+            margin-top: 20px;
           }
 
           .provider-config {
@@ -123,6 +123,12 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
             display: flex;
             justify-content: flex-end;
             margin-top: 8px;
+          }
+
+          @media (max-width: 768px) {
+            mat-card {
+              margin: 8px;
+            }
           }
         `,
     ],

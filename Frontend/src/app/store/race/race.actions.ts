@@ -30,6 +30,24 @@ export const createRaceFailure = createAction(
     props<{ error: string }>()
 );
 
+// Full race migration from another instance: creates the race, after which the race list opens
+// the participant import mapping dialog for it. Kept separate from createRace so the race list
+// can tell the two apart (plain create just shows a snackbar; this one continues into the import).
+export const createRaceForResultImport = createAction(
+    '[Race] Create Race For Result Import',
+    props<{ race: RaceRequest }>()
+);
+
+export const createRaceForResultImportSuccess = createAction(
+    '[Race] Create Race For Result Import Success',
+    props<{ race: Race }>()
+);
+
+export const createRaceForResultImportFailure = createAction(
+    '[Race] Create Race For Result Import Failure',
+    props<{ error: string }>()
+);
+
 export const updateRace = createAction(
     '[Race] Update Race',
     props<{ id: number; race: RaceRequest }>()

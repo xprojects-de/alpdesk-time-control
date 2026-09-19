@@ -34,17 +34,17 @@ export const raceReducer = createReducer(
         loading: false,
         error
     })),
-    on(RaceActions.createRace, (state) => ({
+    on(RaceActions.createRace, RaceActions.createRaceForResultImport, (state) => ({
         ...state,
         loading: true,
         error: null
     })),
-    on(RaceActions.createRaceSuccess, (state, {race}) => ({
+    on(RaceActions.createRaceSuccess, RaceActions.createRaceForResultImportSuccess, (state, {race}) => ({
         ...state,
         races: [...state.races, race],
         loading: false
     })),
-    on(RaceActions.createRaceFailure, (state, {error}) => ({
+    on(RaceActions.createRaceFailure, RaceActions.createRaceForResultImportFailure, (state, {error}) => ({
         ...state,
         loading: false,
         error
