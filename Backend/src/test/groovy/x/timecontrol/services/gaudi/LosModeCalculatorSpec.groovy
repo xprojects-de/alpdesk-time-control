@@ -138,10 +138,10 @@ class LosModeCalculatorSpec extends Specification {
         when:
         def ranking = calculator.computeRanking(losMode(), races)
 
-        then: "the raw gap |4083-18804|=14721ms (the old, now-wrong behaviour) does not equal the difference of the two printed values 0:18.80-0:04.08=0:14.72=14720ms, which is what's now returned"
+        then: "the raw gap |4083-18804|=14721ms (the old, now-wrong behaviour) does not equal the difference of the two printed values 0:18.80-0:04.08=0:14.72=14720ms, which is what's now returned - alongside the printed averages themselves"
         ranking.size() == 1
-        ranking[0].valueMs() == 4083
-        ranking[0].referenceMs() == 18804
+        ranking[0].valueMs() == 4080
+        ranking[0].referenceMs() == 18800
         ranking[0].diffMs() == 14720
     }
 
@@ -192,5 +192,25 @@ class LosModeCalculatorSpec extends Specification {
 
         and: "the ranking itself still only contains the complete pair"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
+    }
+
+    def "a pair average is rounded once, straight to the printed hundredth - not to a whole ms first"() {
+        given: "10004 and 10005 average 10004.5ms: rounding to 10005ms first would print 0:10.01, but the value is closer to 0:10.00"
+        def participants = [
+                participant(1L, 10004), participant(2L, 10005), // this pair: average 10004.5ms
+                participant(3L, 10000), participant(4L, 10000), // overall average 10002.25ms -> 0:10.00
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then: "pair and overall average both print as 0:10.00, so the pair hits the average exactly"
+        ranking.size() == 1
+        ranking[0].valueMs() == 10000
+        ranking[0].referenceMs() == 10000
+        ranking[0].diffMs() == 0
     }
 }

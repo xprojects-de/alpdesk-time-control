@@ -141,14 +141,33 @@ public class RankingViewService {
      * {@link ParticipantService#groupByAgeGroup} and the female-before-male convention used
      * throughout {@link PdfExportService} - without this, two same-year different-gender age
      * groups would print in whatever order {@code ageGroupService.findAll()} happens to return.
+     * <p>
+     * Always ends with {@link AgeGroupService#UNKNOWN_AGE_GROUP}, the bucket for anyone without a
+     * birth date or whose birth year matches no configured group - without it, such a participant
+     * would silently vanish from every by-age-group view (they're ranked, so they aren't in the
+     * "nicht gewertet" list either). Callers skip empty sections, so it only shows up when someone
+     * actually lands there; label it via {@link #ageGroupSectionLabel}.
      */
     public List<String> uniqueAgeGroupNamesYoungestFirst() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+        List<String> names = new ArrayList<>(StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
                 .distinct()
-                .toList();
+                .toList());
+        if (names.stream().noneMatch(AgeGroupService.UNKNOWN_AGE_GROUP::equalsIgnoreCase)) {
+            names.add(AgeGroupService.UNKNOWN_AGE_GROUP);
+        }
+        return names;
+    }
+
+    /**
+     * Section title text for an age group name from {@link #uniqueAgeGroupNamesYoungestFirst} -
+     * the name itself, except the catch-all {@link AgeGroupService#UNKNOWN_AGE_GROUP} bucket, which
+     * reads as "ohne Altersklasse" (e.g. "Wertung ohne Altersklasse weiblich").
+     */
+    public String ageGroupSectionLabel(String ageGroupName) {
+        return AgeGroupService.UNKNOWN_AGE_GROUP.equals(ageGroupName) ? "ohne Altersklasse" : ageGroupName;
     }
 
     public String formatName(Person person) {

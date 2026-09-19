@@ -85,7 +85,7 @@ public class RaceLiveService {
                                 participants, race, gender, ageGroupName, null, lookup);
                         if (!entries.isEmpty()) {
                             sections.add(new RaceLiveRankingSection(
-                                    "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender), entries));
+                                    "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender), entries));
                         }
                     }
                 }
@@ -125,7 +125,7 @@ public class RaceLiveService {
                                     participants, race, gender, ageGroupName, category.id(), lookup);
                             if (!entries.isEmpty()) {
                                 sections.add(new RaceLiveRankingSection(
-                                        "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender) + " " + category.name(),
+                                        "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender) + " " + category.name(),
                                         entries));
                             }
                         }

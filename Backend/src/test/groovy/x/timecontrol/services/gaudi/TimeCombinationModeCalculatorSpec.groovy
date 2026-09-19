@@ -189,4 +189,24 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking.size() == 1
         ranking[0].valueMs() == 60000
     }
+
+    def "the combined total is the sum of the printed leg values, so it can't tie someone who printed slower in every leg"() {
+        given: "Anna runs 10.004s in all 4 legs (prints 0:10.00 each), Berta 10.005s (prints 0:10.01 each) - raw sums 40016 vs 40020ms would both print as 0:40.02 and share a place"
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Berta")])
+        def races = (1L..4L).collect { Long raceId ->
+            new GaudiModeCalculator.RaceParticipants(raceId, race(raceId), 1.0d,
+                    [participant(raceId * 10 + 1, 1L, 10004), participant(raceId * 10 + 2, 2L, 10005)])
+        }
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "totals are 4 x 0:10.00 = 0:40.00 and 4 x 0:10.01 = 0:40.04, ranked 1 and 2"
+        ranking[0].label().contains("Anna")
+        ranking[0].valueMs() == 40000
+        ranking[0].place() == 1
+        ranking[1].valueMs() == 40040
+        ranking[1].place() == 2
+        ranking[1].diffMs() == 40
+    }
 }

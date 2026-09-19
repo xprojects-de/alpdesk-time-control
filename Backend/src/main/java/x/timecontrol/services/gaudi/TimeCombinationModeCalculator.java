@@ -91,15 +91,20 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             }
 
             List<GaudiRankingLegResponse> legs = new ArrayList<>();
-            // Accumulated as a double and rounded only once at the end (not per leg) - rounding
-            // each weighted leg separately compounds error across legs for a non-integer weight
-            // (e.g. two legs at weight 0.5 would round 16.5 -> 17 twice instead of the correct 33).
+            // Each leg counts with the value its own race prints and ranks on (rounded to the
+            // hundredth for TIME races, RankingService#roundForDisplay) - summing the raw ms
+            // instead would let the combined total disagree with the printed legs: 10.004s four
+            // times prints as 10.00 each but sums to 40.016 -> 40.02, tying someone who printed
+            // 10.01 four times. The weighted sum is accumulated as a double and rounded only once
+            // at the end (not per leg) - rounding each weighted leg separately compounds error
+            // across legs for a non-integer weight (e.g. two legs at weight 0.5 would round
+            // 16.5 -> 17 twice instead of the correct 33).
             double weightedTotal = 0;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
                 if (adjusted != null) {
-                    weightedTotal += adjusted * race.weight();
+                    weightedTotal += rankingService.roundForDisplay(race.race(), adjusted) * race.weight();
                 }
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),

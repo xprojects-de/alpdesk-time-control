@@ -132,6 +132,19 @@ public class RankingService {
     }
 
     /**
+     * Same as {@link #roundForDisplay(Race, Integer)}, but for a not-yet-integral value such as an
+     * average - rounded exactly once, straight to the printed precision (nearest 10ms for TIME
+     * races, nearest stored hundredth for POINTS races). Rounding to a whole ms first and only then
+     * to the printed precision can land a printed hundredth off: 10004.5ms would become 10005ms and
+     * then print as 0:10.01, although the value itself is closer to 0:10.00.
+     */
+    public int roundForDisplay(Race race, double rawValue) {
+        return race.resultUnit() == ResultUnit.TIME
+                ? (int) roundToTensOfMs(rawValue)
+                : (int) Math.round(rawValue);
+    }
+
+    /**
      * The value participants are considered tied on for place assignment - see
      * {@link #roundForDisplay}: two participants whose raw results differ only in the millisecond
      * digit that rounding erases must show the same time and therefore share a place; ranking on

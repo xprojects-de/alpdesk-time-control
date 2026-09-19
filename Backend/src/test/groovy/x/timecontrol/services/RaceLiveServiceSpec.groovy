@@ -2,6 +2,7 @@ package x.timecontrol.services
 
 import spock.lang.Specification
 import x.timecontrol.dto.RaceLiveViewType
+import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
@@ -118,5 +119,31 @@ class RaceLiveServiceSpec extends Specification {
         then:
         response.sections().size() == 1
         response.sections().first().entries()*.name() == ["Bert Slow"]
+    }
+
+    def "ALL_AGEGROUPS view adds an 'ohne Altersklasse' section for participants matching no age group instead of dropping them"() {
+        given: "Anna falls into U14, Bert (born outside every configured range) matches none"
+        def ageGroups = Stub(AgeGroupService) {
+            findAll() >> [new AgeGroup(1L, "U14", 2012, 2013, Gender.BOTH)]
+            calculateAgeGroupName(_, Gender.FEMALE, _) >> "U14"
+            calculateAgeGroupName(_, Gender.MALE, _) >> AgeGroupService.UNKNOWN_AGE_GROUP
+        }
+        def viewService = new RankingViewService(ageGroups, categoryService, teamService, personService,
+                new RankingService(startGroupTemplateService), startGroupTemplateService)
+        def liveService = new RaceLiveService(participantService, categoryService, viewService)
+        participantService.findByRaceId(1L) >> [participant(1L, 50000), participant(2L, 60000)]
+        personService.findByIds(_) >> [
+                1L: person(1L, "Anna", "Fast", Gender.FEMALE),
+                2L: person(2L, "Bert", "Nomatch", Gender.MALE),
+        ]
+
+        when:
+        def response = liveService.buildResponse(race(), RaceLiveViewType.ALL_AGEGROUPS, null, null, null)
+
+        then: "Bert is ranked in his own trailing section, and still not listed as nicht gewertet"
+        response.sections()*.title() == ["Wertung U14 weiblich", "Wertung ohne Altersklasse männlich"]
+        response.sections()[1].entries()*.name() == ["Bert Nomatch"]
+        response.sections()[1].entries()*.place() == [1]
+        response.notRanked().isEmpty()
     }
 }

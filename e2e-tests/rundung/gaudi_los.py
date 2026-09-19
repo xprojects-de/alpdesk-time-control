@@ -72,10 +72,12 @@ for entry in ranking:
     expected_diff = abs(pair_display - overall_display)
     expected_diffs.append(expected_diff)
 
-    if entry.get("valueMs") != round(pair_average_ms):
-        problems.append((entry["label"], "valueMs", f"erwartet {round(pair_average_ms)}", entry.get("valueMs")))
-    if entry.get("referenceMs") != round(overall_average_ms):
-        problems.append((entry["label"], "referenceMs", f"erwartet {round(overall_average_ms)}", entry.get("referenceMs")))
+    # valueMs/referenceMs are the PRINTED averages - rounded once, straight from the raw average to
+    # the hundredth (no intermediate rounding to a whole ms).
+    if entry.get("valueMs") != pair_display:
+        problems.append((entry["label"], "valueMs", f"erwartet {pair_display}", entry.get("valueMs")))
+    if entry.get("referenceMs") != overall_display:
+        problems.append((entry["label"], "referenceMs", f"erwartet {overall_display}", entry.get("referenceMs")))
     if entry.get("diffMs") != expected_diff:
         problems.append((entry["label"], "diffMs", f"erwartet {expected_diff}", entry.get("diffMs")))
 

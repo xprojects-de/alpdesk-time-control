@@ -272,7 +272,7 @@ public class PdfExportService {
                 for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null, lookup);
                     if (!entries.isEmpty()) {
-                        String title = "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender);
+                        String title = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender);
                         drawSection(ctx, rankingColumns(entries), title, entries, false);
                     }
                 }
@@ -342,7 +342,7 @@ public class PdfExportService {
                     for (Category category : categories) {
                         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id(), lookup);
                         if (!entries.isEmpty()) {
-                            String title = "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender) + " " + category.name();
+                            String title = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender) + " " + category.name();
                             drawSection(ctx, rankingColumns(entries), title, entries, false);
                         }
                     }
@@ -519,7 +519,7 @@ public class PdfExportService {
                 for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (!entries.isEmpty()) {
-                        String sectionTitle = "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender);
+                        String sectionTitle = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender);
                         drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), sectionTitle, entries, false,
                                 pointsCombinationDetailColumns(anyLegHasPenalty(entries)), e -> pointsCombinationDetailRows(e, legRaces));
                     }
