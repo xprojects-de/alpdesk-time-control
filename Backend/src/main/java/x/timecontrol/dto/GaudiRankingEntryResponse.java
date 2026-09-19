@@ -53,7 +53,7 @@ public record GaudiRankingEntryResponse(
         java.util.List<GaudiTeamMemberResponse> members,
 
         @Nullable
-        @Schema(description = "The person this entry represents (Punkte-Mischwertung only), used to filter/group the ranking by gender or age group", example = "42", nullable = true)
+        @Schema(description = "The person this entry represents (Zeit-Kombination / Punkte-Mischwertung only), used to filter/group the ranking by gender or age group and to resolve name/age group for the CSV export", example = "42", nullable = true)
         Long personId,
 
         @Nullable

@@ -173,5 +173,19 @@ export const gaudiModeReducer = createReducer(
         ...state,
         pdfExportLoading: false,
         error
+    })),
+
+    on(GaudiModeActions.exportCsv, state => ({
+        ...state,
+        pdfExportLoading: true
+    })),
+    on(GaudiModeActions.exportCsvSuccess, state => ({
+        ...state,
+        pdfExportLoading: false
+    })),
+    on(GaudiModeActions.exportCsvFailure, (state, {error}) => ({
+        ...state,
+        pdfExportLoading: false,
+        error
     }))
 );

@@ -1,5 +1,6 @@
 import {createAction, props} from '@ngrx/store';
 import {
+    GaudiCsvExportVariant,
     GaudiLosPairing,
     GaudiMode,
     GaudiModeRequest,
@@ -135,5 +136,19 @@ export const exportPdfAllAgeGroupsSuccess = createAction(
 );
 export const exportPdfAllAgeGroupsFailure = createAction(
     '[GaudiMode] Export Pdf All Age Groups Failure',
+    props<{ error: string }>()
+);
+
+// CSV export (Zeit-Kombination / Punkte-Mischwertung)
+export const exportCsv = createAction(
+    '[GaudiMode] Export Csv',
+    props<{ id: number; variant: GaudiCsvExportVariant; filename: string }>()
+);
+export const exportCsvSuccess = createAction(
+    '[GaudiMode] Export Csv Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportCsvFailure = createAction(
+    '[GaudiMode] Export Csv Failure',
     props<{ error: string }>()
 );

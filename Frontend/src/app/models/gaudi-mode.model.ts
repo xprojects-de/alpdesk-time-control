@@ -107,3 +107,10 @@ export interface GaudiRankingEntry {
     members?: GaudiTeamMember[];
     personId?: number;
 }
+
+/**
+ * CSV export variants of a Gaudi-Modus ranking. 'all' works for Zeit-Kombination and
+ * Punkte-Mischwertung; the others are Punkte-Mischwertung only, and 'agegroups' downloads a ZIP
+ * with one CSV per age group x gender.
+ */
+export type GaudiCsvExportVariant = 'all' | 'FEMALE' | 'MALE' | 'agegroups';

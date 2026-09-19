@@ -22,6 +22,7 @@ import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {
+    GaudiCsvExportVariant,
     GaudiLosPairing,
     GaudiMode,
     GaudiModeType,
@@ -158,6 +159,54 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                                 <mat-icon>picture_as_pdf</mat-icon>
                             }
                             PDF Export
+                        </button>
+                    }
+
+                    @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
+                        <button
+                                mat-raised-button
+                                [matMenuTriggerFor]="csvExportMenu"
+                                [disabled]="pdfExportLoading$ | async"
+                                matTooltip="CSV Export Optionen"
+                        >
+                            <mat-icon>table_view</mat-icon>
+                            CSV Export
+                            <mat-icon>arrow_drop_down</mat-icon>
+                        </button>
+
+                        <mat-menu #csvExportMenu="matMenu">
+                            <button mat-menu-item (click)="exportCsv('all')">
+                                <mat-icon>leaderboard</mat-icon>
+                                <span>Gesamtwertung</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportCsv('FEMALE')">
+                                <mat-icon>female</mat-icon>
+                                <span>Alle Damen</span>
+                            </button>
+
+                            <button mat-menu-item (click)="exportCsv('MALE')">
+                                <mat-icon>male</mat-icon>
+                                <span>Alle Herren</span>
+                            </button>
+
+                            <mat-divider></mat-divider>
+
+                            <button mat-menu-item (click)="exportCsv('agegroups')">
+                                <mat-icon>view_list</mat-icon>
+                                <span>Nach Altersklassen aufgeteilt (ZIP)</span>
+                            </button>
+                        </mat-menu>
+                    } @else if (gaudiMode().type === gaudiModeType.TIME_COMBINATION) {
+                        <button
+                                mat-raised-button
+                                (click)="exportCsv('all')"
+                                [disabled]="pdfExportLoading$ | async"
+                        >
+                            <mat-icon>table_view</mat-icon>
+                            CSV Export
                         </button>
                     }
                 </div>
@@ -331,7 +380,7 @@ export class GaudiModeDetailComponent implements OnDestroy {
     trackByPairingId = (_index: number, pairing: GaudiLosPairing) => pairing.id;
 
     // GaudiRankingEntry has no stable unique id: personId is only ever populated for
-    // POINTS_COMBINATION (TIME_COMBINATION/LOS/TEAM always send it as null - see the respective
+    // TIME_COMBINATION/POINTS_COMBINATION (LOS/TEAM always send it as null - see the respective
     // backend calculators). Without it, place+label is NOT a safe fallback key on its own: place
     // is not unique under a tie (RankingService.assignStandardPlaces), and label is just
     // "Lastname Firstname" with no disambiguator, so two different people who happen to share a
@@ -393,6 +442,12 @@ export class GaudiModeDetailComponent implements OnDestroy {
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 5000});
         });
+        this.actions$.pipe(
+            ofType(GaudiModeActions.exportCsvFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim CSV-Export: ${error}`, "OK", {duration: 5000});
+        });
     }
 
     ngOnDestroy(): void {
@@ -441,9 +496,20 @@ export class GaudiModeDetailComponent implements OnDestroy {
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
     }
 
-    private buildFilename(gaudiMode: GaudiMode, suffix: string): string {
+    exportCsv(variant: GaudiCsvExportVariant): void {
+        const gaudiMode = this.gaudiMode();
+        const suffix = variant === 'all' ? '' : variant === 'agegroups' ? 'altersklassen' : variant.toLowerCase();
+        this.store.dispatch(GaudiModeActions.exportCsv({
+            id: gaudiMode.id,
+            variant,
+            filename: this.buildFilename(gaudiMode, suffix, variant === 'agegroups' ? 'zip' : 'csv')
+        }));
+        this.snackBar.open("CSV Export gestartet", "OK", {duration: 2000});
+    }
+
+    private buildFilename(gaudiMode: GaudiMode, suffix: string, extension = 'pdf'): string {
         const base = `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}`;
-        return suffix ? `${base}_${suffix}.pdf` : `${base}.pdf`;
+        return suffix ? `${base}_${suffix}.${extension}` : `${base}.${extension}`;
     }
 
     /** Los-Modus puts the whole pair label into lastName (firstName empty). */

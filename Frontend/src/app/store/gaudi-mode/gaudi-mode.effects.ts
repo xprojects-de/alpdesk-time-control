@@ -158,12 +158,27 @@ export class GaudiModeEffects {
         )
     );
 
+    exportCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(GaudiModeActions.exportCsv),
+            mergeMap(({id, variant, filename}) =>
+                this.gaudiModeService.exportCsv(id, variant).pipe(
+                    map(blob => GaudiModeActions.exportCsvSuccess({blob, filename})),
+                    catchError(error => of(GaudiModeActions.exportCsvFailure({
+                        error: extractErrorMessage(error, 'CSV konnte nicht exportiert werden')
+                    })))
+                )
+            )
+        )
+    );
+
     downloadPdf$ = createEffect(() =>
         this.actions$.pipe(
             ofType(
                 GaudiModeActions.exportPdfSuccess,
                 GaudiModeActions.exportPdfByGenderSuccess,
-                GaudiModeActions.exportPdfAllAgeGroupsSuccess
+                GaudiModeActions.exportPdfAllAgeGroupsSuccess,
+                GaudiModeActions.exportCsvSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

@@ -68,7 +68,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
-        record PersonResult(String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs,
+        record PersonResult(Long personId, String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs,
                             String team) {
         }
 
@@ -124,7 +124,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace, teamsById);
-            results.add(new PersonResult(label, externalId, total, legs, team));
+            results.add(new PersonResult(personId, label, externalId, total, legs, team));
         }
 
         // GaudiModeService.validate() guarantees every combined race shares the same sortDirection,
@@ -158,7 +158,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     r.legs(),
                     r.team(),
                     null,
-                    null,
+                    r.personId(),
                     r.externalId()
             ));
         }

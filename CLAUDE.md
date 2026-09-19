@@ -66,7 +66,9 @@ Micronaut app (`x.timecontrol` package), annotation-driven, no Spring:
   One deliberate exception: `PdfExportService`'s generated PDF content (column headers, labels
   like "Platz"/"Rückstand"/"Höhendifferenz") stays German, since the PDF is read directly by
   German-speaking race officials — only that service's *output strings* are exempt, its own code
-  (methods, fields, comments) still follows the English-only rule.
+  (methods, fields, comments) still follows the English-only rule. The same exemption applies to
+  `GaudiCsvExportService`'s CSV header row (Platz/Name/Vorname/...), the CSV counterpart of the
+  Gaudi-Modus PDFs.
 - **Controller/** — REST endpoints (`@Controller`), one per resource (Race, Participant, Person,
   Team, Category, AgeGroup, Measurement, RaceMeasurement, GaudiMode, Settings, PointsScale,
   Version). Nearly everything is `@Secured` behind JWT bearer auth; a handful of static

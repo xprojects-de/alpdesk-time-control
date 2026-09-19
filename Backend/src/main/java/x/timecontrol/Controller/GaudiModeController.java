@@ -28,6 +28,7 @@ import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.GaudiCsvExportService;
 import x.timecontrol.services.GaudiModeService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
@@ -35,8 +36,11 @@ import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RaceService;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -59,6 +63,9 @@ public class GaudiModeController {
 
     @Inject
     PersonService personService;
+
+    @Inject
+    GaudiCsvExportService gaudiCsvExportService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -257,7 +264,7 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByGender(@PathVariable Long id, @PathVariable String gender) {
-        return exportPointsCombinationPdf(id, gender.toLowerCase() + ".pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
@@ -276,7 +283,7 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
-        return exportPointsCombinationPdf(id, ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
                     List<GaudiRankingEntryResponse> ranking =
                             service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
@@ -295,32 +302,102 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfAllAgeGroups(@PathVariable Long id) {
-        return exportPointsCombinationPdf(id, "altersklassen.pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_altersklassen.pdf", "PDF",
                 (gaudiMode, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
                         gaudiMode, races, races.getFirst(),
                         (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName),
                         service.computeDnsEntries(gaudiMode)));
     }
 
+    @Produces("text/csv")
+    @Get("/{id}/export/csv")
+    @Operation(summary = "Export the ranking of a Zeit-Kombination / Punkte-Mischwertung as CSV",
+            description = "One row per ranked person in ranking order: Platz, Name, Vorname, Team, Altersklasse, Externe ID, Wert " +
+                    "(total time or total points). ';'-delimited, UTF-8. Only valid for types TIME_COMBINATION and POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type TIME_COMBINATION or POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsv(@PathVariable Long id) {
+        return exportFile(id, COMBINATION_TYPES, ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(
+                        gaudiMode.type(), service.computeRanking(gaudiMode), races.getFirst()));
+    }
+
+    @Produces("text/csv")
+    @Get("/{id}/export/csv/gender/{gender}")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking filtered by gender as CSV",
+            description = "Same columns as /export/csv. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsvByGender(@PathVariable Long id, @PathVariable String gender) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + gender.toLowerCase() + ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(gaudiMode.type(),
+                        service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null),
+                        races.getFirst()));
+    }
+
+    @Produces("text/csv")
+    @Get("/{id}/export/csv/agegroup/{ageGroup}/gender/{gender}")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking filtered by age group and gender as CSV",
+            description = "Same columns as /export/csv. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsvByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(gaudiMode.type(),
+                        service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup),
+                        races.getFirst()));
+    }
+
+    @Produces("application/zip")
+    @Get("/{id}/export/csv/agegroups/all")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking split into all age groups and genders as a ZIP of CSV files",
+            description = "One CSV (same columns as /export/csv) per non-empty age group x gender. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "ZIP generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "ZIP generation failed")
+    public HttpResponse<?> exportCsvAllAgeGroups(@PathVariable Long id) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_altersklassen.zip", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateAllAgeGroupsZip(gaudiMode.type(), races.getFirst(),
+                        (g, ageGroupName) -> service.computeRankingForCategory(gaudiMode, g, ageGroupName)));
+    }
+
+    private static final Set<GaudiModeType> POINTS_COMBINATION_ONLY = EnumSet.of(GaudiModeType.POINTS_COMBINATION);
+    private static final Set<GaudiModeType> COMBINATION_TYPES =
+            EnumSet.of(GaudiModeType.TIME_COMBINATION, GaudiModeType.POINTS_COMBINATION);
+
     @FunctionalInterface
-    private interface PointsCombinationPdfBody {
+    private interface ExportBody {
         byte[] generate(GaudiMode gaudiMode, List<Race> races) throws Exception;
     }
 
     /**
-     * Shared race-lookup + type-check + generate + error-handling scaffold for the Punkte-Mischwertung
-     * gender/age-group PDF export endpoints above, mirroring {@code exportPdf} in
-     * {@code ParticipantController}.
+     * Shared race-lookup + type-check + generate + error-handling scaffold for the
+     * type-restricted PDF/CSV export endpoints above, mirroring {@code exportPdf} in
+     * {@code ParticipantController}. {@code filenameSuffix} is appended to "gaudi_&lt;id&gt;".
      */
-    private HttpResponse<?> exportPointsCombinationPdf(Long id, String filenameSuffix, PointsCombinationPdfBody body) {
+    private HttpResponse<?> exportFile(Long id, Set<GaudiModeType> allowedTypes, String filenameSuffix,
+                                       String formatLabel, ExportBody body) {
         Optional<GaudiMode> gaudiModeOpt = service.findById(id);
         if (gaudiModeOpt.isEmpty()) {
             return HttpResponse.notFound();
         }
         GaudiMode gaudiMode = gaudiModeOpt.get();
-        if (gaudiMode.type() != GaudiModeType.POINTS_COMBINATION) {
+        if (!allowedTypes.contains(gaudiMode.type())) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
-                    "This export is only available for Gaudi-Modus instances of type POINTS_COMBINATION"));
+                    "This export is only available for Gaudi-Modus instances of type " +
+                            allowedTypes.stream().map(Enum::name).collect(Collectors.joining(" or "))))
+                    .contentType(MediaType.APPLICATION_JSON);
         }
 
         List<Race> races = service.findRacesFor(gaudiMode.id()).stream()
@@ -333,14 +410,14 @@ public class GaudiModeController {
         }
 
         try {
-            byte[] pdfBytes = body.generate(gaudiMode, races);
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + "_" + filenameSuffix);
+            byte[] bytes = body.generate(gaudiMode, races);
+            return HttpResponse.ok(bytes)
+                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + filenameSuffix);
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))
+            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate " + formatLabel + ": " + reason))
                     .contentType(MediaType.APPLICATION_JSON);
         }
     }

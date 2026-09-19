@@ -2,6 +2,7 @@ import {Injectable, inject} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {
+    GaudiCsvExportVariant,
     GaudiLosPairing,
     GaudiMode,
     GaudiModeRequest,
@@ -70,6 +71,16 @@ export class GaudiModeService {
     // Punkte-Mischwertung only
     exportPdfAllAgeGroups(id: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/${id}/export/pdf/agegroups/all`, {
+            responseType: 'blob'
+        });
+    }
+
+    // Zeit-Kombination / Punkte-Mischwertung - see GaudiCsvExportVariant
+    exportCsv(id: number, variant: GaudiCsvExportVariant): Observable<Blob> {
+        const path = variant === 'all' ? ''
+            : variant === 'agegroups' ? '/agegroups/all'
+                : `/gender/${variant}`;
+        return this.http.get(`${this.apiUrl}/${id}/export/csv${path}`, {
             responseType: 'blob'
         });
     }
