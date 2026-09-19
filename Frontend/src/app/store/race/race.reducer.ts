@@ -1,5 +1,5 @@
 import {createReducer, on} from '@ngrx/store';
-import {Race} from '../../models/race.model';
+import {Race, RaceLiveLink} from '../../models/race.model';
 import * as RaceActions from './race.actions';
 
 export interface RaceState {
@@ -7,13 +7,18 @@ export interface RaceState {
     selectedRaceId: number | null;
     loading: boolean;
     error: string | null;
+    /** Live-results links of the race whose live-links dialog was opened last. */
+    liveLinks: RaceLiveLink[];
+    liveLinksLoading: boolean;
 }
 
 export const initialState: RaceState = {
     races: [],
     selectedRaceId: null,
     loading: false,
-    error: null
+    error: null,
+    liveLinks: [],
+    liveLinksLoading: false
 };
 
 
@@ -85,6 +90,21 @@ export const raceReducer = createReducer(
     on(RaceActions.deleteRaceConflict, state => ({
         ...state,
         loading: false
+    })),
+    // Reset on every load so the dialog never briefly shows the links of the race opened before.
+    on(RaceActions.loadLiveLinks, (state) => ({
+        ...state,
+        liveLinks: [],
+        liveLinksLoading: true
+    })),
+    on(RaceActions.loadLiveLinksSuccess, (state, {links}) => ({
+        ...state,
+        liveLinks: links,
+        liveLinksLoading: false
+    })),
+    on(RaceActions.loadLiveLinksFailure, (state) => ({
+        ...state,
+        liveLinksLoading: false
     })),
     on(RaceActions.selectRace, (state, {id}) => ({
         ...state,

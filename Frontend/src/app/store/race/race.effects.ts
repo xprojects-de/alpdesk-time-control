@@ -3,7 +3,7 @@ import {HttpErrorResponse} from '@angular/common/http';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {of} from 'rxjs';
-import {map, catchError, mergeMap} from 'rxjs/operators';
+import {map, catchError, mergeMap, switchMap} from 'rxjs/operators';
 import {RaceService} from '../../services/race.service';
 import * as RaceActions from './race.actions';
 
@@ -20,6 +20,22 @@ export class RaceEffects {
                     map(races => RaceActions.loadRacesSuccess({races})),
                     catchError(error => of(RaceActions.loadRacesFailure({
                         error: extractErrorMessage(error, 'Rennen konnten nicht geladen werden')
+                    })))
+                )
+            )
+        )
+    );
+
+    // switchMap: read-only, and only the most recently opened dialog's links matter.
+    loadLiveLinks$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(RaceActions.loadLiveLinks),
+            switchMap(({raceId}) =>
+                this.raceService.getLiveLinks(raceId).pipe(
+                    map(links => RaceActions.loadLiveLinksSuccess({raceId, links})),
+                    catchError(error => of(RaceActions.loadLiveLinksFailure({
+                        raceId,
+                        error: extractErrorMessage(error, 'Live-Links konnten nicht geladen werden')
                     })))
                 )
             )

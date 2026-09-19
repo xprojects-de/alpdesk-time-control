@@ -52,7 +52,7 @@ export interface Race {
 /** One discoverable public live-results view for a race - see RaceService.getLiveLinks. */
 export interface RaceLiveLink {
     label: string;
-    /** Path relative to the backend's own origin - resolve with RaceService.toAbsoluteUrl before displaying/sharing. */
+    /** Path relative to the backend's own origin - resolve with toAbsoluteUrl (utils/absolute-url.util) before displaying/sharing. */
     path: string;
 }
 

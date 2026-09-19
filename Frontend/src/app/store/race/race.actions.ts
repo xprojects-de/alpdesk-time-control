@@ -1,5 +1,5 @@
 import {createAction, props} from '@ngrx/store';
-import {Race, RaceRequest} from '../../models/race.model';
+import {Race, RaceLiveLink, RaceRequest} from '../../models/race.model';
 
 export const loadRaces = createAction(
     '[Race] Load Races'
@@ -81,6 +81,22 @@ export const deleteRaceFailure = createAction(
 export const deleteRaceConflict = createAction(
     '[Race] Delete Race Conflict',
     props<{ id: number; message: string }>()
+);
+
+// Public live-results links of one race, shown by the race list's live-links dialog
+export const loadLiveLinks = createAction(
+    '[Race] Load Live Links',
+    props<{ raceId: number }>()
+);
+
+export const loadLiveLinksSuccess = createAction(
+    '[Race] Load Live Links Success',
+    props<{ raceId: number; links: RaceLiveLink[] }>()
+);
+
+export const loadLiveLinksFailure = createAction(
+    '[Race] Load Live Links Failure',
+    props<{ raceId: number; error: string }>()
 );
 
 export const selectRace = createAction(

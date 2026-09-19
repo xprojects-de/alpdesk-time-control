@@ -18,6 +18,16 @@ export const selectRaceError = createSelector(
     (state: RaceState) => state.error
 );
 
+export const selectLiveLinks = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.liveLinks
+);
+
+export const selectLiveLinksLoading = createSelector(
+    selectRaceState,
+    (state: RaceState) => state.liveLinksLoading
+);
+
 export const selectRaceById = (id: number) => createSelector(
     selectAllRaces,
     (races) => races.find(race => race.id === id)
