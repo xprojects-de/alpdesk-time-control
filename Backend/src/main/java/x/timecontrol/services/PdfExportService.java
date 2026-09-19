@@ -101,7 +101,8 @@ public class PdfExportService {
             new PdfColumn<>("Alterskl.", 1.5f, e -> truncate(e.ageGroup(), 20)),
             new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
             new PdfColumn<>("Kategorie", 1.3f, e -> truncate(e.category(), 20)),
-            new PdfColumn<>("Gruppe", 1.1f, e -> truncate(e.startGroupLabel(), 16))
+            new PdfColumn<>("Gruppe", 1.1f, e -> truncate(e.startGroupLabel(), 16)),
+            new PdfColumn<>("Zeitversatz", 1.0f, RankingViewService.StartListEntry::startGroupOffset)
     );
 
     /**
@@ -146,9 +147,10 @@ public class PdfExportService {
     }
 
     /**
-     * Drops the "Kategorie"/"Gruppe" columns when none of the entries have an assigned category/
-     * start group, instead of always reserving space for a column that would otherwise show "-" for
-     * every row.
+     * Drops the "Kategorie" column when none of the entries have an assigned category, and the
+     * "Gruppe"/"Zeitversatz" pair when none have a start group, instead of always reserving space
+     * for columns that would otherwise show "-" for every row. With start groups, "Zeitversatz" is
+     * always shown alongside "Gruppe" ("-" for a group without one).
      */
     private List<PdfColumn<RankingViewService.StartListEntry>> startListColumns(List<RankingViewService.StartListEntry> entries) {
         List<PdfColumn<RankingViewService.StartListEntry>> columns = START_LIST_COLUMNS;
@@ -156,7 +158,7 @@ public class PdfExportService {
             columns = columns.stream().filter(c -> !c.header().equals("Kategorie")).toList();
         }
         if (entries.stream().noneMatch(RankingViewService.StartListEntry::hasStartGroup)) {
-            columns = columns.stream().filter(c -> !c.header().equals("Gruppe")).toList();
+            columns = columns.stream().filter(c -> !c.header().equals("Gruppe") && !c.header().equals("Zeitversatz")).toList();
         }
         return columns;
     }

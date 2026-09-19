@@ -33,6 +33,10 @@ get edited between runs, so never reuse a previous answer silently. A silently-w
 here doesn't fail loudly: it produces a plausible-looking but wrong comparison table that reads
 exactly like a real app bug.
 
+The same gate applies to **start-group offsets** (#6): ask in that same round whether any TIME leg
+race used start groups with an offset. The results CSV carries the *raw* clock time, not the value
+the app ranks on, so an unasked offset produces wrong places for exactly the affected groups.
+
 1. **Per-race raw results**, one file per leg race. In order of preference:
    - **Best**: the CSV from `GET /participants/export/results-csv/{raceId}` (Einstellungen/race
      export in the UI). Columns: `raceNumber, lastName, firstName, team, ageGroup, externalId,
@@ -89,6 +93,29 @@ exactly like a real app bug.
    user already has these) or a JSON export of the Gaudi ranking. PDF is fine here since it's only
    used for comparison, not as computation input — a text-extraction slip shows up immediately as
    a diff against the independently-computed table.
+6. **Start groups with an offset** (Startgruppen, block start against one shared race clock) —
+   **always ask explicitly** whether any TIME leg race had participants assigned to a start group
+   whose template has an `offsetSeconds` ("Zeitversatz", entered as Minuten + Sekunden in the
+   start-group template dialog). POINTS
+   races are never affected (`RankingService.startGroupOffsetMs` returns null for them). If yes,
+   ask for that race's **Startlisten-CSV** (Teilnehmerliste → "…"-Aktionsmenü → "Startnummern" → "Startliste (CSV)",
+   `GET /participants/export/startlist-csv/{raceId}`): one row per starter with `externalId`,
+   `startGroup` and `startGroupOffset` (the group's Zeitversatz as `m:ss`, empty for a group without
+   one or a participant without a group) — convert it to seconds and key it by `externalId`. Both
+   columns are **left out of the header entirely** when no starter of that race has a start group —
+   that means no offset applies to anyone in the race, not a broken export.
+   Neither results CSV nor roster CSV contains the start group, so don't look for it there.
+   - The Startlisten-CSV leaves out anyone whose status is DSQ/DNF/DNS (no start position, same as
+     the start list PDF). That's fine here: such a participant never gets a place in that race, so
+     their offset can't affect anything.
+   - Offsets are resolved *live* from the template at ranking time, so the Startlisten-CSV must be
+     exported at the same state as the reference PDF — if the Zeitversatz was edited between the
+     two exports, the comparison is meaningless.
+   - Fallback if the user can't export it (older app version without that export): the Startliste
+     PDF's "Gruppe"/"Zeitversatz" columns, or — older still, only "Gruppe" — the Zeitversatz per
+     group read off the start-group template dialog (Minuten + Sekunden) by the user.
+   If no TIME leg race used start groups (or none of the groups had an offset), note that answer
+   and skip the offset entirely — no question left implicit.
 
 If the user only has PDFs for everything (no CSV export), proceed anyway with the PDF fallback
 path for the per-race inputs, but say explicitly that place-assignment itself isn't independently
@@ -149,8 +176,16 @@ categories apply, otherwise once over the whole field.
 **Step 1 — per-race place, for each leg race independently:**
 - A participant with no measured value, or with a non-`NONE` status (`DNF`/`DNS`/`DSQ`), gets no
   `adjustedValue` and is excluded from that race's placing entirely (`RankingService.adjustedValue`).
-- Otherwise `adjustedValue = duration ± penalty` (`+penalty` if ascending/TIME, `-penalty` if
+- Otherwise first net the raw value of its start-group offset (`RankingService.netDurationMs`):
+  `net = max(0, duration - offsetMs)`, where `offsetMs = offsetSeconds * 1000` of the participant's
+  start group — **TIME races only**, and only for a participant who has a group whose template has
+  an offset; everyone else uses `net = duration`. `duration` here is the raw value from the
+  results CSV (`time/value` column), which is exported **un-netted**.
+- Then `adjustedValue = net ± penalty` (`+penalty` if ascending/TIME, `-penalty` if
   descending/POINTS), floored at 0.
+- The Gaudi PDF prints each leg's time already netted of the offset (`PdfExportService.netLegValue`),
+  so for a start-group participant the printed leg time is `CSV value − offset`, not the CSV value
+  itself — expected, not a mismatch.
 - Sort remaining participants best-to-worst (ascending for TIME, descending for POINTS).
 - Assign standard competition places (1, 2, 2, 4, ...): for **TIME races only**, round the
   adjusted value to the nearest 10ms *before* comparing for ties (two results differing only in

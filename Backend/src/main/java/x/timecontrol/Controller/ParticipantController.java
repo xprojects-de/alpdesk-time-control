@@ -465,6 +465,20 @@ public class ParticipantController {
                 .header("Content-Disposition", "attachment; filename=ergebnisse_" + raceId + ".csv");
     }
 
+    @Produces("text/csv")
+    @Get("/export/startlist-csv/{raceId}")
+    @Operation(summary = "Export a race's start list as CSV", description = "Exports the same participants in the same start order as the start list PDF, with identity data plus each participant's start group and its Zeitversatz (startGroupOffset, \"m:ss\") - the offset a TIME race's raw result is netted by for ranking, which no other export carries. Export only, no matching import.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> exportStartListCsv(@PathVariable Long raceId) {
+        if (raceService.findById(raceId).isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        String csv = service.exportStartListCsv(raceId);
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header("Content-Disposition", "attachment; filename=startliste_" + raceId + ".csv");
+    }
+
     @Produces("application/pdf")
     @Get("/export/pdf/startlist/{raceId}")
     @Operation(summary = "Export start list as PDF", description = "Generates a PDF start list sorted by race number for a specific race", security = @SecurityRequirement(name = "BearerAuth"))

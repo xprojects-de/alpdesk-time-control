@@ -280,6 +280,20 @@ export class ParticipantEffects {
         )
     );
 
+    exportStartListCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportStartListCsv),
+            mergeMap(({raceId, filename}) =>
+                this.participantService.exportStartListCsv(raceId).pipe(
+                    map(blob => ParticipantActions.exportStartListCsvSuccess({blob, filename})),
+                    catchError(error => of(ParticipantActions.exportStartListCsvFailure({
+                        error: extractErrorMessage(error, 'Startlisten-CSV konnte nicht exportiert werden')
+                    })))
+                )
+            )
+        )
+    );
+
     // PDF Export Effects
     exportAllPdf$ = createEffect(() =>
         this.actions$.pipe(
@@ -395,7 +409,8 @@ export class ParticipantEffects {
                 ParticipantActions.exportAllAgeGroupsByCategoryPdfSuccess,
                 ParticipantActions.exportStartListPdfSuccess,
                 ParticipantActions.exportParticipantsCsvSuccess,
-                ParticipantActions.exportParticipantResultsCsvSuccess
+                ParticipantActions.exportParticipantResultsCsvSuccess,
+                ParticipantActions.exportStartListCsvSuccess
             ),
             tap(({blob, filename}) => {
                 const url = window.URL.createObjectURL(blob);

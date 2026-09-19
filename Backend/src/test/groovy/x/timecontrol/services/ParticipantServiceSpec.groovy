@@ -1200,6 +1200,61 @@ class ParticipantServiceSpec extends Specification {
         lines[2] == ";Musterfrau;Erika;;;;;;;"
     }
 
+    def "exportStartListCsv lists starters in start order with their start group and its Zeitversatz, leaving out non-starters"() {
+        given: "bib 2 in a group with a 1:30 Zeitversatz, bib 1 in a group without one, bib 3 DSQ (no start position)"
+        def withOffset = new Participant(10L, 5L, 1L, 2, 2L, null, null, null, null, null, DisqualificationStatus.NONE, null, 7L)
+        def withoutOffset = new Participant(11L, 5L, 2L, 1, null, null, null, null, null, null, DisqualificationStatus.NONE, null, 8L)
+        def dsq = new Participant(12L, 5L, 3L, 3, null, null, null, null, null, null, DisqualificationStatus.DSQ, null, 7L)
+        repository.findByRaceId(5L) >> [withOffset, withoutOffset, dsq]
+        personService.findByIds(_ as Set) >> [
+                1L: new Person(1L, "Max", "Mustermann", LocalDate.of(2013, 5, 1), Gender.MALE, "EXT-1"),
+                2L: new Person(2L, "Erika", "Müller", LocalDate.of(2012, 1, 1), Gender.FEMALE, null)]
+        teamService.findByIds(_ as Set) >> [2L: new Team(2L, "TEAM A")]
+        categoryService.findByIds(_ as Set) >> [:]
+        raceService.findByIds(_ as Set) >> [:]
+        startGroupTemplateService.findByIds(_ as Set) >> [
+                7L: new StartGroupTemplate(7L, "A", "#92D050", 0, 90),
+                8L: new StartGroupTemplate(8L, "B", "#FFC000", 1, null)]
+
+        when:
+        def lines = service.exportStartListCsv(5L).readLines()
+
+        then:
+        lines == [
+                "raceNumber;lastName;firstName;externalId;birthYear;gender;ageGroup;team;category;startGroup;startGroupOffset",
+                "1;Müller;Erika;;2012;FEMALE;;;;B;",
+                "2;Mustermann;Max;EXT-1;2013;MALE;;TEAM A;;A;1:30"]
+    }
+
+    def "exportStartListCsv leaves out the startGroup/startGroupOffset columns entirely when no starter has a start group"() {
+        given:
+        def participant = new Participant(10L, 5L, 1L, 1, null, null, null, null, null, null, DisqualificationStatus.NONE, null, null)
+        repository.findByRaceId(5L) >> [participant]
+        personService.findByIds(_ as Set) >> [1L: new Person(1L, "Max", "Mustermann", LocalDate.of(2013, 5, 1), Gender.MALE, "EXT-1")]
+        teamService.findByIds(_ as Set) >> [:]
+        categoryService.findByIds(_ as Set) >> [:]
+        raceService.findByIds(_ as Set) >> [:]
+        startGroupTemplateService.findByIds(_ as Set) >> [:]
+
+        expect:
+        service.exportStartListCsv(5L).readLines() == [
+                "raceNumber;lastName;firstName;externalId;birthYear;gender;ageGroup;team;category",
+                "1;Mustermann;Max;EXT-1;2013;MALE;;;"]
+    }
+
+    def "formatStartGroupOffset renders the Zeitversatz as m:ss, and null for a group without one"() {
+        expect:
+        RankingViewService.formatStartGroupOffset(seconds) == expected
+
+        where:
+        seconds | expected
+        null    | null
+        0       | "0:00"
+        5       | "0:05"
+        90      | "1:30"
+        3600    | "60:00"
+    }
+
     def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
         given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
         def noStatus = new Participant(10L, 5L, 1L, 42, null, null, 8550, null, null, null, null)

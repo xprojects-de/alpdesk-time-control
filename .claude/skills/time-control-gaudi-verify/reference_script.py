@@ -37,6 +37,15 @@ KEEP_DNS_IN_RANKING = False
 KEEP_DNF_IN_RANKING = False
 KEEP_DSQ_IN_RANKING = False
 
+# TODO: start-group Zeitversatz per TIME leg race, in SECONDS, keyed by externalId (SKILL.md
+# Inputs #6) - built from that race's Startlisten-CSV (externalId + startGroupOffset "m:ss", empty =
+# no offset). MUST come from asking; leave a race out (or the dict empty) only once the user said no
+# start group with an offset was used there. POINTS races are never netted, even if listed here.
+# The results CSV value is the RAW clock time.
+START_GROUP_OFFSET_SECONDS = {
+    # 1: {"12345": 30, "23456": 60},
+}
+
 # TODO: (ageGroup, gender)-keyed groups, only needed if the reference output is category-split
 # (SKILL.md "Category-split rankings"). Populate this from whichever source the user picked -
 # the roster CSV export (preferred, independent of the PDF) or the reference PDF's own section
@@ -102,7 +111,7 @@ def std_places(sorted_keys, value_of):
     return places
 
 
-def compute_station_places(rows, kind, eligible_ids=None):
+def compute_station_places(rows, kind, eligible_ids=None, offsets=None):
     """externalId -> place, among participants with a valid result, restricted to eligible_ids.
     Also returns externalId -> status for everyone WITHOUT a valid place (None if simply missing,
     i.e. effective DNS per RankingService.dnsStatusLabel), for the eligibility step to consult."""
@@ -118,6 +127,8 @@ def compute_station_places(rows, kind, eligible_ids=None):
         if val is None or status in ("DNF", "DNS", "DSQ"):
             bad_status[eid] = status or "DNS"  # missing result with no status defaults to DNS
             continue
+        if kind == "TIME" and offsets and eid in offsets:
+            val = max(val - offsets[eid], 0.0)  # RankingService.netDurationMs
         penalty = parse_time_or_float(row.get("penalty")) or 0.0
         adj = val + penalty if kind == "TIME" else val - penalty
         adj = max(adj, 0.0)
@@ -137,7 +148,8 @@ def compute_ranking(rows_by_station, participant_ids):
     station_bad_status = {}
     for num in FILES:
         rows, kind = rows_by_station[num]
-        places, bad_status = compute_station_places(rows, kind, eligible_ids=participant_ids)
+        places, bad_status = compute_station_places(rows, kind, eligible_ids=participant_ids,
+                                                    offsets=START_GROUP_OFFSET_SECONDS.get(num))
         station_places[num] = places
         station_bad_status[num] = bad_status
 

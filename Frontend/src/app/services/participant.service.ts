@@ -178,6 +178,16 @@ export class ParticipantService {
         return this.http.post<ParticipantCopyResponse>(`${this.apiUrl}/copy`, request);
     }
 
+    /**
+     * Start list as CSV - same participants and order as the start list PDF, plus identity data and
+     * each participant's start group with its Zeitversatz (startGroupOffset, "m:ss"). Export only.
+     */
+    exportStartListCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/startlist-csv/${raceId}`, {
+            responseType: 'blob'
+        });
+    }
+
     exportStartListToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/startlist/${raceId}`, {
             responseType: 'blob'

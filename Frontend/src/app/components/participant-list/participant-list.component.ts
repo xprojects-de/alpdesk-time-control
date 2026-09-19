@@ -185,6 +185,12 @@ import {Actions, ofType} from "@ngrx/effects";
                                 <mat-icon>picture_as_pdf</mat-icon>
                                 <span>Startliste (PDF)</span>
                             </button>
+                            <button mat-menu-item (click)="exportStartListCsv()"
+                                    matTooltip="Startliste inkl. Startgruppe und Zeitversatz als CSV exportieren"
+                                    matTooltipPosition="left">
+                                <mat-icon>download</mat-icon>
+                                <span>Startliste (CSV)</span>
+                            </button>
                         </mat-menu>
 
                         <mat-menu #resultsMenu="matMenu">
@@ -810,6 +816,13 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
         });
 
+        this.actions$.pipe(
+            ofType(ParticipantActions.exportStartListCsvFailure),
+            takeUntil(this.destroy$),
+        ).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim CSV-Export: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
+        });
+
         // Setup sort when signal changes - re-attaches whenever a *new* MatSort instance
         // appears (initial render, or the table being recreated after the race filter is
         // cleared and set again), not just once, since sortInstance !== a stale destroyed
@@ -1304,6 +1317,23 @@ async openImportDialog(): Promise<void> {
                         });
                     });
             });
+    }
+
+    async exportStartListCsv(): Promise<void> {
+        const raceId = await firstValueFrom(this.selectedRaceId$);
+        if (!raceId) {
+            this.snackBar.open('Bitte wählen Sie zuerst ein Rennen aus!', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar'],
+            });
+            return;
+        }
+        const races = await firstValueFrom(this.races$);
+        const race = races.find(r => r.id === raceId);
+        this.store.dispatch(ParticipantActions.exportStartListCsv({
+            raceId,
+            filename: `startliste_${race?.name ?? raceId}.csv`,
+        }));
     }
 
     async exportStartListPdf(): Promise<void> {

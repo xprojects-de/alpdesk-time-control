@@ -67,7 +67,8 @@ public class RankingViewService {
     @Serdeable
     public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
                                   String ageGroup, String team, String category, boolean hasCategory,
-                                  String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup) {
+                                  String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup,
+                                  String startGroupOffset) {
     }
 
     /**
@@ -177,6 +178,18 @@ public class RankingViewService {
         return personService.displayName(person);
     }
 
+    /**
+     * A start group's Zeitversatz as "m:ss" - the same minutes + seconds the start-group template
+     * dialog takes it in - or null for a group without one. Shared by the start list PDF and CSV.
+     */
+    @Nullable
+    public static String formatStartGroupOffset(@Nullable Integer offsetSeconds) {
+        if (offsetSeconds == null) {
+            return null;
+        }
+        return String.format("%d:%02d", offsetSeconds / 60, offsetSeconds % 60);
+    }
+
     public String genderLabel(Gender gender) {
         return gender == Gender.MALE ? "männlich" : "weiblich";
     }
@@ -223,9 +236,11 @@ public class RankingViewService {
             StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
             String startGroupLabel = startGroup != null ? startGroup.label() : "-";
             String startGroupColor = startGroup != null ? startGroup.color() : null;
+            String startGroupOffset = startGroup != null ? formatStartGroupOffset(startGroup.offsetSeconds()) : null;
 
             entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null,
-                    startGroupLabel, startGroupColor, startGroup != null));
+                    startGroupLabel, startGroupColor, startGroup != null,
+                    startGroupOffset != null ? startGroupOffset : "-"));
         }
         return entries;
     }

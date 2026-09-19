@@ -300,6 +300,20 @@ export const exportStartListPdfFailure = createAction(
     props<{ error: string }>()
 );
 
+// CSV Export - Start list (Startliste), incl. start group + Zeitversatz
+export const exportStartListCsv = createAction(
+    '[Participant] Export Start List CSV',
+    props<{ raceId: number; filename: string }>()
+);
+export const exportStartListCsvSuccess = createAction(
+    '[Participant] Export Start List CSV Success',
+    props<{ blob: Blob; filename: string }>()
+);
+export const exportStartListCsvFailure = createAction(
+    '[Participant] Export Start List CSV Failure',
+    props<{ error: string }>()
+);
+
 // PDF Export - All (Gesamtwertung)
 export const exportAllPdf = createAction(
     '[Participant] Export All PDF',

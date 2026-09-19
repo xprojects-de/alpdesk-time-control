@@ -1526,6 +1526,60 @@ public class ParticipantService {
         return csv.toString();
     }
 
+    // Header text for exportStartListCsv. startGroup/startGroupOffset are only appended when at
+    // least one listed participant has a start group (mirroring the start list PDF's
+    // "Gruppe"/"Zeitversatz" columns). startGroupOffset is the group's Zeitversatz as "m:ss" - the
+    // value RankingService nets a TIME race's raw result by, which no other export carries
+    // (exportResultsCsv's time/value is the raw, un-netted clock time).
+    private static final List<String> START_LIST_EXPORT_HEADER =
+            List.of("raceNumber", "lastName", "firstName", "externalId", "birthYear", "gender", "ageGroup", "team", "category");
+    private static final List<String> START_LIST_EXPORT_START_GROUP_HEADER = List.of("startGroup", "startGroupOffset");
+
+    /**
+     * Exports a race's start list as CSV - the same participants in the same order as the start list
+     * PDF ({@link Participant#effectiveStartOrder()}; DSQ/DNF/DNS without a start position aren't
+     * starting and are left out), plus identity data and - only if any of them has a start group -
+     * each participant's start group with its Zeitversatz. Export only, there is no matching import.
+     * Empty cells instead of the PDF's "-".
+     */
+    public String exportStartListCsv(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false)
+                .filter(p -> p.effectiveStartOrder() != null)
+                .sorted(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())))
+                .toList();
+
+        boolean anyStartGroup = participants.stream().anyMatch(p -> p.startGroupId() != null);
+
+        List<String> header = new ArrayList<>(START_LIST_EXPORT_HEADER);
+        if (anyStartGroup) {
+            header.addAll(START_LIST_EXPORT_START_GROUP_HEADER);
+        }
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), header)).append('\n');
+        for (ParticipantResponse p : toResponses(participants)) {
+            PersonResponse person = p.person();
+            List<String> values = new ArrayList<>(List.of(
+                    p.raceNumber() != null ? p.raceNumber().toString() : "",
+                    sanitizeForExport(person != null ? person.lastName() : ""),
+                    sanitizeForExport(person != null ? person.firstName() : ""),
+                    sanitizeForExport(person != null && person.externalId() != null ? person.externalId() : ""),
+                    person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "",
+                    person != null && person.gender() != null ? person.gender().name() : "",
+                    sanitizeForExport(p.ageGroup() != null ? p.ageGroup().name() : ""),
+                    sanitizeForExport(p.team() != null ? p.team().name() : ""),
+                    sanitizeForExport(p.category() != null ? p.category().name() : "")
+            ));
+            if (anyStartGroup) {
+                StartGroupTemplateResponse startGroup = p.startGroup();
+                String offset = startGroup != null ? RankingViewService.formatStartGroupOffset(startGroup.offsetSeconds()) : null;
+                values.add(sanitizeForExport(startGroup != null ? startGroup.label() : ""));
+                values.add(offset != null ? offset : "");
+            }
+            csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
+        }
+        return csv.toString();
+    }
+
     /**
      * Renders a status for {@link #exportResultsCsv} - blank for {@code NONE} (the normal, ranked
      * case) rather than the literal "NONE", so the column reads as empty-unless-flagged in Excel.
