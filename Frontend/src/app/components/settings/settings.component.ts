@@ -42,7 +42,7 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
             <mat-card-content>
                 @if (loading$ | async) {
                     <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
                 } @else {
                     <form [formGroup]="form" class="settings-form">
@@ -98,7 +98,7 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
           .loading-container {
             display: flex;
             justify-content: center;
-            padding: 40px;
+            padding: 8px;
           }
 
           .settings-form {

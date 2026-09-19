@@ -85,7 +85,7 @@ import {Actions, ofType} from "@ngrx/effects";
 
                 @if (loading$ | async) {
                     <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
                 }
 
@@ -188,7 +188,7 @@ import {Actions, ofType} from "@ngrx/effects";
           .loading-container {
             display: flex;
             justify-content: center;
-            padding: 40px;
+            padding: 8px;
           }
 
           .person-table {

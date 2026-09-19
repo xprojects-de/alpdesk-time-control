@@ -79,7 +79,7 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
 
                 @if (loading$ | async) {
                     <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
                 }
 
@@ -148,7 +148,7 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
           .loading-container {
             display: flex;
             justify-content: center;
-            padding: 40px;
+            padding: 8px;
           }
 
           .gaudi-mode-table {
