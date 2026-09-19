@@ -1368,4 +1368,63 @@ class ParticipantServiceSpec extends Specification {
         result.errors().isEmpty()
         result.updated().first().penalty() == 1500
     }
+
+    def "importResultsByRaceNumber clears the penalty when the mapped penalty cell is blank on a row with a result"() {
+        given: "a station removed a penalty after an earlier import - its re-export writes the penalty cell blank"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 31000, 2000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time;penalty\n42;31000;\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().durationMs() == 31000
+        result.updated().first().penalty() == null
+    }
+
+    def "importResultsByRaceNumber keeps the penalty on a row without a time, even when the penalty cell is blank"() {
+        given: "a still-pending row (blank time and status) and a status-keyword-only row carry no result to pair a penalty with"
+        def pending = new Participant(10L, 5L, 1L, 42, null, null, 31000, 2000, null, null, DisqualificationStatus.NONE)
+        def keywordOnly = new Participant(11L, 5L, 2L, 43, null, null, 32000, 3000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [pending, keywordOnly]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;time;penalty;status\n42;;;\n43;DNF;;\n"
+        def mapping = [raceNumber: "raceNumber", time: "time", penalty: "penalty", status: "status"]
+
+        when:
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, mapping, ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        def updated42 = result.updated().find { it.raceNumber() == 42 }
+        updated42.durationMs() == 31000
+        updated42.penalty() == 2000
+        def updated43 = result.updated().find { it.raceNumber() == 43 }
+        updated43.status() == DisqualificationStatus.DNF
+        updated43.penalty() == 3000
+    }
+
+    def "importResultsByRaceNumber clears a removed penalty when reimporting exportResultsCsv's own output"() {
+        given: "the station-to-main round trip: main still has an earlier-imported penalty, the station's newer export has an empty penalty cell"
+        def existing = new Participant(10L, 5L, 1L, 42, null, null, 31000, 2000, null, null, DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [existing]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;lastName;firstName;team;ageGroup;externalId;time/value;penalty;comment;status\n" +
+                "42;Mustermann;Max;;U14;;0:31.000;;;\n"
+
+        when: "reimported with the auto-suggested mapping, exactly like phase4 of the federation e2e suite"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.CLOCK, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        result.updated().first().durationMs() == 31000
+        result.updated().first().penalty() == null
+    }
 }

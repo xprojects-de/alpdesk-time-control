@@ -39,11 +39,13 @@ chunks = [rows[0:chunk_size], rows[chunk_size:2 * chunk_size], rows[2 * chunk_si
 this_phase_rows = chunks[phase - 1]
 
 updated = dns_count = injected_count = 0
+failures = []
 for row in this_phase_rows:
     rn = int(row["raceNumber"].strip())
     p = by_race_number.get(rn)
     if p is None:
         print(f"  WARNING: raceNumber {rn} from CSV not found among station participants!")
+        failures.append(rn)
         continue
 
     duration_raw = (row.get("durationMs") or "").strip()
@@ -78,9 +80,12 @@ for row in this_phase_rows:
     st, resp = c.put(BASE, token, f"/participants/{p['id']}", body)
     if st != 200:
         print(f"  FAILED update for raceNumber {rn}: {st} {resp}")
+        failures.append(rn)
     else:
         updated += 1
 
 remaining = len(rows) - sum(len(ch) for ch in chunks[:phase])
 print(f"{key} Phase {phase}/3: updated={updated} dns_set={dns_count} injected_status={injected_count} "
       f"(noch {remaining} Teilnehmer ohne Ergebnis, folgen in einer spaeteren Phase)")
+if failures:
+    sys.exit(f"{key}: {len(failures)} Ergebnisse nicht eingetragen (raceNumber): {failures}")

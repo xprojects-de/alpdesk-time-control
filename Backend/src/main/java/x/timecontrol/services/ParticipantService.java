@@ -1179,6 +1179,13 @@ public class ParticipantService {
      * als gewertet") - including undoing a previously imported DNF/DNS/DSQ by clearing the cell; a
      * mapped, non-blank value that isn't NONE/DNF/DNS/DSQ (any casing) is a row error rather than
      * being silently dropped.
+     * <p>
+     * The mapped "penalty" column follows the result it belongs to: on a row that carries a numeric
+     * time/value, a blank penalty cell means "no penalty" and clears an existing one - otherwise a
+     * penalty removed at a station after an earlier import would stick on the main instance forever
+     * and skew its ranking. On a row without a time/value (a still-pending participant, or one only
+     * carrying a status keyword) and when the column isn't mapped at all, the existing penalty is
+     * kept.
      */
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat,
@@ -1285,6 +1292,11 @@ public class ParticipantService {
                     errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty must not be negative"));
                     continue;
                 }
+            } else if (penaltyRaw != null && durationMs != null) {
+                // Mapped-but-blank penalty on a row that carries a result: the file states this
+                // result has no penalty (e.g. a station removed one after an earlier import), so
+                // clear it instead of keeping the stale value.
+                penalty = null;
             }
 
             String commentRaw = valueFor(row, effectiveMapping, "comment");

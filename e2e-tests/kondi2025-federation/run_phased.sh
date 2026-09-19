@@ -19,6 +19,18 @@ for phase in 1 2 3; do
     echo "=== Wettkampf-Phase $phase/3: Ergebnisse an jeder Station eintragen (nur ein Drittel des Feldes) ==="
     for s in station1 station2 station3 station4; do python3 phase3_phased_results.py "$s" "$phase"; done
 
+    # Station corrections across breaks: a penalty added before break 1's import is removed again
+    # at the station before break 2's import - phase4_phased's cross-check then proves MAIN drops it.
+    if [ "$phase" = 1 ]; then
+        echo ""
+        echo "=== Korrektur an der Station: Strafzeit setzen (wird in Pause 1 importiert) ==="
+        python3 phase3b_station_corrections.py add
+    elif [ "$phase" = 2 ]; then
+        echo ""
+        echo "=== Korrektur an der Station: Strafzeit wieder entfernen (muss in Pause 2 bei MAIN verschwinden) ==="
+        python3 phase3b_station_corrections.py remove
+    fi
+
     echo ""
     echo "=== Wettkampf-Phase $phase/3: Zwischenstand exportieren + in MAIN importieren (Pause/Sicherung) ==="
     python3 phase4_phased_export_import.py "$phase"
