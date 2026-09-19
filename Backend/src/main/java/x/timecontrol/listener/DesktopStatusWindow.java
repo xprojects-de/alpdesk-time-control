@@ -15,16 +15,21 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
@@ -92,11 +97,13 @@ final class DesktopStatusWindow {
         gbc.insets = new Insets(10, 0, 2, 0);
         textPanel.add(linkLabel, gbc);
 
-        JLabel loginLabel = new JLabel("Login: " + username + " / " + password);
-        loginLabel.setFont(loginLabel.getFont().deriveFont(Font.PLAIN, 12f));
         gbc.gridy = 3;
         gbc.insets = new Insets(6, 0, 2, 0);
-        textPanel.add(loginLabel, gbc);
+        textPanel.add(copyableRow("Benutzer:", username), gbc);
+
+        gbc.gridy = 4;
+        gbc.insets = new Insets(2, 0, 2, 0);
+        textPanel.add(copyableRow("Passwort:", password), gbc);
 
         content.add(textPanel, BorderLayout.CENTER);
 
@@ -156,6 +163,41 @@ final class DesktopStatusWindow {
         frame.setLocationRelativeTo(null);
         frame.setAlwaysOnTop(false);
         frame.setVisible(true);
+    }
+
+    /**
+     * A label plus a selectable (read-only, label-styled) text field and a copy button, so the
+     * login credentials can be copied into the browser's login form instead of retyped.
+     */
+    private static JPanel copyableRow(String caption, String value) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+
+        JLabel captionLabel = new JLabel(caption);
+        captionLabel.setFont(captionLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        row.add(captionLabel);
+
+        JTextField valueField = new JTextField(value);
+        valueField.setEditable(false);
+        valueField.setBorder(BorderFactory.createEmptyBorder());
+        valueField.setOpaque(false);
+        valueField.setFont(captionLabel.getFont().deriveFont(Font.BOLD));
+        valueField.setColumns(Math.max(value.length(), 1));
+        row.add(valueField);
+
+        JButton copyButton = new JButton("Kopieren");
+        copyButton.setFont(copyButton.getFont().deriveFont(Font.PLAIN, 11f));
+        copyButton.setMargin(new Insets(1, 6, 1, 6));
+        copyButton.setFocusable(false);
+        copyButton.addActionListener(_ -> {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(value), null);
+            copyButton.setText("Kopiert");
+            Timer resetTimer = new Timer(1500, _ -> copyButton.setText("Kopieren"));
+            resetTimer.setRepeats(false);
+            resetTimer.start();
+        });
+        row.add(copyButton);
+
+        return row;
     }
 
     /**
