@@ -1427,4 +1427,46 @@ class ParticipantServiceSpec extends Specification {
         result.updated().first().durationMs() == 31000
         result.updated().first().penalty() == null
     }
+
+    def "importResultsByRaceNumber clears the comment when the mapped comment cell is blank on a row stating an outcome"() {
+        given: "a DSQ reversed at the station (time + blank status) and a DNS whose note was removed (blank time + status DNS)"
+        def reversedDsq = new Participant(10L, 5L, 1L, 42, null, null, 31000, null, null, "Regelverstoss", DisqualificationStatus.DSQ)
+        def dns = new Participant(11L, 5L, 2L, 43, null, null, null, null, null, "krank", DisqualificationStatus.DNS)
+        repository.findByRaceId(5L) >> [reversedDsq, dns]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        def csv = "raceNumber;lastName;firstName;team;ageGroup;externalId;time/value;penalty;comment;status\n" +
+                "42;Mustermann;Max;;U14;;0:31.000;;;\n" +
+                "43;Musterfrau;Erika;;U14;;;;;DNS\n"
+
+        when: "reimported with the auto-suggested mapping, like a station export"
+        def result = service.importResultsByRaceNumber(5L, csv.getBytes("UTF-8"), null, null, ResultTimeFormat.CLOCK, ResultUnit.TIME)
+
+        then:
+        result.errors().isEmpty()
+        def updated42 = result.updated().find { it.raceNumber() == 42 }
+        updated42.status() == DisqualificationStatus.NONE
+        updated42.comment() == null
+        def updated43 = result.updated().find { it.raceNumber() == 43 }
+        updated43.status() == DisqualificationStatus.DNS
+        updated43.comment() == null
+    }
+
+    def "importResultsByRaceNumber keeps the comment on a still-pending row or when the comment column isn't mapped"() {
+        given:
+        def pending = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, "Nachstart", DisqualificationStatus.NONE)
+        def withTime = new Participant(11L, 5L, 2L, 43, null, null, null, null, null, "Ski gebrochen", DisqualificationStatus.NONE)
+        repository.findByRaceId(5L) >> [pending, withTime]
+        repository.updateAll(_) >> { List<Participant> list -> list }
+
+        when: "a pending row with comment mapped, and a separate file without a comment column at all"
+        def pendingResult = service.importResultsByRaceNumber(5L, "raceNumber;time;comment;status\n42;;;\n".getBytes("UTF-8"), null,
+                [raceNumber: "raceNumber", time: "time", comment: "comment", status: "status"], ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+        def unmappedResult = service.importResultsByRaceNumber(5L, "raceNumber;time\n43;31000\n".getBytes("UTF-8"), null,
+                [raceNumber: "raceNumber", time: "time"], ResultTimeFormat.MILLISECONDS, ResultUnit.TIME)
+
+        then:
+        pendingResult.updated().first().comment() == "Nachstart"
+        unmappedResult.updated().first().comment() == "Ski gebrochen"
+    }
 }

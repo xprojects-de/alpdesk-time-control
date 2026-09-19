@@ -1186,6 +1186,11 @@ public class ParticipantService {
      * and skew its ranking. On a row without a time/value (a still-pending participant, or one only
      * carrying a status keyword) and when the column isn't mapped at all, the existing penalty is
      * kept.
+     * <p>
+     * The mapped "comment" column works the same way: on a row that states an outcome (a non-blank
+     * time/value or status cell), a blank comment means "no comment" and clears an existing one -
+     * e.g. the note of a DSQ reversed at a station after an earlier import. On a still-pending row
+     * (both blank) and when the column isn't mapped at all, the existing comment is kept.
      */
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat,
@@ -1300,7 +1305,17 @@ public class ParticipantService {
             }
 
             String commentRaw = valueFor(row, effectiveMapping, "comment");
-            String comment = (commentRaw != null && !commentRaw.trim().isEmpty()) ? commentRaw.trim() : existing.comment();
+            String comment;
+            if (commentRaw != null && !commentRaw.trim().isEmpty()) {
+                comment = commentRaw.trim();
+            } else if (commentRaw != null && (hasText(timeRaw) || hasText(statusRaw))) {
+                // Same rule as the penalty above: a mapped-but-blank comment on a row that states an
+                // outcome (a time/value or a status) means "no comment" - e.g. the note of a DSQ that
+                // was reversed at the station after an earlier import.
+                comment = null;
+            } else {
+                comment = existing.comment();
+            }
 
             toUpdate.add(new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(),
@@ -1399,6 +1414,10 @@ public class ParticipantService {
         int minutes = parts.length >= 2 ? Integer.parseInt(parts[parts.length - 2]) : 0;
         int hours = parts.length == 3 ? Integer.parseInt(parts[0]) : 0;
         return (int) Math.round((hours * 3600L + minutes * 60L) * 1000.0 + seconds * 1000.0);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String valueFor(Map<String, String> row, Map<String, String> mapping, String targetField) {
