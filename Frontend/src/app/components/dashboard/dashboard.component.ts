@@ -6,6 +6,7 @@ import {Observable, Subject} from "rxjs";
 import {distinctUntilChanged, filter, map, takeUntil} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
+import {MatDividerModule} from "@angular/material/divider";
 import {MatToolbarModule} from "@angular/material/toolbar";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -39,6 +40,7 @@ interface NavItem {
         RouterLinkActive,
         MatSidenavModule,
         MatListModule,
+        MatDividerModule,
         MatToolbarModule,
         MatButtonModule,
         MatIconModule,
@@ -112,12 +114,17 @@ interface NavItem {
         <mat-sidenav-container class="dashboard-container">
             <mat-sidenav mode="side" [opened]="navOpen()" class="app-nav">
                 <mat-nav-list class="nav-list">
-                    @for (item of navItems; track item.path) {
-                        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
-                           [matTooltip]="item.label" matTooltipPosition="right">
-                            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-                            <span matListItemTitle>{{ item.label }}</span>
-                        </a>
+                    @for (group of navGroups; track $index; let first = $first) {
+                        @if (!first) {
+                            <mat-divider class="nav-divider"/>
+                        }
+                        @for (item of group; track item.path) {
+                            <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
+                               [matTooltip]="item.label" matTooltipPosition="right">
+                                <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+                                <span matListItemTitle>{{ item.label }}</span>
+                            </a>
+                        }
                     }
                 </mat-nav-list>
                 @if (version$ | async; as version) {
@@ -180,6 +187,10 @@ interface NavItem {
 
           .nav-list {
             flex: 1 1 auto;
+          }
+
+          .nav-divider {
+            margin: 8px 0;
           }
 
           .app-version {
@@ -246,18 +257,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // null until the first health check completes (see BackendHealthState.reachable).
     backendReachable$: Observable<boolean | null>;
 
-    readonly navItems: NavItem[] = [
-        {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
-        {path: 'races', label: 'Rennen', icon: 'flag'},
-        {path: 'teams', label: 'Teams', icon: 'groups'},
-        {path: 'categories', label: 'Kategorien', icon: 'category'},
-        {path: 'persons', label: 'Personen', icon: 'badge'},
-        {path: 'participants', label: 'Teilnehmer', icon: 'person'},
-        {path: 'start-group-templates', label: 'Startgruppen', icon: 'palette'},
-        {path: 'measurements', label: 'Messungen', icon: 'timer'},
-        {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
-        {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
-        {path: 'settings', label: 'Zeitmessung', icon: 'settings_input_antenna'},
+    // Rendered with a divider between groups: race setup/evaluation first, timing-related pages below.
+    readonly navGroups: NavItem[][] = [
+        [
+            {path: 'races', label: 'Rennen', icon: 'flag'},
+            {path: 'categories', label: 'Kategorien', icon: 'category'},
+            {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
+            {path: 'teams', label: 'Teams', icon: 'groups'},
+            {path: 'start-group-templates', label: 'Startgruppen', icon: 'palette'},
+            {path: 'persons', label: 'Personen', icon: 'badge'},
+            {path: 'participants', label: 'Teilnehmer', icon: 'person'},
+            {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
+        ],
+        [
+            {path: 'settings', label: 'Zeitmessung', icon: 'settings_input_antenna'},
+            {path: 'measurements', label: 'Messungen', icon: 'timer'},
+            {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
+        ],
     ];
 
     private static readonly NAV_OPEN_KEY = 'dashboard_nav_open';
