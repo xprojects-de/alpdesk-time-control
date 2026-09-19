@@ -1,1 +1,0 @@
-import{f as Gl,vt as om}from"./chunk-1I-lyJg8.js";var r=om(`startGroupTemplate`);var p=Gl(r,t=>t.templates);var l=Gl(r,t=>t.loading);Gl(r,t=>t.error);export{p as n,l as t};

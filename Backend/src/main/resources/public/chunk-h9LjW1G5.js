@@ -1,0 +1,1 @@
+import{f as Gl,it as dm}from"./chunk-D2FZZT2z.js";var r=dm(`category`);var c=Gl(r,e=>e.categories);var s=Gl(r,e=>e.loading);Gl(r,e=>e.error);export{s as n,c as t};
