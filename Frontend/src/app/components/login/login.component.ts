@@ -3,7 +3,6 @@ import {
     OnInit,
     inject,
     OnDestroy,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
@@ -112,7 +111,6 @@ import {takeUntil} from "rxjs/operators";
             </mat-card>
         </div>
     `,
-    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [
         `
           .login-container {

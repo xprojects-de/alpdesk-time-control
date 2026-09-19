@@ -627,7 +627,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return isDesc ? -adjusted : adjusted;
                 }
                 default:
-                    return (participant as any)[columnId];
+                    // Remaining sortable columns (id, raceNumber, startSequence, status,
+                    // measuredAt, comment) are plain scalar fields of Participant.
+                    return participant[columnId as keyof Participant] as string | number;
             }
         };
 

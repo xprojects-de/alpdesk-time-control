@@ -1,4 +1,4 @@
-import {Component, HostListener, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, OnDestroy, OnInit, viewChild, inject, ChangeDetectionStrategy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject, combineLatest, firstValueFrom} from "rxjs";
@@ -226,7 +226,10 @@ interface BoardColumn {
             </mat-card-content>
         </mat-card>
     `,
+    // Eager on purpose: the board state (groupColumns, dirty, hasResults, ...) is plain fields
+    // mutated from store subscriptions and dialog callbacks, which OnPush wouldn't pick up.
     changeDetection: ChangeDetectionStrategy.Eager,
+    host: {'(window:beforeunload)': 'onBeforeUnload($event)'},
     styles: [
         `
           mat-card {
@@ -396,7 +399,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
     dirty = false;
     hasResults = false;
 
-    @ViewChild('raceSelect') raceSelect?: MatSelect;
+    raceSelect = viewChild<MatSelect>('raceSelect');
 
     private currentRaceId: number | null = null;
     private latestTemplates: StartGroupTemplate[] = [];
@@ -459,7 +462,6 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         }).afterClosed().pipe(map(confirmed => !!confirmed));
     }
 
-    @HostListener('window:beforeunload', ['$event'])
     onBeforeUnload(event: BeforeUnloadEvent): void {
         if (this.dirty) {
             event.preventDefault();
@@ -514,7 +516,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
                 // value/reference is unchanged from Angular's point of view and it wouldn't push
                 // a "new" value back into mat-select - writeValue bypasses that and forces it to
                 // redisplay the still-current race directly.
-                this.raceSelect?.writeValue(this.currentRaceId ?? null);
+                this.raceSelect()?.writeValue(this.currentRaceId ?? null);
             }
         });
     }
