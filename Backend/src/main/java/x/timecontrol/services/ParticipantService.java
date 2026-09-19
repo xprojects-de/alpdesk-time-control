@@ -439,10 +439,15 @@ public class ParticipantService {
 
     /**
      * Copies every participant of {@code sourceRaceId} into each of {@code targetRaceIds}, carrying
-     * over personId/teamId/categoryId but leaving durationMs/penalty/measuredAt empty (each race
-     * measures its own result). raceNumber is carried over only if {@code carryStartNumber} is true
-     * and the number isn't already taken in the target race (to avoid duplicate start numbers); it is
-     * left empty otherwise. A person already present in a target race is skipped rather than duplicated.
+     * over personId/teamId/categoryId/comment and the start-group assignment (startGroupId +
+     * startSequence) but leaving durationMs/penalty/measuredAt empty (each race measures its own
+     * result). raceNumber is carried over only if {@code carryStartNumber} is true and the number
+     * isn't already taken in the target race (to avoid duplicate start numbers); it is left empty
+     * otherwise. A startSequence already taken in the target race is dropped together with its
+     * startGroupId, the same way {@link #copyStartGroupAssignment} treats a lost position. Only a DNS
+     * status is carried over - DNF/DSQ describe what happened in the source race itself and never
+     * apply to another one. A person already present in a target race is skipped rather than
+     * duplicated.
      */
     public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds, boolean carryStartNumber) {
         // Now that PRAGMA foreign_keys=ON is enabled, saving a participant for a race that doesn't
@@ -476,7 +481,11 @@ public class ParticipantService {
                         .collect(Collectors.toSet());
                 Set<Integer> existingRaceNumbers = targetParticipants.stream()
                         .map(Participant::raceNumber)
-                        .filter(java.util.Objects::nonNull)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                Set<Integer> existingStartSequences = targetParticipants.stream()
+                        .map(Participant::startSequence)
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
 
                 for (Participant source : sourceParticipants) {
@@ -488,24 +497,41 @@ public class ParticipantService {
                     if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
                         raceNumber = source.raceNumber();
                     }
-                    Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
-                            source.teamId(), source.categoryId(), null, null, null, null);
+                    Integer startSequence = source.startSequence();
+                    Long startGroupId = source.startGroupId();
+                    if (startSequence != null && existingStartSequences.contains(startSequence)) {
+                        // Losing its position also drops its group, or it would keep showing in that
+                        // group's column/start list while sorting outside the group's block.
+                        startSequence = null;
+                        startGroupId = null;
+                    }
+                    DisqualificationStatus status = source.status() == DisqualificationStatus.DNS
+                            ? DisqualificationStatus.DNS
+                            : DisqualificationStatus.NONE;
                     try {
-                        repository.save(copy);
+                        repository.save(new Participant(null, targetRaceId, source.personId(), raceNumber,
+                                source.teamId(), source.categoryId(), null, null, null, source.comment(),
+                                status, startSequence, startGroupId));
                     } catch (DataAccessException e) {
-                        // existingRaceNumbers is a snapshot taken before this loop started - it can be
-                        // stale if another request concurrently claimed this race number in the same
-                        // target race. Fall back to no start number for this participant instead of
-                        // aborting the rest of the copy over a single collision.
-                        if (raceNumber == null || !isUniqueConstraintViolation(e)) {
+                        // existingRaceNumbers/existingStartSequences are snapshots taken before this
+                        // loop started - they can be stale if another request concurrently claimed this
+                        // race number or start position in the same target race. Fall back to neither
+                        // for this participant instead of aborting the rest of the copy over a single
+                        // collision.
+                        if ((raceNumber == null && startSequence == null) || !isUniqueConstraintViolation(e)) {
                             throw e;
                         }
                         repository.save(new Participant(null, targetRaceId, source.personId(), null,
-                                source.teamId(), source.categoryId(), null, null, null, null));
+                                source.teamId(), source.categoryId(), null, null, null, source.comment(),
+                                status, null, null));
                         raceNumber = null;
+                        startSequence = null;
                     }
                     if (raceNumber != null) {
                         existingRaceNumbers.add(raceNumber);
+                    }
+                    if (startSequence != null) {
+                        existingStartSequences.add(startSequence);
                     }
                     existingPersonIds.add(source.personId());
                     copied++;

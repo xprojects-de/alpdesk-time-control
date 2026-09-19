@@ -166,7 +166,7 @@ public class ParticipantController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     @Post("/copy")
-    @Operation(summary = "Copy participants into other races", description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race). A person already present in a target race is skipped rather than duplicated.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Copy participants into other races", description = "Copies every participant of the source race into each target race (personId/teamId/categoryId/comment and startGroupId/startSequence carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race; a DNS status is carried over, DNF/DSQ never). A person already present in a target race is skipped rather than duplicated.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Participants copied", content = @Content(schema = @Schema(implementation = ParticipantCopyResponse.class)))
     @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
     public HttpResponse<?> copyParticipants(@Body ParticipantCopyRequest request) {

@@ -935,6 +935,86 @@ class ParticipantServiceSpec extends Specification {
         thrown(DataAccessException)
     }
 
+    def "copyParticipants carries over comment and start-group assignment"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, 7, 3L, 4L, 60000, 500, LocalDateTime.now(), "Vorläufer",
+                DisqualificationStatus.NONE, 5, 9L)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        service.copyParticipants(1L, [2L], false)
+
+        then:
+        1 * repository.save({ Participant p ->
+            p.raceId() == 2L && p.personId() == 10L && p.teamId() == 3L && p.categoryId() == 4L &&
+                    p.comment() == "Vorläufer" && p.startSequence() == 5 && p.startGroupId() == 9L &&
+                    p.durationMs() == null && p.penalty() == null && p.measuredAt() == null &&
+                    p.status() == DisqualificationStatus.NONE
+        })
+    }
+
+    def "copyParticipants drops start sequence and group when the sequence is already taken in the target race"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, null, DisqualificationStatus.NONE, 5, 9L)
+        def alreadyInTarget = new Participant(2L, 2L, 20L, null, null, null, null, null, null, null, DisqualificationStatus.NONE, 5, 8L)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> [alreadyInTarget]
+
+        when:
+        service.copyParticipants(1L, [2L], false)
+
+        then:
+        1 * repository.save({ Participant p -> p.startSequence() == null && p.startGroupId() == null })
+    }
+
+    def "copyParticipants falls back to no start sequence when a concurrent write already claimed it"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, "c", DisqualificationStatus.DNS, 5, 9L)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        def result = service.copyParticipants(1L, [2L], false)
+
+        then:
+        1 * repository.save({ Participant p -> p.startSequence() == 5 }) >> {
+            throw new DataAccessException("UNIQUE constraint failed: participant.race_id, participant.start_sequence")
+        }
+        1 * repository.save({ Participant p ->
+            p.startSequence() == null && p.startGroupId() == null && p.comment() == "c" && p.status() == DisqualificationStatus.DNS
+        })
+        result.copiedCount() == 1
+    }
+
+    def "copyParticipants carries over only a DNS status"() {
+        given:
+        raceService.findById(1L) >> Optional.of(race())
+        raceService.findById(2L) >> Optional.of(race())
+        def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, null, sourceStatus, null, null)
+        repository.findByRaceId(1L) >> [source]
+        repository.findByRaceId(2L) >> []
+
+        when:
+        service.copyParticipants(1L, [2L], false)
+
+        then:
+        1 * repository.save({ Participant p -> p.status() == expected })
+
+        where:
+        sourceStatus                  || expected
+        DisqualificationStatus.DNS    || DisqualificationStatus.DNS
+        DisqualificationStatus.DNF    || DisqualificationStatus.NONE
+        DisqualificationStatus.DSQ    || DisqualificationStatus.NONE
+        DisqualificationStatus.NONE   || DisqualificationStatus.NONE
+    }
+
     def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {
         given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
         def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)

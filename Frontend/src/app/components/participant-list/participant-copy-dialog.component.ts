@@ -35,7 +35,8 @@ export interface ParticipantCopyDialogResult {
         <mat-dialog-content>
             <p>
                 Alle Teilnehmer von "{{ sourceRaceName() }}" werden in die ausgewählten Rennen übernommen
-                (Name, Team, Kategorie). Zeiten und Strafen werden nicht übernommen. Personen,
+                (Name, Team, Kategorie, Kommentar, Startgruppe und Startreihenfolge). Ein DNS-Status wird
+                mitkopiert, DNF und DSQ nicht. Zeiten und Strafen werden nicht übernommen. Personen,
                 die im Zielrennen bereits Teilnehmer sind, werden übersprungen.
             </p>
             <form [formGroup]="form">
