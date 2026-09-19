@@ -6,7 +6,6 @@ import x.timecontrol.entities.Measurement;
 import x.timecontrol.repositories.MeasurementRepository;
 import jakarta.inject.Singleton;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -144,7 +143,7 @@ public class MeasurementService {
      * for building/pre-filling the column-mapping UI. Never touches the database.
      */
     public MeasurementImportPreviewResponse previewImport(byte[] fileBytes, Character delimiter) {
-        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> suggested = MeasurementImportParsers.suggestMapping(parsed.fields());
         List<Map<String, String>> sample = parsed.rows().stream().limit(5).toList();
         return new MeasurementImportPreviewResponse(parsed.fields(), suggested, sample);
@@ -167,7 +166,7 @@ public class MeasurementService {
      * rejecting the whole file.
      */
     public MeasurementImportResult importMapped(byte[] fileBytes, Character delimiter, Map<String, String> mapping) {
-        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> effectiveMapping = (mapping == null)
                 ? MeasurementImportParsers.suggestMapping(parsed.fields())
                 : mapping;
