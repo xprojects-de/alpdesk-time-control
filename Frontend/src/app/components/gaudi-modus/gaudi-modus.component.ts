@@ -3,7 +3,6 @@ import {
     AfterViewInit,
     OnDestroy,
     inject,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
@@ -33,7 +32,6 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
 
 @Component({
     selector: "app-gaudi-modus",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -134,7 +132,6 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .filter-section {

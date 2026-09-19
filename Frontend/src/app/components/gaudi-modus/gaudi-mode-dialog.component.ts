@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -46,7 +46,6 @@ export interface GaudiModeDialogData {
 
 @Component({
     selector: "app-gaudi-mode-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -190,7 +189,6 @@ export interface GaudiModeDialogData {
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .gaudi-mode-form {

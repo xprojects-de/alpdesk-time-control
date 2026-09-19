@@ -3,7 +3,6 @@ import {
     AfterViewInit,
     inject,
     OnDestroy,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
@@ -37,7 +36,6 @@ import {take, takeUntil} from "rxjs/operators";
 
 @Component({
     selector: "app-race-measurement-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -143,7 +141,6 @@ import {take, takeUntil} from "rxjs/operators";
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
      styles: [
          `
            .measurement-form {

@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from '@angular/core';
+import {Component, inject} from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {Store} from '@ngrx/store';
 import {Actions, ofType} from '@ngrx/effects';
@@ -25,7 +25,6 @@ export interface RaceLiveLinksDialogData {
  * so this dialog never has to know or reconstruct any part of a live-results URL itself. */
 @Component({
     selector: 'app-race-live-links-dialog',
-    standalone: true,
     imports: [
         CommonModule,
         MatDialogModule,
@@ -85,7 +84,6 @@ export interface RaceLiveLinksDialogData {
             max-width: 80vw;
         }
     `],
-    changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RaceLiveLinksDialogComponent {
     private store = inject(Store);

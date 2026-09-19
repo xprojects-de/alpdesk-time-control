@@ -1,4 +1,4 @@
-import {Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, signal, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
@@ -32,7 +32,6 @@ interface NavItem {
 
 @Component({
     selector: "app-dashboard",
-    standalone: true,
     imports: [
         CommonModule,
         RouterOutlet,
@@ -138,7 +137,6 @@ interface NavItem {
             </mat-sidenav-content>
         </mat-sidenav-container>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           :host {

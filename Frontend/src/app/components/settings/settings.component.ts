@@ -1,4 +1,4 @@
-import {Component, inject, OnDestroy, OnInit, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject, OnDestroy, OnInit} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {Store} from "@ngrx/store";
@@ -22,7 +22,6 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
 
 @Component({
     selector: "app-settings",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -87,7 +86,6 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           mat-card {

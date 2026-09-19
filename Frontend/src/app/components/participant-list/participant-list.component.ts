@@ -5,7 +5,6 @@ import {
     OnDestroy,
     inject,
     effect,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {RouterLink} from "@angular/router";
@@ -48,7 +47,6 @@ import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-participant-list",
-    standalone: true,
     imports: [
         CommonModule,
         RouterLink,
@@ -452,7 +450,6 @@ import {Actions, ofType} from "@ngrx/effects";
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .filter-section {

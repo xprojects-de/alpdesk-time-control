@@ -1,4 +1,4 @@
-import {Component, inject, signal, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule} from "@angular/forms";
 import {MatDialogRef, MatDialogModule} from "@angular/material/dialog";
@@ -23,7 +23,6 @@ export interface ParticipantImportMappingDialogResult {
 
 @Component({
     selector: "app-participant-import-mapping-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -137,7 +136,6 @@ export interface ParticipantImportMappingDialogResult {
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           mat-dialog-content {

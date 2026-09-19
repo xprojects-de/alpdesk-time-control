@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -19,7 +19,6 @@ import {notBlank} from "../../utils/validators.util";
 
 @Component({
     selector: "app-category-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -60,7 +59,6 @@ import {notBlank} from "../../utils/validators.util";
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .category-form {

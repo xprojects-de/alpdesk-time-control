@@ -5,7 +5,6 @@ import {
     input,
     output,
     effect,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
@@ -37,7 +36,6 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
 @Component({
     selector: "app-gaudi-mode-detail",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -321,7 +319,6 @@ import {selectAllRaces} from "../../store/race/race.selectors";
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .detail-card {

@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -42,7 +42,6 @@ import {PersonService} from "../../services/person.service";
 
 @Component({
     selector: "app-participant-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -202,7 +201,6 @@ import {PersonService} from "../../services/person.service";
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .participant-form {

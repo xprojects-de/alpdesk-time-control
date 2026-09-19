@@ -1,11 +1,10 @@
-import {Component, ChangeDetectionStrategy} from "@angular/core";
+import {Component} from "@angular/core";
 import {RouterLink} from "@angular/router";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
 
 @Component({
     selector: "app-dashboard-not-found",
-    standalone: true,
     imports: [RouterLink, MatButtonModule, MatIconModule],
     template: `
         <div class="not-found">
@@ -21,7 +20,6 @@ import {MatIconModule} from "@angular/material/icon";
             </a>
         </div>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .not-found {

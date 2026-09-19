@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
@@ -14,7 +14,6 @@ export interface StartGroupCopyDialogData {
 
 @Component({
     selector: "app-start-group-copy-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -47,7 +46,6 @@ export interface StartGroupCopyDialogData {
             <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Übernehmen</button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           mat-form-field {

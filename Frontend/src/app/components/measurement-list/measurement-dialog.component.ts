@@ -1,7 +1,6 @@
 import {
     Component,
     inject,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
@@ -25,7 +24,6 @@ import {
 
 @Component({
     selector: "app-measurement-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -104,7 +102,6 @@ import {
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
      styles: [
          `
            .measurement-form {

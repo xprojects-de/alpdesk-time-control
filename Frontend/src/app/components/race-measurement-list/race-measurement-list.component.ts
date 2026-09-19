@@ -3,7 +3,6 @@ import {
     AfterViewInit,
     OnDestroy,
     inject,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
@@ -44,7 +43,6 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
 
 @Component({
     selector: "app-race-measurement-list",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -172,7 +170,6 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .filter-section {

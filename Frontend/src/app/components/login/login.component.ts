@@ -26,7 +26,6 @@ import {takeUntil} from "rxjs/operators";
 
 @Component({
     selector: "app-login",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,

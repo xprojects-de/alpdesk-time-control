@@ -5,7 +5,6 @@ import {
     OnDestroy,
     inject,
     effect,
-    ChangeDetectionStrategy,
 } from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {Store} from '@ngrx/store';
@@ -36,7 +35,6 @@ import {Actions, ofType} from '@ngrx/effects';
 
 @Component({
     selector: 'app-race-list',
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -162,7 +160,6 @@ import {Actions, ofType} from '@ngrx/effects';
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .header-actions {

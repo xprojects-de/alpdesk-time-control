@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core';
+import {Component, inject, ChangeDetectorRef} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {
     FormBuilder,
@@ -37,7 +37,6 @@ export interface RaceDialogData {
 
 @Component({
     selector: 'app-race-dialog',
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -226,7 +225,6 @@ export interface RaceDialogData {
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
      styles: [
          `
            .race-form {

@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy, OnDestroy, OnInit} from "@angular/core";
+import {Component, inject, OnDestroy, OnInit} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {MatDialogRef, MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {MatTableModule} from "@angular/material/table";
@@ -19,7 +19,6 @@ import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.co
 
 @Component({
     selector: "app-points-scale-manager-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         MatDialogModule,
@@ -74,7 +73,6 @@ import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.co
             <button mat-raised-button color="primary" (click)="close()">Schließen</button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .scales-table {

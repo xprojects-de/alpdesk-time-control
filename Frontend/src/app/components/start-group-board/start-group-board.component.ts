@@ -51,7 +51,6 @@ interface BoardColumn {
 
 @Component({
     selector: "app-start-group-board",
-    standalone: true,
     imports: [
         CommonModule,
         DragDropModule,

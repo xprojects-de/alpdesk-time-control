@@ -3,7 +3,6 @@ import {
     AfterViewInit,
     OnDestroy,
     inject,
-    ChangeDetectionStrategy,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
@@ -59,7 +58,6 @@ interface MeasurementWithParticipant extends Measurement {
 
 @Component({
     selector: "app-measurement-list",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -358,7 +356,6 @@ interface MeasurementWithParticipant extends Measurement {
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
           .title-row {
