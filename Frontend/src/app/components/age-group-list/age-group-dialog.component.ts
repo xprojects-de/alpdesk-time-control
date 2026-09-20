@@ -49,10 +49,10 @@ import {notBlank} from "../../utils/validators.util";
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
                 </mat-form-field>
 
-                <!-- Die Saison steht im Titel und wird hier bewusst nicht editiert: sie gehört zur
-                     Liste, die gerade angezeigt wird, nicht zur einzelnen Gruppe. Änderbar wäre sie
-                     der einzige Weg, eine Gruppe in eine Saison zu schreiben, die die Tabelle
-                     daneben gar nicht zeigt. Gewechselt wird über den Saison-Auswähler. -->
+                <!-- The season is shown in the title and deliberately not editable here: it
+                     belongs to the list currently on screen, not to the individual group. Making it
+                     editable would be the one way to write a group into a season the table next to
+                     it does not show. Switching seasons goes through the season selector. -->
                 <p class="season-note">
                     Diese Geburtsjahrgänge gelten für <strong>Saison {{ data.seasonYear }}</strong
                     >. Für eine andere Saison oben die Saison wechseln.
@@ -191,8 +191,8 @@ export class AgeGroupDialogComponent {
             const formValue = this.form.value;
             const ageGroup: AgeGroupRequest = {
                 name: formValue.name,
-                // Aus den Dialogdaten, nicht aus dem Formular: beim Bearbeiten bleibt es die Saison
-                // der Gruppe, beim Anlegen die gerade angezeigte - ein Wechsel ist hier nicht vorgesehen.
+                // From the dialog data, not from the form: editing keeps the group's own season,
+                // creating uses the one on screen - changing it here is not offered (see template).
                 seasonYear: this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
                 gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),

@@ -62,9 +62,9 @@ import {Actions, ofType} from "@ngrx/effects";
                     </mat-form-field>
 
                     @if (rolloverSource$ | async; as rolloverSource) {
-                        <!-- Gleiche Bedingung wie beim Hinweis unten, inklusive loading: sonst
-                             blitzt der Knopf bei jedem Saisonwechsel kurz auf, solange die Liste
-                             noch leer ist. -->
+                        <!-- Same condition as the hint below, loading included: without it the
+                             button flashes up on every season switch, for as long as the list is
+                             still empty. -->
                         @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
                             <button
                                 mat-raised-button
@@ -81,9 +81,9 @@ import {Actions, ofType} from "@ngrx/effects";
                     }
                 </div>
 
-                <!-- Nur mit ausgewählter Saison: ohne sie wurde die Saisonliste gar nicht geladen
-                     (Backend nicht erreichbar), und der Hinweis stünde mit leerer Jahreszahl da und
-                     würde eine Aussage über eine Saison treffen, die noch niemand ausgewählt hat. -->
+                <!-- Only with a selected season: without one the season list never loaded at all
+                     (backend unreachable), and the hint would stand there with a blank year, making
+                     a statement about a season nobody has selected yet. -->
                 @if (selectedSeason$ | async; as shownSeason) {
                     @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
                         <div class="empty-season">
@@ -97,9 +97,9 @@ import {Actions, ofType} from "@ngrx/effects";
                 }
 
                 <div class="header-actions">
-                    <!-- Ohne geladene Saison gibt es keine, in der die Gruppe angelegt werden
-                         könnte - und das Kalenderjahr zu raten ist genau das, was die Saisonbindung
-                         verhindern soll. -->
+                    <!-- With no season loaded there is none to create the group in - and guessing
+                         the calendar year is exactly what tying groups to a season is meant to
+                         prevent. -->
                     <button
                         mat-raised-button
                         color="primary"
@@ -294,10 +294,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
 
         combineLatest([
             this.store.select(AgeGroupSelectors.selectAgeGroupSeasons),
-            // Auch Saisons mit Rennen, aber ohne Altersgruppen: genau die werden "ohne
-            // Altersklasse" ausgewertet, und genau die muss man auswählen können, um das zu
-            // beheben. Nach einem Upgrade auf saisonbezogene Altersklassen ist jede
-            // Vergangenheits-Saison in diesem Zustand.
+            // Seasons that have races but no age groups too: those are exactly the ones whose
+            // results come out "ohne Altersklasse", and exactly the ones that have to be selectable
+            // in order to fix that. After an upgrade to season-scoped age groups, every past season
+            // is in this state.
             this.store.select(AgeGroupSelectors.selectSeasonsWithRaces),
             this.currentSeason$,
             this.selectedSeason$,
@@ -324,7 +324,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                 this.seasonOptions.set([...options].sort((a, b) => b - a));
             });
 
-        // Mitgeführt für openCreateDialog(), das außerhalb des Templates keinen async-Pipe hat.
+        // Kept around for openCreateDialog(), which has no async pipe outside the template.
         this.currentSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => (this.currentSeason = season));
 
         // Reload whenever the selected season changes - the table only ever shows one season.
@@ -411,9 +411,9 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         if (toSeason == null) {
             return;
         }
-        // Die Verschiebung kann negativ sein: eine vergangene Saison wird aus einer späteren
-        // aufgefüllt (nach dem Upgrade auf saisonbezogene Altersklassen der Normalfall), dann
-        // wandern die Jahrgänge zurück statt vor.
+        // The shift can be negative: a past season is filled from a later one (the normal case
+        // right after the upgrade to season-scoped age groups), and the birth years then move back
+        // instead of forward.
         const shift = toSeason - fromSeason;
         const years = Math.abs(shift) === 1 ? "1 Jahr" : `${Math.abs(shift)} Jahre`;
         const direction = shift > 0 ? "nach vorne" : "zurück";
@@ -448,10 +448,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     openCreateDialog(): void {
-        // Kein Rückfall auf das Kalenderjahr: mit verschobener Saisongrenze ist das nicht die
-        // laufende Saison, und eine Altersgruppe im falschen Jahr anzulegen ist genau der Fehler,
-        // den die Saisonbindung verhindern soll. Die laufende Saison rechnet das Backend aus; ohne
-        // geladene Saison ist der Knopf oben deaktiviert, das hier ist nur der Typ-Abschluss.
+        // No fallback to the calendar year: with a moved season boundary that is not the current
+        // season, and creating an age group in the wrong year is exactly the mistake tying groups
+        // to a season is meant to prevent. The backend computes the current season; with none
+        // loaded the button above is disabled, so this is only closing the type.
         const seasonYear = this.selectedSeason ?? this.currentSeason;
         if (seasonYear == null) {
             return;

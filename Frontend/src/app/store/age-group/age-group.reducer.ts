@@ -29,7 +29,7 @@ export const initialState: AgeGroupState = {
     error: null,
 };
 
-/** Die Saisonliste (neueste zuerst) um eine Saison ergänzen, falls sie noch nicht drin ist. */
+/** Adds a season to the list (newest first) unless it is already in it. */
 const withSeason = (seasons: number[], season: number): number[] =>
     seasons.includes(season) ? seasons : [...seasons, season].sort((a, b) => b - a);
 
@@ -61,16 +61,16 @@ export const ageGroupReducer = createReducer(
     })),
     on(AgeGroupActions.createAgeGroupSuccess, (state, {ageGroup}) => ({
         ...state,
-        // Nur übernehmen, wenn die neue Gruppe zur gerade angezeigten Saison gehört - die Tabelle
-        // zeigt immer genau eine Saison, und eine fremde Zeile wäre dort nicht als solche
-        // erkennbar. Der Dialog legt ohnehin nur in der angezeigten Saison an; das hier fängt den
-        // Fall ab, dass währenddessen die Saison gewechselt wurde.
+        // Only taken over when the new group belongs to the season currently on screen: the table
+        // always shows exactly one season, and a row from another one would not be recognisable as
+        // such there. The dialog only ever creates in the shown season anyway; this covers the case
+        // where the season was switched while it was open.
         ageGroups:
             state.selectedSeason == null || ageGroup.seasonYear === state.selectedSeason
                 ? [...state.ageGroups, ageGroup]
                 : state.ageGroups,
-        // Eine Saison, die bisher nur Rennen hatte, ist ab der ersten Gruppe eine konfigurierte -
-        // und damit auch als Quelle einer Übernahme wählbar.
+        // A season that so far only had races becomes a configured one with its first group - and
+        // is therefore also selectable as the source of a rollover.
         seasons: withSeason(state.seasons, ageGroup.seasonYear),
         loading: false,
     })),
@@ -108,9 +108,9 @@ export const ageGroupReducer = createReducer(
         return {
             ...state,
             ageGroups: remaining,
-            // War das die letzte Gruppe dieser Saison, ist sie keine konfigurierte mehr - sonst
-            // stünde sie weiter als Quelle einer Übernahme zur Wahl und der Server lehnte sie ab.
-            // Auswählbar bleibt sie trotzdem (selectedSeason fließt in die Optionen ein).
+            // If that was the season's last group it is no longer a configured one - otherwise it
+            // would stay on offer as a rollover source and the server would reject it. It remains
+            // selectable regardless (selectedSeason feeds into the options).
             seasons:
                 remaining.length === 0 && state.selectedSeason != null
                     ? state.seasons.filter(s => s !== state.selectedSeason)

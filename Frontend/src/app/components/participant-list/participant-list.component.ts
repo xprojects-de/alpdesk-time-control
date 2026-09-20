@@ -773,12 +773,12 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.participants$ = this.store.select(ParticipantSelectors.selectFilteredParticipants);
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
-        // Aus participants$ (selectFilteredParticipants) und nicht aus selectAllParticipants: der
-        // Selektor filtert auf das ausgewählte Rennen, der Store dagegen hält je nach Vorgeschichte
-        // auch Teilnehmer anderer Rennen (mergeById im Reducer ersetzt nur, leert nicht). Über den
-        // ganzen Store gerechnet würde ein anderes Rennen mit Altersklassen die Warnung für dieses
-        // hier verschlucken. Die Textsuche sitzt nicht hier, sondern in dataSource.filter, die
-        // Aussage betrifft also wie beabsichtigt das ganze Rennen.
+        // From participants$ (selectFilteredParticipants) rather than selectAllParticipants: that
+        // selector filters down to the selected race, whereas the store can still hold participants
+        // of other races depending on what was loaded before (mergeById in the reducer replaces,
+        // it never clears). Computed over the whole store, another race that does have age groups
+        // would swallow the warning for this one. The text search does not live here but in
+        // dataSource.filter, so this statement covers the whole race, as intended.
         this.noAgeGroupsForRace$ = this.participants$.pipe(
             map(
                 participants =>

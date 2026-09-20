@@ -71,8 +71,8 @@ export class AgeGroupEffects {
             mergeMap(() =>
                 this.ageGroupService.getSeasons().pipe(
                     map(({seasons, seasonsWithRaces, currentSeason}) =>
-                        // seasonsWithRaces defensiv: im Dev-Setup zeigt `ng serve` auf ein separat
-                        // laufendes Backend, das älter sein kann als der Frontend-Stand.
+                        // seasonsWithRaces defensively: in the dev setup `ng serve` talks to a
+                        // separately running backend, which can be older than the frontend.
                         AgeGroupActions.loadSeasonsSuccess({
                             seasons: seasons ?? [],
                             seasonsWithRaces: seasonsWithRaces ?? [],

@@ -91,13 +91,13 @@ export class SettingsEffects {
     );
 
     /**
-     * Race.seasonYear rechnet ausschließlich das Backend aus - und genau das ändert sich mit der
-     * Saisongrenze, womit jedes Rennen im Store veraltet ist. Rennlisten- und Teilnehmerseite laden
-     * zwar beim Betreten ohnehin neu, aber darauf zu bauen heißt, sich auf das Mount-Verhalten
-     * jedes künftigen Consumers zu verlassen; die Rennen sind wenige Zeilen, also wird der Store
-     * hier direkt wieder stimmig gemacht. Teilnehmer bleiben außen vor: deren Altersklasse hängt
-     * genauso an der Saison, aber sie alle zu laden wäre für eine Einstellung unverhältnismäßig -
-     * die Teilnehmerseite lädt sie beim Öffnen neu.
+     * Race.seasonYear is computed by the backend alone - and it is exactly what the season boundary
+     * changes, so every race in the store is stale afterwards. The race and participant pages do
+     * reload on entry anyway, but relying on that means relying on the mount behaviour of every
+     * future consumer; races are a handful of rows, so the store is simply made consistent again
+     * here. Participants are left out: their age class depends on the season just as much, but
+     * loading all of them for one setting would be out of proportion - the participant page reloads
+     * them when it is opened.
      */
     reloadRacesAfterSeasonChange$ = createEffect(() =>
         this.actions$.pipe(

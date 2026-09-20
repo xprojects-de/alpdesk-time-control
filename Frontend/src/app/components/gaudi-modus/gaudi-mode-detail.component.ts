@@ -357,8 +357,8 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 margin: 0 0 16px;
                 padding: 12px 16px;
                 display: flex;
-                /* flex-start, nicht center: der Text läuft über mehrere Zeilen, ein vertikal
-                   zentriertes Icon stünde dann neben der mittleren statt neben der ersten. */
+                /* flex-start, not center: the text runs over several lines, and a vertically
+                   centred icon would then sit next to the middle one instead of the first. */
                 align-items: flex-start;
                 gap: 12px;
                 border-radius: 4px;
@@ -441,13 +441,13 @@ export class GaudiModeDetailComponent {
     private races = signal<Race[]>([]);
 
     /**
-     * Die Saisons, in denen die Rennen dieser Wertung liegen - null, solange es nur eine ist.
+     * The seasons this mode's races fall into - null as long as there is only one.
      * <p>
-     * Mehr als eine heißt: die Altersklassen sind nicht eindeutig, weil ein Teilnehmer zwischen
-     * zwei Saisons die Klasse wechselt. Das Backend wertet dann gegen die Saison des ersten
-     * Rennens aus (SeasonService#scopeOf) - hier steht, dass es das tut, damit man den Saisonstart
-     * anpassen kann, falls die Rennen zu einer Saison gehören sollen. `races` kommt in der
-     * konfigurierten Reihenfolge, das erste ist also dasselbe, das das Backend heranzieht.
+     * More than one means the age classes are ambiguous, because a participant changes class
+     * between two seasons. The backend then scores against the first race's season
+     * (SeasonService#scoringSeasonOf); this says so, so the operator can move the season boundary
+     * if the races are meant to belong to one season. `races` comes in the configured order, so the
+     * first one here is the same one the backend uses.
      */
     seasonSpan = computed(() => {
         const byId = new Map(this.races().map(r => [r.id, r]));
