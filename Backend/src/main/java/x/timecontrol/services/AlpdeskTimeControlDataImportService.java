@@ -13,6 +13,7 @@ import x.timecontrol.entities.TimingProviderType;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -129,6 +130,17 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
         // device can't block archive/reset operations.
         measurementTableLock.run(() -> {
+            // The device reports its WHOLE list on every poll, not just what is new, so most lines
+            // of a 5s tick describe a row that is already stored unchanged. One read up front,
+            // keyed by the device's own id, replaces the per-line lookup that used to run for each
+            // of them.
+            Map<Long, Measurement> storedByDeviceId = new HashMap<>();
+            for (Measurement stored : measurementService.findAll()) {
+                if (stored.deviceMeasurementId() != null) {
+                    storedByDeviceId.put(stored.deviceMeasurementId(), stored);
+                }
+            }
+
             for (String line : lines) {
 
                 String trimmedLine = line.trim();
@@ -158,18 +170,32 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
                     }
                     int durationMs = (int) roundedDurationMs;
 
-                    // Looked up (and upserted below) by the device's own id, kept in a column
-                    // separate from this table's own `id` PK - see Measurement#deviceMeasurementId.
-                    var existingMeasurement = measurementService.findByDeviceMeasurementId(deviceId);
-                    Long existingParticipantId = existingMeasurement
-                            .map(Measurement::participantId)
-                            .orElse(null);
-                    LocalDateTime timestamp = existingMeasurement
-                            .map(Measurement::measuredAt)
-                            .orElse(now);
+                    // Keyed by the device's own id, kept in a column separate from this table's
+                    // own `id` PK - see Measurement#deviceMeasurementId.
+                    Measurement existing = storedByDeviceId.get(deviceId);
+
+                    // participantId and measuredAt are carried over from the stored row, so the
+                    // duration is the only thing an upsert could actually change. When it matches,
+                    // the write would rewrite the row to what it already is - skipped, because on a
+                    // WAL database that is a real commit per row, every 5 seconds, for every finish
+                    // recorded so far. The row is still reported back: MeasurementController's
+                    // manual device import returns this list to the UI, which must keep listing
+                    // everything the device holds, not only what happened to need writing.
+                    // duration_ms is NOT NULL (V1__create_participant.sql), so unboxing the
+                    // stored value for this comparison cannot NPE.
+                    if (existing != null && existing.durationMs() == durationMs) {
+                        createdMeasurements.add(existing);
+                        continue;
+                    }
+
+                    Long existingParticipantId = existing != null ? existing.participantId() : null;
+                    LocalDateTime timestamp = existing != null ? existing.measuredAt() : now;
 
                     Measurement saved = measurementService.upsertByDeviceMeasurementId(deviceId, existingParticipantId, durationMs, timestamp);
                     createdMeasurements.add(saved);
+                    // Keeps a second line for the same device id in this same response comparing
+                    // against what was just written, exactly as the old per-line lookup did.
+                    storedByDeviceId.put(deviceId, saved);
                     LOG.debug("Upserted measurement, device ID {}: {} ms", deviceId, durationMs);
 
                 } catch (NumberFormatException e) {

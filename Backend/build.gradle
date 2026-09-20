@@ -6,7 +6,20 @@ plugins {
     id("io.micronaut.aot") version "5.0.2"
 }
 
-version = "0.1"
+// Single source of truth for the version: application.properties, which is also what the running
+// app reports (app.version, VersionController) and what the frontend shows in the sidebar. Read
+// from there rather than repeated here, because the installer used to carry an unrelated number -
+// a 1.5 app shipped in a "1.0.1" .dmg, so a bundle on disk could not be matched to the app inside it.
+version = {
+    def propertiesFile = file('src/main/resources/application.properties')
+    def properties = new Properties()
+    propertiesFile.withInputStream { properties.load(it) }
+    def declared = properties.getProperty('app.version')?.trim()
+    if (!declared) {
+        throw new GradleException("app.version is missing from ${propertiesFile} - the build derives its version from it")
+    }
+    return declared
+}()
 group = "x.timecontrol"
 
 repositories {
@@ -140,12 +153,14 @@ def jpackagePlatform = org.gradle.internal.os.OperatingSystem.current().with {
 def jpackageIconExtension = [macos: 'icns', windows: 'ico', linux: 'png'][jpackagePlatform]
 def jpackageIcon = file("packaging/icons/app.${jpackageIconExtension}")
 def jpackageInstallerType = [macos: 'dmg', windows: 'exe', linux: 'deb'][jpackagePlatform]
-// jpackage wants a dotted numeric version, padded to at least 3 components ("0.1" -> "0.1.0").
+// jpackage wants a dotted numeric version, padded to at least 3 components ("1.5" -> "1.5.0").
 // macOS additionally rejects a leading "0" (jpackage's mac bundler requires a positive first
-// component), so only there a leading "1." is prepended ("0.1" -> "1.0.1") rather than
-// overwriting the leading digit, to keep the original version numbers recognizable. This is
-// just the installer's package version - the app's own displayed version (app.version,
-// VersionController) is untouched.
+// component), so only there a leading "1." is prepended ("0.4" -> "1.0.4") rather than
+// overwriting the leading digit, to keep the original version number recognizable. That branch
+// only bites if app.version is ever taken below 1 again.
+//
+// The number itself comes from app.version (see `version` at the top) - the same one
+// VersionController reports - so an installer on disk names the app version it contains.
 def jpackageVersionParts = project.version.toString().tokenize('.')
 if (jpackagePlatform == 'macos' && jpackageVersionParts[0] == '0') {
     jpackageVersionParts = ['1'] + jpackageVersionParts

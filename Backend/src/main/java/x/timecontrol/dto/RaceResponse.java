@@ -89,6 +89,15 @@ public record RaceResponse(
      * it to drift.
      */
     public static RaceResponse from(Race race, int seasonYear) {
+        return from(race, seasonYear, race.coverPagePdf() != null);
+    }
+
+    /**
+     * For callers whose Race came from a projection that leaves the cover page out (see
+     * {@link x.timecontrol.repositories.RaceRepository#findAllWithoutCoverPage()}), so
+     * {@code race.coverPagePdf() != null} would wrongly report "no cover page" for every race.
+     */
+    public static RaceResponse from(Race race, int seasonYear, boolean hasCoverPage) {
         return new RaceResponse(
                 race.id(),
                 race.name(),
@@ -106,7 +115,7 @@ public record RaceResponse(
                 race.resultUnit(),
                 race.resultUnitLabel(),
                 race.sortDirection(),
-                race.coverPagePdf() != null,
+                hasCoverPage,
                 race.previousRaceId(),
                 race.startOrderMode(),
                 race.startOrderReverseTopCount()

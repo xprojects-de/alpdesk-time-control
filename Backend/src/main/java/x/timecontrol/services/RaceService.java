@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,6 +72,19 @@ public class RaceService {
 
     public Iterable<Race> findAll() {
         return repository.findAll();
+    }
+
+    /**
+     * The race list without the cover-page BLOBs, plus the ids of the races that have one - see
+     * {@link RaceRepository#findAllWithoutCoverPage()} for why the list endpoint must not use
+     * {@link #findAll()}. The returned races have {@code coverPagePdf == null} regardless.
+     */
+    public List<Race> findAllWithoutCoverPage() {
+        return repository.findAllWithoutCoverPage();
+    }
+
+    public Set<Long> findIdsWithCoverPage() {
+        return new HashSet<>(repository.findIdsWithCoverPage());
     }
 
     /**

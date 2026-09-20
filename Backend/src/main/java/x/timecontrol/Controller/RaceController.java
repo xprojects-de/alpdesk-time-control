@@ -32,6 +32,7 @@ import x.timecontrol.services.TimingProviderRegistry;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -66,12 +67,17 @@ public class RaceController {
     @Operation(summary = "List all races", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of all races", content = @Content(schema = @Schema(implementation = RaceResponse.class)))
     public HttpResponse<List<RaceResponse>> list() {
-        Iterable<Race> races = service.findAll();
+        // Without the cover-page BLOBs: this list is loaded on practically every screen (the race
+        // selector) and only needs to know whether a race has one, which findIdsWithCoverPage
+        // answers in a second, tiny query.
+        List<Race> races = service.findAllWithoutCoverPage();
+        Set<Long> withCoverPage = service.findIdsWithCoverPage();
         // Season boundary read once for the whole list: seasonOf(race) would otherwise re-read the
         // settings row for every race.
         java.time.MonthDay seasonStart = seasonService.seasonStart();
-        List<RaceResponse> response = StreamSupport.stream(races.spliterator(), false)
-                .map(r -> RaceResponse.from(r, seasonService.seasonOf(r.date(), seasonStart)))
+        List<RaceResponse> response = races.stream()
+                .map(r -> RaceResponse.from(r, seasonService.seasonOf(r.date(), seasonStart),
+                        withCoverPage.contains(r.id())))
                 .toList();
         return HttpResponse.ok(response);
     }
