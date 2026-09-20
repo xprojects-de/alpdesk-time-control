@@ -1,1 +1,0 @@
-import{Nt as rc,_ as Fm}from"./chunk-R2twGyTn.js";var r=Fm(`category`);var c=rc(r,e=>e.categories);var s=rc(r,e=>e.loading);rc(r,e=>e.error);export{s as n,c as t};

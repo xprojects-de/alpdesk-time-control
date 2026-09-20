@@ -1,0 +1,1 @@
+import{Nt as rc,_ as Fm}from"./chunk-DKLC6Of2.js";var c=Fm(`race`);var s=rc(c,e=>e.races);var i=rc(c,e=>e.loading);rc(c,e=>e.error);var S=rc(c,e=>e.liveLinks);var d=rc(c,e=>e.liveLinksLoading);var n=rc(c,e=>e.selectedRaceId);rc(s,n,(e,a)=>a?e.find(r=>r.id===a):null);export{s as a,n as i,d as n,i as r,S as t};
