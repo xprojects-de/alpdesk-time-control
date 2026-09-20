@@ -13,7 +13,7 @@ class DatabaseBackupListenerSpec extends Specification {
     @Unroll
     def "resolves #url to #expected"() {
         expect:
-        new DatabaseBackupListener(url).databaseFile()?.toString() == expected
+        new DatabaseBackupListener(url, true).databaseFile()?.toString() == expected
 
         where:
         url                                                                  || expected
@@ -27,6 +27,6 @@ class DatabaseBackupListenerSpec extends Specification {
 
     def "keeps a query string that is part of no parameter out of the path"() {
         expect: "only the first ? separates path from parameters"
-        new DatabaseBackupListener("jdbc:sqlite:db/t.db?a=1?b=2").databaseFile().toString() == "db/t.db"
+        new DatabaseBackupListener("jdbc:sqlite:db/t.db?a=1?b=2", true).databaseFile().toString() == "db/t.db"
     }
 }

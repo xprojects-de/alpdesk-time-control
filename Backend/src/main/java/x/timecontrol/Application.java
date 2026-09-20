@@ -87,10 +87,14 @@ public class Application {
             return;
         }
         try {
-            String secret;
-            if (Files.exists(JWT_SECRET_FILE)) {
-                secret = Files.readString(JWT_SECRET_FILE).trim();
-            } else {
+            String secret = Files.exists(JWT_SECRET_FILE) ? Files.readString(JWT_SECRET_FILE).trim() : "";
+            // isBlank, not just "file missing": a start that died mid-write (crash, full disk)
+            // leaves a 0-byte file behind. Reading it would set an EMPTY secret - which counts as
+            // configured and therefore beats the default in application.properties, while HS256
+            // rejects it outright. The app would never start again, and in the packaged build
+            // nobody would see why. Regenerating costs nothing: a secret nobody could read cannot
+            // have signed a token that is still valid.
+            if (secret.isBlank()) {
                 secret = generateSecret();
                 Files.createDirectories(JWT_SECRET_FILE.getParent());
                 Files.writeString(JWT_SECRET_FILE, secret);
@@ -123,10 +127,11 @@ public class Application {
             return existing;
         }
         try {
-            String password;
-            if (Files.exists(APP_PASSWORD_FILE)) {
-                password = Files.readString(APP_PASSWORD_FILE).trim();
-            } else {
+            String password = Files.exists(APP_PASSWORD_FILE) ? Files.readString(APP_PASSWORD_FILE).trim() : "";
+            // See ensureJwtSecret: an empty file would otherwise become an empty password, and
+            // nobody could log in. A fresh one is logged and shown in the status window, so the
+            // operator learns it the same way they did the first time.
+            if (password.isBlank()) {
                 password = generatePassword();
                 Files.createDirectories(APP_PASSWORD_FILE.getParent());
                 Files.writeString(APP_PASSWORD_FILE, password);

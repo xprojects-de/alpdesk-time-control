@@ -78,8 +78,14 @@ public class TeamModeCalculator implements GaudiModeCalculator {
             // result should see exactly who made up the team's scored total, not a roster
             // padded with extra squad members who didn't count towards it.
             List<Participant> countedMembers = members.stream().sorted(byBestFirst).limit(teamSize).toList();
+            // Each member counts with the value that is printed for them (rounded to the hundredth
+            // for a TIME race, RankingService#roundForDisplay; unchanged for POINTS) - summing raw
+            // milliseconds instead would let the total disagree with the member column right next
+            // to it: two members printing 0:10.00 each would add up to a printed 0:20.01, and a
+            // team whose members print identically to another's would still get a different place.
+            // Same rule TimeCombinationModeCalculator applies to its legs.
             long totalValue = countedMembers.stream()
-                    .mapToLong(p -> rankingService.adjustedValue(race, p))
+                    .mapToLong(p -> rankingService.roundForDisplay(race, rankingService.adjustedValue(race, p)))
                     .sum();
 
             List<GaudiTeamMemberResponse> memberResponses = countedMembers.stream()

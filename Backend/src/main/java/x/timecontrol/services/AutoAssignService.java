@@ -263,7 +263,14 @@ public class AutoAssignService {
         // effectiveStartOrder() != null, but the comparator calls the method again independently -
         // the compiler/IDE can't see that invariant across the two calls, so state it explicitly
         // instead of leaving a @Nullable method reference where Comparator.comparing needs non-null.
-        starting.sort(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())));
+        // raceNumber as a tie-break, and the same one firstAfter() compares by: startSequence and
+        // raceNumber are two separate 1..n number spaces, each unique only within itself, so two
+        // participants can share an order key (a late entry without a startSequence whose bib equals
+        // someone else's sequence). Sorting and comparing by different orders would let firstAfter()
+        // step over the second of the pair for good - it is the cursor's only way forward, so that
+        // starter never gets a time and everyone behind them is credited one measurement too early.
+        starting.sort(Comparator.comparing((Participant p) -> Objects.requireNonNull(p.effectiveStartOrder()))
+                .thenComparing(Participant::raceNumber));
         List<Integer> raceNumbersInStartOrder = starting.stream().map(Participant::raceNumber).toList();
         return new RaceRoster(raceNumbersInStartOrder, byRaceNumber);
     }
@@ -316,7 +323,11 @@ public class AutoAssignService {
         Participant currentParticipant = roster.byRaceNumber().get(current);
         int currentOrderKey = currentParticipant != null ? orderKey(currentParticipant) : current;
         for (Integer raceNumber : roster.raceNumbersInStartOrder()) {
-            if (orderKey(roster.byRaceNumber().get(raceNumber)) > currentOrderKey) {
+            int orderKey = orderKey(roster.byRaceNumber().get(raceNumber));
+            // Lexicographic (orderKey, raceNumber), matching how loadRoster sorts the queue - see
+            // the comment there for why the tie-break is not optional. Bibs are unique per race, so
+            // the pair is a total order and no entry can be stepped over.
+            if (orderKey > currentOrderKey || (orderKey == currentOrderKey && raceNumber > current)) {
                 return raceNumber;
             }
         }

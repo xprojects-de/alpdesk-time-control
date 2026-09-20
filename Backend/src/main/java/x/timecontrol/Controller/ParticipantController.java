@@ -158,9 +158,14 @@ public class ParticipantController {
     @Delete("/race/{raceId}")
     @Operation(summary = "Delete all participants of a race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "All participants of the race deleted")
-    public HttpResponse<Void> deleteByRaceId(@PathVariable Long raceId) {
-        service.deleteByRaceId(raceId);
-        return HttpResponse.noContent();
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
+    public HttpResponse<?> deleteByRaceId(@PathVariable Long raceId) {
+        try {
+            service.deleteByRaceId(raceId);
+            return HttpResponse.noContent();
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)

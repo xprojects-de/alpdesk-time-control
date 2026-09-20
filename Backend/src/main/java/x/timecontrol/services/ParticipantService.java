@@ -467,7 +467,18 @@ public class ParticipantService {
         return repository.findByRaceId(raceId);
     }
 
+    /**
+     * @throws IllegalStateException if auto-assign is running for this race - the same guard
+     *                               {@link #applyStartGroupAssignment} and
+     *                               {@link #copyStartGroupAssignment} apply, and for a stronger
+     *                               reason: auto-assign holds a cursor on a race number and is
+     *                               matching incoming finish times to it. Deleting the roster
+     *                               underneath it leaves that cursor pointing at a participant that
+     *                               no longer exists, and the times arriving in the meantime are
+     *                               silently dropped instead of being recorded anywhere.
+     */
     public void deleteByRaceId(Long raceId) {
+        requireAutoAssignInactive(raceId);
         repository.deleteByRaceId(raceId);
     }
 

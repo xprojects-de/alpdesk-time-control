@@ -11,6 +11,9 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+import java.awt.GraphicsEnvironment;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -56,8 +59,16 @@ public class DatabaseBackupListener implements BeanCreatedEventListener<FlywayCo
      */
     private final String jdbcUrl;
 
-    public DatabaseBackupListener(@Value("${datasources.default.url}") String jdbcUrl) {
+    /**
+     * Mirrors {@code DesktopWindowStartupListener}: the packaged native image has no usable AWT, so
+     * the same flag that suppresses the status window has to suppress this dialog too.
+     */
+    private final boolean graalPackage;
+
+    public DatabaseBackupListener(@Value("${datasources.default.url}") String jdbcUrl,
+                                  @Value("${app.graalPackage:false}") boolean graalPackage) {
         this.jdbcUrl = jdbcUrl;
+        this.graalPackage = graalPackage;
     }
 
     @Override
@@ -92,10 +103,46 @@ public class DatabaseBackupListener implements BeanCreatedEventListener<FlywayCo
             // Refuse to start rather than run an irreversible migration with no copy to fall back
             // on: a failed backup is fixable (disk space, permissions), a failed migration on an
             // unbacked-up race history is not.
+            //
+            // Show it first, though: throwing here aborts the context before ServerStartupEvent
+            // fires, so DesktopWindowStartupListener never opens the status window. In the packaged
+            // build there is no console either - without this dialog the operator double-clicks the
+            // app at the venue, nothing visible happens at all, and the one message that says what
+            // to do goes to a log file nobody is going to look for.
+            LOG.error("Database backup failed - refusing to migrate", e);
+            showFailureDialog(target, e);
             throw new IllegalStateException(
                     "Could not back up the database to " + target + " before applying pending migrations. "
                             + "Refusing to migrate without a backup - free up disk space or fix the directory's "
                             + "permissions and start again.", e);
+        }
+    }
+
+    /**
+     * German, unlike everything else in this class: this is the one string an operator at the venue
+     * reads, the same audience and the same language as the status window it stands in for. Never
+     * lets its own failure replace the real one - the caller rethrows regardless.
+     */
+    private void showFailureDialog(Path target, Exception cause) {
+        if (graalPackage || GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        String message = """
+                Die Datenbank konnte vor der Aktualisierung nicht gesichert werden.
+
+                Zieldatei: %s
+                Grund: %s
+
+                Die Aktualisierung wurde abgebrochen, die Datenbank ist unverändert.
+                Schaffe Speicherplatz bzw. korrigiere die Schreibrechte für diesen
+                Ordner und starte die Anwendung erneut.""".formatted(target, cause.getMessage());
+        try {
+            SwingUtilities.invokeAndWait(() -> JOptionPane.showMessageDialog(
+                    null, message, "Alpdesk Time-Control - Sicherung fehlgeschlagen", JOptionPane.ERROR_MESSAGE));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            LOG.warn("Could not show the backup-failure dialog ({})", e.toString());
         }
     }
 

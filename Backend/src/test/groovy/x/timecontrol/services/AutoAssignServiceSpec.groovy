@@ -361,4 +361,36 @@ class AutoAssignServiceSpec extends Specification {
         then:
         status.nextRaceNumber() == 2
     }
+
+    /**
+     * A late entry has no startSequence and falls back to its bib for ordering - which can collide
+     * with an existing participant's startSequence, since the two are separate 1..n number spaces
+     * and only unique within themselves. Without a tie-break, the cursor can never reach the second
+     * of the two, and every measurement from there on is credited to the wrong starter.
+     */
+    def "reaches a late entry whose bib collides with another participant's start sequence"() {
+        given: "start order derived from run 1 (bibs 50/51/52 get sequences 1/2/3), then bib 2 entered late"
+        participantRepository.findByRaceId(1L) >> [
+                participant(1L, 50, 1),
+                participant(2L, 51, 2),
+                participant(3L, 2, null),   // order key 2 - collides with bib 51's start sequence
+                participant(4L, 52, 3),
+        ]
+        measurementRepository.findAll() >> [
+                measurement(100L, null, 10000),
+                measurement(101L, null, 11000),
+                measurement(102L, null, 12000),
+                measurement(103L, null, 13000),
+        ]
+        service.enable(1L, null)
+
+        when:
+        service.processNewMeasurements()
+
+        then: "every starter gets exactly one time, nobody is skipped"
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 1L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 2L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 3L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 4L })
+    }
 }

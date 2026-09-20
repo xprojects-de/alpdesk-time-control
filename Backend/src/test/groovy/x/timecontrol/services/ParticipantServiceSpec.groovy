@@ -805,6 +805,34 @@ class ParticipantServiceSpec extends Specification {
         0 * repository.update(_)
     }
 
+    /**
+     * Stronger reason than for the start-order operations next to it: auto-assign holds a cursor on
+     * a race number and is crediting incoming finish times to it. Wiping the roster underneath it
+     * leaves that cursor pointing at nothing, and every time arriving meanwhile is dropped.
+     */
+    def "deleteByRaceId refuses while auto-assign is active for the race"() {
+        given:
+        autoAssignActiveForRace = true
+
+        when:
+        service.deleteByRaceId(5L)
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.deleteByRaceId(_)
+    }
+
+    def "deleteByRaceId deletes when auto-assign is not running"() {
+        given:
+        autoAssignActiveForRace = false
+
+        when:
+        service.deleteByRaceId(5L)
+
+        then:
+        1 * repository.deleteByRaceId(5L)
+    }
+
     def "copyStartGroupAssignment refuses while auto-assign is active for a target race"() {
         given:
         autoAssignActiveForRace = true
