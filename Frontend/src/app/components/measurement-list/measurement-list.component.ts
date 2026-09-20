@@ -236,13 +236,34 @@ interface MeasurementWithParticipant extends Measurement {
                                     mat-raised-button
                                     (click)="skipAutoAssign()"
                                     [disabled]="autoAssignBusy$ | async"
-                                    matTooltip="Aktuell erwartete Startnummer überspringen (z. B. nicht gestartet)"
+                                    matTooltip="Aktuelle Startnummer überspringen (z. B. nicht gestartet)"
                                 >
                                     <mat-icon>skip_next</mat-icon>
                                     Überspringen
                                 </button>
+                                <span class="set-next-group">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        class="set-next-input"
+                                        placeholder="StNr."
+                                        aria-label="Nächste Startnummer setzen"
+                                        [(ngModel)]="nextRaceNumberInput"
+                                        [disabled]="!!(autoAssignBusy$ | async)"
+                                        (keyup.enter)="setNextRaceNumber()"
+                                    />
+                                    <button
+                                        mat-raised-button
+                                        (click)="setNextRaceNumber()"
+                                        [disabled]="!nextRaceNumberInput || !!(autoAssignBusy$ | async)"
+                                        matTooltip="Zuordnung auf diese Startnummer setzen - nach einem eingeschobenen Läufer oder um ein versehentliches Überspringen zu korrigieren"
+                                    >
+                                        <mat-icon>my_location</mat-icon>
+                                        Setzen
+                                    </button>
+                                </span>
                                 <span class="next-number-info">
-                                    Nächste erwartete Startnummer:
+                                    Nächste Startnummer:
                                     @if (autoStatus.nextRaceNumber !== null) {
                                         <strong>{{ autoStatus.nextRaceNumber }}</strong>
                                         ({{
@@ -256,6 +277,25 @@ interface MeasurementWithParticipant extends Measurement {
                                         <em>keine weiteren Startnummern</em>
                                     }
                                 </span>
+                                @if (returnToRaceNumber !== null) {
+                                    <span class="return-hint">
+                                        <mat-icon>warning</mat-icon>
+                                        <span>
+                                            Die Zuordnung wurde von Hand versetzt und läuft von hier aus weiter - sie
+                                            kehrt <strong>nicht</strong> von selbst zurück. Vorher war
+                                            <strong>{{ returnToRaceNumber }}</strong> an der Reihe.
+                                        </span>
+                                        <button
+                                            mat-raised-button
+                                            (click)="returnToQueue()"
+                                            [disabled]="autoAssignBusy$ | async"
+                                            matTooltip="Zuordnung wieder auf die Startnummer setzen, die vor dem Versetzen erwartet wurde"
+                                        >
+                                            <mat-icon>undo</mat-icon>
+                                            Zurück zu {{ returnToRaceNumber }}
+                                        </button>
+                                    </span>
+                                }
                             }
                         }
                     } @else {
@@ -413,6 +453,41 @@ interface MeasurementWithParticipant extends Measurement {
                 min-width: 280px;
             }
 
+            .return-hint {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-basis: 100%;
+                margin-top: 4px;
+                padding: 8px 12px;
+                border-radius: 4px;
+                background: rgba(255, 171, 0, 0.12);
+            }
+
+            .return-hint mat-icon {
+                flex-shrink: 0;
+            }
+
+            .set-next-group {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .set-next-input {
+                width: 72px;
+                padding: 6px 8px;
+                font: inherit;
+                border: 1px solid rgba(0, 0, 0, 0.38);
+                border-radius: 4px;
+                background: transparent;
+                color: inherit;
+            }
+
+            .set-next-input:disabled {
+                opacity: 0.5;
+            }
+
             .next-number-info {
                 font-size: 0.9rem;
                 color: rgba(0, 0, 0, 0.7);
@@ -504,6 +579,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
+    /** Bound to the bib input next to "Überspringen" - cleared once the backend accepted it. */
+    nextRaceNumberInput: number | null = null;
+    /**
+     * The bib the queue expected before it was last moved by hand, offered back as a one-click
+     * return. Setting the cursor is a JUMP, not an insertion: once the moved-to participant has
+     * their time, matching continues from THEIR position in the start order - so a mid-field jump
+     * silently steps over everyone in between. Nothing here restores that automatically on purpose;
+     * this only makes sure the way back is on screen instead of in the operator's head.
+     */
+    returnToRaceNumber: number | null = null;
+    /** Mirrored from autoAssignStatus$ so the value BEFORE a jump can be captured when it is dispatched. */
+    private currentNextRaceNumber: number | null = null;
+    /** Held between dispatch and success so a rejected bib never leaves a bogus return offer behind. */
+    private pendingReturnRaceNumber: number | null = null;
+    private pendingTargetRaceNumber: number | null = null;
 
     constructor() {
         this.measurements$ = this.store.select(MeasurementSelectors.selectAllMeasurements);
@@ -529,6 +619,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.scheduledImportEnabled$ = this.store.select(MeasurementSelectors.selectScheduledImportEnabled);
         this.deviceStatus$ = this.store.select(MeasurementSelectors.selectDeviceStatus);
         this.autoAssignStatus$ = this.store.select(MeasurementSelectors.selectAutoAssignStatus);
+        this.autoAssignStatus$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(status => (this.currentNextRaceNumber = status?.nextRaceNumber ?? null));
         this.autoAssignBusy$ = this.store.select(MeasurementSelectors.selectAutoAssignBusy);
         // Deliberately NOT bound to the app-wide RaceSelectors.selectSelectedRaceId (used by
         // participant-list/race-measurement-list/gaudi-modus to filter by race): this select
@@ -548,16 +641,39 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     MeasurementActions.enableAutoAssignSuccess,
                     MeasurementActions.disableAutoAssignSuccess,
                     MeasurementActions.skipAutoAssignSuccess,
+                    MeasurementActions.setNextAutoAssignRaceNumberSuccess,
                 ),
                 takeUntil(this.destroy$),
             )
             .subscribe(action => {
-                const message =
-                    action.type === MeasurementActions.enableAutoAssignSuccess.type
-                        ? "Automatik-Modus aktiviert"
-                        : action.type === MeasurementActions.disableAutoAssignSuccess.type
-                          ? "Automatik-Modus deaktiviert"
-                          : "Startnummer übersprungen";
+                let message: string;
+                if (action.type === MeasurementActions.enableAutoAssignSuccess.type) {
+                    message = "Automatik-Modus aktiviert";
+                } else if (action.type === MeasurementActions.disableAutoAssignSuccess.type) {
+                    message = "Automatik-Modus deaktiviert";
+                } else if (action.type === MeasurementActions.setNextAutoAssignRaceNumberSuccess.type) {
+                    // Only cleared on success: a rejected bib stays in the field so it can be fixed.
+                    this.nextRaceNumberInput = null;
+                    if (this.pendingTargetRaceNumber === this.returnToRaceNumber) {
+                        // Back where we started - nothing left to offer.
+                        this.returnToRaceNumber = null;
+                        message = "Nächste Startnummer gesetzt";
+                    } else {
+                        // Captured only on the FIRST jump: a second one before returning must not
+                        // overwrite the way back to the real queue position.
+                        if (this.returnToRaceNumber === null) {
+                            this.returnToRaceNumber = this.pendingReturnRaceNumber;
+                        }
+                        message =
+                            this.returnToRaceNumber !== null
+                                ? `Nächste Startnummer gesetzt - vorher war ${this.returnToRaceNumber} an der Reihe`
+                                : "Nächste Startnummer gesetzt";
+                    }
+                    this.pendingReturnRaceNumber = null;
+                    this.pendingTargetRaceNumber = null;
+                } else {
+                    message = "Startnummer übersprungen";
+                }
                 this.snackBar.open(message, "OK", {duration: 3000});
             });
 
@@ -568,6 +684,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     MeasurementActions.enableAutoAssignFailure,
                     MeasurementActions.disableAutoAssignFailure,
                     MeasurementActions.skipAutoAssignFailure,
+                    MeasurementActions.setNextAutoAssignRaceNumberFailure,
                 ),
                 takeUntil(this.destroy$),
             )
@@ -893,6 +1010,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     onRaceChange(raceId: number | null): void {
+        // A different race (or none) makes any remembered position meaningless.
+        this.returnToRaceNumber = null;
         this.store.dispatch(RaceActions.selectRace({id: raceId}));
         // Selecting a race is the on/off switch for auto-assign - no separate start/stop button.
         if (raceId !== null) {
@@ -904,6 +1023,31 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     skipAutoAssign(): void {
         this.store.dispatch(MeasurementActions.skipAutoAssign());
+    }
+
+    /**
+     * Points the auto-assign cursor at a specific bib. "Überspringen" only ever moves forward one
+     * at a time, so without this there is no way back from a mis-click, and no way to resume where
+     * the queue stood after a runner was let down out of order - re-selecting the race restarts the
+     * cursor at the first participant without a time, which also undoes every earlier skip.
+     */
+    setNextRaceNumber(): void {
+        if (this.nextRaceNumberInput === null || this.nextRaceNumberInput === undefined) {
+            return;
+        }
+        const target = Number(this.nextRaceNumberInput);
+        this.pendingReturnRaceNumber = this.currentNextRaceNumber;
+        this.pendingTargetRaceNumber = target;
+        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber: target}));
+    }
+
+    /** Puts the cursor back where the queue stood before the jump - same path, so it clears the hint. */
+    returnToQueue(): void {
+        if (this.returnToRaceNumber === null) {
+            return;
+        }
+        this.nextRaceNumberInput = this.returnToRaceNumber;
+        this.setNextRaceNumber();
     }
 
     formatDuration(ms: number): string {
