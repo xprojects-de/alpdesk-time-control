@@ -23,6 +23,7 @@ import {Race, ResultUnit} from "../../models/race.model";
 import {Team} from "../../models/team.model";
 import {Category} from "../../models/category.model";
 import {PersonService} from "../../services/person.service";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 
 @Component({
     selector: "app-participant-dialog",
@@ -35,6 +36,7 @@ import {PersonService} from "../../services/person.service";
         MatButtonModule,
         MatSelectModule,
         MatAutocompleteModule,
+        RaceSelectComponent,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -70,17 +72,12 @@ import {PersonService} from "../../services/person.service";
                     }
                 </mat-form-field>
 
-                <mat-form-field appearance="outline">
-                    <mat-label>Rennen</mat-label>
-                    <mat-select formControlName="race" required>
-                        @for (race of races$ | async; track race.id) {
-                            <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
-                        }
-                    </mat-select>
-                    @if (form.get("race")?.hasError("required") && form.get("race")?.touched) {
-                        <mat-error>Rennen ist erforderlich</mat-error>
-                    }
-                </mat-form-field>
+                <app-race-select
+                    formControlName="race"
+                    [races]="(races$ | async) ?? []"
+                    [required]="true"
+                    errorMessage="Rennen ist erforderlich"
+                />
 
                 <mat-form-field appearance="outline">
                     <mat-label>Startnummer</mat-label>
@@ -196,7 +193,8 @@ import {PersonService} from "../../services/person.service";
                 margin-top: 16px;
             }
 
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 width: 100%;
             }
 

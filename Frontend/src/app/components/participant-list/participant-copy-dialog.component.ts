@@ -4,9 +4,9 @@ import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatButtonModule} from "@angular/material/button";
-import {MatSelectModule} from "@angular/material/select";
 import {MatCheckboxModule} from "@angular/material/checkbox";
 import {Race} from "../../models/race.model";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 
 export interface ParticipantCopyDialogData {
     sourceRaceId: number;
@@ -26,8 +26,8 @@ export interface ParticipantCopyDialogResult {
         MatDialogModule,
         MatFormFieldModule,
         MatButtonModule,
-        MatSelectModule,
         MatCheckboxModule,
+        RaceSelectComponent,
     ],
     template: `
         <h2 mat-dialog-title>Teilnehmer in andere Rennen kopieren</h2>
@@ -39,14 +39,13 @@ export interface ParticipantCopyDialogResult {
                 werden übersprungen.
             </p>
             <form [formGroup]="form">
-                <mat-form-field appearance="outline">
-                    <mat-label>Zielrennen</mat-label>
-                    <mat-select formControlName="targetRaceIds" multiple required>
-                        @for (race of otherRaces(); track race.id) {
-                            <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                        }
-                    </mat-select>
-                </mat-form-field>
+                <app-race-select
+                    formControlName="targetRaceIds"
+                    label="Zielrennen"
+                    [races]="otherRaces()"
+                    [multiple]="true"
+                    [required]="true"
+                />
                 <mat-checkbox formControlName="carryStartNumber"> Startnummern übernehmen </mat-checkbox>
                 <p class="hint">
                     Bereits im Zielrennen vergebene Startnummern werden dabei übersprungen (leer gelassen).
@@ -60,7 +59,8 @@ export interface ParticipantCopyDialogResult {
     `,
     styles: [
         `
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 width: 100%;
                 min-width: 350px;
             }

@@ -19,6 +19,7 @@ import {
     StartOrderMode,
 } from "../../models/race.model";
 import {readFileAsBase64} from "../../utils/file-base64.util";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 
 /** Dialog input: the race being edited (null for a new race) plus every other race, for the "linked previous race" dropdown. */
 export interface RaceDialogData {
@@ -39,6 +40,7 @@ export interface RaceDialogData {
         MatNativeDateModule,
         MatSelectModule,
         MatIconModule,
+        RaceSelectComponent,
     ],
     template: `
         <h2 mat-dialog-title>
@@ -99,15 +101,12 @@ export interface RaceDialogData {
                     Ergebnis die Startreihenfolge (und automatische Zeitmesswert-Zuordnung) bestimmt.
                 </p>
                 <div class="race-form-grid">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Verknüpfter Durchgang</mat-label>
-                        <mat-select formControlName="previousRaceId">
-                            <mat-option [value]="null">Kein</mat-option>
-                            @for (race of availablePreviousRaces; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        formControlName="previousRaceId"
+                        label="Verknüpfter Durchgang"
+                        emptyOptionLabel="Kein"
+                        [races]="availablePreviousRaces"
+                    />
 
                     @if (form.value.previousRaceId) {
                         <mat-form-field appearance="outline">
@@ -211,7 +210,8 @@ export interface RaceDialogData {
                 margin-top: 16px;
             }
 
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 width: 100%;
             }
 

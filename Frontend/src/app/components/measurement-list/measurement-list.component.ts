@@ -14,7 +14,7 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatMenuModule} from "@angular/material/menu";
-import {MatSelectModule} from "@angular/material/select";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
@@ -58,7 +58,7 @@ interface MeasurementWithParticipant extends Measurement {
         MatTooltipModule,
         MatSlideToggleModule,
         MatMenuModule,
-        MatSelectModule,
+        RaceSelectComponent,
         MatFormFieldModule,
         FormsModule,
     ],
@@ -214,29 +214,20 @@ interface MeasurementWithParticipant extends Measurement {
                 </div>
 
                 <div class="auto-assign-row">
-                    <mat-form-field
-                        appearance="outline"
+                    <app-race-select
                         class="race-select"
+                        label="Rennen (Automatik-Zuordnung)"
+                        emptyOptionLabel="— kein Rennen —"
                         [matTooltip]="
                             (scheduledImportEnabled$ | async)
                                 ? 'Automatischen Import zuerst deaktivieren, um das Rennen zu wechseln'
                                 : 'Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie'
                         "
-                    >
-                        <mat-label>Rennen (Automatik-Zuordnung)</mat-label>
-                        <mat-select
-                            [value]="selectedRaceId$ | async"
-                            [disabled]="!!(scheduledImportEnabled$ | async) || !!(autoAssignBusy$ | async)"
-                            (selectionChange)="onRaceChange($event.value)"
-                        >
-                            <mat-option [value]="null">— kein Rennen —</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id"
-                                    >{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option
-                                >
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        [disabled]="!!(scheduledImportEnabled$ | async) || !!(autoAssignBusy$ | async)"
+                        (valueChange)="onRaceChange($any($event))"
+                    />
 
                     @if (selectedRaceId$ | async; as selectedRaceId) {
                         @if (autoAssignStatus$ | async; as autoStatus) {
@@ -899,15 +890,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     getParticipantNameByRaceNumber(raceId: number, raceNumber: number, participants: Participant[]): string {
         const participant = participants.find(p => p.race?.id === raceId && p.raceNumber === raceNumber);
         return participant?.person ? `${participant.person.firstName} ${participant.person.lastName}` : "unbekannt";
-    }
-
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const [year, month, day] = parts;
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
     }
 
     onRaceChange(raceId: number | null): void {

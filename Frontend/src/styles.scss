@@ -93,3 +93,15 @@ body {
   }
 }
 
+
+/*
+ * Panel of the shared <app-race-select>. Its search field is sticky at the very top of the panel,
+ * so the panel's own top padding has to go - otherwise the first options scroll through the gap
+ * above the search row. The panel lives in an overlay outside the component's DOM, which is why
+ * this rule is global rather than part of the component's styles.
+ */
+.mat-mdc-select-panel.race-select-panel {
+  // Both class names, so this wins over Material's own .mat-mdc-select-panel padding regardless
+  // of which stylesheet the browser sees last.
+  padding-top: 0;
+}

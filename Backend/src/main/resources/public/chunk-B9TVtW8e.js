@@ -1,1 +1,0 @@
-import{xt as nc,z as Rm}from"./chunk-COUF65hP.js";var r=Rm(`category`);var c=nc(r,e=>e.categories);var s=nc(r,e=>e.loading);nc(r,e=>e.error);export{s as n,c as t};
