@@ -130,16 +130,22 @@ check("Vorsaison wertet nach der Übernahme wieder",
 if db_path:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
-        leftovers = [row[0] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'age_group%'")]
-        check("keine Rest-Tabelle aus dem Rebuild", sorted(leftovers), ["age_group"])
+        # Bewusst auf die konkrete Rest-Tabelle geprüft und nicht auf "age_group ist die einzige
+        # Tabelle mit diesem Präfix": Letzteres würde an einer künftigen, völlig legitimen Tabelle
+        # scheitern, die zufällig so anfängt.
+        tables = [row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")]
+        check("Zwischentabelle des Rebuilds entfernt", "age_group_v1" in tables, False)
+        check("age_group existiert", "age_group" in tables, True)
         indexes = [row[0] for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'age_group'"
             " AND name NOT LIKE 'sqlite_autoindex%'")]
-        check("Saison-Index angelegt", indexes, ["idx_age_group_season_year"])
-        version = conn.execute(
-            "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1").fetchone()
-        check("Schema-Version", version[0] if version else None, "4")
+        check("Saison-Index angelegt", "idx_age_group_season_year" in indexes, True)
+        # Auf "V4 wurde erfolgreich angewendet" geprüft, nicht auf "4 ist der neueste Stand" -
+        # sonst wird dieser Test von der nächsten Migration rot, ohne dass an V4 etwas falsch wäre.
+        applied = conn.execute(
+            "SELECT success FROM flyway_schema_history WHERE version = '4'").fetchone()
+        check("Migration V4 erfolgreich angewendet", applied[0] if applied else None, 1)
     finally:
         conn.close()
 else:
