@@ -8,7 +8,7 @@ Time Control (a.k.a. "Alpdesk Time-Control") is a self-contained race-timing app
 club events: a Micronaut/Java backend serving a REST API plus the built Angular frontend as static
 resources, backed by a local SQLite database. It's designed to run as a single packaged desktop app
 (jpackage installer / native-image binary / shadow jar) on a laptop at the race venue, with no
-external services required. See [README.md](README.md) for end-user installation/packaging details
+external services required. See [docs/installation.md](docs/installation.md) for end-user installation/packaging details
 and where the SQLite DB and JWT secret live for each distribution type (`app.packaged` /
 `APP_DATA_DIR` in [Application.java](Backend/src/main/java/x/timecontrol/Application.java)).
 

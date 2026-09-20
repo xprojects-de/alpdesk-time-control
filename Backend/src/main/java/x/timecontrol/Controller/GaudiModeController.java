@@ -187,6 +187,12 @@ public class GaudiModeController {
             return HttpResponse.ok(service.computeRanking(gaudiMode.get()));
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // A refused-by-design state, not a server fault. Same 409-for-IllegalStateException
+            // mapping the rest of the controllers use, so the reason reaches the operator as a
+            // handled error instead of the GlobalExceptionHandler's generic 500.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to compute ranking: " + e.getMessage()));
         }
@@ -199,9 +205,23 @@ public class GaudiModeController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Excluded entries", content = @Content(schema = @Schema(implementation = GaudiDnsEntryResponse.class)))
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
-    public HttpResponse<List<GaudiDnsEntryResponse>> getNotRanked(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "List refused by design (see the message)")
+    public HttpResponse<?> getNotRanked(@PathVariable Long id) {
         Optional<GaudiMode> gaudiMode = service.findById(id);
-        return gaudiMode.map(g -> HttpResponse.ok(service.computeDnsEntries(g))).orElse(HttpResponse.notFound());
+        if (gaudiMode.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        try {
+            return HttpResponse.ok(service.computeDnsEntries(gaudiMode.get()));
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // Same 409-for-IllegalStateException mapping as getRanking and the exports: without it
+            // a refused-by-design state reaches the operator as the GlobalExceptionHandler's
+            // generic "An unexpected error occurred", with the actual reason dropped.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces("application/pdf")
@@ -209,26 +229,16 @@ public class GaudiModeController {
     @Operation(summary = "Export the computed ranking of a Gaudi-Modus instance as PDF", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "409", description = "Ranking refused by design (see the message)")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdf(@PathVariable Long id) {
-        Optional<GaudiMode> gaudiModeOpt = service.findById(id);
-        if (gaudiModeOpt.isEmpty()) {
-            return HttpResponse.notFound();
-        }
-        GaudiMode gaudiMode = gaudiModeOpt.get();
-
-        List<Race> races = service.findRacesFor(gaudiMode.id()).stream()
-                .map(gmr -> raceService.findById(gmr.raceId()))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .toList();
-        if (races.isEmpty()) {
-            return HttpResponse.notFound();
-        }
-
-        try {
+        // Routed through the same scaffold as the type-restricted exports below (every type is
+        // allowed here) rather than repeating the race lookup and error handling: the duplicated
+        // copy is how this endpoint ended up without their IllegalStateException -> 409 mapping and
+        // turned a refused-by-design state into a 500.
+        return exportFile(id, EnumSet.allOf(GaudiModeType.class), ".pdf", "PDF", (gaudiMode, races) -> {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
-            byte[] pdfBytes = switch (gaudiMode.type()) {
+            return switch (gaudiMode.type()) {
                 case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst(),
                         service.computeDnsEntries(gaudiMode));
                 case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode, ranking, races.getFirst());
@@ -239,19 +249,7 @@ public class GaudiModeController {
                         pdfExportService.generatePointsCombinationRanking(gaudiMode, ranking, races, races.getFirst(),
                                 service.computeDnsEntries(gaudiMode));
             };
-
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + ".pdf");
-        } catch (DataAccessException e) {
-            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
-        } catch (Exception e) {
-            // The method-level @Produces forces "application/pdf" on a plain HttpResponse.serverError();
-            // overriding the content type here is what makes the JSON ErrorResponse body actually readable
-            // as JSON instead of being mislabeled as a (broken) PDF download.
-            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))
-                    .contentType(MediaType.APPLICATION_JSON);
-        }
+        });
     }
 
     @Produces("application/pdf")
@@ -415,6 +413,11 @@ public class GaudiModeController {
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + filenameSuffix);
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // See getRanking: a refused-by-design state is a 409 with its reason, not a 500.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()))
+                    .contentType(MediaType.APPLICATION_JSON);
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate " + formatLabel + ": " + reason))

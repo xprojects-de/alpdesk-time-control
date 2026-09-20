@@ -16,9 +16,12 @@ token = c.login(config.MAIN)
 # instead of auto-creating one gender-split group per (ageGroup label) x gender combination.
 # Adjust birth-year ranges/names to match your own event, or delete this block entirely to let
 # the import auto-create age groups from the CSV's own "ageGroup" column instead.
+# seasonYear has to match the season the races below fall into (date 2025-09-15, default
+# 1 January boundary -> season 2025): age groups are configured per season, and the import
+# resolves the "Klasse" column against the target race's own season only.
 for ag in [
-    {"name": "U16", "birthYearFrom": 2010, "birthYearTo": 2011, "gender": "BOTH"},
-    {"name": "U14", "birthYearFrom": 2012, "birthYearTo": 2013, "gender": "BOTH"},
+    {"name": "U16", "seasonYear": 2025, "birthYearFrom": 2010, "birthYearTo": 2011, "gender": "BOTH"},
+    {"name": "U14", "seasonYear": 2025, "birthYearFrom": 2012, "birthYearTo": 2013, "gender": "BOTH"},
 ]:
     status, resp = c.post(config.MAIN, token, "/age-groups", ag)
     print(f"age-group {ag['name']}:", status, resp)

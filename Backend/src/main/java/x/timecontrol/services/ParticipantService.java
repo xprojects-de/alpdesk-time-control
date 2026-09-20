@@ -40,6 +40,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -67,6 +68,7 @@ public class ParticipantService {
 
     private final ParticipantRepository repository;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final RaceService raceService;
     private final TeamService teamService;
     private final CategoryService categoryService;
@@ -77,9 +79,10 @@ public class ParticipantService {
     private final TransactionOperations<Connection> transactionOperations;
     private final GaudiLosPairingRepository losPairingRepository;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService, TransactionOperations<Connection> transactionOperations, GaudiLosPairingRepository losPairingRepository) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, SeasonService seasonService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService, TransactionOperations<Connection> transactionOperations, GaudiLosPairingRepository losPairingRepository) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.raceService = raceService;
         this.teamService = teamService;
         this.categoryService = categoryService;
@@ -307,8 +310,19 @@ public class ParticipantService {
         });
     }
 
-    private List<AgeGroup> allAgeGroups() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+    /**
+     * The age groups that apply to one race: those configured for the season the race's date falls
+     * into (see {@link SeasonService}). Never "all age groups" - an age class rolls over every
+     * year, so several seasons' rows describe the same class with different birth years and
+     * matching a person against all of them at once would pick whichever season came first.
+     */
+    private List<AgeGroup> ageGroupsForRace(Race race) {
+        return ageGroupService.findBySeason(seasonService.seasonOf(race));
+    }
+
+    private Race requireRace(Long raceId) {
+        return raceService.findById(raceId)
+                .orElseThrow(() -> new IllegalArgumentException("Race with id " + raceId + " does not exist"));
     }
 
     private Optional<AgeGroup> findMatchingAgeGroup(Person person, List<AgeGroup> ageGroups) {
@@ -356,8 +370,8 @@ public class ParticipantService {
      * the ordering convention can't drift between the two. {@code personsById} is caller-provided
      * since both callers already need to batch-load it for other purposes too.
      */
-    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
-        List<AgeGroup> ageGroups = allAgeGroups().stream()
+    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById, int seasonYear) {
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonYear).stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .toList();
@@ -405,7 +419,21 @@ public class ParticipantService {
         Map<Long, Team> teamsById = teamService.findByIds(teamIds);
         Map<Long, Category> categoriesById = categoryService.findByIds(categoryIds);
         Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
-        List<AgeGroup> ageGroups = allAgeGroups();
+        // A batch can span races of different seasons (the roster of one race never does, but
+        // cross-race callers exist), and each race has to be categorised against its own season's
+        // age groups. Resolved once per race up front and keyed by race id, so the per-participant
+        // loop below is a plain map lookup: deriving the season per participant would re-read the
+        // settings row (SeasonService#seasonStart) once for every row in the batch.
+        Map<Integer, List<AgeGroup>> ageGroupsBySeason = new HashMap<>();
+        Map<Long, List<AgeGroup>> ageGroupsByRaceId = new HashMap<>();
+        Map<Long, Integer> seasonByRaceId = new HashMap<>();
+        MonthDay seasonStart = seasonService.seasonStart();
+        for (Race race : racesById.values()) {
+            int season = seasonService.seasonOf(race.date(), seasonStart);
+            seasonByRaceId.put(race.id(), season);
+            ageGroupsByRaceId.put(race.id(),
+                    ageGroupsBySeason.computeIfAbsent(season, ageGroupService::findBySeason));
+        }
 
         List<ParticipantResponse> result = new ArrayList<>();
         for (Participant p : participants) {
@@ -413,13 +441,19 @@ public class ParticipantService {
             Person person = p.personId() != null ? personsById.get(p.personId()) : null;
             Team team = p.teamId() != null ? teamsById.get(p.teamId()) : null;
             Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
+            // No race (deleted out from under the participant) means no season to categorise
+            // against, so no age group - the same "nothing matched" outcome the caller already
+            // handles for a person whose birth year fits no configured group.
+            List<AgeGroup> ageGroups = race != null
+                    ? ageGroupsByRaceId.getOrDefault(race.id(), List.of())
+                    : List.of();
             AgeGroup ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups).orElse(null) : null;
             StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
 
             result.add(ParticipantResponse.from(
                     p,
                     person != null ? PersonResponse.from(person) : null,
-                    race != null ? RaceResponse.from(race) : null,
+                    race != null ? RaceResponse.from(race, seasonByRaceId.get(race.id())) : null,
                     team != null ? TeamResponse.from(team) : null,
                     category != null ? CategoryResponse.from(category) : null,
                     ageGroup != null ? AgeGroupResponse.from(ageGroup) : null,
@@ -567,7 +601,8 @@ public class ParticipantService {
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
+                groupByAgeGroup(participants, personsById, seasonService.seasonOf(requireRace(raceId)));
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
@@ -663,7 +698,12 @@ public class ParticipantService {
         // bucket last).
         Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
-        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
+        // Bucketed against the *target* race's season, not the previous race's: the order computed
+        // here becomes that race's start order and has to line up with the age-group sections its
+        // own start list and rankings print. Two runs of the same event are in the same season
+        // anyway; this only matters if they were ever split across the season boundary.
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
+                groupByAgeGroup(previousParticipants, previousPersonsById, seasonService.seasonOf(race));
 
         List<Participant> ordered = new ArrayList<>();
         Set<Long> matchedPersonIds = new HashSet<>();
@@ -1054,6 +1094,9 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
+        // Resolved once for the whole file rather than per row: it is the same race for every row,
+        // and resolving it per row would read the settings table once per participant.
+        int seasonYear = seasonService.seasonOf(requireRace(raceId));
 
         String line;
         int lineNumber = 0;
@@ -1078,7 +1121,7 @@ public class ParticipantService {
             }
 
             String externalId = parts.length > 5 ? parts[5].trim() : "";
-            importRow(raceId, lineNumber, line,
+            importRow(raceId, seasonYear, lineNumber, line,
                     new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
                             null, null, null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
@@ -1108,11 +1151,12 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
+        int seasonYear = seasonService.seasonOf(requireRace(raceId));
 
         int rowNumber = 1;
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
-            importRow(raceId, rowNumber, row.toString(),
+            importRow(raceId, seasonYear, rowNumber, row.toString(),
                     new ImportRowFields(
                             valueFor(row, effectiveMapping, "lastName"),
                             valueFor(row, effectiveMapping, "firstName"),
@@ -1680,7 +1724,7 @@ public class ParticipantService {
      * {@code existingNameBirthDateKeys} is grown in place so duplicate ExternalId-less rows later in
      * the same file are also caught.
      */
-    private void importRow(Long raceId, int rowNumber, String rawRowDescription, ImportRowFields fields,
+    private void importRow(Long raceId, int seasonYear, int rowNumber, String rawRowDescription, ImportRowFields fields,
                             Set<String> existingNameBirthDateKeys, List<Participant> imported, List<ParticipantImportRowError> errors) {
         String lastName = fields.lastName() != null ? fields.lastName().trim() : "";
         String firstName = fields.firstName() != null ? fields.firstName().trim() : "";
@@ -1748,9 +1792,12 @@ public class ParticipantService {
                 Long categoryId = categoryName.isEmpty() ? null : categoryService.findOrCreateByName(categoryName).id();
                 // AgeGroup isn't a participant FK - it's computed from birthDate/gender at read time
                 // (findMatchingAgeGroup) - so importing "Klasse" just needs a matching AgeGroup row to
-                // exist, not anything set on the Participant itself.
+                // exist, not anything set on the Participant itself. It has to exist in *this race's
+                // season*: scoped to the target race rather than to whatever "U14" happens to exist,
+                // an import can neither silently reuse a past season's class nor widen its birth-year
+                // range and thereby re-categorise races already run under it.
                 if (!ageGroupName.isEmpty()) {
-                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender);
+                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender, seasonYear);
                 }
 
                 Person person;

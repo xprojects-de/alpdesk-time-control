@@ -1,18 +1,23 @@
 import {createReducer, on} from "@ngrx/store";
 import {TimingProviderSettings} from "../../models/timing-provider.model";
+import {SeasonSettings} from "../../models/season-settings.model";
 import * as SettingsActions from "./settings.actions";
 
 export interface SettingsState {
     timingProvider: TimingProviderSettings | null;
+    season: SeasonSettings | null;
     loading: boolean;
     saving: boolean;
+    seasonSaving: boolean;
     error: string | null;
 }
 
 export const initialState: SettingsState = {
     timingProvider: null,
+    season: null,
     loading: false,
     saving: false,
+    seasonSaving: false,
     error: null,
 };
 
@@ -49,5 +54,23 @@ export const settingsReducer = createReducer(
         ...state,
         saving: false,
         error,
+    })),
+
+    on(SettingsActions.loadSeasonSuccess, (state, {season}) => ({
+        ...state,
+        season,
+    })),
+    on(SettingsActions.updateSeason, state => ({
+        ...state,
+        seasonSaving: true,
+    })),
+    on(SettingsActions.updateSeasonSuccess, (state, {season}) => ({
+        ...state,
+        season,
+        seasonSaving: false,
+    })),
+    on(SettingsActions.updateSeasonFailure, state => ({
+        ...state,
+        seasonSaving: false,
     })),
 );

@@ -14,6 +14,9 @@ public record AgeGroupResponse(
         @Schema(description = "Name of the age group", example = "Herren allgemein")
         String name,
 
+        @Schema(description = "Season this configuration is valid for", example = "2026")
+        Integer seasonYear,
+
         @Schema(description = "Starting birth year for range", example = "1985")
         Integer birthYearFrom,
 
@@ -27,6 +30,7 @@ public record AgeGroupResponse(
         return new AgeGroupResponse(
                 ageGroup.id(),
                 ageGroup.name(),
+                ageGroup.seasonYear(),
                 ageGroup.birthYearFrom(),
                 ageGroup.birthYearTo(),
                 ageGroup.gender()

@@ -26,6 +26,7 @@ import x.timecontrol.services.DataImportScheduler;
 import x.timecontrol.services.RaceLiveService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.TimingDataImporter;
 import x.timecontrol.services.TimingProviderRegistry;
 
@@ -57,14 +58,20 @@ public class RaceController {
     @Inject
     CategoryService categoryService;
 
+    @Inject
+    SeasonService seasonService;
+
     @Produces(MediaType.APPLICATION_JSON)
     @Get
     @Operation(summary = "List all races", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of all races", content = @Content(schema = @Schema(implementation = RaceResponse.class)))
     public HttpResponse<List<RaceResponse>> list() {
         Iterable<Race> races = service.findAll();
+        // Season boundary read once for the whole list: seasonOf(race) would otherwise re-read the
+        // settings row for every race.
+        java.time.MonthDay seasonStart = seasonService.seasonStart();
         List<RaceResponse> response = StreamSupport.stream(races.spliterator(), false)
-                .map(RaceResponse::from)
+                .map(r -> RaceResponse.from(r, seasonService.seasonOf(r.date(), seasonStart)))
                 .toList();
         return HttpResponse.ok(response);
     }
@@ -76,7 +83,7 @@ public class RaceController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<RaceResponse> getById(@PathVariable Long id) {
         Optional<Race> race = service.findById(id);
-        return race.map(r -> HttpResponse.ok(RaceResponse.from(r)))
+        return race.map(r -> HttpResponse.ok(RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -87,7 +94,7 @@ public class RaceController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<RaceResponse> getByName(@PathVariable String name) {
         Optional<Race> race = service.findByName(name);
-        return race.map(r -> HttpResponse.ok(RaceResponse.from(r)))
+        return race.map(r -> HttpResponse.ok(RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -122,7 +129,7 @@ public class RaceController {
         try {
             Race race = service.createFromRequest(request);
             Race created = service.create(race);
-            return HttpResponse.created(RaceResponse.from(created));
+            return HttpResponse.created(RaceResponse.from(created, seasonService.seasonOf(created)));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
@@ -155,7 +162,7 @@ public class RaceController {
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
-        return updated.map(r -> HttpResponse.ok((Object) RaceResponse.from(r)))
+        return updated.map(r -> HttpResponse.ok((Object) RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 

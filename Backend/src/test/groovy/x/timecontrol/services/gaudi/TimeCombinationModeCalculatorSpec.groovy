@@ -18,6 +18,11 @@ import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
+import x.timecontrol.services.RaceService
+import x.timecontrol.services.SeasonService
+import x.timecontrol.services.SettingsService
 
 class TimeCombinationModeCalculatorSpec extends Specification {
 
@@ -25,12 +30,25 @@ class TimeCombinationModeCalculatorSpec extends Specification {
     TeamService teamService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
     AgeGroupService ageGroupService = Mock() {
-        findAll() >> []
+        findBySeason(2026) >> []
     }
-    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, teamService, ageGroupService)
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
+
+    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, teamService, ageGroupService, seasonService)
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+    }
+
+    private static Race raceOn(Long id, LocalDate date) {
+        new Race(id, "Rennen " + id, date, null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
     }
 
@@ -208,5 +226,38 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking[1].valueMs() == 40040
         ranking[1].place() == 2
         ranking[1].diffMs() == 40
+    }
+
+    def "computeDnsEntries scores a combination spanning two seasons against the first race's season instead of failing"() {
+        given: "a December and a January race with the default 1 January boundary - one club championship, two seasons"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, raceOn(1L, LocalDate.of(2025, 12, 14)), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, raceOn(2L, LocalDate.of(2026, 1, 11)), 1.0d, []),
+        ]
+
+        when: "Anna is missing the second leg, so she lands on the \"nicht gewertet\" list"
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then: "the classes come from 2025, the first race's season - and the export is produced rather than refused"
+        1 * ageGroupService.findBySeason(2025) >> []
+        dns.size() == 1
+        dns[0].lastName() == "Test"
+    }
+
+    def "computeDnsEntries resolves no season and reads no age groups when every person completed every leg"() {
+        given: "the common case - a complete field, so the list below it is empty"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 70000)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then: "nothing to categorise means nothing to look up"
+        0 * ageGroupService.findBySeason(_)
+        dns.isEmpty()
     }
 }

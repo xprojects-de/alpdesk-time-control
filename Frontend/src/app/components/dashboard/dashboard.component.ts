@@ -274,10 +274,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
             {path: "gaudi-mode", label: "Gaudi-Modus", icon: "celebration"},
         ],
         [
-            {path: "settings", label: "Zeitmessung", icon: "settings_input_antenna"},
             {path: "measurements", label: "Messungen", icon: "timer"},
             {path: "race-measurements", label: "Zuordnung & Sync", icon: "sync_alt"},
         ],
+        // Its own group: the page is no longer only about the timing device (it also holds the
+        // season boundary), so it no longer belongs inside the timing block above.
+        [{path: "settings", label: "Einstellungen", icon: "settings"}],
     ];
 
     private static readonly NAV_OPEN_KEY = "dashboard_nav_open";

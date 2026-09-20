@@ -13,6 +13,8 @@ import x.timecontrol.entities.SortDirection
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.util.zip.ZipInputStream
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
 
 class GaudiCsvExportServiceSpec extends Specification {
 
@@ -20,13 +22,21 @@ class GaudiCsvExportServiceSpec extends Specification {
     AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     RankingViewService rankingViewService = Mock()
 
-    def service = new GaudiCsvExportService(personService, ageGroupService, rankingViewService)
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
+
+    def service = new GaudiCsvExportService(personService, ageGroupService, seasonService, rankingViewService)
 
     def race = new Race(10L, "Riesenslalom", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
 
     def setup() {
-        ageGroupService.findAll() >> [new AgeGroup(1L, "U14", 2013, 2014, Gender.BOTH)]
+        ageGroupService.findBySeason(2026) >> [new AgeGroup(1L, "U14", 2026, 2013, 2014, Gender.BOTH)]
         personService.findByIds(_ as Set) >> [
                 1L: new Person(1L, "Max", "Muster", LocalDate.of(2013, 5, 1), Gender.MALE, "EXT-1"),
                 2L: new Person(2L, "Anna", "Beispiel", LocalDate.of(1980, 5, 1), Gender.FEMALE, null)
@@ -68,7 +78,7 @@ class GaudiCsvExportServiceSpec extends Specification {
 
     def "all age groups: one CSV per non-empty age group x gender inside the ZIP"() {
         given:
-        rankingViewService.uniqueAgeGroupNamesYoungestFirst() >> ["U14", AgeGroupService.UNKNOWN_AGE_GROUP]
+        rankingViewService.uniqueAgeGroupNamesYoungestFirst(_) >> ["U14", AgeGroupService.UNKNOWN_AGE_GROUP]
         rankingViewService.ageGroupSectionLabel(_ as String) >> { String n -> n == AgeGroupService.UNKNOWN_AGE_GROUP ? "ohne Altersklasse" : n }
         rankingViewService.genderLabel(_ as Gender) >> { Gender g -> g == Gender.MALE ? "männlich" : "weiblich" }
         def fetcher = { Gender g, String ag ->

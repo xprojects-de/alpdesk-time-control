@@ -14,8 +14,8 @@ export class AgeGroupEffects {
     loadAgeGroups$ = createEffect(() =>
         this.actions$.pipe(
             ofType(AgeGroupActions.loadAgeGroups),
-            mergeMap(() =>
-                this.ageGroupService.getAll().pipe(
+            mergeMap(({season}) =>
+                this.ageGroupService.getAll(season).pipe(
                     map(ageGroups => AgeGroupActions.loadAgeGroupsSuccess({ageGroups})),
                     catchError(error =>
                         of(
@@ -57,6 +57,50 @@ export class AgeGroupEffects {
                         of(
                             AgeGroupActions.updateAgeGroupFailure({
                                 error: extractErrorMessage(error, "Altersgruppe konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    loadSeasons$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(AgeGroupActions.loadSeasons),
+            mergeMap(() =>
+                this.ageGroupService.getSeasons().pipe(
+                    map(({seasons, seasonsWithRaces, currentSeason}) =>
+                        // seasonsWithRaces defensively: in the dev setup `ng serve` talks to a
+                        // separately running backend, which can be older than the frontend.
+                        AgeGroupActions.loadSeasonsSuccess({
+                            seasons: seasons ?? [],
+                            seasonsWithRaces: seasonsWithRaces ?? [],
+                            currentSeason,
+                        }),
+                    ),
+                    catchError(error =>
+                        of(
+                            AgeGroupActions.loadSeasonsFailure({
+                                error: extractErrorMessage(error, "Saisons konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    copySeason$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(AgeGroupActions.copySeason),
+            mergeMap(({fromSeason, toSeason}) =>
+                this.ageGroupService.copySeason({fromSeason, toSeason}).pipe(
+                    map(ageGroups => AgeGroupActions.copySeasonSuccess({toSeason, ageGroups})),
+                    catchError(error =>
+                        of(
+                            AgeGroupActions.copySeasonFailure({
+                                error: extractErrorMessage(error, "Saison konnte nicht übernommen werden"),
                             }),
                         ),
                     ),

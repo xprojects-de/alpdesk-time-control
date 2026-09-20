@@ -51,7 +51,7 @@ public class RaceLiveService {
 
         switch (view) {
             case STARTLIST -> {
-                startList = rankingViewService.createStartListEntries(participants);
+                startList = rankingViewService.createStartListEntries(participants, race);
                 viewLabel = "Startliste";
             }
             case OVERALL -> {
@@ -79,7 +79,7 @@ public class RaceLiveService {
             }
             case ALL_AGEGROUPS -> {
                 viewLabel = "Alle Altersklassen";
-                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(race)) {
                     for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(
                                 participants, race, gender, ageGroupName, null, lookup);
@@ -118,7 +118,7 @@ public class RaceLiveService {
             case ALL_AGEGROUPS_BY_CATEGORY -> {
                 viewLabel = "Alle Altersklassen nach Kategorie";
                 List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
-                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(race)) {
                     for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                         for (Category category : categories) {
                             List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(

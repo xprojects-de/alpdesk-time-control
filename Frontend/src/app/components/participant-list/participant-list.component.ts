@@ -66,7 +66,13 @@ import {Actions, ofType} from "@ngrx/effects";
             <mat-card-header>
                 <mat-card-title>Teilnehmer</mat-card-title>
                 @if (selectedRace$ | async; as race) {
-                    <mat-card-subtitle>{{ raceLabel(race) }}</mat-card-subtitle>
+                    <mat-card-subtitle>
+                        {{ raceLabel(race) }}
+                        <!-- Which season's age groups this race is scored against. Shown once here
+                             rather than per row: every row of this table belongs to this one race
+                             and therefore to this one season. -->
+                        <span class="season-badge">Altersklassen: Saison {{ race.seasonYear }}</span>
+                    </mat-card-subtitle>
                 }
             </mat-card-header>
             <mat-card-content>
@@ -289,6 +295,16 @@ import {Actions, ofType} from "@ngrx/effects";
                 @if ((selectedRaceId$ | async) === null) {
                     <p class="hint">Bitte ein Rennen auswählen, um dessen Teilnehmer anzuzeigen.</p>
                 } @else {
+                    @if (noAgeGroupsForRace$ | async) {
+                        <div class="age-group-warning">
+                            <mat-icon>warning</mat-icon>
+                            <span>
+                                Kein Teilnehmer dieses Rennens hat eine Altersklasse. Altersklassen gelten pro Saison -
+                                prüfe unter <strong>Altersgruppen</strong>, ob für die Saison dieses Rennens welche
+                                angelegt sind. Auswertungen nach Altersklassen bleiben sonst leer.
+                            </span>
+                        </div>
+                    }
                     @if (loading$ | async) {
                         <div class="loading-container">
                             <mat-spinner diameter="30"></mat-spinner>
@@ -568,6 +584,32 @@ import {Actions, ofType} from "@ngrx/effects";
                 color: rgba(0, 0, 0, 0.6);
             }
 
+            .season-badge {
+                margin-left: 8px;
+                padding: 1px 8px;
+                border-radius: 10px;
+                background: rgba(0, 0, 0, 0.06);
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 11px;
+                white-space: nowrap;
+            }
+
+            .age-group-warning {
+                margin: 12px 0;
+                padding: 12px 16px;
+                display: flex;
+                /* flex-start, not center: this text is three lines wide on a typical window, and a
+                   vertically centred icon then floats next to the middle line. */
+                align-items: flex-start;
+                gap: 12px;
+                border-radius: 4px;
+                background: rgba(255, 171, 0, 0.12);
+            }
+
+            .age-group-warning mat-icon {
+                flex-shrink: 0;
+            }
+
             .comment-cell {
                 max-width: 200px;
                 overflow: hidden;
@@ -615,6 +657,15 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
+    /**
+     * True when this race has participants with a birth date but not one of them resolved to an age
+     * group. Since the backend resolves a participant's class against the season of their race,
+     * that is what a season with no age groups configured looks like from here - the most likely
+     * cause right after a season rollover. Derived from the loaded participants rather than from
+     * a separate lookup: the season a race falls into depends on the configured season boundary and
+     * is only known server-side.
+     */
+    noAgeGroupsForRace$: Observable<boolean>;
     /** The currently selected race's full record - used to check previousRaceId for the "Startreihenfolge übernehmen" button. */
     selectedRace$: Observable<Race | undefined>;
     loading$: Observable<boolean>;
@@ -722,6 +773,20 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.participants$ = this.store.select(ParticipantSelectors.selectFilteredParticipants);
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
+        // From participants$ (selectFilteredParticipants) rather than selectAllParticipants: that
+        // selector filters down to the selected race, whereas the store can still hold participants
+        // of other races depending on what was loaded before (mergeById in the reducer replaces,
+        // it never clears). Computed over the whole store, another race that does have age groups
+        // would swallow the warning for this one. The text search does not live here but in
+        // dataSource.filter, so this statement covers the whole race, as intended.
+        this.noAgeGroupsForRace$ = this.participants$.pipe(
+            map(
+                participants =>
+                    participants.length > 0 &&
+                    participants.some(p => p.person?.birthDate) &&
+                    participants.every(p => !p.ageGroup),
+            ),
+        );
         this.selectedRace$ = combineLatest([this.races$, this.selectedRaceId$]).pipe(
             map(([races, id]) => races.find(r => r.id === id)),
         );

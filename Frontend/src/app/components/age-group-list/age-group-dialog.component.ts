@@ -7,6 +7,15 @@ import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
 import {AgeGroup, AgeGroupRequest} from "../../models/age-group.model";
+
+/**
+ * An existing age group to edit, or just the season a new one is being created in - the dialog
+ * always needs the season, since a class's birth years are only meaningful together with it.
+ */
+export interface AgeGroupDialogData {
+    ageGroup: AgeGroup | null;
+    seasonYear: number;
+}
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {notBlank} from "../../utils/validators.util";
 
@@ -23,7 +32,8 @@ import {notBlank} from "../../utils/validators.util";
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data ? "Altersgruppe bearbeiten" : "Neue Altersgruppe" }}
+            {{ data.ageGroup ? "Altersgruppe bearbeiten" : "Neue Altersgruppe" }}
+            <span class="season-badge">Saison {{ data.seasonYear }}</span>
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="age-group-form">
@@ -38,6 +48,15 @@ import {notBlank} from "../../utils/validators.util";
                     }
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
                 </mat-form-field>
+
+                <!-- The season is shown in the title and deliberately not editable here: it
+                     belongs to the list currently on screen, not to the individual group. Making it
+                     editable would be the one way to write a group into a season the table next to
+                     it does not show. Switching seasons goes through the season selector. -->
+                <p class="season-note">
+                    Diese Geburtsjahrgänge gelten für <strong>Saison {{ data.seasonYear }}</strong
+                    >. Für eine andere Saison oben die Saison wechseln.
+                </p>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Geschlecht</mat-label>
@@ -104,13 +123,29 @@ import {notBlank} from "../../utils/validators.util";
             mat-form-field {
                 width: 100%;
             }
+
+            .season-note {
+                margin: 0 0 4px;
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 13px;
+            }
+
+            .season-badge {
+                margin-left: 8px;
+                padding: 2px 8px;
+                border-radius: 12px;
+                background: rgba(0, 0, 0, 0.08);
+                font-size: 0.7em;
+                font-weight: 500;
+                vertical-align: middle;
+            }
         `,
     ],
 })
 export class AgeGroupDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<AgeGroupDialogComponent>);
-    public data = inject<AgeGroup | null>(MAT_DIALOG_DATA);
+    public data = inject<AgeGroupDialogData>(MAT_DIALOG_DATA);
 
     form: FormGroup;
     genderOptions = [
@@ -122,14 +157,14 @@ export class AgeGroupDialogComponent {
     constructor() {
         this.form = this.fb.group(
             {
-                name: [this.data?.name || "", [Validators.required, notBlank()]],
-                gender: [this.data?.gender || "", Validators.required],
+                name: [this.data.ageGroup?.name || "", [Validators.required, notBlank()]],
+                gender: [this.data.ageGroup?.gender || "", Validators.required],
                 birthYearFrom: [
-                    this.data?.birthYearFrom || "",
+                    this.data.ageGroup?.birthYearFrom || "",
                     [Validators.required, Validators.min(1900), Validators.max(2100)],
                 ],
                 birthYearTo: [
-                    this.data?.birthYearTo || "",
+                    this.data.ageGroup?.birthYearTo || "",
                     [Validators.required, Validators.min(1900), Validators.max(2100)],
                 ],
             },
@@ -156,6 +191,9 @@ export class AgeGroupDialogComponent {
             const formValue = this.form.value;
             const ageGroup: AgeGroupRequest = {
                 name: formValue.name,
+                // From the dialog data, not from the form: editing keeps the group's own season,
+                // creating uses the one on screen - changing it here is not offered (see template).
+                seasonYear: this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
                 gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),
                 birthYearTo: Number(formValue.birthYearTo),

@@ -14,6 +14,7 @@ import {MatButtonModule} from "@angular/material/button";
 import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {TimingProviderLabels, TimingProviderSettings, TimingProviderType} from "../../models/timing-provider.model";
+import {SeasonSettingsComponent} from "./season-settings.component";
 import * as SettingsActions from "../../store/settings/settings.actions";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
 
@@ -33,8 +34,11 @@ const ALPDESK_CONFIG_FIELDS: {key: string; label: string; placeholder: string}[]
         MatButtonModule,
         MatProgressSpinnerModule,
         MatSnackBarModule,
+        SeasonSettingsComponent,
     ],
     template: `
+        <app-season-settings />
+
         <mat-card>
             <mat-card-header>
                 <mat-card-title>Zeitmessung</mat-card-title>

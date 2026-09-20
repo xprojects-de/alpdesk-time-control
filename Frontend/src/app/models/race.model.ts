@@ -27,6 +27,12 @@ export interface Race {
     id: number;
     name: string;
     date: string;
+    /**
+     * The season this race is scored in - and therefore which age groups apply to it. Derived by
+     * the backend from the date and the configured season boundary, so with a boundary other than
+     * 1 January this is NOT the calendar year of `date`. Read-only; never sent back.
+     */
+    seasonYear: number;
     organisation?: string;
     referee?: string;
     raceDirector?: string;

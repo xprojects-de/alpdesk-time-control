@@ -1,7 +1,7 @@
-import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
+import {combineLatest, Observable, Subject} from "rxjs";
 import {MatTableModule, MatTableDataSource} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -12,6 +12,8 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
+import {MatSelectModule} from "@angular/material/select";
+import {MatFormFieldModule} from "@angular/material/form-field";
 import {AgeGroup} from "../../models/age-group.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import * as AgeGroupActions from "../../store/age-group/age-group.actions";
@@ -35,6 +37,8 @@ import {Actions, ofType} from "@ngrx/effects";
         MatTooltipModule,
         MatSortModule,
         MatPaginatorModule,
+        MatSelectModule,
+        MatFormFieldModule,
     ],
     template: `
         <mat-card>
@@ -42,8 +46,66 @@ import {Actions, ofType} from "@ngrx/effects";
                 <mat-card-title>Altersgruppen</mat-card-title>
             </mat-card-header>
             <mat-card-content>
+                <div class="season-bar">
+                    <mat-form-field appearance="outline" class="season-select" subscriptSizing="dynamic">
+                        <mat-label>Saison</mat-label>
+                        <mat-select [value]="selectedSeason$ | async" (selectionChange)="onSeasonChange($event.value)">
+                            @for (season of seasonOptions(); track season) {
+                                <mat-option [value]="season">
+                                    {{ season }}
+                                    @if (season === (currentSeason$ | async)) {
+                                        <span class="season-hint">(aktuell)</span>
+                                    }
+                                </mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+
+                    @if (rolloverSource$ | async; as rolloverSource) {
+                        <!-- Same condition as the hint below, loading included: without it the
+                             button flashes up on every season switch, for as long as the list is
+                             still empty. -->
+                        @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
+                            <button
+                                mat-raised-button
+                                color="accent"
+                                (click)="copyFromSeason(rolloverSource)"
+                                matTooltip="Übernimmt alle Altersgruppen der Saison {{
+                                    rolloverSource
+                                }} und verschiebt die Geburtsjahrgänge entsprechend"
+                            >
+                                <mat-icon>content_copy</mat-icon>
+                                Aus Saison {{ rolloverSource }} übernehmen
+                            </button>
+                        }
+                    }
+                </div>
+
+                <!-- Only with a selected season: without one the season list never loaded at all
+                     (backend unreachable), and the hint would stand there with a blank year, making
+                     a statement about a season nobody has selected yet. -->
+                @if (selectedSeason$ | async; as shownSeason) {
+                    @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
+                        <div class="empty-season">
+                            <mat-icon>info</mat-icon>
+                            <span>
+                                Für die Saison {{ shownSeason }} sind keine Altersgruppen angelegt. Rennen dieser Saison
+                                werden ohne Altersklasse ausgewertet, bis hier welche existieren.
+                            </span>
+                        </div>
+                    }
+                }
+
                 <div class="header-actions">
-                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
+                    <!-- With no season loaded there is none to create the group in - and guessing
+                         the calendar year is exactly what tying groups to a season is meant to
+                         prevent. -->
+                    <button
+                        mat-raised-button
+                        color="primary"
+                        [disabled]="(selectedSeason$ | async) === null && (currentSeason$ | async) === null"
+                        (click)="openCreateDialog()"
+                    >
                         <mat-icon>add</mat-icon>
                         Neue Altersgruppe
                     </button>
@@ -134,6 +196,40 @@ import {Actions, ofType} from "@ngrx/effects";
     `,
     styles: [
         `
+            .season-bar {
+                margin-top: 20px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+
+            .season-select {
+                width: 160px;
+            }
+
+            .season-hint {
+                opacity: 0.6;
+                font-size: 0.85em;
+            }
+
+            .empty-season mat-icon {
+                flex-shrink: 0;
+            }
+
+            .empty-season {
+                margin-top: 16px;
+                padding: 12px 16px;
+                display: flex;
+                /* flex-start, not center: the text wraps to several lines on a narrow window, and
+                   a vertically centred icon then sits next to the middle line instead of the
+                   first one. */
+                align-items: flex-start;
+                gap: 12px;
+                border-radius: 4px;
+                background: rgba(255, 171, 0, 0.12);
+            }
+
             .header-actions {
                 margin-top: 20px;
                 margin-bottom: 20px;
@@ -174,6 +270,14 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
 
     ageGroups$: Observable<AgeGroup[]>;
     loading$: Observable<boolean>;
+    selectedSeason$: Observable<number | null>;
+    currentSeason$: Observable<number | null>;
+    rolloverSource$: Observable<number | null>;
+    // The seasons to offer: everything already configured, plus the current one even when it has
+    // nothing yet - otherwise there would be no way to select the season you want to set up.
+    seasonOptions = signal<number[]>([]);
+    private selectedSeason: number | null = null;
+    private currentSeason: number | null = null;
     displayedColumns = ["id", "name", "gender", "birthYearFrom", "birthYearTo", "actions"];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
@@ -184,6 +288,65 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     constructor() {
         this.ageGroups$ = this.store.select(AgeGroupSelectors.selectAllAgeGroups);
         this.loading$ = this.store.select(AgeGroupSelectors.selectAgeGroupLoading);
+        this.selectedSeason$ = this.store.select(AgeGroupSelectors.selectSelectedSeason);
+        this.currentSeason$ = this.store.select(AgeGroupSelectors.selectCurrentSeason);
+        this.rolloverSource$ = this.store.select(AgeGroupSelectors.selectRolloverSourceSeason);
+
+        combineLatest([
+            this.store.select(AgeGroupSelectors.selectAgeGroupSeasons),
+            // Seasons that have races but no age groups too: those are exactly the ones whose
+            // results come out "ohne Altersklasse", and exactly the ones that have to be selectable
+            // in order to fix that. After an upgrade to season-scoped age groups, every past season
+            // is in this state.
+            this.store.select(AgeGroupSelectors.selectSeasonsWithRaces),
+            this.currentSeason$,
+            this.selectedSeason$,
+        ])
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(([seasons, seasonsWithRaces, currentSeason, selectedSeason]) => {
+                const options = new Set([...seasons, ...seasonsWithRaces]);
+                if (currentSeason != null) {
+                    options.add(currentSeason);
+                }
+                // A season the operator explicitly navigated to stays selectable even after its
+                // last group was deleted - otherwise the select would clear itself mid-edit.
+                if (selectedSeason != null) {
+                    options.add(selectedSeason);
+                }
+                // Always offer one season beyond the furthest one that exists, so a new season is
+                // reachable before anything is configured for it - and stays reachable once it is:
+                // without this, setting up next year would make the year after that unselectable
+                // until the calendar caught up.
+                const furthest = Math.max(...options);
+                if (Number.isFinite(furthest)) {
+                    options.add(furthest + 1);
+                }
+                this.seasonOptions.set([...options].sort((a, b) => b - a));
+            });
+
+        // Kept around for openCreateDialog(), which has no async pipe outside the template.
+        this.currentSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => (this.currentSeason = season));
+
+        // Reload whenever the selected season changes - the table only ever shows one season.
+        this.selectedSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => {
+            this.selectedSeason = season;
+            if (season != null) {
+                this.store.dispatch(AgeGroupActions.loadAgeGroups({season}));
+            }
+        });
+
+        this.actions$
+            .pipe(ofType(AgeGroupActions.copySeasonSuccess), takeUntil(this.destroy$))
+            .subscribe(({toSeason, ageGroups}) => {
+                this.snackBar.open(
+                    `${ageGroups.length} Altersgruppen nach Saison ${toSeason} übernommen - bitte Jahrgänge prüfen`,
+                    "OK",
+                    {duration: 6000},
+                );
+            });
+        this.actions$.pipe(ofType(AgeGroupActions.copySeasonFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Übernehmen der Saison: ${error}`, "OK", {duration: 5000});
+        });
 
         this.actions$.pipe(ofType(AgeGroupActions.createAgeGroupSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Altersgruppe erfolgreich erstellt", "OK", {duration: 3000});
@@ -231,10 +394,48 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     ngAfterViewInit(): void {
-        this.store.dispatch(AgeGroupActions.loadAgeGroups());
+        // The season list drives everything else: its success action picks the default season,
+        // which in turn triggers the age-group load above.
+        this.store.dispatch(AgeGroupActions.loadSeasons());
         this.ageGroups$.pipe(takeUntil(this.destroy$)).subscribe(ageGroups => {
             this.dataSource.data = ageGroups;
         });
+    }
+
+    onSeasonChange(season: number): void {
+        this.store.dispatch(AgeGroupActions.selectSeason({season}));
+    }
+
+    copyFromSeason(fromSeason: number): void {
+        const toSeason = this.selectedSeason;
+        if (toSeason == null) {
+            return;
+        }
+        // The shift can be negative: a past season is filled from a later one (the normal case
+        // right after the upgrade to season-scoped age groups), and the birth years then move back
+        // instead of forward.
+        const shift = toSeason - fromSeason;
+        const years = Math.abs(shift) === 1 ? "1 Jahr" : `${Math.abs(shift)} Jahre`;
+        const direction = shift > 0 ? "nach vorne" : "zurück";
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "520px",
+                data: {
+                    message:
+                        `Alle Altersgruppen der Saison ${fromSeason} nach ${toSeason} übernehmen? ` +
+                        `Die Geburtsjahrgänge werden dabei um ${years} ${direction} verschoben ` +
+                        `(aus "U14 2013-2014" wird "U14 ${2013 + shift}-${2014 + shift}"). ` +
+                        `Feste Jahrgangsklassen musst du danach von Hand korrigieren.`,
+                    confirmLabel: "Übernehmen",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    this.store.dispatch(AgeGroupActions.copySeason({fromSeason, toSeason}));
+                }
+            });
     }
 
     ngOnDestroy(): void {
@@ -247,8 +448,17 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     openCreateDialog(): void {
+        // No fallback to the calendar year: with a moved season boundary that is not the current
+        // season, and creating an age group in the wrong year is exactly the mistake tying groups
+        // to a season is meant to prevent. The backend computes the current season; with none
+        // loaded the button above is disabled, so this is only closing the type.
+        const seasonYear = this.selectedSeason ?? this.currentSeason;
+        if (seasonYear == null) {
+            return;
+        }
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {
             width: "500px",
+            data: {ageGroup: null, seasonYear},
         });
 
         dialogRef
@@ -264,7 +474,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     openEditDialog(ageGroup: AgeGroup): void {
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {
             width: "500px",
-            data: ageGroup,
+            data: {ageGroup, seasonYear: ageGroup.seasonYear},
         });
 
         dialogRef
@@ -302,7 +512,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     refreshData(): void {
-        this.store.dispatch(AgeGroupActions.loadAgeGroups());
+        this.store.dispatch(AgeGroupActions.loadSeasons());
+        if (this.selectedSeason != null) {
+            this.store.dispatch(AgeGroupActions.loadAgeGroups({season: this.selectedSeason}));
+        }
         this.snackBar.open("Daten werden aktualisiert...", "OK", {
             duration: 2000,
         });

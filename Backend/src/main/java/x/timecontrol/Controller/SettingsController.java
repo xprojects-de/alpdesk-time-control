@@ -15,12 +15,16 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.SeasonSettingsRequest;
+import x.timecontrol.dto.SeasonSettingsResponse;
 import x.timecontrol.dto.TimingProviderSettingsRequest;
 import x.timecontrol.dto.TimingProviderSettingsResponse;
 import x.timecontrol.entities.AppSettings;
+import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.SettingsService;
 import x.timecontrol.services.TimingProviderRegistry;
 
+import java.time.MonthDay;
 import java.util.Map;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -41,6 +45,54 @@ public class SettingsController {
 
     @Inject
     TimingProviderRegistry timingProviderRegistry;
+
+    @Inject
+    SeasonService seasonService;
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/season")
+    @Operation(summary = "Get the season boundary and the season today falls into",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Season settings", content = @Content(schema = @Schema(implementation = SeasonSettingsResponse.class)))
+    public HttpResponse<SeasonSettingsResponse> getSeason() {
+        return HttpResponse.ok(seasonSettingsResponse());
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Put("/season")
+    @Operation(summary = "Move the season boundary",
+            description = "Which date a season year starts on, and with it which age groups apply to a race. The default 1/1 makes a season a calendar year; a club whose season spans the turn of the year can move it to e.g. 1 July so a December and a January race count as one season. Changing this re-assigns existing races to different seasons, so the UI confirms first.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Season boundary updated", content = @Content(schema = @Schema(implementation = SeasonSettingsResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Not a valid month/day combination")
+    public HttpResponse<?> updateSeason(@Body SeasonSettingsRequest request) {
+        if (request.seasonStartMonth() == null || request.seasonStartDay() == null) {
+            return HttpResponse.badRequest(new ErrorResponse("seasonStartMonth and seasonStartDay are required"));
+        }
+        MonthDay seasonStart;
+        try {
+            // MonthDay itself rejects an impossible combination such as 31 June, which would be a
+            // boundary that exists in no year at all.
+            seasonStart = MonthDay.of(request.seasonStartMonth(), request.seasonStartDay());
+        } catch (RuntimeException e) {
+            return HttpResponse.badRequest(new ErrorResponse(
+                    "Not a valid date: " + request.seasonStartDay() + "." + request.seasonStartMonth() + "."));
+        }
+        settingsService.updateSeasonStart(seasonStart);
+        return HttpResponse.ok(seasonSettingsResponse());
+    }
+
+    private SeasonSettingsResponse seasonSettingsResponse() {
+        MonthDay seasonStart = seasonService.seasonStart();
+        int currentSeason = seasonService.currentSeason();
+        return new SeasonSettingsResponse(
+                seasonStart.getMonthValue(),
+                seasonStart.getDayOfMonth(),
+                currentSeason,
+                seasonService.seasonStartDate(currentSeason),
+                seasonService.seasonEndDate(currentSeason));
+    }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get("/timing-provider")

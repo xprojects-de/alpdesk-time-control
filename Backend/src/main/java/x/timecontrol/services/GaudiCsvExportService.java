@@ -17,7 +17,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -37,13 +36,16 @@ public class GaudiCsvExportService {
 
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final RankingViewService rankingViewService;
 
     public GaudiCsvExportService(PersonService personService,
                                  AgeGroupService ageGroupService,
+                                 SeasonService seasonService,
                                  RankingViewService rankingViewService) {
         this.personService = personService;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.rankingViewService = rankingViewService;
     }
 
@@ -65,7 +67,7 @@ public class GaudiCsvExportService {
                                           BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
-            for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+            for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(headerRace)) {
                 for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (entries.isEmpty()) {
@@ -88,7 +90,11 @@ public class GaudiCsvExportService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+        // The header race is the Gaudi-Modus' first race, which is exactly the one
+        // {@link SeasonService#scoringSeasonOf} resolves the calculators' season from - so a combination
+        // spanning two seasons prints the same classes here as the ranking it accompanies, rather
+        // than each side picking its own.
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonService.seasonOf(headerRace));
 
         StringBuilder csv = new StringBuilder();
         csv.append(String.join(String.valueOf(DELIMITER), HEADER)).append('\n');

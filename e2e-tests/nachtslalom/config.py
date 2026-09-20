@@ -33,8 +33,12 @@ RACE2_NAME = "Nachtslalom Lauf 2"
 # processes Damen first - that makes applyStartOrderFromPreviousRace's *global* startSequence
 # numbering deterministic (Damen block gets the lower sequence numbers) instead of depending on
 # unspecified tie-break/insertion-order behavior between two equal-birthYearTo groups.
-DAMEN = {"name": "Damen", "birthYearFrom": 1950, "birthYearTo": 2015, "gender": "FEMALE"}
-HERREN = {"name": "Herren", "birthYearFrom": 1950, "birthYearTo": 2014, "gender": "MALE"}
+# Age groups are configured per season, and a race is assigned to a season by its date (default
+# boundary: 1 January, so a 2026-01-24 race is season 2026). This has to match RACE_SEASON, or the
+# participants resolve to no age group at all.
+RACE_SEASON = 2026
+DAMEN = {"name": "Damen", "seasonYear": RACE_SEASON, "birthYearFrom": 1950, "birthYearTo": 2015, "gender": "FEMALE"}
+HERREN = {"name": "Herren", "seasonYear": RACE_SEASON, "birthYearFrom": 1950, "birthYearTo": 2014, "gender": "MALE"}
 
 REVERSE_TOP_COUNT = 3
 
