@@ -85,8 +85,10 @@ export interface GaudiTeamMember {
 
 /** An entry excluded from a Gaudi-Modus ranking ("nicht gewertet"); for Los-Modus lastName carries the pair label. */
 export interface GaudiNotRankedEntry {
+    /** For LOS pairings this holds the whole pairing label and firstName is absent. */
     lastName: string;
-    firstName: string;
+    /** Omitted by the backend for LOS pairings (it sends an empty string, which serde drops). */
+    firstName?: string;
     team?: string;
     ageGroup: string;
     externalId?: string;

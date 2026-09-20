@@ -504,7 +504,9 @@ export class GaudiModeDetailComponent {
 
     /** Los-Modus puts the whole pair label into lastName (firstName empty). */
     notRankedName(entry: GaudiNotRankedEntry): string {
-        return `${entry.lastName} ${entry.firstName}`.trim();
+        // LOS pairings carry their whole label in lastName and have no firstName, so the two must
+        // not be concatenated blindly - that rendered "<pairing> undefined".
+        return [entry.lastName, entry.firstName].filter(Boolean).join(' ').trim();
     }
 
     memberSummary(entry: GaudiRankingEntry): string {

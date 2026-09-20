@@ -291,6 +291,10 @@ export const participantReducer = createReducer(
         copyLoading: false,
         copyResult: result
     })),
+    on(ParticipantActions.clearCopyResult, state => ({
+        ...state,
+        copyResult: null
+    })),
     on(ParticipantActions.copyParticipantsFailure, (state, {error}) => ({
         ...state,
         copyLoading: false,

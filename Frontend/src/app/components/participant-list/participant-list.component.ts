@@ -750,15 +750,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
         // Import/Copy/PDF-Export failures previously had no feedback at all: the loading spinner
         // just stopped with nothing telling the operator the roster wasn't actually there.
-        this.actions$.pipe(
-            ofType(ParticipantActions.importParticipantsCsvSuccess, ParticipantActions.importParticipantsMappedSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(({result}) => {
-            const message = result.skippedCount > 0
-                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
-                : `Import abgeschlossen: ${result.importedCount} importiert`;
-            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
-        });
+        // Import and copy successes are reported from their selectImportResult/selectCopyResult
+        // subscriptions below (they also open the skipped-rows dialog / reload the list), not from
+        // the success action - listening to both showed the same message twice.
         this.actions$.pipe(
             ofType(ParticipantActions.importParticipantsCsvFailure, ParticipantActions.importParticipantsMappedFailure),
             takeUntil(this.destroy$),
@@ -782,15 +776,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Ergebnis-Import: ${error}`, "OK", {duration: 8000, panelClass: "error-snackbar"});
         });
 
-        this.actions$.pipe(
-            ofType(ParticipantActions.copyParticipantsSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(({result}) => {
-            const message = result.skippedCount > 0
-                ? `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen`
-                : `Kopieren abgeschlossen: ${result.copiedCount} kopiert`;
-            this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
-        });
         this.actions$.pipe(
             ofType(ParticipantActions.copyParticipantsFailure),
             takeUntil(this.destroy$),
@@ -862,11 +847,10 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 if (!result) {
                     return;
                 }
-                this.snackBar.open(
-                    `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
-                    'OK',
-                    {duration: 5000},
-                );
+                const message = result.skippedCount > 0
+                    ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                    : `Import abgeschlossen: ${result.importedCount} importiert`;
+                this.snackBar.open(message, 'OK', {duration: result.skippedCount > 0 ? 8000 : 3000});
                 const errors = result.errors ?? [];
                 if (errors.length > 0) {
                     const details = errors
@@ -891,12 +875,14 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 if (!result) {
                     return;
                 }
-                this.snackBar.open(
-                    `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen (bereits vorhanden)`,
-                    'OK',
-                    {duration: 5000},
-                );
+                const message = result.skippedCount > 0
+                    ? `Kopieren abgeschlossen: ${result.copiedCount} kopiert, ${result.skippedCount} übersprungen (bereits vorhanden)`
+                    : `Kopieren abgeschlossen: ${result.copiedCount} kopiert`;
+                this.snackBar.open(message, 'OK', {duration: result.skippedCount > 0 ? 8000 : 3000});
                 this.store.dispatch(ParticipantActions.loadParticipants());
+                // Without this the result stays in the store and this whole block runs again on
+                // every re-mount of the list (stale message plus a pointless reload).
+                this.store.dispatch(ParticipantActions.clearCopyResult());
             });
     }
 

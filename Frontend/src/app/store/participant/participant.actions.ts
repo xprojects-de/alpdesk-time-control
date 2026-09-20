@@ -221,6 +221,10 @@ export const importParticipantsMappedFailure = createAction(
 // participant list (e.g. by navigating away and back) doesn't re-display stale import errors.
 export const clearImportResult = createAction('[Participant] Clear Import Result');
 
+// Same for the last copy result - without this it would survive in the store and re-trigger the
+// participant list's copy feedback (and its reload) every time the list is re-mounted.
+export const clearCopyResult = createAction('[Participant] Clear Copy Result');
+
 // Import results (time/status) for existing participants, matched by race number - never creates a
 // participant. Kept entirely separate from the roster import above (different response shape,
 // different state slice) so it can't regress it.
