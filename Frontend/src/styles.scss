@@ -104,4 +104,9 @@ body {
   // Both class names, so this wins over Material's own .mat-mdc-select-panel padding regardless
   // of which stylesheet the browser sees last.
   padding-top: 0;
+
+  // [panelWidth]="null" lets the panel grow past the (often narrow) form field instead of wrapping
+  // every "Name · Datum" onto two lines, which would halve how many races fit on screen. The cap
+  // keeps a long race name from stretching the panel across the whole window.
+  max-width: 480px;
 }

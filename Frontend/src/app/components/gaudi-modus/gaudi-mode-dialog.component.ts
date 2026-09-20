@@ -16,6 +16,7 @@ import {Observable, Subject} from "rxjs";
 import {take, takeUntil} from "rxjs/operators";
 import {selectAllRaces} from "../../store/race/race.selectors";
 import {RaceSelectComponent} from "../shared/race-select/race-select.component";
+import {raceLabel} from "../../utils/race-label.util";
 import * as PointsScaleActions from "../../store/points-scale/points-scale.actions";
 import * as PointsScaleSelectors from "../../store/points-scale/points-scale.selectors";
 import {Race} from "../../models/race.model";
@@ -365,11 +366,7 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
 
     raceName(raceId: number): string {
         const race = this.allRaces.find(r => r.id === raceId);
-        if (!race) {
-            return String(raceId);
-        }
-        const parts = race.date?.split("-") ?? [];
-        return parts.length === 3 ? `${race.name} · ${parts[2]}.${parts[1]}.${parts[0]}` : race.name;
+        return race ? raceLabel(race) : String(raceId);
     }
 
     onRacesSelected(raceIds: number[]): void {

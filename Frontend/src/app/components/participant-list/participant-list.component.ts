@@ -15,6 +15,7 @@ import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceSelectComponent} from "../shared/race-select/race-select.component";
+import {raceLabel} from "../../utils/race-label.util";
 import {MatInputModule} from "@angular/material/input";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
@@ -64,6 +65,9 @@ import {Actions, ofType} from "@ngrx/effects";
         <mat-card>
             <mat-card-header>
                 <mat-card-title>Teilnehmer</mat-card-title>
+                @if (selectedRace$ | async; as race) {
+                    <mat-card-subtitle>{{ raceLabel(race) }}</mat-card-subtitle>
+                }
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
@@ -602,6 +606,13 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
+    /**
+     * Name plus date of the race the list is showing, in the card header. The picker's own trigger
+     * is capped by the field width and cuts the date off exactly where two races share a name, so
+     * the header is what actually answers "am I in the right race?" at the venue.
+     */
+    protected readonly raceLabel = raceLabel;
+
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
     /** The currently selected race's full record - used to check previousRaceId for the "Startreihenfolge übernehmen" button. */

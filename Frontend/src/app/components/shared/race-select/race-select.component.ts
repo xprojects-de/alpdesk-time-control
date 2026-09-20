@@ -4,6 +4,7 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatIconModule} from "@angular/material/icon";
 import {MatSelectModule} from "@angular/material/select";
 import {Race} from "../../../models/race.model";
+import {formatRaceDate, raceLabel} from "../../../utils/race-label.util";
 
 /** A single race id (or null) in single mode, the list of selected ids in multiple mode. */
 export type RaceSelectValue = number | number[] | null;
@@ -30,6 +31,7 @@ export type RaceSelectValue = number | number[] | null;
                 (selectionChange)="onSelectionChange($event.value)"
                 (openedChange)="onOpenedChange($event)"
                 panelClass="race-select-panel"
+                [panelWidth]="null"
             >
                 @if (multiple() && selectedIds().length > 0) {
                     <mat-select-trigger>{{ triggerLabel() }}</mat-select-trigger>
@@ -57,7 +59,12 @@ export type RaceSelectValue = number | number[] | null;
                     <mat-option [value]="null">{{ emptyOptionLabel() }}</mat-option>
                 }
                 @for (race of visibleRaces(); track race.id) {
-                    <mat-option [value]="race.id">{{ raceLabel(race) }}</mat-option>
+                    <mat-option [value]="race.id">
+                        {{ race.name }}
+                        @if (formatRaceDate(race.date); as date) {
+                            <span class="race-select-date">· {{ date }}</span>
+                        }
+                    </mat-option>
                 }
                 @if (visibleRaces().length === 0) {
                     <div class="race-select-empty">Kein Rennen gefunden</div>
@@ -120,6 +127,20 @@ export type RaceSelectValue = number | number[] | null;
 
             .race-select-search mat-icon {
                 color: var(--mat-sys-on-surface-variant);
+            }
+
+            /*
+             * The date is what tells two races of the same name apart, so it has to be readable -
+             * but the name is what you scan for, so the date stays visually secondary. Deliberately
+             * on the same line rather than a second one: a two-line option nearly halves how many
+             * races fit on screen, which works against the very problem the search solves.
+             */
+            .race-select-date {
+                margin-left: 4px;
+                color: var(--mat-sys-on-surface-variant);
+                font-size: 0.9em;
+                /* Keeps the separator glued to the date, so it never dangles at a line break. */
+                white-space: nowrap;
             }
 
             .race-select-empty {
@@ -232,14 +253,9 @@ export class RaceSelectComponent implements ControlValueAccessor {
     triggerLabel = computed(() => {
         const ids = this.selectedIds();
         const first = this.races().find(race => race.id === ids[0]);
-        const firstLabel = first ? this.raceLabel(first) : String(ids[0] ?? "");
+        const firstLabel = first ? raceLabel(first) : String(ids[0] ?? "");
         return ids.length > 1 ? `${firstLabel} (+${ids.length - 1} weitere)` : firstLabel;
     });
-
-    raceLabel(race: Race): string {
-        const date = this.formatDate(race.date);
-        return date ? `${race.name} · ${date}` : race.name;
-    }
 
     onSelectionChange(selection: RaceSelectValue): void {
         let next = selection;
@@ -324,14 +340,11 @@ export class RaceSelectComponent implements ControlValueAccessor {
         return [...races].sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
     }
 
-    private matches(race: Race, terms: string[]): boolean {
-        const haystack = `${race.name.toLowerCase()} ${race.date} ${this.formatDate(race.date)}`;
-        return terms.every(term => haystack.includes(term));
-    }
+    /** Exposed for the option template, which renders name and date as separate elements. */
+    protected readonly formatRaceDate = formatRaceDate;
 
-    /** ISO date as the German-speaking race officials read it; empty for anything unparseable. */
-    private formatDate(dateString: string): string {
-        const parts = dateString?.split("-") ?? [];
-        return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : (dateString ?? "");
+    private matches(race: Race, terms: string[]): boolean {
+        const haystack = `${race.name.toLowerCase()} ${race.date} ${formatRaceDate(race.date)}`;
+        return terms.every(term => haystack.includes(term));
     }
 }
