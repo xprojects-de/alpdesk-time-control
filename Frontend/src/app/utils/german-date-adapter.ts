@@ -32,6 +32,12 @@ export class GermanDateAdapter extends NativeDateAdapter {
         return super.parse(value);
     }
 
+    // `Object` (not `object`) on purpose: it mirrors Angular Material's own NativeDateAdapter
+    // signature, and the value actually passed here is the string "input" from DE_DATE_FORMATS in
+    // app.config.ts - assignable to `Object` but not to `object`, so narrowing the type breaks the
+    // comparison below (TS2367) and with it the build. The disable keeps `ng lint --fix` from
+    // "fixing" it again.
+    // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
     override format(date: Date, displayFormat: Object): string {
         if (displayFormat === 'input') {
             const day = date.getDate();

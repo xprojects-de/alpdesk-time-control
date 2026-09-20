@@ -49,6 +49,11 @@ module.exports = defineConfig([
       angular.configs.templateAccessibility,
       prettierRecommended,
     ],
-    rules: {},
+    rules: {
+      // Without an explicit parser, eslint-plugin-prettier infers a JS parser for template files
+      // and "formats" them as JSX - it turned app.html's `<router-outlet />` into
+      // `<router-outlet />;`, i.e. a stray semicolon rendered as text in the app.
+      "prettier/prettier": ["error", {parser: "angular"}],
+    },
   },
 ]);
