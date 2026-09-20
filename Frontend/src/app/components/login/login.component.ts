@@ -2,8 +2,9 @@ import {
     Component,
     OnInit,
     inject,
-    OnDestroy,
+    DestroyRef,
 } from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -13,7 +14,7 @@ import {
 } from "@angular/forms";
 import {Router} from "@angular/router";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
+import {Observable} from "rxjs";
 import {MatCardModule} from "@angular/material/card";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
@@ -22,7 +23,6 @@ import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatIconModule} from "@angular/material/icon";
 import * as AuthActions from "../../store/auth/auth.actions";
 import * as AuthSelectors from "../../store/auth/auth.selectors";
-import {takeUntil} from "rxjs/operators";
 
 @Component({
     selector: "app-login",
@@ -189,11 +189,12 @@ import {takeUntil} from "rxjs/operators";
         `,
     ],
 })
-export class LoginComponent implements OnInit, OnDestroy {
+export class LoginComponent implements OnInit {
     private fb = inject(FormBuilder);
     private store = inject(Store);
     private router = inject(Router);
-    private destroy$ = new Subject<void>();
+    // ngOnInit runs outside the injection context, so takeUntilDestroyed needs this explicitly.
+    private destroyRef = inject(DestroyRef);
 
     loginForm: FormGroup;
     loading$: Observable<boolean>;
@@ -212,17 +213,12 @@ export class LoginComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         this.store
             .select(AuthSelectors.selectIsAuthenticated)
-            .pipe(takeUntil(this.destroy$))
+            .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe((isAuthenticated) => {
                 if (isAuthenticated) {
                     this.router.navigate(["/dashboard"]).then();
                 }
             });
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     onSubmit(): void {

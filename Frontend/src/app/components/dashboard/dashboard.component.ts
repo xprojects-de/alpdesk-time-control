@@ -1,9 +1,10 @@
-import {Component, inject, signal, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, signal, OnInit, OnDestroy, DestroyRef} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
-import {distinctUntilChanged, filter, map, takeUntil} from "rxjs/operators";
+import {Observable} from "rxjs";
+import {distinctUntilChanged, filter, map} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
 import {MatDividerModule} from "@angular/material/divider";
@@ -246,7 +247,8 @@ interface NavItem {
 })
 export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
-    private destroy$ = new Subject<void>();
+    // ngOnInit runs outside the injection context, so takeUntilDestroyed needs this explicitly.
+    private destroyRef = inject(DestroyRef);
     username$: Observable<string | null>;
     deviceConnectionStatus$: Observable<'connected' | 'disconnected' | 'unknown'>;
     version$: Observable<VersionInfo | null>;
@@ -331,7 +333,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // previous interval), so this also picks up a provider switch made on the Settings page
         // without needing a dashboard reload.
         this.timingProviderActive$.pipe(
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(this.destroyRef),
         ).subscribe(active => {
             if (active) {
                 this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
@@ -342,9 +344,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         });
     }
 
+    // Kept despite takeUntilDestroyed: unsubscribing locally does not stop the two polling
+    // effects, they need their explicit stop actions.
     ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
         // Stop polling when component is destroyed
         this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
         this.store.dispatch(BackendHealthActions.stopBackendHealthPolling());

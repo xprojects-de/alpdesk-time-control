@@ -126,6 +126,13 @@ Angular 22 standalone-style app using Angular Material and NgRx.
   selectors rather than calling services directly.
 - **components/**: one folder per feature/page, matching the store slices (race-list,
   participant-list, measurement-list, gaudi-modus, settings, etc.).
+- **Subscription cleanup**: existing components use a `private destroy$ = new Subject<void>()` plus
+  `takeUntil(this.destroy$)` and an `ngOnDestroy` — that is correct and stays as is; don't convert
+  them wholesale. New components (and ones being reworked anyway) use Angular's
+  `takeUntilDestroyed()` from `@angular/core/rxjs-interop` instead — without an argument only inside
+  an injection context (constructor/field initializer), otherwise with an injected `DestroyRef`.
+  `race-live-links-dialog.component.ts` is the reference for the new style. Both patterns coexisting
+  is intentional.
 - **guards/auth.guard.ts** + **interceptors/auth.interceptor.ts**: route guarding and attaching the
   JWT bearer token to outgoing requests, backed by `store/auth`.
 - **environments/**: `environment.ts` (dev) hardcodes `apiUrl: 'http://localhost:18000'`, relying on
