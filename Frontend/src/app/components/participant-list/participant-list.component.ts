@@ -499,7 +499,11 @@ import {Actions, ofType} from "@ngrx/effects";
                     <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
 
                     <div class="count-info" [class.hidden]="loading$ | async">
-                        Anzahl der Teilnehmer: {{ dataSource.data.length }}
+                        @if (searchTerm()) {
+                            Anzahl der Teilnehmer: {{ dataSource.filteredData.length }} von {{ dataSource.data.length }}
+                        } @else {
+                            Anzahl der Teilnehmer: {{ dataSource.data.length }}
+                        }
                     </div>
                 }
             </mat-card-content>

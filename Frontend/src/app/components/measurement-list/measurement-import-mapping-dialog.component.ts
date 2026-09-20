@@ -1,6 +1,6 @@
 import {Component, inject, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {FormBuilder, FormGroup, ReactiveFormsModule} from "@angular/forms";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {MatDialogRef, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatButtonModule} from "@angular/material/button";
@@ -118,7 +118,12 @@ export interface MeasurementImportMappingDialogResult {
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button mat-raised-button color="primary" [disabled]="!preview() || previewLoading()" (click)="onImport()">
+            <button
+                mat-raised-button
+                color="primary"
+                [disabled]="!preview() || previewLoading() || mappingForm.invalid"
+                (click)="onImport()"
+            >
                 Importieren
             </button>
         </mat-dialog-actions>
@@ -199,7 +204,14 @@ export class MeasurementImportMappingDialogComponent {
     previewError = signal<string | null>(null);
     preview = signal<MeasurementImportPreviewResponse | null>(null);
 
-    mappingForm: FormGroup = this.fb.group(Object.fromEntries(this.targetFields.map(field => [field.key, [""]])));
+    // Mirrors participant-result-import-mapping-dialog: without Validators.required the '*' next to
+    // a required field's label is just decoration, the Import button stays enabled with nothing
+    // mapped for it, and every single row then fails server-side instead of being caught here.
+    mappingForm: FormGroup = this.fb.group(
+        Object.fromEntries(
+            this.targetFields.map(field => [field.key, ["", field.required ? Validators.required : []]]),
+        ),
+    );
 
     onFileSelected(event: Event): void {
         const input = event.target as HTMLInputElement;
