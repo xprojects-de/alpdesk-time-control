@@ -19,6 +19,7 @@ import {StartGroupTemplateDialogComponent} from "./start-group-template-dialog.c
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
+import {formatStartGroupOffset} from "../../utils/start-group-offset.util";
 
 @Component({
     selector: "app-start-group-template-list",
@@ -324,12 +325,5 @@ export class StartGroupTemplateListComponent implements AfterViewInit, OnDestroy
         });
     }
 
-    formatOffset(offsetSeconds: number | null | undefined): string {
-        if (offsetSeconds == null) {
-            return "-";
-        }
-        const minutes = Math.floor(offsetSeconds / 60);
-        const seconds = offsetSeconds % 60;
-        return minutes > 0 ? `${minutes} min ${seconds} s` : `${seconds} s`;
-    }
+    protected readonly formatOffset = formatStartGroupOffset;
 }

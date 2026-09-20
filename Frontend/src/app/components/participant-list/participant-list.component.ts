@@ -39,6 +39,11 @@ import {
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil, take, map} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
+import {
+    findImplausibleStartGroupOffsets,
+    formatStartGroupOffset,
+    ImplausibleStartGroupOffset,
+} from "../../utils/start-group-offset.util";
 
 @Component({
     selector: "app-participant-list",
@@ -302,6 +307,19 @@ import {Actions, ofType} from "@ngrx/effects";
                                 Kein Teilnehmer dieses Rennens hat eine Altersklasse. Altersklassen gelten pro Saison -
                                 prüfe unter <strong>Altersgruppen</strong>, ob für die Saison dieses Rennens welche
                                 angelegt sind. Auswertungen nach Altersklassen bleiben sonst leer.
+                            </span>
+                        </div>
+                    }
+                    @for (offset of implausibleStartGroupOffsets$ | async; track offset.label) {
+                        <div class="start-group-warning">
+                            <mat-icon>warning</mat-icon>
+                            <span>
+                                Der Zeitversatz der Startgruppe <strong>{{ offset.label }}</strong> ({{
+                                    formatStartGroupOffset(offset.offsetSeconds)
+                                }}) ist größer als die schnellste gemessene Zeit dieser Gruppe ({{
+                                    formatDuration(offset.fastestMs)
+                                }}). {{ affectedResultsLabel(offset.affected) }} dadurch als 0:00.00 gewertet. Prüfe den
+                                Zeitversatz unter <strong>Startgruppen</strong>.
                             </span>
                         </div>
                     }
@@ -594,7 +612,8 @@ import {Actions, ofType} from "@ngrx/effects";
                 white-space: nowrap;
             }
 
-            .age-group-warning {
+            .age-group-warning,
+            .start-group-warning {
                 margin: 12px 0;
                 padding: 12px 16px;
                 display: flex;
@@ -606,7 +625,10 @@ import {Actions, ofType} from "@ngrx/effects";
                 background: rgba(255, 171, 0, 0.12);
             }
 
-            .age-group-warning mat-icon {
+            .age-group-warning mat-icon,
+            .start-group-warning mat-icon {
+                /* Without this the icon is a shrinkable flex item: it collapses to almost nothing
+                   and the text runs over it. */
                 flex-shrink: 0;
             }
 
@@ -654,6 +676,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
      * the header is what actually answers "am I in the right race?" at the venue.
      */
     protected readonly raceLabel = raceLabel;
+    protected readonly formatStartGroupOffset = formatStartGroupOffset;
 
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
@@ -666,6 +689,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
      * is only known server-side.
      */
     noAgeGroupsForRace$: Observable<boolean>;
+    implausibleStartGroupOffsets$: Observable<ImplausibleStartGroupOffset[]>;
     /** The currently selected race's full record - used to check previousRaceId for the "Startreihenfolge übernehmen" button. */
     selectedRace$: Observable<Race | undefined>;
     loading$: Observable<boolean>;
@@ -787,6 +811,9 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     participants.every(p => !p.ageGroup),
             ),
         );
+        // Same source and same reasoning as noAgeGroupsForRace$ above: scoped to the selected
+        // race, so another race's plausible offsets cannot mask this one's.
+        this.implausibleStartGroupOffsets$ = this.participants$.pipe(map(findImplausibleStartGroupOffsets));
         this.selectedRace$ = combineLatest([this.races$, this.selectedRaceId$]).pipe(
             map(([races, id]) => races.find(r => r.id === id)),
         );
@@ -1113,6 +1140,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
             parts.push(`(${this.penaltySign(participant)} Strafe)`);
         }
         return parts.join(" ");
+    }
+
+    /** Correct German for one vs. several results - the count is data, the verb has to follow it. */
+    affectedResultsLabel(count: number): string {
+        return count === 1 ? "Ein Ergebnis wird" : `${count} Ergebnisse werden`;
     }
 
     formatDuration(ms: number): string {
