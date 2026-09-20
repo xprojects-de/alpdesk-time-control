@@ -15,6 +15,8 @@ import {Actions, ofType} from "@ngrx/effects";
 import {Observable, Subject} from "rxjs";
 import {take, takeUntil} from "rxjs/operators";
 import {selectAllRaces} from "../../store/race/race.selectors";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
+import {raceLabel} from "../../utils/race-label.util";
 import * as PointsScaleActions from "../../store/points-scale/points-scale.actions";
 import * as PointsScaleSelectors from "../../store/points-scale/points-scale.selectors";
 import {Race} from "../../models/race.model";
@@ -48,6 +50,7 @@ export interface GaudiModeDialogData {
         MatIconModule,
         MatTooltipModule,
         MatSnackBarModule,
+        RaceSelectComponent,
     ],
     template: `
         <h2 mat-dialog-title>{{ isEdit ? "Gaudi-Modus bearbeiten" : "Neuer Gaudi-Modus" }}</h2>
@@ -72,24 +75,20 @@ export interface GaudiModeDialogData {
                 </mat-form-field>
 
                 @if (isCombination()) {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select
-                            [value]="selectedRaceIds"
-                            (selectionChange)="onRacesSelected($event.value)"
-                            multiple
-                            required
-                        >
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                        <mat-hint>Mindestens zwei Rennen auswählen</mat-hint>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceIds"
+                        [multiple]="true"
+                        [required]="true"
+                        hint="Mindestens zwei Rennen auswählen"
+                        (valueChange)="onRacesSelected($any($event))"
+                    />
 
                     @if (form.value.type === gaudiModeType.POINTS_COMBINATION && selectedRaceIds.length > 0) {
                         <div class="weights-section">
-                            <span class="weights-label">Gewichtung je Rennen</span>
+                            <span class="weights-label"
+                                >Gewichtung je Rennen (Reihenfolge = Reihenfolge der Läufe)</span
+                            >
                             @for (raceId of selectedRaceIds; track raceId) {
                                 <div class="weight-row">
                                     <span class="weight-race-name">{{ raceName(raceId) }}</span>
@@ -133,18 +132,12 @@ export interface GaudiModeDialogData {
                         </div>
                     }
                 } @else {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select
-                            [value]="selectedRaceIds[0] ?? null"
-                            (selectionChange)="onSingleRaceSelected($event.value)"
-                            required
-                        >
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceIds[0] ?? null"
+                        [required]="true"
+                        (valueChange)="onSingleRaceSelected($any($event))"
+                    />
                 }
 
                 @if (form.value.type === gaudiModeType.TEAM) {
@@ -203,7 +196,8 @@ export interface GaudiModeDialogData {
                 margin-top: 16px;
             }
 
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 width: 100%;
             }
 
@@ -371,7 +365,8 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     }
 
     raceName(raceId: number): string {
-        return this.allRaces.find(r => r.id === raceId)?.name ?? String(raceId);
+        const race = this.allRaces.find(r => r.id === raceId);
+        return race ? raceLabel(race) : String(raceId);
     }
 
     onRacesSelected(raceIds: number[]): void {

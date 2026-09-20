@@ -11,7 +11,7 @@ import {MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {MatSelectModule} from "@angular/material/select";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceMeasurement} from "../../models/race-measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
@@ -43,7 +43,7 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
         MatSnackBarModule,
         MatCardModule,
         MatTooltipModule,
-        MatSelectModule,
+        RaceSelectComponent,
         MatFormFieldModule,
     ],
     template: `
@@ -53,16 +53,11 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async" (selectionChange)="onRaceChange($event.value)">
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id"
-                                    >{{ race.name }} ({{ formatRaceDate(race.date) }})
-                                </mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        (valueChange)="onRaceChange($any($event))"
+                    />
                 </div>
 
                 @if (selectedRaceId$ | async; as selectedRaceId) {
@@ -206,7 +201,8 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                 position: relative;
             }
 
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 min-width: 250px;
             }
 
@@ -382,17 +378,6 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         } else {
             return `${seconds}.${String(milliseconds).padStart(3, "0")}s`;
         }
-    }
-
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const year = parts[0];
-            const month = parts[1];
-            const day = parts[2];
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
     }
 
     openEditDialog(raceMeasurement: RaceMeasurement): void {

@@ -10,8 +10,7 @@ import {MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {MatSelectModule} from "@angular/material/select";
-import {MatFormFieldModule} from "@angular/material/form-field";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {take, takeUntil} from "rxjs/operators";
 import {Race} from "../../models/race.model";
 import {GaudiMode, GaudiModeType, GaudiModeTypeLabels} from "../../models/gaudi-mode.model";
@@ -37,8 +36,7 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
         MatSnackBarModule,
         MatCardModule,
         MatTooltipModule,
-        MatSelectModule,
-        MatFormFieldModule,
+        RaceSelectComponent,
         GaudiModeDetailComponent,
     ],
     template: `
@@ -48,18 +46,13 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select
-                            [value]="selectedRaceId$ | async"
-                            (selectionChange)="onRaceFilterChange($event.value)"
-                        >
-                            <mat-option [value]="null">Alle Rennen</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        label="Nach Rennen filtern"
+                        emptyOptionLabel="Alle Rennen"
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        (valueChange)="onRaceFilterChange($any($event))"
+                    />
 
                     <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
@@ -158,7 +151,7 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
                 margin: 20px;
             }
 
-            mat-form-field {
+            app-race-select {
                 min-width: 250px;
             }
         `,

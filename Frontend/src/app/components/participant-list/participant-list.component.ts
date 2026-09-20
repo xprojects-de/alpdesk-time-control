@@ -13,8 +13,9 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
-import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
+import {raceLabel} from "../../utils/race-label.util";
 import {MatInputModule} from "@angular/material/input";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
@@ -54,33 +55,29 @@ import {Actions, ofType} from "@ngrx/effects";
         MatTooltipModule,
         MatSortModule,
         MatPaginatorModule,
-        MatSelectModule,
         MatFormFieldModule,
         MatInputModule,
         MatMenuModule,
         MatDividerModule,
+        RaceSelectComponent,
     ],
     template: `
         <mat-card>
             <mat-card-header>
                 <mat-card-title>Teilnehmer</mat-card-title>
+                @if (selectedRace$ | async; as race) {
+                    <mat-card-subtitle>{{ raceLabel(race) }}</mat-card-subtitle>
+                }
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select
-                            [value]="selectedRaceId$ | async"
-                            (selectionChange)="onRaceFilterChange($event.value)"
-                        >
-                            <mat-option [value]="null">Rennen auswählen...</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id"
-                                    >{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option
-                                >
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        label="Nach Rennen filtern"
+                        emptyOptionLabel="Rennen auswählen..."
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        (valueChange)="onRaceFilterChange($any($event))"
+                    />
                     @if ((selectedRaceId$ | async) !== null) {
                         <mat-form-field appearance="outline" class="search-field">
                             <mat-label>Suche (Name, Vorname, Startnummer)</mat-label>
@@ -552,7 +549,8 @@ import {Actions, ofType} from "@ngrx/effects";
                 color: black;
             }
 
-            mat-form-field {
+            mat-form-field,
+            app-race-select {
                 min-width: 250px;
             }
 
@@ -608,6 +606,13 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     private destroy$ = new Subject<void>();
 
     participants$: Observable<Participant[]>;
+    /**
+     * Name plus date of the race the list is showing, in the card header. The picker's own trigger
+     * is capped by the field width and cuts the date off exactly where two races share a name, so
+     * the header is what actually answers "am I in the right race?" at the venue.
+     */
+    protected readonly raceLabel = raceLabel;
+
     races$: Observable<Race[]>;
     selectedRaceId$: Observable<number | null>;
     /** The currently selected race's full record - used to check previousRaceId for the "Startreihenfolge übernehmen" button. */
@@ -983,17 +988,6 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     getStatusLabel(status: DisqualificationStatus): string {
         return ParticipantListComponent.STATUS_LABELS[status] ?? status;
-    }
-
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const year = parts[0];
-            const month = parts[1];
-            const day = parts[2];
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
     }
 
     formatResultValue(participant: Participant): string {

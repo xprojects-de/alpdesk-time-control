@@ -8,7 +8,7 @@ import {DragDropModule, CdkDragDrop, moveItemInArray, transferArrayItem} from "@
 import {MatCardModule} from "@angular/material/card";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
-import {MatSelect, MatSelectModule} from "@angular/material/select";
+import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatTooltipModule} from "@angular/material/tooltip";
@@ -29,6 +29,7 @@ import * as StartGroupTemplateActions from "../../store/start-group-template/sta
 import * as StartGroupTemplateSelectors from "../../store/start-group-template/start-group-template.selectors";
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {StartGroupCopyDialogComponent, StartGroupCopyDialogData} from "./start-group-copy-dialog.component";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 
 interface DraftEntry {
     participant: Participant;
@@ -59,6 +60,7 @@ interface BoardColumn {
         MatDialogModule,
         MatSnackBarModule,
         MatProgressSpinnerModule,
+        RaceSelectComponent,
     ],
     template: `
         <mat-card>
@@ -67,19 +69,13 @@ interface BoardColumn {
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select
-                            #raceSelect="matSelect"
-                            [value]="selectedRaceId$ | async"
-                            (selectionChange)="onRaceChange($event.value)"
-                        >
-                            <mat-option [value]="null">Rennen auswählen...</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        #raceSelect
+                        emptyOptionLabel="Rennen auswählen..."
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        (valueChange)="onRaceChange($any($event))"
+                    />
                 </div>
 
                 @if ((selectedRaceId$ | async) === null) {
@@ -439,7 +435,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
     dirty = false;
     hasResults = false;
 
-    raceSelect = viewChild<MatSelect>("raceSelect");
+    raceSelect = viewChild<RaceSelectComponent>("raceSelect");
 
     private currentRaceId: number | null = null;
     private latestTemplates: StartGroupTemplate[] = [];
