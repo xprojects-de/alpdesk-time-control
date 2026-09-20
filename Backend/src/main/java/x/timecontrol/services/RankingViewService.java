@@ -43,14 +43,16 @@ public class RankingViewService {
     public static final Category NO_CATEGORY = new Category(NO_CATEGORY_ID, "Ohne Kategorie");
 
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final CategoryService categoryService;
     private final TeamService teamService;
     private final PersonService personService;
     private final RankingService rankingService;
     private final StartGroupTemplateService startGroupTemplateService;
 
-    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService) {
+    public RankingViewService(AgeGroupService ageGroupService, SeasonService seasonService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService) {
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.categoryService = categoryService;
         this.teamService = teamService;
         this.personService = personService;
@@ -113,11 +115,13 @@ public class RankingViewService {
     }
 
     /**
-     * Loads all age groups once per view so per-participant age-group lookups (potentially
-     * thousands for a large by-age-group/category view) don't each hit the database.
+     * Loads the age groups of this race's season once per view so per-participant age-group
+     * lookups (potentially thousands for a large by-age-group/category view) don't each hit the
+     * database. Scoped to the race's own season, so re-exporting a finished race still prints the
+     * classes it was run under rather than whatever is configured now.
      */
-    public List<AgeGroup> loadAgeGroups() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+    public List<AgeGroup> loadAgeGroups(Race race) {
+        return ageGroupService.findBySeason(seasonService.seasonOf(race));
     }
 
     public List<Category> sortedCategories() {
@@ -149,8 +153,8 @@ public class RankingViewService {
      * "nicht gewertet" list either). Callers skip empty sections, so it only shows up when someone
      * actually lands there; label it via {@link #ageGroupSectionLabel}.
      */
-    public List<String> uniqueAgeGroupNamesYoungestFirst() {
-        List<String> names = new ArrayList<>(StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+    public List<String> uniqueAgeGroupNamesYoungestFirst(Race race) {
+        List<String> names = new ArrayList<>(loadAgeGroups(race).stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
@@ -205,14 +209,14 @@ public class RankingViewService {
      * participant excluded from the start order entirely (DSQ/DNF/DNS with no derived position)
      * isn't listed - they're not starting.
      */
-    public List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
+    public List<StartListEntry> createStartListEntries(Iterable<Participant> participants, Race race) {
         List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> p.effectiveStartOrder() != null)
                 // requireNonNull: just filtered for this, but the comparator calls the @Nullable
                 // method again independently, so state the invariant explicitly.
                 .sorted(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())))
                 .toList();
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
         Map<Long, Person> personsById = loadPersonsByIds(sorted, Participant::personId);
         Map<Long, Team> teamsById = loadTeamsByIds(sorted, Participant::teamId);
         Map<Long, Category> categoriesById = loadCategoriesByIds(sorted, Participant::categoryId);
@@ -251,7 +255,7 @@ public class RankingViewService {
                                                                      String filterAgeGroup,
                                                                      Long filterCategoryId,
                                                                      PersonTeamLookup lookup) {
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
 
         // Only keep participants that have a measured result, resolving each one's Person from
         // the pre-loaded lookup instead of a per-participant query
@@ -354,7 +358,7 @@ public class RankingViewService {
      * list per race, shown as-is regardless of which category is being viewed.
      */
     public List<DnsRow> createDnsRows(Iterable<Participant> participants, Race race, PersonTeamLookup lookup) {
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
 
         List<ParticipantWithPerson> notScored = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> rankingService.adjustedValue(race, p) == null)

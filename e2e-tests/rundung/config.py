@@ -17,7 +17,11 @@ APP_PASSWORD = os.environ.get("RUNDUNG_APP_PASSWORD", "e2eTestPass123")
 RACE1_NAME = "Praezision Einzel"
 RACE2_NAME = "Praezision Lauf 2"
 
-HERREN = {"name": "Herren", "birthYearFrom": 1950, "birthYearTo": 2015, "gender": "MALE"}
+# Age groups are configured per season, and a race is assigned to a season by its date (default
+# boundary: 1 January, so a 2026-02-01 race is season 2026). This has to match RACE_SEASON below,
+# or the participants resolve to no age group at all.
+RACE_SEASON = 2026
+HERREN = {"name": "Herren", "seasonYear": RACE_SEASON, "birthYearFrom": 1950, "birthYearTo": 2015, "gender": "MALE"}
 REVERSE_TOP_COUNT = 3
 
 # bib -> (firstName, lastName, birthYear). All entered in both Race 1 and Race 2 (Race 2 gets no

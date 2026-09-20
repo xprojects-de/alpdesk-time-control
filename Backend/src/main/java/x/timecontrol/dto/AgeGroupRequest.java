@@ -10,6 +10,9 @@ public record AgeGroupRequest(
         @Schema(description = "Name of the age group", example = "Herren allgemein", requiredMode = Schema.RequiredMode.REQUIRED)
         String name,
 
+        @Schema(description = "Season this configuration is valid for - age classes roll over every year, so the same name exists once per season with different birth years", example = "2026", requiredMode = Schema.RequiredMode.REQUIRED)
+        Integer seasonYear,
+
         @Schema(description = "Starting birth year for range (e.g., 1985 or 1800 for very old)", example = "1985", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer birthYearFrom,
 

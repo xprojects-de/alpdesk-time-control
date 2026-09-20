@@ -37,13 +37,16 @@ public class GaudiCsvExportService {
 
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final RankingViewService rankingViewService;
 
     public GaudiCsvExportService(PersonService personService,
                                  AgeGroupService ageGroupService,
+                                 SeasonService seasonService,
                                  RankingViewService rankingViewService) {
         this.personService = personService;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.rankingViewService = rankingViewService;
     }
 
@@ -65,7 +68,7 @@ public class GaudiCsvExportService {
                                           BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
-            for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+            for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(headerRace)) {
                 for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (entries.isEmpty()) {
@@ -88,7 +91,9 @@ public class GaudiCsvExportService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+        // The header race is one of the Gaudi-Modus' own races, so its season is the season the
+        // whole combination was run in - the calculators already refuse a mode spanning several.
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonService.seasonOf(headerRace));
 
         StringBuilder csv = new StringBuilder();
         csv.append(String.join(String.valueOf(DELIMITER), HEADER)).append('\n');

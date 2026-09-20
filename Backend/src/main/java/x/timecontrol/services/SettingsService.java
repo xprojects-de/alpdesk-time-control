@@ -9,6 +9,7 @@ import x.timecontrol.entities.AppSettings;
 import x.timecontrol.entities.TimingProviderType;
 import x.timecontrol.repositories.AppSettingsRepository;
 
+import java.time.MonthDay;
 import java.util.Map;
 
 @Singleton
@@ -58,7 +59,26 @@ public class SettingsService {
         } catch (Exception e) {
             throw new IllegalArgumentException("Could not serialize timing provider config: " + e.getMessage(), e);
         }
-        AppSettings updated = new AppSettings(SETTINGS_ID, type, json);
+        AppSettings current = getSettings();
+        AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay());
+        return repository.update(updated);
+    }
+
+    /**
+     * Moves the season boundary - which date a season year starts on, and with it which age groups
+     * apply to a race (see {@link SeasonService}). Changing it re-assigns existing races to
+     * different seasons, so callers are expected to have the operator confirm first.
+     *
+     * @throws IllegalArgumentException if month/day are not a valid combination, e.g. 31 June -
+     *                                  such a boundary would not exist in any year
+     */
+    public AppSettings updateSeasonStart(MonthDay seasonStart) {
+        if (seasonStart == null) {
+            throw new IllegalArgumentException("Season start is required");
+        }
+        AppSettings current = getSettings();
+        AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(),
+                current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth());
         return repository.update(updated);
     }
 }

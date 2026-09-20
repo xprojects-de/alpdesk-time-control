@@ -13,6 +13,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
+import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
 import x.timecontrol.services.TeamService;
@@ -41,13 +42,15 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
     private final PersonService personService;
     private final TeamService teamService;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
 
     public TimeCombinationModeCalculator(RankingService rankingService, PersonService personService,
-                                         TeamService teamService, AgeGroupService ageGroupService) {
+                                         TeamService teamService, AgeGroupService ageGroupService, SeasonService seasonService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.teamService = teamService;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
     }
 
     @Override
@@ -179,7 +182,10 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
-        List<AgeGroup> ageGroups = StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+        // Scoped to the one season these races belong to - seasonOfAll refuses a combination
+        // spanning two, where a participant would be in a different class in each.
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
+                seasonService.seasonOfAll(races.stream().map(RaceParticipants::race).toList()));
         Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 

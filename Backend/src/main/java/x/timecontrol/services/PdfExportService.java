@@ -137,7 +137,7 @@ public class PdfExportService {
      * {@link #renderDocument(Race, boolean, PdfBody)} prepends it to automatically.
      */
     public byte[] generateStartList(Iterable<Participant> participants, Race race) throws IOException {
-        List<RankingViewService.StartListEntry> entries = rankingViewService.createStartListEntries(participants);
+        List<RankingViewService.StartListEntry> entries = rankingViewService.createStartListEntries(participants, race);
         boolean anyStartGroup = entries.stream().anyMatch(RankingViewService.StartListEntry::hasStartGroup);
         Function<RankingViewService.StartListEntry, Color> rowColorFn = anyStartGroup
                 ? e -> e.startGroupColor() != null ? parseHexColor(e.startGroupColor()) : null
@@ -265,7 +265,7 @@ public class PdfExportService {
     }
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst();
+        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(race);
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
 
@@ -333,7 +333,7 @@ public class PdfExportService {
     }
 
     public byte[] generateAllAgeGroupsByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
-        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst();
+        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(race);
         List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
@@ -514,7 +514,7 @@ public class PdfExportService {
             GaudiMode gaudiMode, List<Race> legRaces, Race headerRace,
             BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher,
             List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
-        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst();
+        List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(headerRace);
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
             for (String ageGroupName : uniqueAgeGroupNames) {

@@ -21,6 +21,10 @@ import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
+import x.timecontrol.services.SeasonService
+import x.timecontrol.services.SettingsService
 
 class PointsCombinationModeCalculatorSpec extends Specification {
 
@@ -29,10 +33,18 @@ class PointsCombinationModeCalculatorSpec extends Specification {
     TeamService teamService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
     AgeGroupService ageGroupService = Mock() {
-        findAll() >> []
+        findBySeason(2026) >> []
     }
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService)
+
     PointsCombinationModeCalculator calculator =
-            new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService)
+            new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService, seasonService)
 
     def scale = new PointsScale(1L, "Test-Schema", "100,80,60")
 

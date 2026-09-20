@@ -24,6 +24,8 @@ import x.timecontrol.repositories.ParticipantRepository
 import java.sql.Connection
 import java.time.LocalDate
 import java.time.LocalDateTime
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
 
 class ParticipantServiceSpec extends Specification {
 
@@ -39,11 +41,19 @@ class ParticipantServiceSpec extends Specification {
     TransactionOperations<Connection> transactionOperations = Mock()
     GaudiLosPairingRepository losPairingRepository = Mock()
 
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService)
+
     ParticipantService service = new ParticipantService(
-            repository, ageGroupService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations, losPairingRepository)
+            repository, ageGroupService, seasonService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations, losPairingRepository)
 
     // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_)/
-    // ageGroupService.findAll() with a more specific interaction - a single closure-based
+    // ageGroupService.findBySeason(2026) with a more specific interaction - a single closure-based
     // interaction per mock method avoids the ambiguity of two equally-plausible interactions on
     // the same method (see the identical pattern/reasoning in the gaudi calculator specs'
     // knownPersons/knownTeams maps).
@@ -51,7 +61,7 @@ class ParticipantServiceSpec extends Specification {
     List<AgeGroup> ageGroups = []
 
     def setup() {
-        ageGroupService.findAll() >> { ageGroups }
+        ageGroupService.findBySeason(2026) >> { ageGroups }
         // Mirrors AgeGroupService's real isYearInAgeGroup() exactly - safe to stub globally
         // (deterministic, no per-test variation needed) unlike the mutable fields above.
         ageGroupService.isYearInAgeGroup(_, _) >> { AgeGroup ageGroup, int birthYear ->
@@ -63,7 +73,12 @@ class ParticipantServiceSpec extends Specification {
     }
 
     private static Race race() {
-        new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+        raceWithId(1L)
+    }
+
+    /** Dated inside season 2026, the season every age group in these specs is configured for. */
+    private static Race raceWithId(Long id) {
+        new Race(id, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
     }
 
@@ -299,6 +314,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "assignRaceNumbers re-shuffling an already-numbered race does not collide with the unique constraint"() {
         given: "3 participants already hold numbers 2,3,1; the new assignment (by birthdate, youngest first) is 1,2,3 - a naive single-pass update would collide immediately"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null, null)
         def p2 = new Participant(2L, 5L, 2L, 3, null, null, null, null, null, null)
         def p3 = new Participant(3L, 5L, 3L, 1, null, null, null, null, null, null)
@@ -334,6 +350,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "assignRaceNumbers refuses to run while live auto-assign is active for this race"() {
         given: "reshuffling numbers underneath an in-flight auto-assign cursor could mismatch a finish to the wrong participant"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         autoAssignActiveForRace = true
 
         when:
@@ -352,7 +369,7 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -382,8 +399,8 @@ class ParticipantServiceSpec extends Specification {
     def "applyStartOrderFromPreviousRace reverses per AGE GROUP, completely independent of Category - two different categories within the same age group are reversed together, and each age group is reversed on its own"() {
         given: "U21 (2000-2010) and Senior (1980-1999); within U21, A(cat 1)=rank1 and B(cat 2)=rank2; within Senior, C(cat 1)=rank1 and D(cat 2)=rank2"
         ageGroups = [
-                new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH),
-                new AgeGroup(2L, "Senior", 1980, 1999, Gender.BOTH),
+                new AgeGroup(1L, "U21", 2026, 2000, 2010, Gender.BOTH),
+                new AgeGroup(2L, "Senior", 2026, 1980, 1999, Gender.BOTH),
         ]
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 15)
@@ -422,7 +439,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "applyStartOrderFromPreviousRace reverses per GENDER within a single mixed-gender (BOTH) age group, instead of reversing boys and girls together as one field"() {
         given: "one BOTH-gender U21 age group; by raw time A(100)=fastest overall, C(150), B(200), D(250)=slowest overall"
-        ageGroups = [new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH)]
+        ageGroups = [new AgeGroup(1L, "U21", 2026, 2000, 2010, Gender.BOTH)]
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 2)
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -465,7 +482,7 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -500,7 +517,7 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -547,7 +564,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "applyStartOrderFromPreviousRace puts participants with no matching age group in their own block, after every real age group"() {
         given: "only A (born 2005) matches the one defined age group; B (born 1970) matches none"
-        ageGroups = [new AgeGroup(1L, "U21", 2000, 2010, Gender.BOTH)]
+        ageGroups = [new AgeGroup(1L, "U21", 2026, 2000, 2010, Gender.BOTH)]
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 15)
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -584,7 +601,7 @@ class ParticipantServiceSpec extends Specification {
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
         raceService.findById(4L) >> Optional.of(race4)
-        // ageGroupService.findAll() >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -804,6 +821,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "CSV import reports a row-level error instead of aborting the whole import"() {
         given: "the second row's participant save fails (e.g. a transient DB error)"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
@@ -830,6 +848,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "CSV import does not duplicate a person who is matched via ExternalId and already a participant of this race"() {
         given:
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         def existingPerson = new Person(1L, "John", "Doe", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
         personService.findByExternalId("EXT-1") >> Optional.of(existingPerson)
@@ -1017,6 +1036,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {
         given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)
         repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null, null)]
         personService.findByIds([2L] as Set) >> [2L: existingPerson]
@@ -1038,6 +1058,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "mapped import resolves the ageGroup column via AgeGroupService instead of Category, independently of an actual category column"() {
         given: "a semicolon CSV whose Klasse column is mapped to ageGroup and whose separate Kategorie column is mapped to category"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         teamService.findOrCreateByName("SC Oberstdorf") >> new Team(1L, "SC OBERSTDORF")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
@@ -1053,7 +1074,7 @@ class ParticipantServiceSpec extends Specification {
                  team: "Verein", ageGroup: "Klasse", category: "Kategorie"])
 
         then: "the AgeGroup is resolved (not treated as the free-text category) and the real category column still goes through categoryService"
-        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE) >> new AgeGroup(1L, "U14M", 2012, 2012, Gender.MALE)
+        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE, 2026) >> new AgeGroup(1L, "U14M", 2026, 2012, 2012, Gender.MALE)
         1 * categoryService.findOrCreateByName("Ski Alpin") >> new Category(1L, "SKI ALPIN")
         result.imported().size() == 1
         result.errors().isEmpty()
@@ -1061,6 +1082,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "mapped import parses a status column into the participant's DisqualificationStatus"() {
         given: "a CSV with a Status column marking the row as disqualified"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1082,6 +1104,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "mapped import defaults a blank/unrecognized status column to NONE instead of failing the row"() {
         given:
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1120,6 +1143,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "mapped import carries over durationMs/penalty/measuredAt when the file provides them (full race export round-trip)"() {
         given: "a CSV using exactly the header exportCsv would produce"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1142,6 +1166,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "mapped import rejects a negative durationMs or penalty instead of silently ranking the row first"() {
         given: "importRow bypasses ParticipantService.validate() entirely, so this must be re-checked inline"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1260,6 +1285,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "exportResultsCsv writes result fields plus informational identity fields (including the computed ageGroup), sorted ascending by raceNumber"() {
         given: "one participant with a full result and a matching AgeGroup, plus one with no result, no raceNumber and no matching AgeGroup"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
         def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
         def person1 = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
@@ -1268,8 +1294,10 @@ class ParticipantServiceSpec extends Specification {
         personService.findByIds([1L, 2L] as Set) >> [1L: person1, 2L: person2]
         teamService.findByIds([2L] as Set) >> [2L: new Team(2L, "TEAM A")]
         categoryService.findByIds(_ as Set) >> [:]
-        raceService.findByIds(_ as Set) >> [:]
-        ageGroups = [new AgeGroup(1L, "Herren Elite", 1985, 2000, Gender.MALE)]
+        // toResponses resolves each participant's age group against the season of that
+        // participant's own race, so the race has to come back from the batch lookup too.
+        raceService.findByIds(_ as Set) >> [5L: raceWithId(5L)]
+        ageGroups = [new AgeGroup(1L, "Herren Elite", 2026, 1985, 2000, Gender.MALE)]
 
         when:
         def lines = service.exportResultsCsv(5L, ResultUnit.TIME).readLines()
@@ -1337,6 +1365,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
         given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         def noStatus = new Participant(10L, 5L, 1L, 42, null, null, 8550, null, null, null, null)
         def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
         repository.findByRaceId(5L) >> [noStatus]
@@ -1351,6 +1380,7 @@ class ParticipantServiceSpec extends Specification {
 
     def "exportResultsCsv writes DNF/DNS/DSQ as the literal word, not blank"() {
         given:
+        raceService.findById(5L) >> Optional.of(raceWithId(5L))
         def dsq = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.DSQ)
         def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
         repository.findByRaceId(5L) >> [dsq]

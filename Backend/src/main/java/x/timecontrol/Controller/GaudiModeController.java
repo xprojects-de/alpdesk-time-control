@@ -187,6 +187,13 @@ public class GaudiModeController {
             return HttpResponse.ok(service.computeRanking(gaudiMode.get()));
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // A refused-by-design state, not a server fault - most notably a Gaudi-Modus whose
+            // races span several seasons, where age classes mean different birth years per season
+            // (see SeasonService#seasonOfAll). Same 409-for-IllegalStateException mapping the rest
+            // of the controllers use, so the reason reaches the operator as a handled error.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to compute ranking: " + e.getMessage()));
         }
@@ -415,6 +422,12 @@ public class GaudiModeController {
                     .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + filenameSuffix);
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // See getRanking: a refused-by-design state (e.g. races spanning several seasons)
+            // is a 409 with its reason, not a 500.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()))
+                    .contentType(MediaType.APPLICATION_JSON);
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate " + formatLabel + ": " + reason))
