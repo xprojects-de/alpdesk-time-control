@@ -3,7 +3,7 @@ import {Injectable} from "@angular/core";
 
 @Injectable()
 export class GermanDateAdapter extends NativeDateAdapter {
-    override parse(value: any): Date | null {
+    override parse(value: unknown): Date | null {
         if (typeof value === "string" && value.trim()) {
             const parts = value.trim().split(".");
             if (parts.length === 3) {

@@ -57,6 +57,20 @@ ESLint via `eslint-plugin-prettier`, so `ng lint` is the single entry point for 
 linting. `src/index.html` is excluded: it is a plain HTML document, and the Angular template parser
 used for `**/*.html` fails on its doctype.
 
+**After every frontend code change, run the linter before reporting the change as done** — either
+`npx eslint <changed files> --fix` for a handful of files or `npm run lint:fix` for a broader change,
+and then `npm run lint` to confirm it is clean. `ng lint` must stay green; leaving a change
+unformatted means the next person's lint run drags unrelated files into their diff.
+
+Two traps `--fix` has already caused here, both now guarded in the code - don't undo the guards:
+- It applies rule fixes, not just formatting. `@typescript-eslint/no-wrapper-object-types` rewrote
+  `displayFormat: Object` to `object` in `german-date-adapter.ts` and broke the build (TS2367), so
+  **always run `ng build` after a `--fix` over many files**; the line now carries an
+  `eslint-disable-next-line`.
+- For `**/*.html`, `eslint-plugin-prettier` needs `{parser: "angular"}` (set in `eslint.config.js`).
+  Without it, it infers a JS parser and "formats" templates as JSX - it turned `app.html`'s
+  `<router-outlet />` into `<router-outlet />;`, i.e. a stray semicolon rendered as text.
+
 CORS in `application.properties` only allows `http://localhost:4200` as an origin, so the Angular
 dev server must run on that exact port when talking to a locally running backend.
 

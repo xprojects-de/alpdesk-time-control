@@ -57,7 +57,7 @@ import {Actions, ofType} from "@ngrx/effects";
                     <button
                         mat-raised-button
                         color="warn"
-                        [disabled]="!(unusedPersonCount$ | async)"
+                        [disabled]="(unusedPersonCount$ | async) === 0"
                         (click)="deleteUnusedPersons()"
                         matTooltip="Löscht alle Personen, die keinem Rennen / Teilnehmer zugewiesen sind"
                     >

@@ -47,6 +47,7 @@ import {notBlank} from "../../utils/validators.util";
                                 class="swatch"
                                 [class.selected]="form.value.color === color.hex"
                                 [style.background]="color.hex"
+                                [attr.aria-label]="color.label"
                                 [matTooltip]="color.label"
                                 (click)="selectColor(color.hex)"
                             ></button>

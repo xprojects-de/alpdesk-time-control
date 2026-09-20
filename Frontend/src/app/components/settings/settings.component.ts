@@ -81,7 +81,7 @@ const ALPDESK_CONFIG_FIELDS: {key: string; label: string; placeholder: string}[]
                                 mat-raised-button
                                 color="primary"
                                 type="button"
-                                [disabled]="!(canSave$ | async)"
+                                [disabled]="(canSave$ | async) !== true"
                                 (click)="save()"
                             >
                                 @if (saving$ | async) {

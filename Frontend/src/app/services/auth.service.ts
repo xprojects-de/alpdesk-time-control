@@ -64,7 +64,7 @@ export class AuthService {
 
             const expirationDate = payload.exp * 1000;
             return Date.now() >= expirationDate;
-        } catch (error) {
+        } catch {
             return true;
         }
     }
@@ -84,7 +84,8 @@ export class AuthService {
             );
             return JSON.parse(decodedPayload);
         } catch (error) {
-            throw new Error("Invalid token format");
+            // Keeps the original decoding failure attached instead of swallowing it.
+            throw new Error("Invalid token format", {cause: error});
         }
     }
 
