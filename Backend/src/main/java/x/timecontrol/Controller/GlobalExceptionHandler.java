@@ -1,5 +1,6 @@
 package x.timecontrol.Controller;
 
+import io.micronaut.core.convert.exceptions.ConversionErrorException;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -8,10 +9,12 @@ import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Error;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.json.JsonSyntaxException;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.authentication.AuthenticationException;
 import io.micronaut.security.authentication.AuthorizationException;
 import io.micronaut.security.rules.SecurityRule;
+import io.micronaut.web.router.exceptions.UnsatisfiedRouteException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import x.timecontrol.dto.ErrorResponse;
@@ -85,10 +88,60 @@ public class GlobalExceptionHandler {
      */
     @Produces(MediaType.APPLICATION_JSON)
     @Error(global = true, exception = AuthenticationException.class)
-    public HttpResponse<ErrorResponse> handleAuthenticationException(HttpRequest<?> request, AuthenticationException exception) {
+    public HttpResponse<ErrorResponse> handleAuthenticationException(HttpRequest<?> request) {
         LOG.debug("Failed login attempt on {} {}", request.getMethod(), request.getPath());
         return HttpResponse.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("Invalid username or password."));
+    }
+
+    /**
+     * A request Micronaut could not bind to the route's parameters - a missing required query
+     * value/part/body, or a path variable that does not parse into its declared type
+     * ({@code GET /races/abc}). Micronaut maps these to 400 itself, but only as long as nothing
+     * more general claims them first: the {@link Throwable} catch-all below is more general, so
+     * without these three handlers every such request came back as a 500 "An unexpected error
+     * occurred." - and, worse, logged a full stack trace at ERROR for what is a caller's typo,
+     * which is exactly the noise that makes a race-day log useless when a real fault does happen.
+     * <p>
+     * The offending parameter is named in the response because it is part of this API's published
+     * contract (it is in the OpenAPI document at /swagger), unlike the exception's own message,
+     * which can carry the rejected value and therefore stays out of the body.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = UnsatisfiedRouteException.class)
+    public HttpResponse<ErrorResponse> handleUnsatisfiedRoute(HttpRequest<?> request, UnsatisfiedRouteException exception) {
+        String name = exception.getArgument().getName();
+        return badRequest(request, "Required parameter '" + name + "' is missing.");
+    }
+
+    /**
+     * See {@link #handleUnsatisfiedRoute}: a parameter that is present but does not convert into
+     * its declared type.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = ConversionErrorException.class)
+    public HttpResponse<ErrorResponse> handleConversionError(HttpRequest<?> request, ConversionErrorException exception) {
+        String name = exception.getArgument().getName();
+        return badRequest(request, "Parameter '" + name + "' has an invalid value.");
+    }
+
+    /**
+     * See {@link #handleUnsatisfiedRoute}: a request body that is not well-formed JSON. The parser
+     * message is deliberately not echoed - it quotes the offending input.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = JsonSyntaxException.class)
+    public HttpResponse<ErrorResponse> handleJsonSyntax(HttpRequest<?> request) {
+        return badRequest(request, "The request body is not valid JSON.");
+    }
+
+    /**
+     * A caller's mistake, not a fault of this server: logged at WARN without a stack trace, so the
+     * ERROR level keeps meaning "something here is broken".
+     */
+    private static HttpResponse<ErrorResponse> badRequest(HttpRequest<?> request, String message) {
+        LOG.warn("Bad request on {} {}: {}", request.getMethod(), request.getPath(), message);
+        return HttpResponse.<ErrorResponse>status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(message));
     }
 
     /**
@@ -99,7 +152,7 @@ public class GlobalExceptionHandler {
      * default error handler, whose verbosity depends on the active environment.
      */
     @Produces(MediaType.APPLICATION_JSON)
-    @Error(global = true, exception = Throwable.class)
+    @Error(global = true)
     public HttpResponse<ErrorResponse> handleUnexpectedException(HttpRequest<?> request, Throwable exception) {
         LOG.error("Unhandled exception on {} {}", request.getMethod(), request.getPath(), exception);
         return HttpResponse.<ErrorResponse>serverError()
