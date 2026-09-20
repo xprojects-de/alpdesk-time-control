@@ -62,7 +62,10 @@ import {Actions, ofType} from "@ngrx/effects";
                     </mat-form-field>
 
                     @if (rolloverSource$ | async; as rolloverSource) {
-                        @if ((ageGroups$ | async)?.length === 0) {
+                        <!-- Gleiche Bedingung wie beim Hinweis unten, inklusive loading: sonst
+                             blitzt der Knopf bei jedem Saisonwechsel kurz auf, solange die Liste
+                             noch leer ist. -->
+                        @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
                             <button
                                 mat-raised-button
                                 color="accent"
@@ -78,18 +81,31 @@ import {Actions, ofType} from "@ngrx/effects";
                     }
                 </div>
 
-                @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
-                    <div class="empty-season">
-                        <mat-icon>info</mat-icon>
-                        <span>
-                            Für die Saison {{ selectedSeason$ | async }} sind keine Altersgruppen angelegt. Rennen
-                            dieser Saison werden ohne Altersklasse ausgewertet, bis hier welche existieren.
-                        </span>
-                    </div>
+                <!-- Nur mit ausgewählter Saison: ohne sie wurde die Saisonliste gar nicht geladen
+                     (Backend nicht erreichbar), und der Hinweis stünde mit leerer Jahreszahl da und
+                     würde eine Aussage über eine Saison treffen, die noch niemand ausgewählt hat. -->
+                @if (selectedSeason$ | async; as shownSeason) {
+                    @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
+                        <div class="empty-season">
+                            <mat-icon>info</mat-icon>
+                            <span>
+                                Für die Saison {{ shownSeason }} sind keine Altersgruppen angelegt. Rennen dieser Saison
+                                werden ohne Altersklasse ausgewertet, bis hier welche existieren.
+                            </span>
+                        </div>
+                    }
                 }
 
                 <div class="header-actions">
-                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
+                    <!-- Ohne geladene Saison gibt es keine, in der die Gruppe angelegt werden
+                         könnte - und das Kalenderjahr zu raten ist genau das, was die Saisonbindung
+                         verhindern soll. -->
+                    <button
+                        mat-raised-button
+                        color="primary"
+                        [disabled]="(selectedSeason$ | async) === null && (currentSeason$ | async) === null"
+                        (click)="openCreateDialog()"
+                    >
                         <mat-icon>add</mat-icon>
                         Neue Altersgruppe
                     </button>
@@ -308,9 +324,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
                 this.seasonOptions.set([...options].sort((a, b) => b - a));
             });
 
-        // Reload whenever the selected season changes - the table only ever shows one season.
+        // Mitgeführt für openCreateDialog(), das außerhalb des Templates keinen async-Pipe hat.
         this.currentSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => (this.currentSeason = season));
 
+        // Reload whenever the selected season changes - the table only ever shows one season.
         this.selectedSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => {
             this.selectedSeason = season;
             if (season != null) {
@@ -433,12 +450,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     openCreateDialog(): void {
         // Kein Rückfall auf das Kalenderjahr: mit verschobener Saisongrenze ist das nicht die
         // laufende Saison, und eine Altersgruppe im falschen Jahr anzulegen ist genau der Fehler,
-        // den die Saisonbindung verhindern soll. Die laufende Saison rechnet das Backend aus; ist
-        // noch keine geladen, wird gar kein Dialog geöffnet - die Saison steht dann auch im
-        // Auswähler noch nicht.
+        // den die Saisonbindung verhindern soll. Die laufende Saison rechnet das Backend aus; ohne
+        // geladene Saison ist der Knopf oben deaktiviert, das hier ist nur der Typ-Abschluss.
         const seasonYear = this.selectedSeason ?? this.currentSeason;
         if (seasonYear == null) {
-            this.snackBar.open("Saison wird noch geladen - bitte kurz warten", "OK", {duration: 3000});
             return;
         }
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {

@@ -6,6 +6,7 @@ import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.CrudRepository;
 import x.timecontrol.entities.Race;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,5 +25,14 @@ public interface RaceRepository extends CrudRepository<Race, Long> {
             "start_order_reverse_top_count, live_token FROM race WHERE live_token = :liveToken",
             nativeQuery = true)
     Optional<Race> findByLiveTokenWithoutCoverPage(String liveToken);
+
+    /**
+     * Just the dates, for {@link x.timecontrol.services.SeasonService#seasonsWithRaces} - which only
+     * needs to know which seasons have a race at all. Deliberately not {@link #findAll()}: that
+     * loads every race's cover_page_pdf BLOB (up to several MB each, see above), and the season
+     * selector asks for this on every load of the age-group page.
+     */
+    @Query(value = "SELECT DISTINCT date FROM race", nativeQuery = true)
+    List<LocalDate> findDistinctRaceDates();
 }
 

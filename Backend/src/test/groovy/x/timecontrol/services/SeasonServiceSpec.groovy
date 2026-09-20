@@ -11,11 +11,11 @@ import java.time.LocalDate
 
 class SeasonServiceSpec extends Specification {
 
-    private SeasonService serviceWithBoundary(int month, int day, List<Race> races = []) {
+    private SeasonService serviceWithBoundary(int month, int day, List<LocalDate> raceDates = []) {
         def settings = Stub(SettingsService)
         settings.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, month, day)
         def raceService = Stub(RaceService)
-        raceService.findAll() >> races
+        raceService.findDistinctRaceDates() >> raceDates
         new SeasonService(settings, raceService)
     }
 
@@ -98,9 +98,9 @@ class SeasonServiceSpec extends Specification {
     def "seasonsWithRaces reports each season that has a race, newest first, through the configured boundary"() {
         given: "a 1 July boundary, so the January race belongs to the previous season year"
         def service = serviceWithBoundary(7, 1, [
-                raceOn(LocalDate.of(2026, 1, 11)),
-                raceOn(LocalDate.of(2025, 12, 14)),
-                raceOn(LocalDate.of(2026, 9, 20))
+                LocalDate.of(2026, 1, 11),
+                LocalDate.of(2025, 12, 14),
+                LocalDate.of(2026, 9, 20)
         ])
 
         expect: "both winter races collapse into 2025, the September one opens 2026"

@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Decides which season a date - and with it a race - belongs to.
@@ -146,8 +145,8 @@ public class SeasonService {
      */
     public List<Integer> seasonsWithRaces() {
         MonthDay seasonStart = seasonStart();
-        return StreamSupport.stream(raceService.findAll().spliterator(), false)
-                .map(race -> seasonOf(race.date(), seasonStart))
+        return raceService.findDistinctRaceDates().stream()
+                .map(date -> seasonOf(date, seasonStart))
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .toList();

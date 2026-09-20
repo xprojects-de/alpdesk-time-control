@@ -33,6 +33,15 @@ import java.util.stream.StreamSupport;
 @Tag(name = "Age Group")
 public class AgeGroupController {
 
+    /**
+     * Plausible range for a season year, matching the birth-year range the age-group dialog offers.
+     * A season outside it is a typo or a broken client, and the row it would create matches nobody
+     * while cluttering the season selector for good. Enforced here rather than only in the UI: the
+     * dialog no longer lets the season be typed at all, so this endpoint is the only guard left.
+     */
+    private static final int MIN_SEASON_YEAR = 1900;
+    private static final int MAX_SEASON_YEAR = 2100;
+
     @Inject
     AgeGroupService service;
 
@@ -76,8 +85,10 @@ public class AgeGroupController {
     @ApiResponse(responseCode = "400", description = "Invalid input")
     @ApiResponse(responseCode = "409", description = "Source season is empty, or target season already has age groups")
     public HttpResponse<?> copySeason(@Body CopySeasonRequest request) {
-        if (request.fromSeason() == null || request.toSeason() == null) {
-            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("fromSeason and toSeason are required"));
+        if (!isPlausibleSeason(request.fromSeason()) || !isPlausibleSeason(request.toSeason())) {
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
+                    "fromSeason and toSeason are required and must be between "
+                            + MIN_SEASON_YEAR + " and " + MAX_SEASON_YEAR));
         }
         if (request.fromSeason().equals(request.toSeason())) {
             // A bad request, not a state conflict: nothing about the stored data prevents this,
@@ -129,7 +140,8 @@ public class AgeGroupController {
     public HttpResponse<?> add(@Body AgeGroupRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
-                    "Name, seasonYear, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
+                    "Name, seasonYear (" + MIN_SEASON_YEAR + "-" + MAX_SEASON_YEAR
+                            + "), birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
         }
         AgeGroup ageGroup = service.createFromRequest(request);
         try {
@@ -151,7 +163,8 @@ public class AgeGroupController {
     public HttpResponse<?> update(@PathVariable Long id, @Body AgeGroupRequest request) {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
-                    "Name, seasonYear, birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
+                    "Name, seasonYear (" + MIN_SEASON_YEAR + "-" + MAX_SEASON_YEAR
+                            + "), birthYearFrom, birthYearTo (with birthYearFrom <= birthYearTo) and gender are required"));
         }
         AgeGroup ageGroup = service.createFromRequest(request);
         Optional<AgeGroup> updated;
@@ -171,11 +184,15 @@ public class AgeGroupController {
      */
     private boolean isValid(AgeGroupRequest request) {
         return request.name() != null && !request.name().isBlank()
-                && request.seasonYear() != null
+                && isPlausibleSeason(request.seasonYear())
                 && request.birthYearFrom() != null
                 && request.birthYearTo() != null
                 && request.birthYearFrom() <= request.birthYearTo()
                 && request.gender() != null;
+    }
+
+    private static boolean isPlausibleSeason(Integer seasonYear) {
+        return seasonYear != null && seasonYear >= MIN_SEASON_YEAR && seasonYear <= MAX_SEASON_YEAR;
     }
 
     @Delete("/{id}")

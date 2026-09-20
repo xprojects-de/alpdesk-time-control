@@ -35,6 +35,7 @@ const REPEAT_SUPPRESSION_MS = 15000;
  * Deliberately excluded because their own screen already reports them, and listing them here
  * would show two snackbars for one failure:
  * - SettingsActions.loadTimingProviderFailure (settings.component.ts)
+ * - SettingsActions.loadSeasonFailure (season-settings.component.ts)
  * - PointsScaleActions.loadPointsScalesFailure (gaudi-mode-dialog / points-scale-manager-dialog)
  * - GaudiModeActions.loadRankingFailure, RaceActions.loadLiveLinksFailure (their own views)
  * Backend-health failures are excluded too - they are expected while the backend is down and are
@@ -52,6 +53,7 @@ export class LoadFailureEffects {
             this.actions$.pipe(
                 ofType(
                     AgeGroupActions.loadAgeGroupsFailure,
+                    AgeGroupActions.loadSeasonsFailure,
                     CategoryActions.loadCategoriesFailure,
                     GaudiModeActions.loadGaudiModesFailure,
                     MeasurementActions.loadMeasurementsFailure,

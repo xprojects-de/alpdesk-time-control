@@ -11,8 +11,10 @@ import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.RaceRepository;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -69,6 +71,14 @@ public class RaceService {
 
     public Iterable<Race> findAll() {
         return repository.findAll();
+    }
+
+    /**
+     * The date of every race, distinct - for deciding which seasons have races at all
+     * ({@link SeasonService#seasonsWithRaces}) without pulling each race's cover-page BLOB along.
+     */
+    public List<LocalDate> findDistinctRaceDates() {
+        return repository.findDistinctRaceDates();
     }
 
     public Optional<Race> findById(Long id) {

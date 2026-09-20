@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, and the Saison season-scoped age-class test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, the Saison season-scoped age-class test, and the Saison-Upgrade migration test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -49,6 +49,17 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   ranking, a "nicht gewertet" list, a PDF and a CSV rather than an error, scored against the first
   race's season. Birth years are chosen so the same person is U16 in one season and U14 in the
   other, which is what makes a wrong season visible. No timing device, no external data.
+- `e2e-tests/saison-upgrade/` — migration V4 (the `age_group` table rebuild) applied to a database
+  that already holds age groups: no row lost, **ids preserved** (the fixture uses non-contiguous
+  ids on purpose), AUTOINCREMENT high-water mark carried over, no leftover `age_group_v1`, and the
+  point of the rebuild — the same class name now allowed once per season. Then the consequence for
+  race history: a past season's race comes out "ohne Altersklasse" and is fixable from the UI by
+  rolling a season backwards. The only suite that does **not** start on an empty database:
+  `make_fixture.py` assembles a V3-schema database from the repo's own V1-V3 migration files, and
+  `start_instances.sh` passes `-Dflyway.datasources.default.validate-on-migrate=false` because that
+  fixture's flyway history is hand-written with NULL checksums (V4 itself is applied normally).
+  Its `run_all.sh` takes the instance's DB path — `start_instances.sh` prints it — as an argument;
+  pass it, or the SQLite-level checks are skipped.
 
 Each suite starts its own throwaway backend instance(s) via its own `start_instances.sh` into a
 fresh `mktemp -d` work dir with an isolated SQLite DB — **never** the real
@@ -87,7 +98,9 @@ found.
    b. Check the printed health-check output shows the expected ports responding (HTTP 200/302
       etc., not connection failures) before continuing.
    c. `./run_all.sh` — record pass/fail. The scripts use `set -euo pipefail`, so they stop at
-      the first failed step/verification.
+      the first failed step/verification. For `saison-upgrade` only, pass the instance database
+      path that its `start_instances.sh` printed (`./run_all.sh <work-dir>/app/database/time-control.db`);
+      without it that suite skips its SQLite-level checks and says so.
    d. Clean up regardless of outcome: `pkill -f 'time-control.jar'` (plus
       `pkill -f 'fake_device.py'` for bergsprint/nachtslalom), then `rm -rf` that suite's temp work dir.
    e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d three more times, once

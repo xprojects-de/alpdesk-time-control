@@ -74,16 +74,26 @@ getrennt. Wer das nicht braucht, lässt die Liste leer.
 
 ## Altersgruppen
 
-Hier stehen die Altersklassen je **Saison**: Name (z. B. „Herren allgemein“ oder „Damen U18“),
-Saisonjahr, Geschlecht und der Geburtsjahrgangsbereich von/bis. Teilnehmer werden anhand von
-Geburtsjahr und Geschlecht automatisch der passenden Altersgruppe zugeordnet.
+Hier stehen die Altersklassen: Name (z. B. „Herren allgemein“ oder „Damen U18“), Geschlecht und
+der Geburtsjahrgangsbereich von/bis. Teilnehmer werden anhand von Geburtsjahr und Geschlecht
+automatisch der passenden Altersgruppe zugeordnet.
 
-Weil die Jahrgänge jedes Jahr weiterwandern, gehören Altersgruppen immer zu einer Saison. Über den
-Saison-Filter wechselt man zwischen den Jahren; ein Knopf übernimmt alle Altersgruppen der
-Vorsaison in die neue – man muss also nur noch die Jahrgänge verschieben statt alles neu zu tippen.
+Weil die Jahrgänge jedes Jahr weiterwandern, gehören Altersgruppen immer zu **einer Saison**. Die
+Liste zeigt deshalb immer genau eine – oben links wird gewechselt, und alles darunter (auch der
+Knopf „Neue Altersgruppe“) bezieht sich auf die gewählte Saison.
+
+Zur Auswahl stehen alle Saisons, für die Altersgruppen angelegt sind, alle, in denen **Rennen**
+liegen, die laufende, und eine darüber hinaus – damit man die nächste Saison vorbereiten kann,
+bevor es dort ein Rennen gibt.
+
+Ist eine Saison noch leer, bietet ein Knopf an, **eine andere Saison zu übernehmen**: alle
+Altersgruppen werden kopiert und die Geburtsjahrgänge um die Jahresdifferenz verschoben. Das geht
+in beide Richtungen – vorwärts für die kommende Saison, rückwärts, um eine vergangene nachzutragen.
+Nur feste Jahrgangsklassen („Jahrgang 2012“) muss man danach von Hand korrigieren, die wandern ja
+nicht mit.
 
 > Wenn eine Teilnehmerliste plötzlich lauter leere Altersgruppen zeigt, sind fast immer für die
-> Saison des Rennens noch keine Altersgruppen angelegt.
+> Saison des Rennens noch keine Altersgruppen angelegt – die Saison oben auswählen und übernehmen.
 
 ## Teams
 
