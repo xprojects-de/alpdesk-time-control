@@ -11,7 +11,10 @@ import {MeasurementImportResponse} from "../../models/measurement-import.model";
 export const loadMeasurements = createAction("[Measurement] Load Measurements");
 export const loadMeasurementsSuccess = createAction(
     "[Measurement] Load Measurements Success",
-    props<{measurements: Measurement[]}>(),
+    // writeSeq = the value of MeasurementState.writeSeq when this request was STARTED. The reducer
+    // drops the response if a write has completed since then, because the backend had not seen
+    // that write yet when it answered.
+    props<{measurements: Measurement[]; writeSeq: number}>(),
 );
 export const loadMeasurementsFailure = createAction(
     "[Measurement] Load Measurements Failure",

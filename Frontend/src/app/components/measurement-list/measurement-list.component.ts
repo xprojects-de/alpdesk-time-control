@@ -226,7 +226,7 @@ interface MeasurementWithParticipant extends Measurement {
                         <mat-label>Rennen (Automatik-Zuordnung)</mat-label>
                         <mat-select
                             [value]="selectedRaceId$ | async"
-                            [disabled]="!!(scheduledImportEnabled$ | async)"
+                            [disabled]="!!(scheduledImportEnabled$ | async) || !!(autoAssignBusy$ | async)"
                             (selectionChange)="onRaceChange($event.value)"
                         >
                             <mat-option [value]="null">— kein Rennen —</mat-option>
@@ -244,6 +244,7 @@ interface MeasurementWithParticipant extends Measurement {
                                 <button
                                     mat-raised-button
                                     (click)="skipAutoAssign()"
+                                    [disabled]="autoAssignBusy$ | async"
                                     matTooltip="Aktuell erwartete Startnummer überspringen (z. B. nicht gestartet)"
                                 >
                                     <mat-icon>skip_next</mat-icon>
@@ -500,6 +501,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     selectedRaceId$: Observable<number | null>;
     autoAssignStatus$: Observable<AutoAssignStatus>;
+    autoAssignBusy$: Observable<boolean>;
     loading$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
@@ -536,6 +538,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.scheduledImportEnabled$ = this.store.select(MeasurementSelectors.selectScheduledImportEnabled);
         this.deviceStatus$ = this.store.select(MeasurementSelectors.selectDeviceStatus);
         this.autoAssignStatus$ = this.store.select(MeasurementSelectors.selectAutoAssignStatus);
+        this.autoAssignBusy$ = this.store.select(MeasurementSelectors.selectAutoAssignBusy);
         // Deliberately NOT bound to the app-wide RaceSelectors.selectSelectedRaceId (used by
         // participant-list/race-measurement-list/gaudi-modus to filter by race): this select
         // doubles as the auto-assign on/off switch, so showing it pre-filled from another

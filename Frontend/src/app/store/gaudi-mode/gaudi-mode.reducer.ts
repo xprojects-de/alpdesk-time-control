@@ -9,6 +9,8 @@ export interface GaudiModeState {
     ranking: GaudiRankingEntry[];
     notRanked: GaudiNotRankedEntry[];
     loading: boolean;
+    /** True while a draw/load-pairing request is in flight - see the draw button's [disabled]. */
+    pairingLoading: boolean;
     pdfExportLoading: boolean;
     error: string | null;
 }
@@ -20,6 +22,7 @@ export const initialState: GaudiModeState = {
     ranking: [],
     notRanked: [],
     loading: false,
+    pairingLoading: false,
     pdfExportLoading: false,
     error: null,
 };
@@ -100,19 +103,25 @@ export const gaudiModeReducer = createReducer(
         notRanked: [],
     })),
 
+    // pairingLoading is separate from `loading`: the draw button binds to it, and a second click
+    // before the response lands would re-randomize the pairing server-side, leaving the printed
+    // list and the stored one out of sync.
     on(GaudiModeActions.drawPairing, GaudiModeActions.loadPairing, state => ({
         ...state,
         loading: true,
+        pairingLoading: true,
         error: null,
     })),
     on(GaudiModeActions.pairingSuccess, (state, {pairing}) => ({
         ...state,
         pairing,
         loading: false,
+        pairingLoading: false,
     })),
     on(GaudiModeActions.pairingFailure, (state, {error}) => ({
         ...state,
         loading: false,
+        pairingLoading: false,
         error,
     })),
 

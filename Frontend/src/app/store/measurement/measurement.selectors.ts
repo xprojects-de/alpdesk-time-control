@@ -60,6 +60,10 @@ export const selectIsPollingDeviceConnection = createSelector(
 
 export const selectAutoAssignStatus = createSelector(selectMeasurementState, state => state.autoAssignStatus);
 
+export const selectWriteSeq = createSelector(selectMeasurementState, state => state.writeSeq);
+
+export const selectAutoAssignBusy = createSelector(selectMeasurementState, state => state.autoAssignBusy);
+
 export const selectImportLoading = createSelector(selectMeasurementState, state => state.importLoading);
 
 export const selectImportResult = createSelector(selectMeasurementState, state => state.importResult);

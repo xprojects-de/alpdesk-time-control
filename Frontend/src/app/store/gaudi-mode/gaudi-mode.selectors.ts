@@ -7,6 +7,8 @@ export const selectAllGaudiModes = createSelector(selectGaudiModeState, state =>
 
 export const selectGaudiModeLoading = createSelector(selectGaudiModeState, state => state.loading);
 
+export const selectPairingLoading = createSelector(selectGaudiModeState, state => state.pairingLoading);
+
 export const selectGaudiModePdfExportLoading = createSelector(selectGaudiModeState, state => state.pdfExportLoading);
 
 export const selectGaudiModeError = createSelector(selectGaudiModeState, state => state.error);

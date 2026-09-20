@@ -63,8 +63,15 @@ import {selectAllRaces} from "../../store/race/race.selectors";
             <mat-card-content>
                 @if (gaudiMode().type === gaudiModeType.LOS) {
                     <div class="section-actions">
-                        <button mat-raised-button color="primary" (click)="draw()">
-                            <mat-icon>casino</mat-icon>
+                        <button mat-raised-button color="primary" (click)="draw()" [disabled]="pairingLoading$ | async">
+                            @if (pairingLoading$ | async) {
+                                <mat-spinner
+                                    diameter="20"
+                                    style="display: inline-block; margin-right: 8px"
+                                ></mat-spinner>
+                            } @else {
+                                <mat-icon>casino</mat-icon>
+                            }
                             {{ (pairing$ | async)?.length ? "Neu auslosen" : "Auslosen" }}
                         </button>
                     </div>
@@ -399,6 +406,7 @@ export class GaudiModeDetailComponent {
     trackByRankingEntry = (index: number, entry: GaudiRankingEntry) =>
         entry.personId ?? `${index}|${entry.place}|${entry.label}`;
     pdfExportLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectGaudiModePdfExportLoading);
+    pairingLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectPairingLoading);
 
     private races: Race[] = [];
 

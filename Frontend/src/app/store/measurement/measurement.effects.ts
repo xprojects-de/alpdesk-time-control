@@ -1,15 +1,18 @@
 import {inject, Injectable} from "@angular/core";
 import {extractErrorMessage} from "../../utils/http-error.util";
 import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {Store} from "@ngrx/store";
 import {interval, of} from "rxjs";
-import {catchError, map, mergeMap, switchMap, takeUntil, tap} from "rxjs/operators";
+import {catchError, map, mergeMap, switchMap, takeUntil, tap, withLatestFrom} from "rxjs/operators";
 import {MeasurementService} from "../../services/measurement.service";
 import * as MeasurementActions from "./measurement.actions";
+import * as MeasurementSelectors from "./measurement.selectors";
 
 @Injectable()
 export class MeasurementEffects {
     private actions$ = inject(Actions);
     private measurementService = inject(MeasurementService);
+    private store = inject(Store);
 
     // switchMap, not mergeMap: this is re-dispatched every 2s by the live auto-refresh poll, and only
     // the most recently requested snapshot should ever be applied. With mergeMap, a slow response to
@@ -17,9 +20,12 @@ export class MeasurementEffects {
     loadMeasurements$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.loadMeasurements),
-            switchMap(() =>
+            // Reads the write counter BEFORE the request goes out, so the reducer can tell whether
+            // a create/update/delete completed while this snapshot was travelling.
+            withLatestFrom(this.store.select(MeasurementSelectors.selectWriteSeq)),
+            switchMap(([, writeSeq]) =>
                 this.measurementService.getAll().pipe(
-                    map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements})),
+                    map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements, writeSeq})),
                     catchError(error =>
                         of(
                             MeasurementActions.loadMeasurementsFailure({
@@ -144,6 +150,20 @@ export class MeasurementEffects {
     );
 
     // Reload measurements after successful reset
+    // Re-syncs with the backend after every write, so the list is authoritative again even if a
+    // poll response was dropped while the write was in flight (see the reducer's
+    // loadMeasurementsSuccess handler).
+    reloadAfterWrite$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(
+                MeasurementActions.createMeasurementSuccess,
+                MeasurementActions.updateMeasurementSuccess,
+                MeasurementActions.deleteMeasurementSuccess,
+            ),
+            map(() => MeasurementActions.loadMeasurements()),
+        ),
+    );
+
     reloadAfterReset$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.resetMeasurementsSuccess),

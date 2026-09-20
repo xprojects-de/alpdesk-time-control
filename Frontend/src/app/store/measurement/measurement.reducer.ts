@@ -27,7 +27,15 @@ export interface MeasurementState {
     deviceStatus: string | null;
     deviceConnected: boolean | null;
     isPollingDeviceConnection: boolean;
+    /**
+     * Counts completed writes (create/update/delete/reset/archive/import). A poll response carries
+     * the value it saw when its request started; if the counter moved on in the meantime, the
+     * backend answered before that write and the response is stale - see loadMeasurementsSuccess.
+     */
+    writeSeq: number;
     autoAssignStatus: AutoAssignStatus;
+    /** True while an enable/disable/skip/set-next request is in flight - see the buttons' [disabled]. */
+    autoAssignBusy: boolean;
     importLoading: boolean;
     importResult: MeasurementImportResponse | null;
 }
@@ -43,6 +51,8 @@ export const initialState: MeasurementState = {
     deviceStatus: null,
     deviceConnected: null,
     isPollingDeviceConnection: false,
+    writeSeq: 0,
+    autoAssignBusy: false,
     autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null},
     importLoading: false,
     importResult: null,
@@ -67,9 +77,15 @@ export const measurementReducer = createReducer(
         measurementsLoading: true,
         error: null,
     })),
-    on(MeasurementActions.loadMeasurementsSuccess, (state, {measurements}) => ({
+    on(MeasurementActions.loadMeasurementsSuccess, (state, {measurements, writeSeq}) => ({
         ...state,
-        measurements,
+        // Never let a stale 2s poll response undo a write: it would make a just-created measurement
+        // disappear (the operator then enters it twice, and auto-assign hands the duplicate to the
+        // next bib) or resurrect a just-deleted one. Two ways a response can be stale:
+        // - a write is still in flight (loadingCount > 0), so the backend has not seen it yet;
+        // - a write completed after this request started (writeSeq moved on).
+        // reloadAfterWrite$ issues a fresh load after every write, so nothing is lost by skipping.
+        measurements: state.loadingCount > 0 || writeSeq !== state.writeSeq ? state.measurements : measurements,
         measurementsLoading: false,
     })),
     on(MeasurementActions.loadMeasurementsFailure, (state, {error}) => ({
@@ -111,6 +127,7 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.createMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: [...state.measurements, measurement],
+        writeSeq: state.writeSeq + 1,
         loadingCount: endLoading(state),
     })),
     on(MeasurementActions.createMeasurementFailure, (state, {error}) => ({
@@ -124,6 +141,7 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.updateMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: state.measurements.map(m => (m.id === measurement.id ? measurement : m)),
+        writeSeq: state.writeSeq + 1,
         loadingCount: endLoading(state),
     })),
     on(MeasurementActions.updateMeasurementFailure, (state, {error}) => ({
@@ -137,6 +155,7 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.deleteMeasurementSuccess, (state, {id}) => ({
         ...state,
         measurements: state.measurements.filter(m => m.id !== id),
+        writeSeq: state.writeSeq + 1,
         selectedMeasurementId: state.selectedMeasurementId === id ? null : state.selectedMeasurementId,
         loadingCount: endLoading(state),
     })),
@@ -306,6 +325,16 @@ export const measurementReducer = createReducer(
         ...state,
         error: null,
     })),
+    // Blocks the buttons until the response lands: the expected race number only advances with it,
+    // so a second click on "Überspringen" before that skipped a second bib and auto-assigned the
+    // next finisher to the wrong participant.
+    on(
+        MeasurementActions.enableAutoAssign,
+        MeasurementActions.disableAutoAssign,
+        MeasurementActions.skipAutoAssign,
+        MeasurementActions.setNextAutoAssignRaceNumber,
+        state => ({...state, autoAssignBusy: true, error: null}),
+    ),
     on(
         MeasurementActions.loadAutoAssignStatusSuccess,
         MeasurementActions.enableAutoAssignSuccess,
@@ -315,6 +344,7 @@ export const measurementReducer = createReducer(
         (state, {status}) => ({
             ...state,
             autoAssignStatus: status,
+            autoAssignBusy: false,
         }),
     ),
     on(
@@ -326,6 +356,7 @@ export const measurementReducer = createReducer(
         (state, {error}) => ({
             ...state,
             error,
+            autoAssignBusy: false,
         }),
     ),
 );
