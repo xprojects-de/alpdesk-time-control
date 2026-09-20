@@ -1,4 +1,4 @@
-import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject, firstValueFrom} from "rxjs";
@@ -12,6 +12,8 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
+import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatInputModule} from "@angular/material/input";
 import {Race, RaceRequest} from "../../models/race.model";
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
@@ -40,6 +42,8 @@ import {Actions, ofType} from "@ngrx/effects";
         MatTooltipModule,
         MatSortModule,
         MatPaginatorModule,
+        MatFormFieldModule,
+        MatInputModule,
     ],
     template: `
         <mat-card>
@@ -47,6 +51,24 @@ import {Actions, ofType} from "@ngrx/effects";
                 <mat-card-title>Rennen</mat-card-title>
             </mat-card-header>
             <mat-card-content>
+                <div class="filter-section">
+                    <mat-form-field appearance="outline" class="search-field">
+                        <mat-label>Suche (Name, Datum)</mat-label>
+                        <mat-icon matPrefix>search</mat-icon>
+                        <input
+                            matInput
+                            [value]="searchTerm()"
+                            (input)="onSearchChange($any($event.target).value)"
+                            placeholder="z.B. Slalom oder 19.09."
+                        />
+                        @if (searchTerm()) {
+                            <button matSuffix mat-icon-button aria-label="Suche leeren" (click)="clearSearch()">
+                                <mat-icon>close</mat-icon>
+                            </button>
+                        }
+                    </mat-form-field>
+                </div>
+
                 <div class="header-actions">
                     <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
@@ -138,6 +160,17 @@ import {Actions, ofType} from "@ngrx/effects";
     `,
     styles: [
         `
+            .filter-section {
+                margin-top: 20px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+
+            .search-field {
+                min-width: 280px;
+            }
+
             .header-actions {
                 margin-top: 20px;
                 margin-bottom: 20px;
@@ -182,10 +215,27 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     dataSource = new MatTableDataSource<Race>([]);
     trackById = (_index: number, race: Race) => race.id;
 
+    /** Free-text search over the loaded races - see filterPredicate below. */
+    searchTerm = signal("");
+
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
 
     constructor() {
+        // Name plus the date as it is displayed, so "19.09." finds a race the operator sees in the
+        // table without having to type the ISO form the backend stores.
+        this.dataSource.filterPredicate = (race: Race, filter: string) => {
+            const term = filter.trim().toLowerCase();
+            if (!term) {
+                return true;
+            }
+            const [jahr, monat, tag] = (race.date ?? "").split("-");
+            const datumAnzeige = tag && monat && jahr ? `${tag}.${monat}.${jahr}` : (race.date ?? "");
+            return [race.name, datumAnzeige]
+                .filter((value): value is string => !!value)
+                .some(value => value.toLowerCase().includes(term));
+        };
+
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.loading$ = this.store.select(RaceSelectors.selectRaceLoading);
 
@@ -355,6 +405,17 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(RaceActions.deleteRace({id: race.id}));
                 }
             });
+    }
+
+    onSearchChange(value: string): void {
+        this.searchTerm.set(value);
+        this.dataSource.filter = value.trim().toLowerCase();
+        // Without this, a search made while on page 3 shows an empty table instead of its matches.
+        this.paginator()?.firstPage();
+    }
+
+    clearSearch(): void {
+        this.onSearchChange("");
     }
 
     refreshData(): void {
