@@ -9,6 +9,10 @@ export const selectSettingsLoading = createSelector(selectSettingsState, state =
 
 export const selectSettingsSaving = createSelector(selectSettingsState, state => state.saving);
 
+export const selectSeasonSettings = createSelector(selectSettingsState, state => state.season);
+
+export const selectSeasonSaving = createSelector(selectSettingsState, state => state.seasonSaving);
+
 export const selectSettingsError = createSelector(selectSettingsState, state => state.error);
 
 // Whether a timing device is configured (type !== NONE). null while settings are still loading -

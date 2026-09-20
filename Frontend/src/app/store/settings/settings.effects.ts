@@ -52,4 +52,40 @@ export class SettingsEffects {
             ),
         ),
     );
+
+    loadSeason$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(SettingsActions.loadSeason),
+            mergeMap(() =>
+                this.settingsService.getSeason().pipe(
+                    map(season => SettingsActions.loadSeasonSuccess({season})),
+                    catchError(error =>
+                        of(
+                            SettingsActions.loadSeasonFailure({
+                                error: extractErrorMessage(error, "Saison-Einstellungen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    updateSeason$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(SettingsActions.updateSeason),
+            mergeMap(({request}) =>
+                this.settingsService.updateSeason(request).pipe(
+                    map(season => SettingsActions.updateSeasonSuccess({season})),
+                    catchError(error =>
+                        of(
+                            SettingsActions.updateSeasonFailure({
+                                error: extractErrorMessage(error, "Saison-Grenze konnte nicht gespeichert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
 }

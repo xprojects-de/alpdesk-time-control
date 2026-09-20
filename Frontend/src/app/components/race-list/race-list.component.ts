@@ -123,6 +123,18 @@ import {Actions, ofType} from "@ngrx/effects";
                             </td>
                         </ng-container>
 
+                        <!-- Which season a race is scored in, and with it which age groups apply
+                             to it. Worth its own column here (unlike in the participant list, which
+                             only ever shows one race): with a season boundary other than 1 January,
+                             a January race belongs to the previous season, which its date alone
+                             does not reveal. -->
+                        <ng-container matColumnDef="seasonYear">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Saison</th>
+                            <td mat-cell *matCellDef="let race" class="season-cell">
+                                {{ race.seasonYear }}
+                            </td>
+                        </ng-container>
+
                         <!-- Actions Column -->
                         <ng-container matColumnDef="actions">
                             <th mat-header-cell *matHeaderCellDef>Aktionen</th>
@@ -188,6 +200,10 @@ import {Actions, ofType} from "@ngrx/effects";
                 width: 100%;
             }
 
+            .season-cell {
+                color: rgba(0, 0, 0, 0.6);
+            }
+
             .hidden {
                 display: none;
             }
@@ -211,7 +227,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
 
     races$: Observable<Race[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "name", "date", "actions"];
+    displayedColumns = ["id", "name", "date", "seasonYear", "actions"];
     dataSource = new MatTableDataSource<Race>([]);
     trackById = (_index: number, race: Race) => race.id;
 

@@ -7,6 +7,15 @@ import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
 import {AgeGroup, AgeGroupRequest} from "../../models/age-group.model";
+
+/**
+ * An existing age group to edit, or just the season a new one is being created in - the dialog
+ * always needs the season, since a class's birth years are only meaningful together with it.
+ */
+export interface AgeGroupDialogData {
+    ageGroup: AgeGroup | null;
+    seasonYear: number;
+}
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {notBlank} from "../../utils/validators.util";
 
@@ -23,7 +32,8 @@ import {notBlank} from "../../utils/validators.util";
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data ? "Altersgruppe bearbeiten" : "Neue Altersgruppe" }}
+            {{ data.ageGroup ? "Altersgruppe bearbeiten" : "Neue Altersgruppe" }}
+            <span class="season-badge">Saison {{ data.seasonYear }}</span>
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="age-group-form">
@@ -37,6 +47,18 @@ import {notBlank} from "../../utils/validators.util";
                         <mat-error>Name darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Saison</mat-label>
+                    <input matInput type="number" formControlName="seasonYear" required min="1900" max="2100" />
+                    @if (form.get("seasonYear")?.hasError("required") && form.get("seasonYear")?.touched) {
+                        <mat-error>Saison ist erforderlich</mat-error>
+                    }
+                    @if (form.get("seasonYear")?.hasError("min") || form.get("seasonYear")?.hasError("max")) {
+                        <mat-error>Saison muss zwischen 1900 und 2100 liegen</mat-error>
+                    }
+                    <mat-hint>Für welches Jahr gelten diese Geburtsjahrgänge?</mat-hint>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
@@ -104,13 +126,23 @@ import {notBlank} from "../../utils/validators.util";
             mat-form-field {
                 width: 100%;
             }
+
+            .season-badge {
+                margin-left: 8px;
+                padding: 2px 8px;
+                border-radius: 12px;
+                background: rgba(0, 0, 0, 0.08);
+                font-size: 0.7em;
+                font-weight: 500;
+                vertical-align: middle;
+            }
         `,
     ],
 })
 export class AgeGroupDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<AgeGroupDialogComponent>);
-    public data = inject<AgeGroup | null>(MAT_DIALOG_DATA);
+    public data = inject<AgeGroupDialogData>(MAT_DIALOG_DATA);
 
     form: FormGroup;
     genderOptions = [
@@ -122,14 +154,20 @@ export class AgeGroupDialogComponent {
     constructor() {
         this.form = this.fb.group(
             {
-                name: [this.data?.name || "", [Validators.required, notBlank()]],
-                gender: [this.data?.gender || "", Validators.required],
+                name: [this.data.ageGroup?.name || "", [Validators.required, notBlank()]],
+                // Prefilled with the season currently being configured, so the common case (adding
+                // a class to the season you are looking at) needs no thought.
+                seasonYear: [
+                    this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
+                    [Validators.required, Validators.min(1900), Validators.max(2100)],
+                ],
+                gender: [this.data.ageGroup?.gender || "", Validators.required],
                 birthYearFrom: [
-                    this.data?.birthYearFrom || "",
+                    this.data.ageGroup?.birthYearFrom || "",
                     [Validators.required, Validators.min(1900), Validators.max(2100)],
                 ],
                 birthYearTo: [
-                    this.data?.birthYearTo || "",
+                    this.data.ageGroup?.birthYearTo || "",
                     [Validators.required, Validators.min(1900), Validators.max(2100)],
                 ],
             },
@@ -156,6 +194,7 @@ export class AgeGroupDialogComponent {
             const formValue = this.form.value;
             const ageGroup: AgeGroupRequest = {
                 name: formValue.name,
+                seasonYear: Number(formValue.seasonYear),
                 gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),
                 birthYearTo: Number(formValue.birthYearTo),

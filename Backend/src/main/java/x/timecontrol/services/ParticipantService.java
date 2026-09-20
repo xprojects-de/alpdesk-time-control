@@ -40,6 +40,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -425,8 +426,11 @@ public class ParticipantService {
         // settings row (SeasonService#seasonStart) once for every row in the batch.
         Map<Integer, List<AgeGroup>> ageGroupsBySeason = new HashMap<>();
         Map<Long, List<AgeGroup>> ageGroupsByRaceId = new HashMap<>();
+        Map<Long, Integer> seasonByRaceId = new HashMap<>();
+        MonthDay seasonStart = seasonService.seasonStart();
         for (Race race : racesById.values()) {
-            int season = seasonService.seasonOf(race);
+            int season = seasonService.seasonOf(race.date(), seasonStart);
+            seasonByRaceId.put(race.id(), season);
             ageGroupsByRaceId.put(race.id(),
                     ageGroupsBySeason.computeIfAbsent(season, ageGroupService::findBySeason));
         }
@@ -449,7 +453,7 @@ public class ParticipantService {
             result.add(ParticipantResponse.from(
                     p,
                     person != null ? PersonResponse.from(person) : null,
-                    race != null ? RaceResponse.from(race) : null,
+                    race != null ? RaceResponse.from(race, seasonByRaceId.get(race.id())) : null,
                     team != null ? TeamResponse.from(team) : null,
                     category != null ? CategoryResponse.from(category) : null,
                     ageGroup != null ? AgeGroupResponse.from(ageGroup) : null,
