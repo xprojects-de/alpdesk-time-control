@@ -120,8 +120,8 @@ export class MeasurementService {
         return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/skip`, null);
     }
 
-    setNextAutoAssignRaceNumber(raceNumber: number | null): Observable<AutoAssignStatus> {
-        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/set-next`, {raceNumber});
+    setNextAutoAssignRaceNumber(raceNumber: number | null, force = false): Observable<AutoAssignStatus> {
+        return this.http.post<AutoAssignStatus>(`${this.apiUrl}/auto-assign/set-next`, {raceNumber, force});
     }
 
     checkDeviceConnection(): Observable<boolean> {

@@ -555,9 +555,14 @@ public class MeasurementController {
     @Operation(summary = "Manually set the next expected race number (e.g. after a correction)", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Next race number updated", content = @Content(schema = @Schema(implementation = AutoAssignStatusResponse.class)))
     @ApiResponse(responseCode = "400", description = "Auto-assign mode is not active, or raceNumber does not belong to any participant in the active race")
+    @ApiResponse(responseCode = "409", description = "That race number already has a measurement; retry with force=true to discard it and time it again")
     public HttpResponse<?> setNextAutoAssignRaceNumber(@Body AutoAssignSetNextRequest request) {
         try {
-            return HttpResponse.ok(AutoAssignStatusResponse.from(autoAssignService.setNextRaceNumber(request.raceNumber())));
+            AutoAssignService.Status status =
+                    autoAssignService.setNextRaceNumber(request.raceNumber(), Boolean.TRUE.equals(request.force()));
+            return HttpResponse.ok(AutoAssignStatusResponse.from(status));
+        } catch (AutoAssignService.AlreadyTimedException e) {
+            return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         } catch (IllegalStateException | IllegalArgumentException e) {
             return HttpResponse.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
         }

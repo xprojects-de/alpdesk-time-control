@@ -3,7 +3,7 @@ import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
 import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
-import {take, takeUntil, switchMap, map, filter, distinctUntilChanged} from "rxjs/operators";
+import {take, takeUntil, switchMap, map, filter, distinctUntilChanged, withLatestFrom} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -594,6 +594,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     /** Held between dispatch and success so a rejected bib never leaves a bogus return offer behind. */
     private pendingReturnRaceNumber: number | null = null;
     private pendingTargetRaceNumber: number | null = null;
+    /** Set while a confirmed re-run is in flight, so its success also refreshes the now-deleted row away. */
+    private pendingDiscard = false;
 
     constructor() {
         this.measurements$ = this.store.select(MeasurementSelectors.selectAllMeasurements);
@@ -671,6 +673,12 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     }
                     this.pendingReturnRaceNumber = null;
                     this.pendingTargetRaceNumber = null;
+                    if (this.pendingDiscard) {
+                        // The backend deleted a row - without this the table keeps showing it.
+                        this.pendingDiscard = false;
+                        this.store.dispatch(MeasurementActions.loadMeasurements());
+                        message = "Zeit verworfen - Startnummer kann erneut fahren";
+                    }
                 } else {
                     message = "Startnummer übersprungen";
                 }
@@ -693,6 +701,56 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     duration: 10000,
                     panelClass: "error-snackbar",
                 });
+            });
+
+        // A re-run: the bib the operator pointed at already has a time, and it has to go before a
+        // new one can be matched (one measurement per participant). Asking rather than discarding
+        // it outright - this same path also serves the "Zurück zu" button, and one mistyped digit
+        // would otherwise delete a real runner's recorded time with nothing to undo it.
+        this.actions$
+            .pipe(
+                ofType(MeasurementActions.setNextAutoAssignRaceNumberConflict),
+                withLatestFrom(this.measurements$, this.participants$, this.selectedRaceId$),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(([{raceNumber}, measurements, participants, raceId]) => {
+                this.pendingDiscard = false;
+                const participant = participants.find(p => p.race?.id === raceId && p.raceNumber === raceNumber);
+                const existing = participant ? measurements.find(m => m.participantId === participant.id) : undefined;
+                const name = participant?.person
+                    ? `${participant.person.firstName} ${participant.person.lastName}`
+                    : null;
+                const time = existing ? this.formatDuration(existing.durationMs) : null;
+                const message =
+                    `Startnummer ${raceNumber}${name ? ` (${name})` : ""} hat bereits eine Zeit` +
+                    `${time ? `: ${time}` : ""}.\n\n` +
+                    "Für einen erneuten Lauf muss diese Zeit gelöscht werden. " +
+                    "Das lässt sich nicht rückgängig machen.\n\n" +
+                    `Zeit löschen und die Zuordnung auf ${raceNumber} setzen?`;
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {
+                            title: "Startnummer hat bereits eine Zeit",
+                            message,
+                            confirmLabel: "Zeit löschen",
+                            confirmColor: "warn",
+                        },
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (!confirmed) {
+                            // Nothing moved, so the remembered return position must not change either.
+                            this.pendingReturnRaceNumber = null;
+                            this.pendingTargetRaceNumber = null;
+                            return;
+                        }
+                        this.pendingDiscard = true;
+                        this.pendingReturnRaceNumber = this.currentNextRaceNumber;
+                        this.pendingTargetRaceNumber = raceNumber;
+                        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber, force: true}));
+                    });
             });
 
         // Listen for successful/failed create, update and delete of a single measurement
@@ -1038,7 +1096,9 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         const target = Number(this.nextRaceNumberInput);
         this.pendingReturnRaceNumber = this.currentNextRaceNumber;
         this.pendingTargetRaceNumber = target;
-        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber: target}));
+        // force stays off here on purpose: a bib that already has a time comes back as a conflict
+        // and is confirmed below, so a mistyped digit can never silently destroy a recorded time.
+        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber: target, force: false}));
     }
 
     /** Puts the cursor back where the queue stood before the jump - same path, so it clears the hint. */

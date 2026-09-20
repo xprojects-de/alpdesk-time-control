@@ -359,4 +359,10 @@ export const measurementReducer = createReducer(
             autoAssignBusy: false,
         }),
     ),
+    // Not an error - the component is about to ask whether to discard the existing time - but the
+    // request is over, so the auto-assign buttons have to come back out of their busy state.
+    on(MeasurementActions.setNextAutoAssignRaceNumberConflict, state => ({
+        ...state,
+        autoAssignBusy: false,
+    })),
 );

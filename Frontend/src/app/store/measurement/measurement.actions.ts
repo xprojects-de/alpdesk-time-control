@@ -244,6 +244,14 @@ export const skipAutoAssignFailure = createAction("[Measurement] Skip Auto-Assig
 
 export const setNextAutoAssignRaceNumber = createAction(
     "[Measurement] Set Next Auto-Assign Race Number",
+    props<{raceNumber: number | null; force?: boolean}>(),
+);
+/**
+ * The race number already has a time. Separate from Failure because it is the one outcome the
+ * operator can act on - re-dispatching with force discards that time so the number can run again.
+ */
+export const setNextAutoAssignRaceNumberConflict = createAction(
+    "[Measurement] Set Next Auto-Assign Race Number Conflict",
     props<{raceNumber: number | null}>(),
 );
 export const setNextAutoAssignRaceNumberSuccess = createAction(

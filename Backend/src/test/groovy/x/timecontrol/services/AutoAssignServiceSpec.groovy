@@ -125,7 +125,7 @@ class AutoAssignServiceSpec extends Specification {
         service.enable(1L, 1)
 
         when:
-        service.setNextRaceNumber(42)
+        service.setNextRaceNumber(42, false)
 
         then:
         thrown(IllegalArgumentException)
@@ -136,12 +136,47 @@ class AutoAssignServiceSpec extends Specification {
         given:
         participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
         measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> []
         service.enable(1L, 1)
 
         when:
-        def status = service.setNextRaceNumber(5)
+        def status = service.setNextRaceNumber(5, false)
 
         then:
+        status.nextRaceNumber() == 5
+    }
+
+    // Without the refusal the cursor is accepted here and then silently walked forward again by the
+    // next processNewMeasurements cycle, so the following starter is credited with this race
+    // number's finish - see setNextRaceNumber's javadoc.
+    def "setNextRaceNumber refuses a race number that already has a measurement"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
+        measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        service.enable(1L, 1)
+
+        when:
+        service.setNextRaceNumber(5, false)
+
+        then:
+        thrown(AutoAssignService.AlreadyTimedException)
+        service.getStatus().nextRaceNumber() == 1
+        0 * measurementRepository.deleteById(_)
+    }
+
+    def "setNextRaceNumber with force discards the existing measurement so the race number can run again"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
+        measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        service.enable(1L, 1)
+
+        when:
+        def status = service.setNextRaceNumber(5, true)
+
+        then:
+        1 * measurementRepository.deleteById(7L)
         status.nextRaceNumber() == 5
     }
 

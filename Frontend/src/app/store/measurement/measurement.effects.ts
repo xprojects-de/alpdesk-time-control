@@ -1,3 +1,4 @@
+import {HttpErrorResponse} from "@angular/common/http";
 import {inject, Injectable} from "@angular/core";
 import {extractErrorMessage} from "../../utils/http-error.util";
 import {Actions, createEffect, ofType} from "@ngrx/effects";
@@ -458,16 +459,22 @@ export class MeasurementEffects {
     setNextAutoAssignRaceNumber$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.setNextAutoAssignRaceNumber),
-            mergeMap(({raceNumber}) =>
-                this.measurementService.setNextAutoAssignRaceNumber(raceNumber).pipe(
+            mergeMap(({raceNumber, force}) =>
+                this.measurementService.setNextAutoAssignRaceNumber(raceNumber, force ?? false).pipe(
                     map(status => MeasurementActions.setNextAutoAssignRaceNumberSuccess({status})),
-                    catchError(error =>
-                        of(
+                    catchError(error => {
+                        // 409 is only ever "this race number already has a time" (see
+                        // MeasurementController#setNextAutoAssignRaceNumber) - everything else it
+                        // rejects is a 400.
+                        if (error instanceof HttpErrorResponse && error.status === 409) {
+                            return of(MeasurementActions.setNextAutoAssignRaceNumberConflict({raceNumber}));
+                        }
+                        return of(
                             MeasurementActions.setNextAutoAssignRaceNumberFailure({
                                 error: extractErrorMessage(error, "Nächste Startnummer konnte nicht gesetzt werden"),
                             }),
-                        ),
-                    ),
+                        );
+                    }),
                 ),
             ),
         ),
