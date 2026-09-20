@@ -20,13 +20,13 @@ import x.timecontrol.services.TeamService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Zeit-Kombination: sums each participant's adjusted time (raw time + penalty, per race sort
@@ -182,27 +182,38 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
-        // Scoped to the one season these races belong to - seasonOfAll refuses a combination
-        // spanning two, where a participant would be in a different class in each.
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.seasonOfAll(races.stream().map(RaceParticipants::race).toList()));
-        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
-        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
-        List<GaudiDnsEntryResponse> dns = new ArrayList<>();
+        // Two passes rather than one: whether a person is missing a leg is decided from the
+        // participant rows alone, so the person/team/age-group lookups below only run for the few
+        // who actually end up on the list - and not at all for a complete field, where this method
+        // would otherwise still resolve a season and read two more tables to build nothing.
+        Map<Long, Map<Long, Participant>> incomplete = new LinkedHashMap<>();
         for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
             Map<Long, Participant> byRace = entry.getValue();
-
             boolean completeRequiredLegs = races.stream()
                     .filter(race -> race.weight() != 0)
                     .allMatch(race -> {
                         Participant p = byRace.get(race.raceId());
                         return p != null && rankingService.adjustedValue(race.race(), p) != null;
                     });
-            if (completeRequiredLegs) {
-                continue;
+            if (!completeRequiredLegs) {
+                incomplete.put(entry.getKey(), byRace);
             }
+        }
+        if (incomplete.isEmpty()) {
+            return List.of();
+        }
 
+        // Scoped to the season these races are scored in; a combination spanning two is scored
+        // against the first race's season, which SeasonService also reports (see #scopeOf).
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
+                seasonService.scopeOf(races.stream().map(RaceParticipants::race).toList()).season());
+        Map<Long, Person> personsById = personService.findByIds(incomplete.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(incomplete));
+
+        List<GaudiDnsEntryResponse> dns = new ArrayList<>();
+        for (Map.Entry<Long, Map<Long, Participant>> entry : incomplete.entrySet()) {
+            Map<Long, Participant> byRace = entry.getValue();
             Optional<Person> person = Optional.ofNullable(personsById.get(entry.getKey()));
             String lastName = person.map(Person::lastName).orElse("Unbekannt");
             String firstName = person.map(Person::firstName).orElse("");

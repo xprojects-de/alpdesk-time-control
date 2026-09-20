@@ -49,17 +49,14 @@ import {notBlank} from "../../utils/validators.util";
                     <mat-hint>z.B. "Herren allgemein" oder "Damen U18"</mat-hint>
                 </mat-form-field>
 
-                <mat-form-field appearance="outline">
-                    <mat-label>Saison</mat-label>
-                    <input matInput type="number" formControlName="seasonYear" required min="1900" max="2100" />
-                    @if (form.get("seasonYear")?.hasError("required") && form.get("seasonYear")?.touched) {
-                        <mat-error>Saison ist erforderlich</mat-error>
-                    }
-                    @if (form.get("seasonYear")?.hasError("min") || form.get("seasonYear")?.hasError("max")) {
-                        <mat-error>Saison muss zwischen 1900 und 2100 liegen</mat-error>
-                    }
-                    <mat-hint>Für welches Jahr gelten diese Geburtsjahrgänge?</mat-hint>
-                </mat-form-field>
+                <!-- Die Saison steht im Titel und wird hier bewusst nicht editiert: sie gehört zur
+                     Liste, die gerade angezeigt wird, nicht zur einzelnen Gruppe. Änderbar wäre sie
+                     der einzige Weg, eine Gruppe in eine Saison zu schreiben, die die Tabelle
+                     daneben gar nicht zeigt. Gewechselt wird über den Saison-Auswähler. -->
+                <p class="season-note">
+                    Diese Geburtsjahrgänge gelten für <strong>Saison {{ data.seasonYear }}</strong
+                    >. Für eine andere Saison oben die Saison wechseln.
+                </p>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Geschlecht</mat-label>
@@ -127,6 +124,12 @@ import {notBlank} from "../../utils/validators.util";
                 width: 100%;
             }
 
+            .season-note {
+                margin: 0 0 4px;
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 13px;
+            }
+
             .season-badge {
                 margin-left: 8px;
                 padding: 2px 8px;
@@ -155,12 +158,6 @@ export class AgeGroupDialogComponent {
         this.form = this.fb.group(
             {
                 name: [this.data.ageGroup?.name || "", [Validators.required, notBlank()]],
-                // Prefilled with the season currently being configured, so the common case (adding
-                // a class to the season you are looking at) needs no thought.
-                seasonYear: [
-                    this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
-                    [Validators.required, Validators.min(1900), Validators.max(2100)],
-                ],
                 gender: [this.data.ageGroup?.gender || "", Validators.required],
                 birthYearFrom: [
                     this.data.ageGroup?.birthYearFrom || "",
@@ -194,7 +191,9 @@ export class AgeGroupDialogComponent {
             const formValue = this.form.value;
             const ageGroup: AgeGroupRequest = {
                 name: formValue.name,
-                seasonYear: Number(formValue.seasonYear),
+                // Aus den Dialogdaten, nicht aus dem Formular: beim Bearbeiten bleibt es die Saison
+                // der Gruppe, beim Anlegen die gerade angezeigte - ein Wechsel ist hier nicht vorgesehen.
+                seasonYear: this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
                 gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),
                 birthYearTo: Number(formValue.birthYearTo),

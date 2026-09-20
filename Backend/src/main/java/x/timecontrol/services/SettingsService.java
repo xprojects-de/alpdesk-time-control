@@ -25,14 +25,36 @@ public class SettingsService {
     private final AppSettingsRepository repository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * The single settings row, cached after the first read and cleared by every write below.
+     * <p>
+     * This table is a one-row, rarely-written configuration, but it is now on a hot read path:
+     * {@link SeasonService#seasonStart} consults it to resolve a race's season, and the
+     * by-age-group/by-category ranking views resolve a season once per printed section - hundreds
+     * of times for one page of the public live view, which spectators' browsers poll. Without this,
+     * each of those is a round trip to SQLite for a row that cannot have changed in between.
+     * <p>
+     * Safe to cache because this service is the only writer: {@link AppSettingsRepository} is
+     * injected nowhere else, and the app is a single process owning its own database file (see
+     * README). Volatile rather than synchronized - a racing reader either sees the old row and
+     * re-reads it on the next call, or the null that forces a fresh read; neither can hand out a
+     * row that was never in the database.
+     */
+    private volatile AppSettings cached;
+
     public SettingsService(AppSettingsRepository repository, ObjectMapper objectMapper) {
         this.repository = repository;
         this.objectMapper = objectMapper;
     }
 
     public AppSettings getSettings() {
-        return repository.findById(SETTINGS_ID)
-                .orElseThrow(() -> new IllegalStateException("app_settings row is missing - migration V1 should have seeded it"));
+        AppSettings settings = cached;
+        if (settings == null) {
+            settings = repository.findById(SETTINGS_ID)
+                    .orElseThrow(() -> new IllegalStateException("app_settings row is missing - migration V1 should have seeded it"));
+            cached = settings;
+        }
+        return settings;
     }
 
     public Map<String, String> getProviderConfig(AppSettings settings) {
@@ -61,7 +83,7 @@ public class SettingsService {
         }
         AppSettings current = getSettings();
         AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay());
-        return repository.update(updated);
+        return store(updated);
     }
 
     /**
@@ -79,6 +101,16 @@ public class SettingsService {
         AppSettings current = getSettings();
         AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(),
                 current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth());
-        return repository.update(updated);
+        return store(updated);
+    }
+
+    /**
+     * Writes the settings row and refreshes {@link #cached} from what the database actually
+     * returned, so the next read cannot serve a row that the update transformed on its way in.
+     */
+    private AppSettings store(AppSettings settings) {
+        AppSettings persisted = repository.update(settings);
+        cached = persisted;
+        return persisted;
     }
 }

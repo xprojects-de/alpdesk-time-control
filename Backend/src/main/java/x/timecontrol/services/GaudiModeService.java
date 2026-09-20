@@ -397,7 +397,12 @@ public class GaudiModeService {
         Set<Long> personIds = new LinkedHashSet<>();
         List<Race> races = new ArrayList<>();
         for (GaudiModeRace gmr : findRacesFor(gaudiMode.id())) {
-            raceService.findById(gmr.raceId()).ifPresent(races::add);
+            // Only loaded when a class filter is actually in play - it is the sole consumer below,
+            // and this method runs once per (age group x gender) section of an export, so a race
+            // lookup per leg would otherwise repeat for every section of a gender-only export too.
+            if (filterAgeGroup != null) {
+                raceService.findById(gmr.raceId()).ifPresent(races::add);
+            }
             for (Participant p : participantService.findByRaceId(gmr.raceId())) {
                 if (p.personId() != null) {
                     personIds.add(p.personId());
@@ -407,9 +412,11 @@ public class GaudiModeService {
 
         // Only the season of these races applies - an age class means different birth years in
         // different seasons, so filtering by the class name "U14" is only meaningful within one.
-        // seasonOfAll refuses a Gaudi-Modus whose races span several.
-        List<AgeGroup> ageGroups = filterAgeGroup != null
-                ? ageGroupService.findBySeason(seasonService.seasonOfAll(races))
+        // A Gaudi-Modus spanning several is scored against the first race's season (SeasonService
+        // #scopeOf reports the span); one whose races have all been deleted has nothing to
+        // categorise against, and personIds is empty then anyway.
+        List<AgeGroup> ageGroups = filterAgeGroup != null && !races.isEmpty()
+                ? ageGroupService.findBySeason(seasonService.scopeOf(races).season())
                 : List.of();
         Map<Long, Person> personsById = personService.findByIds(personIds);
 

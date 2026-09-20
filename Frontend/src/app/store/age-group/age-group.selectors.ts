@@ -11,16 +11,32 @@ export const selectAgeGroupError = createSelector(selectAgeGroupState, state => 
 
 export const selectAgeGroupSeasons = createSelector(selectAgeGroupState, state => state.seasons);
 
+export const selectSeasonsWithRaces = createSelector(selectAgeGroupState, state => state.seasonsWithRaces);
+
 export const selectCurrentSeason = createSelector(selectAgeGroupState, state => state.currentSeason);
 
 export const selectSelectedSeason = createSelector(selectAgeGroupState, state => state.selectedSeason);
 
 /**
- * The season offered as the source of a rollover: the newest configured season below the selected
- * one, or null when there is nothing earlier to copy from.
+ * The season offered as the source of a rollover: the configured season closest to the selected
+ * one, preferring an earlier one (the normal case - roll last season forward). An earlier season
+ * is not always available: after upgrading to season-scoped age groups, only the upgrade year has
+ * groups, so filling in a *past* season with races means copying backwards. `copySeason` shifts by
+ * the difference either way, so that works the same. null when nothing is configured to copy from.
  */
-export const selectPreviousConfiguredSeason = createSelector(
+export const selectRolloverSourceSeason = createSelector(
     selectAgeGroupSeasons,
     selectSelectedSeason,
-    (seasons, selected) => (selected == null ? null : (seasons.filter(s => s < selected)[0] ?? null)),
+    (seasons, selected) => {
+        if (selected == null) {
+            return null;
+        }
+        const earlier = seasons.filter(s => s < selected);
+        if (earlier.length > 0) {
+            // seasons is newest-first, so the first earlier one is the closest.
+            return earlier[0];
+        }
+        const later = seasons.filter(s => s > selected);
+        return later.length > 0 ? later[later.length - 1] : null;
+    },
 );

@@ -22,9 +22,16 @@ export interface AgeGroupRequest {
     gender: Gender;
 }
 
-/** The seasons that have age groups configured (newest first), plus the season we are in today. */
+/** What the season selector offers, newest first, plus the season we are in today. */
 export interface AgeGroupSeasons {
+    /** Seasons that have age groups configured - the only ones a rollover can copy from. */
     seasons: number[];
+    /**
+     * Seasons that have at least one race. Offered as well because a season with races but no age
+     * groups is exactly the one whose results come out "ohne Altersklasse" and therefore the one
+     * that needs configuring - it is not in `seasons` yet.
+     */
+    seasonsWithRaces: number[];
     currentSeason: number;
 }
 

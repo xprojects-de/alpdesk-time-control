@@ -37,7 +37,7 @@ class RaceLiveServiceSpec extends Specification {
     SettingsService settingsService = Stub(SettingsService) {
         getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
     }
-    SeasonService seasonService = new SeasonService(settingsService)
+    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
 
     RankingViewService rankingViewService = new RankingViewService(
             ageGroupService, seasonService, categoryService, teamService, personService, new RankingService(startGroupTemplateService), startGroupTemplateService)

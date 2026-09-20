@@ -8,10 +8,12 @@ import x.timecontrol.entities.Race;
 
 import java.time.LocalDate;
 import java.time.MonthDay;
-import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Decides which season a date - and with it a race - belongs to.
@@ -37,9 +39,11 @@ public class SeasonService {
     public static final MonthDay DEFAULT_SEASON_START = MonthDay.of(1, 1);
 
     private final SettingsService settingsService;
+    private final RaceService raceService;
 
-    public SeasonService(SettingsService settingsService) {
+    public SeasonService(SettingsService settingsService, RaceService raceService) {
         this.settingsService = settingsService;
+        this.raceService = raceService;
     }
 
     /**
@@ -82,38 +86,78 @@ public class SeasonService {
     }
 
     /**
-     * The one season a set of races belongs to - for Gaudi-Modus, which combines results across
-     * several races and therefore has no single race to take the season from.
+     * Which season's age classes a set of races is scored against - for Gaudi-Modus, which combines
+     * results across several races and therefore has no single race to take the season from.
      * <p>
-     * Deliberately strict: a combination spanning two seasons is genuinely ambiguous, because a
-     * participant moves up a class between them (someone in U14 in season 2025 is in U16 in 2026),
-     * so there is no correct answer to which class to score them in. Rather than silently picking
-     * one and producing a subtly wrong combined ranking, this refuses - in practice a Gaudi-Modus
-     * never spans seasons, so hitting this means the races were linked by mistake.
+     * A combination spanning two seasons is genuinely ambiguous, because a participant moves up a
+     * class between them (someone in U14 in season 2025 is in U16 in 2026). It is not, however,
+     * something to refuse over: such a combination is a real thing a club does (a ski winter's
+     * club championship over a December and a January race with the default 1 January boundary),
+     * and failing the whole export mid-event is worse than scoring it against one season. So the
+     * first race's season wins - the same race whose name and date already head the exported
+     * document - and the span is reported so the operator can see it and, if they want the two
+     * races to count as one season, move the season boundary.
      *
-     * @throws IllegalStateException if the races fall into more than one season, or the collection
-     *                               is empty
+     * @param races the Gaudi-Modus' races <em>in their configured order</em>; the first one decides
+     * @return the resolved season plus every season the races actually fall into. An empty set of
+     *         races resolves to the current season with no spanned seasons - there is nothing to
+     *         categorise, and callers treat it as "no age groups apply".
      */
-    public int seasonOfAll(Collection<Race> races) {
+    public SeasonScope scopeOf(List<Race> races) {
+        if (races.isEmpty()) {
+            return new SeasonScope(currentSeason(), List.of());
+        }
         MonthDay seasonStart = seasonStart();
         SortedSet<Integer> seasons = races.stream()
                 .map(race -> seasonOf(race.date(), seasonStart))
                 .collect(Collectors.toCollection(TreeSet::new));
-        if (seasons.isEmpty()) {
-            throw new IllegalStateException("Cannot determine a season without any races");
-        }
+        int resolved = seasonOf(races.getFirst().date(), seasonStart);
         if (seasons.size() > 1) {
-            throw new IllegalStateException("These races span several seasons ("
-                    + seasons.stream().map(String::valueOf).collect(Collectors.joining(", "))
-                    + "). Age classes are configured per season and a participant changes class between them, "
-                    + "so a combined ranking across seasons has no defined age group.");
+            LOG.warn("These races span several seasons ({}); age classes are configured per season and a "
+                            + "participant changes class between them, so they are scored against season {} "
+                            + "(the first race's). Move the season boundary if they should count as one season.",
+                    seasons.stream().map(String::valueOf).collect(Collectors.joining(", ")), resolved);
         }
-        return seasons.first();
+        return new SeasonScope(resolved, List.copyOf(seasons));
+    }
+
+    /**
+     * The outcome of {@link #scopeOf}: the season that actually applies, plus every season the
+     * races fall into so a caller can surface an ambiguous combination instead of hiding it.
+     *
+     * @param season      the season every age-group lookup for these races is scoped to
+     * @param allSeasons  every season the races fall into, ascending; a single entry (or none, for
+     *                    an empty set of races) means there is nothing ambiguous
+     */
+    public record SeasonScope(int season, List<Integer> allSeasons) {
+
+        public boolean spansSeveralSeasons() {
+            return allSeasons.size() > 1;
+        }
     }
 
     /** The season today falls into - the default preselected when configuring age groups. */
     public int currentSeason() {
         return seasonOf(LocalDate.now());
+    }
+
+    /**
+     * Every season that has at least one race, newest first.
+     * <p>
+     * Offered alongside the seasons that have age groups configured, because the two differ exactly
+     * where it matters: a season with races but no age groups is the one whose results come out
+     * "ohne Altersklasse", and it is the one the operator needs to be able to select in order to
+     * fix that - it would otherwise not appear in the configuration UI at all. This is also the
+     * state every database upgraded to season-scoped age groups starts in for its past seasons
+     * (see migration V4).
+     */
+    public List<Integer> seasonsWithRaces() {
+        MonthDay seasonStart = seasonStart();
+        return StreamSupport.stream(raceService.findAll().spliterator(), false)
+                .map(race -> seasonOf(race.date(), seasonStart))
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
     }
 
     /**

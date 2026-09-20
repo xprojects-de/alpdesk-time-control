@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, and the Rundung rounding-consistency regression test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, and the Saison season-scoped age-class test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -41,6 +41,14 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   against the actual PDF text via `pdftotext`, not just the JSON API). No timing device involved -
   results are set directly via `PUT`/`POST /participants` - so it runs much faster than
   bergsprint/nachtslalom.
+- `e2e-tests/saison/` — season-scoped age classes end to end: which season a race is scored in
+  follows its *date* and the configured season boundary, and with it which age classes apply.
+  Covers the post-upgrade state (only the upgrade year configured, so a past season's race comes
+  out "ohne Altersklasse" without any export failing), the rollover in both directions, moving and
+  un-moving the season boundary, and a Gaudi-Modus spanning two seasons — which must produce a
+  ranking, a "nicht gewertet" list, a PDF and a CSV rather than an error, scored against the first
+  race's season. Birth years are chosen so the same person is U16 in one season and U14 in the
+  other, which is what makes a wrong season visible. No timing device, no external data.
 
 Each suite starts its own throwaway backend instance(s) via its own `start_instances.sh` into a
 fresh `mktemp -d` work dir with an isolated SQLite DB — **never** the real

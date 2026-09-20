@@ -178,6 +178,30 @@ Fertige Downloads für macOS, Windows und Linux liegen bei jedem
 
 ---
 
+### Beim Update auf saisonbezogene Altersklassen
+
+Ab dieser Version gelten Altersgruppen **pro Saison**: "U14" heißt in Saison 2025 die Jahrgänge
+2012–2013 und in Saison 2026 die Jahrgänge 2013–2014. Welcher Saison ein Rennen angehört, ergibt
+sich aus seinem Datum und dem konfigurierten Saisonstart (Einstellungen → Saison, Standard 1. Januar).
+
+Beim Update werden die vorhandenen Altersgruppen der Saison zugeordnet, in der das Update läuft –
+das ist die Saison, für die sie eingestellt waren. Für **Rennen aus früheren Saisons** gibt es damit
+zunächst keine Altersgruppen: deren Auswertungen erscheinen unter "ohne Altersklasse". Es geht
+nichts verloren, und es ist schnell behoben:
+
+1. **Altersgruppen** öffnen und im Saison-Auswähler die betroffene Saison wählen – Saisons mit
+   Rennen stehen dort auch dann zur Wahl, wenn für sie noch nichts eingestellt ist.
+2. **"Aus Saison … übernehmen"** klicken. Die Jahrgänge werden um die Jahresdifferenz verschoben,
+   rückwärts genauso wie vorwärts.
+3. Feste Jahrgangsklassen ("Jahrgang 2012") danach von Hand korrigieren – die verschieben sich nicht.
+
+Wenn bei euch ein Winter über den Jahreswechsel geht, verschiebt den Saisonstart unter
+**Einstellungen → Saison** z.B. auf den 1. Juli. Dann zählen ein Dezember- und ein Januar-Rennen
+zur selben Saison. Eine Gaudi-Wertung über zwei Saisons wird weiterhin ausgewertet – nach den
+Klassen der Saison des ersten Rennens –, meldet das aber sichtbar in der Wertungsansicht.
+
+---
+
 ## Dokumentation
 
 | Dokument | Inhalt |

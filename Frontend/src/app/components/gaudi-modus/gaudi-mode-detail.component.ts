@@ -1,4 +1,4 @@
-import {Component, inject, input, output, effect} from "@angular/core";
+import {Component, computed, inject, input, output, effect, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Actions, ofType} from "@ngrx/effects";
@@ -61,6 +61,20 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 </button>
             </mat-card-header>
             <mat-card-content>
+                @if (seasonSpan(); as seasonSpanInfo) {
+                    <div class="season-span-warning">
+                        <mat-icon>warning</mat-icon>
+                        <span>
+                            Die Rennen dieser Wertung liegen in verschiedenen Saisons ({{
+                                seasonSpanInfo.all.join(", ")
+                            }}). Altersklassen gelten pro Saison, deshalb wird nach den Klassen der Saison
+                            <strong>{{ seasonSpanInfo.scoredIn }}</strong> ausgewertet - der des ersten Rennens. Sollen
+                            die Rennen zur selben Saison gehören, passe unter <strong>Einstellungen</strong> den
+                            Saisonstart an.
+                        </span>
+                    </div>
+                }
+
                 @if (gaudiMode().type === gaudiModeType.LOS) {
                     <div class="section-actions">
                         <button mat-raised-button color="primary" (click)="draw()" [disabled]="pairingLoading$ | async">
@@ -339,6 +353,22 @@ import {selectAllRaces} from "../../store/race/race.selectors";
     `,
     styles: [
         `
+            .season-span-warning {
+                margin: 0 0 16px;
+                padding: 12px 16px;
+                display: flex;
+                /* flex-start, nicht center: der Text läuft über mehrere Zeilen, ein vertikal
+                   zentriertes Icon stünde dann neben der mittleren statt neben der ersten. */
+                align-items: flex-start;
+                gap: 12px;
+                border-radius: 4px;
+                background: rgba(255, 171, 0, 0.12);
+            }
+
+            .season-span-warning mat-icon {
+                flex-shrink: 0;
+            }
+
             .detail-card {
                 margin-top: 20px;
             }
@@ -408,13 +438,31 @@ export class GaudiModeDetailComponent {
     pdfExportLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectGaudiModePdfExportLoading);
     pairingLoading$: Observable<boolean> = this.store.select(GaudiModeSelectors.selectPairingLoading);
 
-    private races: Race[] = [];
+    private races = signal<Race[]>([]);
+
+    /**
+     * Die Saisons, in denen die Rennen dieser Wertung liegen - null, solange es nur eine ist.
+     * <p>
+     * Mehr als eine heißt: die Altersklassen sind nicht eindeutig, weil ein Teilnehmer zwischen
+     * zwei Saisons die Klasse wechselt. Das Backend wertet dann gegen die Saison des ersten
+     * Rennens aus (SeasonService#scopeOf) - hier steht, dass es das tut, damit man den Saisonstart
+     * anpassen kann, falls die Rennen zu einer Saison gehören sollen. `races` kommt in der
+     * konfigurierten Reihenfolge, das erste ist also dasselbe, das das Backend heranzieht.
+     */
+    seasonSpan = computed(() => {
+        const byId = new Map(this.races().map(r => [r.id, r]));
+        const seasons = this.gaudiMode()
+            .races.map(r => byId.get(r.raceId)?.seasonYear)
+            .filter((season): season is number => season != null);
+        const distinct = [...new Set(seasons)].sort((a, b) => a - b);
+        return distinct.length > 1 ? {scoredIn: seasons[0], all: distinct} : null;
+    });
 
     constructor() {
         this.store
             .select(selectAllRaces)
             .pipe(takeUntilDestroyed())
-            .subscribe(races => (this.races = races));
+            .subscribe(races => this.races.set(races));
 
         effect(() => {
             const gaudiMode = this.gaudiMode();
@@ -575,7 +623,7 @@ export class GaudiModeDetailComponent {
         if (!leg || leg.rawValue === undefined || leg.rawValue === null) {
             return "-";
         }
-        const race = this.races.find(r => r.id === raceId);
+        const race = this.races().find(r => r.id === raceId);
         const hasPenalty = leg.penalty !== undefined && leg.penalty !== null && leg.penalty !== 0;
         const penaltySign = this.penaltySign(race);
         if (race && race.resultUnit === ResultUnit.POINTS) {
@@ -611,7 +659,7 @@ export class GaudiModeDetailComponent {
         return [
             "Messwert",
             hasOffset ? "(− Zeitversatz Startgruppe)" : "",
-            hasPenalty ? `(${this.penaltySign(this.races.find(r => r.id === raceId))} Strafe)` : "",
+            hasPenalty ? `(${this.penaltySign(this.races().find(r => r.id === raceId))} Strafe)` : "",
         ]
             .filter(Boolean)
             .join(" ");
@@ -645,7 +693,7 @@ export class GaudiModeDetailComponent {
             return "-";
         }
         const raceId = this.gaudiMode().races[0]?.raceId;
-        const race = raceId !== undefined ? this.races.find(r => r.id === raceId) : undefined;
+        const race = raceId !== undefined ? this.races().find(r => r.id === raceId) : undefined;
         if (race && race.resultUnit === ResultUnit.POINTS) {
             const label = race.resultUnitLabel ? ` ${race.resultUnitLabel}` : "";
             return `${(value / 100).toFixed(2)}${label}`;

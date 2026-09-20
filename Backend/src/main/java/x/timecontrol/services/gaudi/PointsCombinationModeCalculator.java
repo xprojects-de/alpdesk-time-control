@@ -21,13 +21,13 @@ import x.timecontrol.services.TeamService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Punkte-Mischwertung: per race, each participant's place is looked up in a Punkteschema
@@ -180,21 +180,31 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
 
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
-        // Scoped to the one season these races belong to - seasonOfAll refuses a combination
-        // spanning two, where a participant would be in a different class in each.
+
+        // Two passes rather than one: eligibility is decided from the participant rows alone, so
+        // the person/team/age-group lookups below only run for the few who actually end up on the
+        // list - and not at all for a complete field, where this method would otherwise still
+        // resolve a season and read two more tables to build nothing.
+        Map<Long, Map<Long, Participant>> notRanked = new LinkedHashMap<>();
+        for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
+            if (!isEligibleForRanking(gaudiMode, races, entry.getValue(), placesByRace)) {
+                notRanked.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (notRanked.isEmpty()) {
+            return List.of();
+        }
+
+        // Scoped to the season these races are scored in; a combination spanning two is scored
+        // against the first race's season, which SeasonService also reports (see #scopeOf).
         List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.seasonOfAll(races.stream().map(RaceParticipants::race).toList()));
-        Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
-        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
+                seasonService.scopeOf(races.stream().map(RaceParticipants::race).toList()).season());
+        Map<Long, Person> personsById = personService.findByIds(notRanked.keySet());
+        Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(notRanked));
 
         List<GaudiDnsEntryResponse> dns = new ArrayList<>();
-        for (Map.Entry<Long, Map<Long, Participant>> entry : participantByPersonAndRace.entrySet()) {
+        for (Map.Entry<Long, Map<Long, Participant>> entry : notRanked.entrySet()) {
             Map<Long, Participant> byRace = entry.getValue();
-
-            if (isEligibleForRanking(gaudiMode, races, byRace, placesByRace)) {
-                continue;
-            }
-
             Optional<Person> person = Optional.ofNullable(personsById.get(entry.getKey()));
             String lastName = person.map(Person::lastName).orElse("Unbekannt");
             String firstName = person.map(Person::firstName).orElse("");

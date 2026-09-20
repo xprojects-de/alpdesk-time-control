@@ -27,6 +27,6 @@ public interface AgeGroupRepository extends CrudRepository<AgeGroup, Long> {
      * configuration UI offers as its season selector, and what
      * {@link x.timecontrol.services.AgeGroupService#copySeason} offers as source seasons.
      */
-    @Query("SELECT DISTINCT season_year FROM age_group ORDER BY season_year DESC")
+    @Query(value = "SELECT DISTINCT season_year FROM age_group ORDER BY season_year DESC", nativeQuery = true)
     List<Integer> findDistinctSeasonYears();
 }

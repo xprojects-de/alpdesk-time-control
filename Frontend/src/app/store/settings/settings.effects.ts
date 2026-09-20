@@ -4,6 +4,7 @@ import {Actions, createEffect, ofType} from "@ngrx/effects";
 import {of} from "rxjs";
 import {catchError, map, mergeMap} from "rxjs/operators";
 import {SettingsService} from "../../services/settings.service";
+import * as RaceActions from "../race/race.actions";
 import * as SettingsActions from "./settings.actions";
 
 @Injectable()
@@ -86,6 +87,19 @@ export class SettingsEffects {
                     ),
                 ),
             ),
+        ),
+    );
+
+    /**
+     * Welcher Saison ein Rennen angehört, rechnet ausschließlich das Backend aus (Race.seasonYear)
+     * - und genau das ändert sich mit der Saisongrenze. Ohne dieses Nachladen zeigen die
+     * Saison-Spalte der Rennliste und das Altersklassen-Badge der Teilnehmerliste noch die alten
+     * Werte, also ausgerechnet dort falsch, wo man die Auswirkung der Änderung prüfen will.
+     */
+    reloadRacesAfterSeasonChange$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(SettingsActions.updateSeasonSuccess),
+            map(() => RaceActions.loadRaces()),
         ),
     );
 }

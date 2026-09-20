@@ -32,7 +32,7 @@ export const selectSeason = createAction("[AgeGroup] Select Season", props<{seas
 export const loadSeasons = createAction("[AgeGroup] Load Seasons");
 export const loadSeasonsSuccess = createAction(
     "[AgeGroup] Load Seasons Success",
-    props<{seasons: number[]; currentSeason: number}>(),
+    props<{seasons: number[]; seasonsWithRaces: number[]; currentSeason: number}>(),
 );
 export const loadSeasonsFailure = createAction("[AgeGroup] Load Seasons Failure", props<{error: string}>());
 

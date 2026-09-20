@@ -47,7 +47,7 @@ class ParticipantServiceSpec extends Specification {
     SettingsService settingsService = Stub(SettingsService) {
         getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
     }
-    SeasonService seasonService = new SeasonService(settingsService)
+    SeasonService seasonService = new SeasonService(settingsService, raceService)
 
     ParticipantService service = new ParticipantService(
             repository, ageGroupService, seasonService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations, losPairingRepository)

@@ -61,18 +61,18 @@ import {Actions, ofType} from "@ngrx/effects";
                         </mat-select>
                     </mat-form-field>
 
-                    @if (previousSeason$ | async; as previousSeason) {
+                    @if (rolloverSource$ | async; as rolloverSource) {
                         @if ((ageGroups$ | async)?.length === 0) {
                             <button
                                 mat-raised-button
                                 color="accent"
-                                (click)="copyFromPreviousSeason(previousSeason)"
+                                (click)="copyFromSeason(rolloverSource)"
                                 matTooltip="Übernimmt alle Altersgruppen der Saison {{
-                                    previousSeason
+                                    rolloverSource
                                 }} und verschiebt die Geburtsjahrgänge entsprechend"
                             >
                                 <mat-icon>content_copy</mat-icon>
-                                Aus Saison {{ previousSeason }} übernehmen
+                                Aus Saison {{ rolloverSource }} übernehmen
                             </button>
                         }
                     }
@@ -256,7 +256,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     loading$: Observable<boolean>;
     selectedSeason$: Observable<number | null>;
     currentSeason$: Observable<number | null>;
-    previousSeason$: Observable<number | null>;
+    rolloverSource$: Observable<number | null>;
     // The seasons to offer: everything already configured, plus the current one even when it has
     // nothing yet - otherwise there would be no way to select the season you want to set up.
     seasonOptions = signal<number[]>([]);
@@ -273,16 +273,21 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         this.loading$ = this.store.select(AgeGroupSelectors.selectAgeGroupLoading);
         this.selectedSeason$ = this.store.select(AgeGroupSelectors.selectSelectedSeason);
         this.currentSeason$ = this.store.select(AgeGroupSelectors.selectCurrentSeason);
-        this.previousSeason$ = this.store.select(AgeGroupSelectors.selectPreviousConfiguredSeason);
+        this.rolloverSource$ = this.store.select(AgeGroupSelectors.selectRolloverSourceSeason);
 
         combineLatest([
             this.store.select(AgeGroupSelectors.selectAgeGroupSeasons),
+            // Auch Saisons mit Rennen, aber ohne Altersgruppen: genau die werden "ohne
+            // Altersklasse" ausgewertet, und genau die muss man auswählen können, um das zu
+            // beheben. Nach einem Upgrade auf saisonbezogene Altersklassen ist jede
+            // Vergangenheits-Saison in diesem Zustand.
+            this.store.select(AgeGroupSelectors.selectSeasonsWithRaces),
             this.currentSeason$,
             this.selectedSeason$,
         ])
             .pipe(takeUntil(this.destroy$))
-            .subscribe(([seasons, currentSeason, selectedSeason]) => {
-                const options = new Set(seasons);
+            .subscribe(([seasons, seasonsWithRaces, currentSeason, selectedSeason]) => {
+                const options = new Set([...seasons, ...seasonsWithRaces]);
                 if (currentSeason != null) {
                     options.add(currentSeason);
                 }
@@ -381,19 +386,25 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(AgeGroupActions.selectSeason({season}));
     }
 
-    copyFromPreviousSeason(fromSeason: number): void {
+    copyFromSeason(fromSeason: number): void {
         const toSeason = this.selectedSeason;
         if (toSeason == null) {
             return;
         }
+        // Die Verschiebung kann negativ sein: eine vergangene Saison wird aus einer späteren
+        // aufgefüllt (nach dem Upgrade auf saisonbezogene Altersklassen der Normalfall), dann
+        // wandern die Jahrgänge zurück statt vor.
+        const shift = toSeason - fromSeason;
+        const years = Math.abs(shift) === 1 ? "1 Jahr" : `${Math.abs(shift)} Jahre`;
+        const direction = shift > 0 ? "nach vorne" : "zurück";
         this.dialog
             .open(ConfirmDialogComponent, {
                 width: "520px",
                 data: {
                     message:
                         `Alle Altersgruppen der Saison ${fromSeason} nach ${toSeason} übernehmen? ` +
-                        `Die Geburtsjahrgänge werden dabei um ${toSeason - fromSeason} Jahr(e) verschoben ` +
-                        `(aus "U14 2013-2014" wird "U14 ${2013 + (toSeason - fromSeason)}-${2014 + (toSeason - fromSeason)}"). ` +
+                        `Die Geburtsjahrgänge werden dabei um ${years} ${direction} verschoben ` +
+                        `(aus "U14 2013-2014" wird "U14 ${2013 + shift}-${2014 + shift}"). ` +
                         `Feste Jahrgangsklassen musst du danach von Hand korrigieren.`,
                     confirmLabel: "Übernehmen",
                 },

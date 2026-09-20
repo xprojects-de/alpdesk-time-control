@@ -17,13 +17,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.AgeGroupRequest;
 import x.timecontrol.dto.AgeGroupResponse;
+import x.timecontrol.dto.AgeGroupSeasonsResponse;
 import x.timecontrol.dto.CopySeasonRequest;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.services.AgeGroupService;
 import x.timecontrol.services.SeasonService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
@@ -55,14 +55,15 @@ public class AgeGroupController {
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get("/seasons")
-    @Operation(summary = "List the seasons that have age groups configured, newest first",
-            description = "The options for the season selector. Also reports the season today falls into, which is what a new configuration defaults to.",
+    @Operation(summary = "List the seasons the configuration UI offers, newest first",
+            description = "The options for the season selector: seasons that have age groups configured, plus seasons that have races but no age groups yet - the latter are exactly the ones whose results come out \"ohne Altersklasse\" and therefore have to be selectable to be fixed. Also reports the season today falls into, which is what a new configuration defaults to.",
             security = @SecurityRequirement(name = "BearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Configured seasons")
-    public HttpResponse<Map<String, Object>> seasons() {
-        return HttpResponse.ok(Map.of(
-                "seasons", service.findConfiguredSeasons(),
-                "currentSeason", seasonService.currentSeason()));
+    @ApiResponse(responseCode = "200", description = "Configured seasons", content = @Content(schema = @Schema(implementation = AgeGroupSeasonsResponse.class)))
+    public HttpResponse<AgeGroupSeasonsResponse> seasons() {
+        return HttpResponse.ok(new AgeGroupSeasonsResponse(
+                service.findConfiguredSeasons(),
+                seasonService.seasonsWithRaces(),
+                seasonService.currentSeason()));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
@@ -77,6 +78,11 @@ public class AgeGroupController {
     public HttpResponse<?> copySeason(@Body CopySeasonRequest request) {
         if (request.fromSeason() == null || request.toSeason() == null) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("fromSeason and toSeason are required"));
+        }
+        if (request.fromSeason().equals(request.toSeason())) {
+            // A bad request, not a state conflict: nothing about the stored data prevents this,
+            // the two values simply have to differ.
+            return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("fromSeason and toSeason must differ"));
         }
         try {
             List<AgeGroupResponse> created = service.copySeason(request.fromSeason(), request.toSeason()).stream()

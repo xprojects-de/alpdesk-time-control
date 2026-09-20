@@ -11,10 +11,12 @@ import java.time.LocalDate
 
 class SeasonServiceSpec extends Specification {
 
-    private SeasonService serviceWithBoundary(int month, int day) {
+    private SeasonService serviceWithBoundary(int month, int day, List<Race> races = []) {
         def settings = Stub(SettingsService)
         settings.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, month, day)
-        new SeasonService(settings)
+        def raceService = Stub(RaceService)
+        raceService.findAll() >> races
+        new SeasonService(settings, raceService)
     }
 
     private static Race raceOn(LocalDate date) {
@@ -61,33 +63,63 @@ class SeasonServiceSpec extends Specification {
         service.seasonOf(raceOn(LocalDate.of(2023, 2, 4))) == 2023
     }
 
-    def "seasonOfAll returns the single season a set of races shares"() {
+    def "scopeOf returns the single season a set of races shares"() {
         given:
         def service = serviceWithBoundary(1, 1)
 
-        expect:
-        service.seasonOfAll([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2026, 3, 8))]) == 2026
+        when:
+        def scope = service.scopeOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2026, 3, 8))])
+
+        then:
+        scope.season() == 2026
+        !scope.spansSeveralSeasons()
+        scope.allSeasons() == [2026]
     }
 
-    def "seasonOfAll refuses races spanning two seasons instead of silently picking one"() {
-        given: "a Gaudi-Modus is scored across several races, but a participant changes class between seasons"
+    def "scopeOf scores races spanning two seasons against the first race's season, and reports the span"() {
+        given: "a ski winter's club championship with the default boundary - December and January"
+        def service = serviceWithBoundary(1, 1)
+
+        when: "the December race is the first (configured) one, so it heads the export"
+        def scope = service.scopeOf([raceOn(LocalDate.of(2025, 12, 14)), raceOn(LocalDate.of(2026, 1, 11))])
+
+        then: "a combined ranking is still produced rather than the whole export failing mid-event"
+        scope.season() == 2025
+        scope.spansSeveralSeasons()
+        scope.allSeasons() == [2025, 2026]
+    }
+
+    def "scopeOf takes the season from the first race, not the earliest one"() {
+        given: "order is the operator's configured leg order, which is what heads the document"
+        def service = serviceWithBoundary(1, 1)
+
+        expect:
+        service.scopeOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2025, 12, 14))]).season() == 2026
+    }
+
+    def "scopeOf on no races resolves to the current season and spans nothing"() {
+        given: "every race of a Gaudi-Modus deleted since - nothing left to categorise"
         def service = serviceWithBoundary(1, 1)
 
         when:
-        service.seasonOfAll([raceOn(LocalDate.of(2025, 12, 14)), raceOn(LocalDate.of(2026, 1, 11))])
+        def scope = service.scopeOf([])
 
-        then:
-        def e = thrown(IllegalStateException)
-        e.message.contains("2025")
-        e.message.contains("2026")
+        then: "no exception: the caller has an empty field anyway and must not fail over it"
+        scope.season() == service.currentSeason()
+        !scope.spansSeveralSeasons()
+        scope.allSeasons().isEmpty()
     }
 
-    def "seasonOfAll refuses an empty set of races rather than inventing a season"() {
-        when:
-        serviceWithBoundary(1, 1).seasonOfAll([])
+    def "seasonsWithRaces reports each season that has a race, newest first, through the configured boundary"() {
+        given: "a 1 July boundary, so the January race belongs to the previous season year"
+        def service = serviceWithBoundary(7, 1, [
+                raceOn(LocalDate.of(2026, 1, 11)),
+                raceOn(LocalDate.of(2025, 12, 14)),
+                raceOn(LocalDate.of(2026, 9, 20))
+        ])
 
-        then:
-        thrown(IllegalStateException)
+        expect: "both winter races collapse into 2025, the September one opens 2026"
+        service.seasonsWithRaces() == [2026, 2025]
     }
 
     def "seasonStartDate/seasonEndDate describe what a season actually spans"() {

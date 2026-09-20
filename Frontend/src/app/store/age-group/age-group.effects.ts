@@ -70,7 +70,9 @@ export class AgeGroupEffects {
             ofType(AgeGroupActions.loadSeasons),
             mergeMap(() =>
                 this.ageGroupService.getSeasons().pipe(
-                    map(({seasons, currentSeason}) => AgeGroupActions.loadSeasonsSuccess({seasons, currentSeason})),
+                    map(({seasons, seasonsWithRaces, currentSeason}) =>
+                        AgeGroupActions.loadSeasonsSuccess({seasons, seasonsWithRaces, currentSeason}),
+                    ),
                     catchError(error =>
                         of(
                             AgeGroupActions.loadSeasonsFailure({
