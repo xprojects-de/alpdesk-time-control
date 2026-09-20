@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {PointsScale, PointsScaleRequest} from '../models/points-scale.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {PointsScale, PointsScaleRequest} from "../models/points-scale.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class PointsScaleService {
     private http = inject(HttpClient);

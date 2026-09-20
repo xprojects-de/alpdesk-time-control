@@ -47,7 +47,29 @@ npm start                # ng serve, dev server on http://localhost:4200 (calls 
 npm run build             # development build
 npm run deploy             # production build → dist/time-control/browser (what copyFrontend consumes)
 npm test                  # Angular's unit-test builder (Vitest under the hood)
+npm run lint              # ng lint: ESLint (angular-eslint) + Prettier as a lint rule
+npm run lint:fix          # ng lint --fix: formats with Prettier and auto-fixes what ESLint can
 ```
+
+Formatting is owned by Prettier (`.prettierrc.json`: 4 spaces, double quotes, no bracket spacing,
+120 columns - chosen to match the existing code, not Prettier's defaults) and enforced through
+ESLint via `eslint-plugin-prettier`, so `ng lint` is the single entry point for both formatting and
+linting. `src/index.html` is excluded: it is a plain HTML document, and the Angular template parser
+used for `**/*.html` fails on its doctype.
+
+**After every frontend code change, run the linter before reporting the change as done** — either
+`npx eslint <changed files> --fix` for a handful of files or `npm run lint:fix` for a broader change,
+and then `npm run lint` to confirm it is clean. `ng lint` must stay green; leaving a change
+unformatted means the next person's lint run drags unrelated files into their diff.
+
+Two traps `--fix` has already caused here, both now guarded in the code - don't undo the guards:
+- It applies rule fixes, not just formatting. `@typescript-eslint/no-wrapper-object-types` rewrote
+  `displayFormat: Object` to `object` in `german-date-adapter.ts` and broke the build (TS2367), so
+  **always run `ng build` after a `--fix` over many files**; the line now carries an
+  `eslint-disable-next-line`.
+- For `**/*.html`, `eslint-plugin-prettier` needs `{parser: "angular"}` (set in `eslint.config.js`).
+  Without it, it infers a JS parser and "formats" templates as JSX - it turned `app.html`'s
+  `<router-outlet />` into `<router-outlet />;`, i.e. a stray semicolon rendered as text.
 
 CORS in `application.properties` only allows `http://localhost:4200` as an origin, so the Angular
 dev server must run on that exact port when talking to a locally running backend.
@@ -66,7 +88,9 @@ Micronaut app (`x.timecontrol` package), annotation-driven, no Spring:
   One deliberate exception: `PdfExportService`'s generated PDF content (column headers, labels
   like "Platz"/"Rückstand"/"Höhendifferenz") stays German, since the PDF is read directly by
   German-speaking race officials — only that service's *output strings* are exempt, its own code
-  (methods, fields, comments) still follows the English-only rule.
+  (methods, fields, comments) still follows the English-only rule. The same exemption applies to
+  `GaudiCsvExportService`'s CSV header row (Platz/Name/Vorname/...), the CSV counterpart of the
+  Gaudi-Modus PDFs.
 - **Controller/** — REST endpoints (`@Controller`), one per resource (Race, Participant, Person,
   Team, Category, AgeGroup, Measurement, RaceMeasurement, GaudiMode, Settings, PointsScale,
   Version). Nearly everything is `@Secured` behind JWT bearer auth; a handful of static
@@ -124,6 +148,13 @@ Angular 22 standalone-style app using Angular Material and NgRx.
   selectors rather than calling services directly.
 - **components/**: one folder per feature/page, matching the store slices (race-list,
   participant-list, measurement-list, gaudi-modus, settings, etc.).
+- **Subscription cleanup**: existing components use a `private destroy$ = new Subject<void>()` plus
+  `takeUntil(this.destroy$)` and an `ngOnDestroy` — that is correct and stays as is; don't convert
+  them wholesale. New components (and ones being reworked anyway) use Angular's
+  `takeUntilDestroyed()` from `@angular/core/rxjs-interop` instead — without an argument only inside
+  an injection context (constructor/field initializer), otherwise with an injected `DestroyRef`.
+  `race-live-links-dialog.component.ts` is the reference for the new style. Both patterns coexisting
+  is intentional.
 - **guards/auth.guard.ts** + **interceptors/auth.interceptor.ts**: route guarding and attaching the
   JWT bearer token to outgoing requests, backed by `store/auth`.
 - **environments/**: `environment.ts` (dev) hardcodes `apiUrl: 'http://localhost:18000'`, relying on

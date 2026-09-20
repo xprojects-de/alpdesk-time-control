@@ -1,15 +1,18 @@
-import {inject, Injectable} from '@angular/core';
-import {extractErrorMessage} from '../../utils/http-error.util';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {interval, of} from 'rxjs';
-import {catchError, map, mergeMap, switchMap, takeUntil, tap} from 'rxjs/operators';
-import {MeasurementService} from '../../services/measurement.service';
-import * as MeasurementActions from './measurement.actions';
+import {inject, Injectable} from "@angular/core";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {Store} from "@ngrx/store";
+import {interval, of} from "rxjs";
+import {catchError, map, mergeMap, switchMap, takeUntil, tap, withLatestFrom} from "rxjs/operators";
+import {MeasurementService} from "../../services/measurement.service";
+import * as MeasurementActions from "./measurement.actions";
+import * as MeasurementSelectors from "./measurement.selectors";
 
 @Injectable()
 export class MeasurementEffects {
     private actions$ = inject(Actions);
     private measurementService = inject(MeasurementService);
+    private store = inject(Store);
 
     // switchMap, not mergeMap: this is re-dispatched every 2s by the live auto-refresh poll, and only
     // the most recently requested snapshot should ever be applied. With mergeMap, a slow response to
@@ -17,15 +20,22 @@ export class MeasurementEffects {
     loadMeasurements$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.loadMeasurements),
-            switchMap(() =>
+            // Reads the write counter BEFORE the request goes out, so the reducer can tell whether
+            // a create/update/delete completed while this snapshot was travelling.
+            withLatestFrom(this.store.select(MeasurementSelectors.selectWriteSeq)),
+            switchMap(([, writeSeq]) =>
                 this.measurementService.getAll().pipe(
-                    map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements})),
-                    catchError(error => of(MeasurementActions.loadMeasurementsFailure({
-                        error: extractErrorMessage(error, 'Messungen konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    map(measurements => MeasurementActions.loadMeasurementsSuccess({measurements, writeSeq})),
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadMeasurementsFailure({
+                                error: extractErrorMessage(error, "Messungen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     loadMeasurementsByParticipant$ = createEffect(() =>
@@ -34,12 +44,19 @@ export class MeasurementEffects {
             mergeMap(({participantId}) =>
                 this.measurementService.getByParticipant(participantId).pipe(
                     map(measurements => MeasurementActions.loadMeasurementsByParticipantSuccess({measurements})),
-                    catchError(error => of(MeasurementActions.loadMeasurementsByParticipantFailure({
-                        error: extractErrorMessage(error, 'Messungen für Teilnehmer konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadMeasurementsByParticipantFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Messungen für Teilnehmer konnten nicht geladen werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     loadMeasurement$ = createEffect(() =>
@@ -48,12 +65,16 @@ export class MeasurementEffects {
             mergeMap(({id}) =>
                 this.measurementService.getById(id).pipe(
                     map(measurement => MeasurementActions.loadMeasurementSuccess({measurement})),
-                    catchError(error => of(MeasurementActions.loadMeasurementFailure({
-                        error: extractErrorMessage(error, 'Messung konnte nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadMeasurementFailure({
+                                error: extractErrorMessage(error, "Messung konnte nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     createMeasurement$ = createEffect(() =>
@@ -62,12 +83,16 @@ export class MeasurementEffects {
             mergeMap(({measurement}) =>
                 this.measurementService.create(measurement).pipe(
                     map(created => MeasurementActions.createMeasurementSuccess({measurement: created})),
-                    catchError(error => of(MeasurementActions.createMeasurementFailure({
-                        error: extractErrorMessage(error, 'Messung konnte nicht erstellt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.createMeasurementFailure({
+                                error: extractErrorMessage(error, "Messung konnte nicht erstellt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     updateMeasurement$ = createEffect(() =>
@@ -76,12 +101,16 @@ export class MeasurementEffects {
             mergeMap(({id, measurement}) =>
                 this.measurementService.update(id, measurement).pipe(
                     map(updated => MeasurementActions.updateMeasurementSuccess({measurement: updated})),
-                    catchError(error => of(MeasurementActions.updateMeasurementFailure({
-                        error: extractErrorMessage(error, 'Messung konnte nicht aktualisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.updateMeasurementFailure({
+                                error: extractErrorMessage(error, "Messung konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     deleteMeasurement$ = createEffect(() =>
@@ -90,14 +119,17 @@ export class MeasurementEffects {
             mergeMap(({id}) =>
                 this.measurementService.delete(id).pipe(
                     map(() => MeasurementActions.deleteMeasurementSuccess({id})),
-                    catchError(error => of(MeasurementActions.deleteMeasurementFailure({
-                        error: extractErrorMessage(error, 'Messung konnte nicht gelöscht werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.deleteMeasurementFailure({
+                                error: extractErrorMessage(error, "Messung konnte nicht gelöscht werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
-
 
     resetMeasurements$ = createEffect(() =>
         this.actions$.pipe(
@@ -105,20 +137,38 @@ export class MeasurementEffects {
             mergeMap(({resetDevice}) =>
                 this.measurementService.reset(resetDevice).pipe(
                     map(message => MeasurementActions.resetMeasurementsSuccess({message})),
-                    catchError(error => of(MeasurementActions.resetMeasurementsFailure({
-                        error: extractErrorMessage(error, 'Messungen konnten nicht zurückgesetzt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.resetMeasurementsFailure({
+                                error: extractErrorMessage(error, "Messungen konnten nicht zurückgesetzt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     // Reload measurements after successful reset
+    // Re-syncs with the backend after every write, so the list is authoritative again even if a
+    // poll response was dropped while the write was in flight (see the reducer's
+    // loadMeasurementsSuccess handler).
+    reloadAfterWrite$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(
+                MeasurementActions.createMeasurementSuccess,
+                MeasurementActions.updateMeasurementSuccess,
+                MeasurementActions.deleteMeasurementSuccess,
+            ),
+            map(() => MeasurementActions.loadMeasurements()),
+        ),
+    );
+
     reloadAfterReset$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.resetMeasurementsSuccess),
-            map(() => MeasurementActions.loadMeasurements())
-        )
+            map(() => MeasurementActions.loadMeasurements()),
+        ),
     );
 
     setContinuousMode$ = createEffect(() =>
@@ -127,12 +177,16 @@ export class MeasurementEffects {
             mergeMap(({enable}) =>
                 this.measurementService.setContinuousMode(enable).pipe(
                     map(() => MeasurementActions.setContinuousModeSuccess({enabled: enable})),
-                    catchError(error => of(MeasurementActions.setContinuousModeFailure({
-                        error: extractErrorMessage(error, 'Kontinuierlicher Modus konnte nicht gesetzt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.setContinuousModeFailure({
+                                error: extractErrorMessage(error, "Kontinuierlicher Modus konnte nicht gesetzt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     setScheduledImport$ = createEffect(() =>
@@ -141,12 +195,16 @@ export class MeasurementEffects {
             mergeMap(({enable}) =>
                 this.measurementService.setScheduledImport(enable).pipe(
                     map(() => MeasurementActions.setScheduledImportSuccess({enabled: enable})),
-                    catchError(error => of(MeasurementActions.setScheduledImportFailure({
-                        error: extractErrorMessage(error, 'Geplanter Import konnte nicht gesetzt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.setScheduledImportFailure({
+                                error: extractErrorMessage(error, "Geplanter Import konnte nicht gesetzt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     loadScheduledImportStatus$ = createEffect(() =>
@@ -155,12 +213,19 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.getScheduledImportStatus().pipe(
                     map(enabled => MeasurementActions.loadScheduledImportStatusSuccess({enabled})),
-                    catchError(error => of(MeasurementActions.loadScheduledImportStatusFailure({
-                        error: extractErrorMessage(error, 'Status des geplanten Imports konnte nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadScheduledImportStatusFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Status des geplanten Imports konnte nicht geladen werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     archiveMeasurements$ = createEffect(() =>
@@ -169,20 +234,24 @@ export class MeasurementEffects {
             mergeMap(({raceId, resetDevice, clearAfterArchive}) =>
                 this.measurementService.archive(raceId, resetDevice, clearAfterArchive).pipe(
                     map(message => MeasurementActions.archiveMeasurementsSuccess({clearAfterArchive, message})),
-                    catchError(error => of(MeasurementActions.archiveMeasurementsFailure({
-                        error: extractErrorMessage(error, 'Messungen konnten nicht archiviert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.archiveMeasurementsFailure({
+                                error: extractErrorMessage(error, "Messungen konnten nicht archiviert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     // Reload measurements after successful archive
     reloadAfterArchive$ = createEffect(() =>
         this.actions$.pipe(
             ofType(MeasurementActions.archiveMeasurementsSuccess),
-            map(() => MeasurementActions.loadMeasurements())
-        )
+            map(() => MeasurementActions.loadMeasurements()),
+        ),
     );
 
     loadDeviceStatus$ = createEffect(() =>
@@ -191,12 +260,16 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.getDeviceStatus().pipe(
                     map(status => MeasurementActions.loadDeviceStatusSuccess({status})),
-                    catchError(error => of(MeasurementActions.loadDeviceStatusFailure({
-                        error: extractErrorMessage(error, 'Gerätestatus konnte nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadDeviceStatusFailure({
+                                error: extractErrorMessage(error, "Gerätestatus konnte nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     discardOldestStart$ = createEffect(() =>
@@ -205,12 +278,16 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.discardOldestStart().pipe(
                     map(message => MeasurementActions.discardOldestStartSuccess({message})),
-                    catchError(error => of(MeasurementActions.discardOldestStartFailure({
-                        error: extractErrorMessage(error, 'Ältester Start konnte nicht verworfen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.discardOldestStartFailure({
+                                error: extractErrorMessage(error, "Ältester Start konnte nicht verworfen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     exportMeasurementsCsv$ = createEffect(() =>
@@ -218,13 +295,17 @@ export class MeasurementEffects {
             ofType(MeasurementActions.exportMeasurementsCsv),
             mergeMap(() =>
                 this.measurementService.exportCsv().pipe(
-                    map(blob => MeasurementActions.exportMeasurementsCsvSuccess({blob, filename: 'measurements.csv'})),
-                    catchError(error => of(MeasurementActions.exportMeasurementsCsvFailure({
-                        error: extractErrorMessage(error, 'Export fehlgeschlagen')
-                    })))
-                )
-            )
-        )
+                    map(blob => MeasurementActions.exportMeasurementsCsvSuccess({blob, filename: "measurements.csv"})),
+                    catchError(error =>
+                        of(
+                            MeasurementActions.exportMeasurementsCsvFailure({
+                                error: extractErrorMessage(error, "Export fehlgeschlagen"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     importMeasurementsMapped$ = createEffect(() =>
@@ -233,28 +314,33 @@ export class MeasurementEffects {
             mergeMap(({file, delimiter, mapping}) =>
                 this.measurementService.importMapped(file, delimiter, mapping).pipe(
                     map(result => MeasurementActions.importMeasurementsMappedSuccess({result})),
-                    catchError(error => of(MeasurementActions.importMeasurementsMappedFailure({
-                        error: extractErrorMessage(error, 'Import fehlgeschlagen')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.importMeasurementsMappedFailure({
+                                error: extractErrorMessage(error, "Import fehlgeschlagen"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     // Auto-download the exported CSV once the export succeeds
-    downloadExportedFile$ = createEffect(() =>
-        this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsCsvSuccess),
-            tap(({blob, filename}) => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                a.click();
-                URL.revokeObjectURL(url);
-            })
-        ),
-        {dispatch: false}
+    downloadExportedFile$ = createEffect(
+        () =>
+            this.actions$.pipe(
+                ofType(MeasurementActions.exportMeasurementsCsvSuccess),
+                tap(({blob, filename}) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }),
+            ),
+        {dispatch: false},
     );
 
     // Device connection polling
@@ -264,10 +350,10 @@ export class MeasurementEffects {
             switchMap(() =>
                 interval(10000).pipe(
                     map(() => MeasurementActions.checkDeviceConnection()),
-                    takeUntil(this.actions$.pipe(ofType(MeasurementActions.stopDeviceConnectionPolling)))
-                )
-            )
-        )
+                    takeUntil(this.actions$.pipe(ofType(MeasurementActions.stopDeviceConnectionPolling))),
+                ),
+            ),
+        ),
     );
 
     checkDeviceConnection$ = createEffect(() =>
@@ -276,12 +362,16 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.checkDeviceConnection().pipe(
                     map(connected => MeasurementActions.checkDeviceConnectionSuccess({connected})),
-                    catchError(error => of(MeasurementActions.checkDeviceConnectionFailure({
-                        error: extractErrorMessage(error, 'Geräteverbindung konnte nicht geprüft werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.checkDeviceConnectionFailure({
+                                error: extractErrorMessage(error, "Geräteverbindung konnte nicht geprüft werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     loadAutoAssignStatus$ = createEffect(() =>
@@ -290,12 +380,19 @@ export class MeasurementEffects {
             switchMap(() =>
                 this.measurementService.getAutoAssignStatus().pipe(
                     map(status => MeasurementActions.loadAutoAssignStatusSuccess({status})),
-                    catchError(error => of(MeasurementActions.loadAutoAssignStatusFailure({
-                        error: extractErrorMessage(error, 'Status der automatischen Zuordnung konnte nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.loadAutoAssignStatusFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Status der automatischen Zuordnung konnte nicht geladen werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     enableAutoAssign$ = createEffect(() =>
@@ -304,12 +401,19 @@ export class MeasurementEffects {
             mergeMap(({request}) =>
                 this.measurementService.enableAutoAssign(request).pipe(
                     map(status => MeasurementActions.enableAutoAssignSuccess({status})),
-                    catchError(error => of(MeasurementActions.enableAutoAssignFailure({
-                        error: extractErrorMessage(error, 'Automatische Zuordnung konnte nicht aktiviert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.enableAutoAssignFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Automatische Zuordnung konnte nicht aktiviert werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     disableAutoAssign$ = createEffect(() =>
@@ -318,12 +422,19 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.disableAutoAssign().pipe(
                     map(status => MeasurementActions.disableAutoAssignSuccess({status})),
-                    catchError(error => of(MeasurementActions.disableAutoAssignFailure({
-                        error: extractErrorMessage(error, 'Automatische Zuordnung konnte nicht deaktiviert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.disableAutoAssignFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Automatische Zuordnung konnte nicht deaktiviert werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     skipAutoAssign$ = createEffect(() =>
@@ -332,12 +443,16 @@ export class MeasurementEffects {
             mergeMap(() =>
                 this.measurementService.skipAutoAssign().pipe(
                     map(status => MeasurementActions.skipAutoAssignSuccess({status})),
-                    catchError(error => of(MeasurementActions.skipAutoAssignFailure({
-                        error: extractErrorMessage(error, 'Startnummer konnte nicht übersprungen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.skipAutoAssignFailure({
+                                error: extractErrorMessage(error, "Startnummer konnte nicht übersprungen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     setNextAutoAssignRaceNumber$ = createEffect(() =>
@@ -346,12 +461,15 @@ export class MeasurementEffects {
             mergeMap(({raceNumber}) =>
                 this.measurementService.setNextAutoAssignRaceNumber(raceNumber).pipe(
                     map(status => MeasurementActions.setNextAutoAssignRaceNumberSuccess({status})),
-                    catchError(error => of(MeasurementActions.setNextAutoAssignRaceNumberFailure({
-                        error: extractErrorMessage(error, 'Nächste Startnummer konnte nicht gesetzt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            MeasurementActions.setNextAutoAssignRaceNumberFailure({
+                                error: extractErrorMessage(error, "Nächste Startnummer konnte nicht gesetzt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 }
-

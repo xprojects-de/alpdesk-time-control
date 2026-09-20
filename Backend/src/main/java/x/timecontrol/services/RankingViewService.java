@@ -1,5 +1,6 @@
 package x.timecontrol.services;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
 import x.timecontrol.entities.AgeGroup;
@@ -9,6 +10,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.StartGroupTemplate;
 import x.timecontrol.entities.Team;
 
 import java.time.LocalDate;
@@ -45,13 +47,15 @@ public class RankingViewService {
     private final TeamService teamService;
     private final PersonService personService;
     private final RankingService rankingService;
+    private final StartGroupTemplateService startGroupTemplateService;
 
-    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService) {
+    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService) {
         this.ageGroupService = ageGroupService;
         this.categoryService = categoryService;
         this.teamService = teamService;
         this.personService = personService;
         this.rankingService = rankingService;
+        this.startGroupTemplateService = startGroupTemplateService;
     }
 
     @Serdeable
@@ -62,7 +66,9 @@ public class RankingViewService {
 
     @Serdeable
     public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
-                                  String ageGroup, String team, String category, boolean hasCategory) {
+                                  String ageGroup, String team, String category, boolean hasCategory,
+                                  String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup,
+                                  String startGroupOffset) {
     }
 
     /**
@@ -136,14 +142,33 @@ public class RankingViewService {
      * {@link ParticipantService#groupByAgeGroup} and the female-before-male convention used
      * throughout {@link PdfExportService} - without this, two same-year different-gender age
      * groups would print in whatever order {@code ageGroupService.findAll()} happens to return.
+     * <p>
+     * Always ends with {@link AgeGroupService#UNKNOWN_AGE_GROUP}, the bucket for anyone without a
+     * birth date or whose birth year matches no configured group - without it, such a participant
+     * would silently vanish from every by-age-group view (they're ranked, so they aren't in the
+     * "nicht gewertet" list either). Callers skip empty sections, so it only shows up when someone
+     * actually lands there; label it via {@link #ageGroupSectionLabel}.
      */
     public List<String> uniqueAgeGroupNamesYoungestFirst() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+        List<String> names = new ArrayList<>(StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
                 .distinct()
-                .toList();
+                .toList());
+        if (names.stream().noneMatch(AgeGroupService.UNKNOWN_AGE_GROUP::equalsIgnoreCase)) {
+            names.add(AgeGroupService.UNKNOWN_AGE_GROUP);
+        }
+        return names;
+    }
+
+    /**
+     * Section title text for an age group name from {@link #uniqueAgeGroupNamesYoungestFirst} -
+     * the name itself, except the catch-all {@link AgeGroupService#UNKNOWN_AGE_GROUP} bucket, which
+     * reads as "ohne Altersklasse" (e.g. "Wertung ohne Altersklasse weiblich").
+     */
+    public String ageGroupSectionLabel(String ageGroupName) {
+        return AgeGroupService.UNKNOWN_AGE_GROUP.equals(ageGroupName) ? "ohne Altersklasse" : ageGroupName;
     }
 
     public String formatName(Person person) {
@@ -151,6 +176,18 @@ public class RankingViewService {
             return "Unbekannt";
         }
         return personService.displayName(person);
+    }
+
+    /**
+     * A start group's Zeitversatz as "m:ss" - the same minutes + seconds the start-group template
+     * dialog takes it in - or null for a group without one. Shared by the start list PDF and CSV.
+     */
+    @Nullable
+    public static String formatStartGroupOffset(@Nullable Integer offsetSeconds) {
+        if (offsetSeconds == null) {
+            return null;
+        }
+        return String.format("%d:%02d", offsetSeconds / 60, offsetSeconds % 60);
     }
 
     public String genderLabel(Gender gender) {
@@ -179,6 +216,8 @@ public class RankingViewService {
         Map<Long, Person> personsById = loadPersonsByIds(sorted, Participant::personId);
         Map<Long, Team> teamsById = loadTeamsByIds(sorted, Participant::teamId);
         Map<Long, Category> categoriesById = loadCategoriesByIds(sorted, Participant::categoryId);
+        Set<Long> startGroupIds = sorted.stream().map(Participant::startGroupId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
 
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
@@ -194,8 +233,14 @@ public class RankingViewService {
             String category = p.categoryId() != null
                     ? Optional.ofNullable(categoriesById.get(p.categoryId())).map(Category::name).orElse("-")
                     : "-";
+            StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
+            String startGroupLabel = startGroup != null ? startGroup.label() : "-";
+            String startGroupColor = startGroup != null ? startGroup.color() : null;
+            String startGroupOffset = startGroup != null ? formatStartGroupOffset(startGroup.offsetSeconds()) : null;
 
-            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null));
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null,
+                    startGroupLabel, startGroupColor, startGroup != null,
+                    startGroupOffset != null ? startGroupOffset : "-"));
         }
         return entries;
     }
@@ -257,8 +302,8 @@ public class RankingViewService {
                     person != null ? person.externalId() : null,
                     ageGroup,
                     team,
-                    formatValue(race, p.durationMs()),
-                    formatValue(race, p.penalty()),
+                    formatValue(race, rankingService.netDurationMs(race, p)),
+                    formatPenalty(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
                     p.penalty() != null && p.penalty() != 0
@@ -355,6 +400,14 @@ public class RankingViewService {
      * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SS) or a
      * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
      */
+    /**
+     * Like {@link #formatValue}, but a 0 penalty (legacy rows stored before 0 was normalized to
+     * null on save) renders as "-" too - "no penalty", not a printed "00:00,00".
+     */
+    public static String formatPenalty(Race race, Integer penalty) {
+        return formatValue(race, penalty != null && penalty == 0 ? null : penalty);
+    }
+
     public static String formatValue(Race race, Integer value) {
         if (value == null) {
             return "-";

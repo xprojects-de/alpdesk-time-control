@@ -1,21 +1,8 @@
-import {
-    ApplicationConfig,
-    provideBrowserGlobalErrorListeners,
-    isDevMode,
-    LOCALE_ID,
-} from "@angular/core";
+import {ApplicationConfig, provideBrowserGlobalErrorListeners, isDevMode, LOCALE_ID} from "@angular/core";
 import {provideRouter} from "@angular/router";
-import {
-    provideHttpClient,
-    withInterceptors,
-    withXhr,
-} from "@angular/common/http";
+import {provideHttpClient, withInterceptors, withXhr} from "@angular/common/http";
 import {provideAnimationsAsync} from "@angular/platform-browser/animations/async";
-import {
-    MAT_DATE_LOCALE,
-    MAT_DATE_FORMATS,
-    DateAdapter,
-} from "@angular/material/core";
+import {MAT_DATE_LOCALE, MAT_DATE_FORMATS, DateAdapter} from "@angular/material/core";
 import {MatPaginatorIntl} from "@angular/material/paginator";
 import {registerLocaleData} from "@angular/common";
 import localeDe from "@angular/common/locales/de";
@@ -47,6 +34,8 @@ import {gaudiModeReducer} from "./store/gaudi-mode/gaudi-mode.reducer";
 import {versionReducer} from "./store/version/version.reducer";
 import {settingsReducer} from "./store/settings/settings.reducer";
 import {pointsScaleReducer} from "./store/points-scale/points-scale.reducer";
+import {startGroupTemplateReducer} from "./store/start-group-template/start-group-template.reducer";
+import {backendHealthReducer} from "./store/backend-health/backend-health.reducer";
 import {ParticipantEffects} from "./store/participant/participant.effects";
 import {MeasurementEffects} from "./store/measurement/measurement.effects";
 import {RaceMeasurementEffects} from "./store/race-measurement/race-measurement.effects";
@@ -60,6 +49,9 @@ import {GaudiModeEffects} from "./store/gaudi-mode/gaudi-mode.effects";
 import {VersionEffects} from "./store/version/version.effects";
 import {SettingsEffects} from "./store/settings/settings.effects";
 import {PointsScaleEffects} from "./store/points-scale/points-scale.effects";
+import {StartGroupTemplateEffects} from "./store/start-group-template/start-group-template.effects";
+import {BackendHealthEffects} from "./store/backend-health/backend-health.effects";
+import {LoadFailureEffects} from "./store/load-failure/load-failure.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 import {timeoutInterceptor} from "./interceptors/timeout.interceptor";
 
@@ -102,16 +94,39 @@ export const appConfig: ApplicationConfig = {
             version: versionReducer,
             settings: settingsReducer,
             pointsScale: pointsScaleReducer,
+            startGroupTemplate: startGroupTemplateReducer,
+            backendHealth: backendHealthReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects, PointsScaleEffects]),
+        provideEffects([
+            AuthEffects,
+            RaceEffects,
+            ParticipantEffects,
+            MeasurementEffects,
+            RaceMeasurementEffects,
+            AgeGroupEffects,
+            TeamEffects,
+            CategoryEffects,
+            PersonEffects,
+            GaudiModeEffects,
+            VersionEffects,
+            SettingsEffects,
+            PointsScaleEffects,
+            StartGroupTemplateEffects,
+            BackendHealthEffects,
+            LoadFailureEffects,
+        ]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
-        ...(isDevMode() ? [provideStoreDevtools({
-            maxAge: 25,
-            logOnly: false,
-            autoPause: true,
-            trace: false,
-            traceLimit: 75,
-        })] : []),
+        ...(isDevMode()
+            ? [
+                  provideStoreDevtools({
+                      maxAge: 25,
+                      logOnly: false,
+                      autoPause: true,
+                      trace: false,
+                      traceLimit: 75,
+                  }),
+              ]
+            : []),
     ],
 };

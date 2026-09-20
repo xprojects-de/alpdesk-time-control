@@ -1,11 +1,11 @@
-import {inject, Injectable} from '@angular/core';
-import {HttpErrorResponse} from '@angular/common/http';
-import {extractErrorMessage} from '../../utils/http-error.util';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {catchError, map, mergeMap} from 'rxjs/operators';
-import {TeamService} from '../../services/team.service';
-import * as TeamActions from './team.actions';
+import {inject, Injectable} from "@angular/core";
+import {HttpErrorResponse} from "@angular/common/http";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {of} from "rxjs";
+import {catchError, map, mergeMap} from "rxjs/operators";
+import {TeamService} from "../../services/team.service";
+import * as TeamActions from "./team.actions";
 
 @Injectable()
 export class TeamEffects {
@@ -18,12 +18,16 @@ export class TeamEffects {
             mergeMap(() =>
                 this.teamService.getAll().pipe(
                     map(teams => TeamActions.loadTeamsSuccess({teams})),
-                    catchError(error => of(TeamActions.loadTeamsFailure({
-                        error: extractErrorMessage(error, 'Teams konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            TeamActions.loadTeamsFailure({
+                                error: extractErrorMessage(error, "Teams konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     createTeam$ = createEffect(() =>
@@ -32,12 +36,16 @@ export class TeamEffects {
             mergeMap(({team}) =>
                 this.teamService.create(team).pipe(
                     map(created => TeamActions.createTeamSuccess({team: created})),
-                    catchError(error => of(TeamActions.createTeamFailure({
-                        error: extractErrorMessage(error, 'Team konnte nicht erstellt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            TeamActions.createTeamFailure({
+                                error: extractErrorMessage(error, "Team konnte nicht erstellt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     updateTeam$ = createEffect(() =>
@@ -46,12 +54,16 @@ export class TeamEffects {
             mergeMap(({id, team}) =>
                 this.teamService.update(id, team).pipe(
                     map(updated => TeamActions.updateTeamSuccess({team: updated})),
-                    catchError(error => of(TeamActions.updateTeamFailure({
-                        error: extractErrorMessage(error, 'Team konnte nicht aktualisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            TeamActions.updateTeamFailure({
+                                error: extractErrorMessage(error, "Team konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     deleteTeam$ = createEffect(() =>
@@ -62,17 +74,21 @@ export class TeamEffects {
                     map(() => TeamActions.deleteTeamSuccess({id})),
                     catchError(error => {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
-                            return of(TeamActions.deleteTeamConflict({
-                                id,
-                                message: extractErrorMessage(error, 'Team konnte nicht gelöscht werden')
-                            }));
+                            return of(
+                                TeamActions.deleteTeamConflict({
+                                    id,
+                                    message: extractErrorMessage(error, "Team konnte nicht gelöscht werden"),
+                                }),
+                            );
                         }
-                        return of(TeamActions.deleteTeamFailure({
-                            error: extractErrorMessage(error, 'Team konnte nicht gelöscht werden')
-                        }));
-                    })
-                )
-            )
-        )
+                        return of(
+                            TeamActions.deleteTeamFailure({
+                                error: extractErrorMessage(error, "Team konnte nicht gelöscht werden"),
+                            }),
+                        );
+                    }),
+                ),
+            ),
+        ),
     );
 }

@@ -1,0 +1,1 @@
+import{xt as nc,z as Rm}from"./chunk-COUF65hP.js";var c=Rm(`race`);var s=nc(c,e=>e.races);var i=nc(c,e=>e.loading);nc(c,e=>e.error);var S=nc(c,e=>e.liveLinks);var d=nc(c,e=>e.liveLinksLoading);var n=nc(c,e=>e.selectedRaceId);nc(s,n,(e,a)=>a?e.find(r=>r.id===a):null);export{s as a,n as i,d as n,i as r,S as t};

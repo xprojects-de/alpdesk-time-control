@@ -1,17 +1,15 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {RaceMeasurement, RaceMeasurementRequest, SyncMeasurementsResponse} from '../models/race-measurement.model';
-import {environment} from '../../environments/environment';
-
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {RaceMeasurement, RaceMeasurementRequest, SyncMeasurementsResponse} from "../models/race-measurement.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class RaceMeasurementService {
     private http = inject(HttpClient);
     private readonly apiUrl = `${environment.apiUrl}/race-measurements`;
-
 
     getByRace(raceId: number): Observable<RaceMeasurement[]> {
         return this.http.get<RaceMeasurement[]>(`${this.apiUrl}/race/${raceId}`);

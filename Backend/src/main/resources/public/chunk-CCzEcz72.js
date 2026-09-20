@@ -1,0 +1,1 @@
+import{xt as nc,z as Rm}from"./chunk-COUF65hP.js";var r=Rm(`team`);var c=nc(r,e=>e.teams);var m=nc(r,e=>e.loading);nc(r,e=>e.error);export{m as n,c as t};

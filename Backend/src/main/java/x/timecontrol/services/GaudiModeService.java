@@ -140,10 +140,20 @@ public class GaudiModeService {
                     existing.get().createdAt(),
                     coverPagePdf
             );
+            // A drawn Los pairing references participants of the race it was drawn for - once the
+            // instance points at a different race (or isn't LOS any more), none of those pairs can be
+            // found there and the ranking would silently come back empty while GET /pairing still
+            // showed the old race's names. Drop it so the operator re-draws for the new race.
+            List<Long> previousRaceIds = findRacesFor(id).stream().map(GaudiModeRace::raceId).toList();
+            List<Long> newRaceIds = races.stream().map(GaudiModeRaceEntry::raceId).toList();
+            boolean pairingStale = gaudiMode.type() != GaudiModeType.LOS || !previousRaceIds.equals(newRaceIds);
             GaudiMode result = transactionOperations.executeWrite(_ -> {
                 GaudiMode saved = repository.update(updated);
                 gaudiModeRaceRepository.deleteByGaudiModeId(id);
                 saveRaces(id, races);
+                if (pairingStale) {
+                    pairingRepository.deleteByGaudiModeId(id);
+                }
                 return saved;
             });
             return Optional.of(result);
@@ -340,8 +350,9 @@ public class GaudiModeService {
 
     /**
      * Persons excluded from the ranking for missing a valid result in at least one combined race -
-     * see {@link GaudiModeCalculator#computeDnsEntries}. Only meaningful for Zeit-Kombination/
-     * Punkte-Mischwertung; other types return an empty list via that method's default implementation.
+     * see {@link GaudiModeCalculator#computeDnsEntries}. Meaningful for Zeit-Kombination/
+     * Punkte-Mischwertung and Los-Modus (unranked pairs); Mannschaftswertung returns an empty list via
+     * that method's default implementation.
      * Deliberately not scoped by gender/age-group the way {@link #computeRankingForCategory} is: the
      * same, unfiltered DNS list is used on every one of a Gaudi-Modus's PDF exports, regardless of
      * which category that particular export ranks.

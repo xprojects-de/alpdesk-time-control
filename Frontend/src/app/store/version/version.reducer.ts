@@ -1,6 +1,6 @@
-import {createReducer, on} from '@ngrx/store';
-import {VersionInfo} from '../../models/version.model';
-import * as VersionActions from './version.actions';
+import {createReducer, on} from "@ngrx/store";
+import {VersionInfo} from "../../models/version.model";
+import * as VersionActions from "./version.actions";
 
 export interface VersionState {
     version: VersionInfo | null;
@@ -11,7 +11,7 @@ export interface VersionState {
 export const initialState: VersionState = {
     version: null,
     loading: false,
-    error: null
+    error: null,
 };
 
 export const versionReducer = createReducer(
@@ -20,16 +20,16 @@ export const versionReducer = createReducer(
     on(VersionActions.loadVersion, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(VersionActions.loadVersionSuccess, (state, {version}) => ({
         ...state,
         version,
-        loading: false
+        loading: false,
     })),
     on(VersionActions.loadVersionFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
-    }))
+        error,
+    })),
 );

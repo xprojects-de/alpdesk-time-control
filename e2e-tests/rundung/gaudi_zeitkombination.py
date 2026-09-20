@@ -51,10 +51,12 @@ boris_asc = asc_by_label.get("Lechner Boris")
 if anton_asc is None or boris_asc is None:
     problems.append(("ASC-Kombination: Eintraege fehlen", asc_by_label.keys()))
 else:
-    if anton_asc["valueMs"] != 5083:
-        problems.append(("ASC Anton valueMs", "erwartet 5083", anton_asc["valueMs"]))
-    if boris_asc["valueMs"] != 34525:
-        problems.append(("ASC Boris valueMs", "erwartet 34525", boris_asc["valueMs"]))
+    # The total is the sum of the PRINTED leg values (each rounded to the hundredth first):
+    # Anton 0:04.08 + 0:01.00 = 5080, Boris 0:33.53 + 0:01.00 = 34530 - not the raw 5083/34525.
+    if anton_asc["valueMs"] != 5080:
+        problems.append(("ASC Anton valueMs", "erwartet 5080", anton_asc["valueMs"]))
+    if boris_asc["valueMs"] != 34530:
+        problems.append(("ASC Boris valueMs", "erwartet 34530", boris_asc["valueMs"]))
     if anton_asc.get("diffMs") is not None:
         problems.append(("ASC Anton diffMs (Leader)", "erwartet fehlend/null", anton_asc.get("diffMs")))
     if boris_asc.get("diffMs") != config.KOMBI_ASC_EXPECTED_DIFF_MS:

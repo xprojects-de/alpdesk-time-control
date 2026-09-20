@@ -168,6 +168,7 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase4_export_import.py` | Ergebnis-Export je Station → Import in Hauptinstanz |
 | `phase3_phased_results.py` | Wie phase3, aber nur ein Drittel des Feldes pro Aufruf (`station<N> <phase 1\|2\|3>`) |
 | `phase4_phased_export_import.py` | Wie phase4, aber pro Phase (`<phase 1\|2\|3>`) - prüft insb. `errorCount == 0` bei unvollständigem Zwischenstand |
+| `phase3b_station_corrections.py` | Phasen-Variante: vor Pause 1 an Station 1/2 eine Strafzeit, an Station 3 eine DSQ mit Kommentar setzen (`add`), vor Pause 2 an der Station wieder zurücknehmen (`remove`) - prüft, dass die Rücknahme beim nächsten Import auch auf MAIN ankommt |
 | `run_phased.sh` | Orchestriert phase1+phase2 wie gewohnt, dann 3x phase3_phased+phase4_phased, dann phase5-9 |
 | `phase4b_results_backup_restore.py` | MAIN: Ergebnisse je Rennen exportieren (Ergebnis-CSV), über `clear-result` zurücksetzen, aus der CSV zurückimportieren, gegen den Vorher-Stand verifizieren |
 | `run_phased_results.sh` | Orchestriert phase1-5 wie `run_all.sh`, dann phase4b, dann erneut phase5, dann phase6-9 |

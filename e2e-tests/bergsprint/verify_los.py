@@ -30,6 +30,14 @@ def round_to_10ms(value_ms):
         return value_ms
     return (value_ms + 5) // 10 * 10
 
+def round_average_for_display(avg):
+    """Mirrors RankingService#roundForDisplay(Race, double): an average is rounded ONCE, straight to
+    the printed precision (nearest 10ms for TIME, nearest stored unit for POINTS) - never to a whole
+    ms first, which would round twice (10004.5 -> 10005 -> 10010 instead of 10000)."""
+    if result_unit == "TIME":
+        return int(math.floor(avg / 10.0 + 0.5)) * 10
+    return round_half_up(avg)
+
 print("=== Los-Modus erstellen und auslosen ===")
 status, gm = c.post(config.BASE, token, "/gaudi-modes", {
     "races": [{"raceId": race_id}], "type": "LOS", "name": f"{config.RACE_NAME} Los-Wertung",
@@ -49,8 +57,7 @@ print(f"{len(ranking)} Paare in der Wertung")
 
 all_values = [v for v in (adjusted_value(p) for p in all_participants) if v is not None]
 overall_avg = sum(all_values) / len(all_values)
-overall_average_ms = round_half_up(overall_avg)
-overall_average_display = round_to_10ms(overall_average_ms)
+overall_average_display = round_average_for_display(overall_avg)
 print(f"\nErwarteter Gesamtdurchschnitt (aus {len(all_values)} gueltigen Werten): {overall_avg:.3f} ms")
 
 expected_pairs, skipped_pairs = [], []
@@ -63,14 +70,13 @@ for pairing in pairings:
         skipped_pairs.append((pairing["participant1Name"], pairing.get("participant2Name")))
         continue
     pair_avg = (v1 + v2) / 2.0 if v2 is not None else v1
-    pair_average_ms = round_half_up(pair_avg)
-    pair_average_display = round_to_10ms(pair_average_ms)
+    pair_average_display = round_average_for_display(pair_avg)
     # LosModeCalculator diffs the two already-display-rounded values, not the raw gap rounded
     # once at the end - rounding doesn't distribute over subtraction, so those can differ by up
     # to a printed hundredth.
     diff_display = abs(pair_average_display - overall_average_display)
     label = f"{pairing['participant1Name']} & {pairing['participant2Name']}" if v2 is not None else f"{pairing['participant1Name']} (Einzel)"
-    expected_pairs.append({"label": label, "avg": pair_average_ms, "diff": diff_display})
+    expected_pairs.append({"label": label, "avg": pair_average_display, "diff": diff_display})
 
 print(f"gueltige Paare: {len(expected_pairs)}, uebersprungen (DNF/DNS-Partner): {len(skipped_pairs)}")
 

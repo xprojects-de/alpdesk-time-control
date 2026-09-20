@@ -1,6 +1,6 @@
-import {createReducer, on} from '@ngrx/store';
-import {Category} from '../../models/category.model';
-import * as CategoryActions from './category.actions';
+import {createReducer, on} from "@ngrx/store";
+import {Category} from "../../models/category.model";
+import * as CategoryActions from "./category.actions";
 
 export interface CategoryState {
     categories: Category[];
@@ -11,7 +11,7 @@ export interface CategoryState {
 export const initialState: CategoryState = {
     categories: [],
     loading: false,
-    error: null
+    error: null,
 };
 
 export const categoryReducer = createReducer(
@@ -20,68 +20,68 @@ export const categoryReducer = createReducer(
     on(CategoryActions.loadCategories, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(CategoryActions.loadCategoriesSuccess, (state, {categories}) => ({
         ...state,
         categories,
-        loading: false
+        loading: false,
     })),
     on(CategoryActions.loadCategoriesFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(CategoryActions.createCategory, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(CategoryActions.createCategorySuccess, (state, {category}) => ({
         ...state,
         categories: [...state.categories, category],
-        loading: false
+        loading: false,
     })),
     on(CategoryActions.createCategoryFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(CategoryActions.updateCategory, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(CategoryActions.updateCategorySuccess, (state, {category}) => ({
         ...state,
-        categories: state.categories.map(c => c.id === category.id ? category : c),
-        loading: false
+        categories: state.categories.map(c => (c.id === category.id ? category : c)),
+        loading: false,
     })),
     on(CategoryActions.updateCategoryFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(CategoryActions.deleteCategory, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(CategoryActions.deleteCategorySuccess, (state, {id}) => ({
         ...state,
         categories: state.categories.filter(c => c.id !== id),
-        loading: false
+        loading: false,
     })),
     on(CategoryActions.deleteCategoryFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
     on(CategoryActions.deleteCategoryConflict, state => ({
         ...state,
-        loading: false
-    }))
+        loading: false,
+    })),
 );

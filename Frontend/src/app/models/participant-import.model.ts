@@ -1,4 +1,4 @@
-import {Participant} from './participant.model';
+import {Participant} from "./participant.model";
 
 export interface ParticipantImportRowError {
     lineNumber: number;
@@ -18,7 +18,7 @@ export interface ParticipantImportResponse {
 // Flexible import (CSV with any delimiter, or DSV-Wettkampfdatei XML) with a user-defined
 // column/field mapping - see Backend ParticipantImportParsers / ParticipantController import-preview
 // and import-mapped endpoints.
-export type ParticipantImportFileFormat = 'CSV' | 'DSV_XML';
+export type ParticipantImportFileFormat = "CSV" | "DSV_XML";
 
 export interface ParticipantImportTargetField {
     key: string;
@@ -34,20 +34,20 @@ export interface ParticipantImportTargetField {
 // durationMs/penalty/measuredAt are the participant's *result* - only relevant for a full race
 // export/import (see ParticipantController#exportCsv), not a plain start-list import.
 export const PARTICIPANT_IMPORT_TARGET_FIELDS: ParticipantImportTargetField[] = [
-    {key: 'lastName', label: 'Nachname', required: true},
-    {key: 'firstName', label: 'Vorname', required: true},
-    {key: 'birthDate', label: 'Geburtsdatum / Jahrgang', required: true},
-    {key: 'gender', label: 'Geschlecht', required: true},
-    {key: 'ageGroup', label: 'Altersgruppe (z.B. U14m)', required: false},
-    {key: 'team', label: 'Verein / Team', required: false},
-    {key: 'category', label: 'Kategorie', required: false},
-    {key: 'externalId', label: 'Externe ID (z.B. DSV-Code)', required: false},
-    {key: 'raceNumber', label: 'Startnummer', required: false},
-    {key: 'durationMs', label: 'Zeit (ms)', required: false},
-    {key: 'penalty', label: 'Strafe (ms)', required: false},
-    {key: 'measuredAt', label: 'Gemessen am', required: false},
-    {key: 'comment', label: 'Kommentar', required: false},
-    {key: 'status', label: 'Status (DSQ/DNF/DNS)', required: false},
+    {key: "lastName", label: "Nachname", required: true},
+    {key: "firstName", label: "Vorname", required: true},
+    {key: "birthDate", label: "Geburtsdatum / Jahrgang", required: true},
+    {key: "gender", label: "Geschlecht", required: true},
+    {key: "ageGroup", label: "Altersgruppe (z.B. U14m)", required: false},
+    {key: "team", label: "Verein / Team", required: false},
+    {key: "category", label: "Kategorie", required: false},
+    {key: "externalId", label: "Externe ID (z.B. DSV-Code)", required: false},
+    {key: "raceNumber", label: "Startnummer", required: false},
+    {key: "durationMs", label: "Zeit (ms)", required: false},
+    {key: "penalty", label: "Strafe (ms)", required: false},
+    {key: "measuredAt", label: "Gemessen am", required: false},
+    {key: "comment", label: "Kommentar", required: false},
+    {key: "status", label: "Status (DSQ/DNF/DNS)", required: false},
 ];
 
 export interface ParticipantImportPreviewResponse {

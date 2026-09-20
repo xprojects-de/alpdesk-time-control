@@ -14,6 +14,12 @@ import java.util.stream.StreamSupport;
 @Singleton
 public class AgeGroupService {
 
+    /**
+     * The age group name {@link #calculateAgeGroupName} returns for a person without a birth date,
+     * or whose birth year/gender matches no configured age group.
+     */
+    public static final String UNKNOWN_AGE_GROUP = "Unbekannt";
+
     private final AgeGroupRepository repository;
 
     public AgeGroupService(AgeGroupRepository repository) {
@@ -87,7 +93,7 @@ public class AgeGroupService {
      */
     public String calculateAgeGroupName(LocalDate birthDate, Gender gender, List<AgeGroup> ageGroups) {
         if (birthDate == null) {
-            return "Unbekannt";
+            return UNKNOWN_AGE_GROUP;
         }
         int birthYear = birthDate.getYear();
         for (AgeGroup ageGroup : ageGroups) {
@@ -97,7 +103,7 @@ public class AgeGroupService {
                 return ageGroup.name();
             }
         }
-        return "Unbekannt";
+        return UNKNOWN_AGE_GROUP;
     }
 
     /**

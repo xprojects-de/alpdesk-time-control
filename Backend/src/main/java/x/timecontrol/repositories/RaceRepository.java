@@ -1,5 +1,6 @@
 package x.timecontrol.repositories;
 
+import io.micronaut.data.annotation.Query;
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.CrudRepository;
@@ -13,6 +14,15 @@ public interface RaceRepository extends CrudRepository<Race, Long> {
     Optional<Race> findByName(String name);
     Optional<Race> findByNameIgnoreCase(String name);
     List<Race> findByIdIn(Iterable<Long> ids);
-    Optional<Race> findByLiveToken(String liveToken);
+    // Serves the unauthenticated public live-results pages, which auto-refresh every 10s per screen
+    // and never render the cover page - so the (up to several MB) cover_page_pdf BLOB is deliberately
+    // not selected; the returned Race always has coverPagePdf == null. Never use it for a PDF export
+    // or as the "existing" row of an update, which would drop the cover page.
+    @Query(value = "SELECT id, name, date, organisation, referee, race_director, time_control, route_name, " +
+            "elevation_difference, route_length, course_setter, weather, result_unit, result_unit_label, " +
+            "sort_direction, NULL AS cover_page_pdf, previous_race_id, start_order_mode, " +
+            "start_order_reverse_top_count, live_token FROM race WHERE live_token = :liveToken",
+            nativeQuery = true)
+    Optional<Race> findByLiveTokenWithoutCoverPage(String liveToken);
 }
 

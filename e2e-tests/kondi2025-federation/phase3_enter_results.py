@@ -24,6 +24,7 @@ by_race_number = {p["raceNumber"]: p for p in participants if p["raceNumber"] is
 print(f"{key}: {len(by_race_number)} participants indexed by raceNumber")
 
 updated = dns_count = injected_count = 0
+failures = []
 with open(csv_file, newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f, delimiter=";")
     for row in reader:
@@ -34,6 +35,7 @@ with open(csv_file, newline="", encoding="utf-8") as f:
         p = by_race_number.get(rn)
         if p is None:
             print(f"  WARNING: raceNumber {rn} from CSV not found among station participants!")
+            failures.append(rn)
             continue
 
         duration_raw = (row.get("durationMs") or "").strip()
@@ -68,7 +70,10 @@ with open(csv_file, newline="", encoding="utf-8") as f:
         st, resp = c.put(BASE, token, f"/participants/{p['id']}", body)
         if st != 200:
             print(f"  FAILED update for raceNumber {rn}: {st} {resp}")
+            failures.append(rn)
         else:
             updated += 1
 
 print(f"{key}: updated={updated} dns_set={dns_count} injected_status={injected_count}")
+if failures:
+    sys.exit(f"{key}: {len(failures)} Ergebnisse nicht eingetragen (raceNumber): {failures}")

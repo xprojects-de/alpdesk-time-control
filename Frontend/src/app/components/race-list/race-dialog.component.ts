@@ -1,23 +1,14 @@
-import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from '@angular/forms';
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-} from '@angular/material/dialog';
-import {MatFormFieldModule} from '@angular/material/form-field';
-import {MatInputModule} from '@angular/material/input';
-import {MatButtonModule} from '@angular/material/button';
-import {MatIconModule} from '@angular/material/icon';
-import {MatDatepickerModule} from '@angular/material/datepicker';
-import {MatNativeDateModule} from '@angular/material/core';
-import {MatSelectModule} from '@angular/material/select';
+import {Component, inject, ChangeDetectorRef} from "@angular/core";
+import {CommonModule} from "@angular/common";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
+import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatInputModule} from "@angular/material/input";
+import {MatButtonModule} from "@angular/material/button";
+import {MatIconModule} from "@angular/material/icon";
+import {MatDatepickerModule} from "@angular/material/datepicker";
+import {MatNativeDateModule} from "@angular/material/core";
+import {MatSelectModule} from "@angular/material/select";
 import {
     Race,
     RaceRequest,
@@ -26,8 +17,8 @@ import {
     SortDirection,
     SortDirectionLabels,
     StartOrderMode,
-} from '../../models/race.model';
-import {readFileAsBase64} from '../../utils/file-base64.util';
+} from "../../models/race.model";
+import {readFileAsBase64} from "../../utils/file-base64.util";
 
 /** Dialog input: the race being edited (null for a new race) plus every other race, for the "linked previous race" dropdown. */
 export interface RaceDialogData {
@@ -36,8 +27,7 @@ export interface RaceDialogData {
 }
 
 @Component({
-    selector: 'app-race-dialog',
-    standalone: true,
+    selector: "app-race-dialog",
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -52,36 +42,25 @@ export interface RaceDialogData {
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data.race ? 'Rennen bearbeiten' : 'Neues Rennen' }}
+            {{ data.race ? "Rennen bearbeiten" : "Neues Rennen" }}
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="race-form">
                 <mat-form-field appearance="outline">
                     <mat-label>Name</mat-label>
-                    <input matInput formControlName="name" required/>
-                    @if (form.get('name')?.hasError('required') &&
-                    form.get('name')?.touched) {
+                    <input matInput formControlName="name" required />
+                    @if (form.get("name")?.hasError("required") && form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
                     }
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Datum</mat-label>
-                    <input
-                            matInput
-                            [matDatepicker]="picker"
-                            formControlName="date"
-                            placeholder="TT.MM.JJJJ"
-                            required
-                    />
-                    <mat-datepicker-toggle
-                            matSuffix
-                            [for]="picker"
-                    ></mat-datepicker-toggle>
+                    <input matInput [matDatepicker]="picker" formControlName="date" placeholder="TT.MM.JJJJ" required />
+                    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
                     <mat-datepicker #picker></mat-datepicker>
                     <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
-                    @if (form.get('date')?.hasError('required') &&
-                    form.get('date')?.touched) {
+                    @if (form.get("date")?.hasError("required") && form.get("date")?.touched) {
                         <mat-error>Datum ist erforderlich</mat-error>
                     }
                 </mat-form-field>
@@ -109,15 +88,15 @@ export interface RaceDialogData {
                     @if (form.value.resultUnit === resultUnit.POINTS) {
                         <mat-form-field appearance="outline">
                             <mat-label>Einheiten-Bezeichnung</mat-label>
-                            <input matInput formControlName="resultUnitLabel" placeholder="z.B. m, Punkte"/>
+                            <input matInput formControlName="resultUnitLabel" placeholder="z.B. m, Punkte" />
                         </mat-form-field>
                     }
                 </div>
 
                 <h3 class="section-title">Startreihenfolge (optional)</h3>
                 <p class="hint">
-                    Für einen zweiten Durchgang (z.B. Slalom): verknüpft dieses Rennen mit einem
-                    anderen, dessen Ergebnis die Startreihenfolge (und automatische Zeitmesswert-Zuordnung) bestimmt.
+                    Für einen zweiten Durchgang (z.B. Slalom): verknüpft dieses Rennen mit einem anderen, dessen
+                    Ergebnis die Startreihenfolge (und automatische Zeitmesswert-Zuordnung) bestimmt.
                 </p>
                 <div class="race-form-grid">
                     <mat-form-field appearance="outline">
@@ -133,9 +112,9 @@ export interface RaceDialogData {
                     @if (form.value.previousRaceId) {
                         <mat-form-field appearance="outline">
                             <mat-label>Anzahl Top-Platzierte umkehren</mat-label>
-                            <input matInput type="number" min="0" formControlName="startOrderReverseTopCount"/>
+                            <input matInput type="number" min="0" formControlName="startOrderReverseTopCount" />
                             <mat-hint>Pro Altersgruppe; z.B. 15 bei Slalom. 0 = keine Umkehrung.</mat-hint>
-                            @if (form.get('startOrderReverseTopCount')?.hasError('min')) {
+                            @if (form.get("startOrderReverseTopCount")?.hasError("min")) {
                                 <mat-error>Darf nicht negativ sein</mat-error>
                             }
                         </mat-form-field>
@@ -146,47 +125,47 @@ export interface RaceDialogData {
                 <div class="race-form-grid">
                     <mat-form-field appearance="outline">
                         <mat-label>Veranstalter</mat-label>
-                        <input matInput formControlName="organisation"/>
+                        <input matInput formControlName="organisation" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Schiedsrichter</mat-label>
-                        <input matInput formControlName="referee"/>
+                        <input matInput formControlName="referee" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Rennleiter</mat-label>
-                        <input matInput formControlName="raceDirector"/>
+                        <input matInput formControlName="raceDirector" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Zeitnahme</mat-label>
-                        <input matInput formControlName="timeControl"/>
+                        <input matInput formControlName="timeControl" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Streckenname</mat-label>
-                        <input matInput formControlName="routeName"/>
+                        <input matInput formControlName="routeName" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Höhendifferenz</mat-label>
-                        <input matInput formControlName="elevationDifference" placeholder="z.B. 350 m"/>
+                        <input matInput formControlName="elevationDifference" placeholder="z.B. 350 m" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Streckenlänge</mat-label>
-                        <input matInput formControlName="routeLength" placeholder="z.B. 1200 m"/>
+                        <input matInput formControlName="routeLength" placeholder="z.B. 1200 m" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Kurssetzer</mat-label>
-                        <input matInput formControlName="courseSetter"/>
+                        <input matInput formControlName="courseSetter" />
                     </mat-form-field>
 
                     <mat-form-field appearance="outline">
                         <mat-label>Wetter</mat-label>
-                        <input matInput formControlName="weather"/>
+                        <input matInput formControlName="weather" />
                     </mat-form-field>
                 </div>
 
@@ -198,82 +177,77 @@ export interface RaceDialogData {
                     @if (coverPageActive) {
                         <span class="cover-page-name">
                             <mat-icon inline="true">picture_as_pdf</mat-icon>
-                            {{ selectedFileName ?? 'Deckblatt aktiv' }}
+                            {{ selectedFileName ?? "Deckblatt aktiv" }}
                         </span>
-                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
-                            Entfernen
-                        </button>
+                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">Entfernen</button>
                     } @else {
                         <span class="hint">Kein Deckblatt ausgewählt.</span>
                     }
                     <button mat-stroked-button type="button" (click)="coverPageInput.click()">
-                        {{ coverPageActive ? 'Ersetzen' : 'PDF auswählen' }}
+                        {{ coverPageActive ? "Ersetzen" : "PDF auswählen" }}
                     </button>
-                    <input #coverPageInput type="file" accept="application/pdf" hidden
-                           (change)="onCoverPageFileSelected($event)"/>
+                    <input
+                        #coverPageInput
+                        type="file"
+                        accept="application/pdf"
+                        hidden
+                        (change)="onCoverPageFileSelected($event)"
+                    />
                 </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!form.valid"
-            >
-                Speichern
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
-     styles: [
-         `
-           .race-form {
-             display: flex;
-             flex-direction: column;
-             gap: 16px;
-             min-width: 400px;
-             margin-top: 16px;
-           }
+    styles: [
+        `
+            .race-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 400px;
+                margin-top: 16px;
+            }
 
-           mat-form-field {
-             width: 100%;
-           }
+            mat-form-field {
+                width: 100%;
+            }
 
-           .section-title {
-             margin: 0 0 -8px;
-             font-size: 14px;
-             font-weight: 500;
-             color: rgba(0, 0, 0, 0.6);
-           }
+            .section-title {
+                margin: 0 0 -8px;
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-           .race-form-grid {
-             display: grid;
-             grid-template-columns: 1fr 1fr;
-             gap: 0 16px;
-           }
+            .race-form-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0 16px;
+            }
 
-           .hint {
-             margin: 0;
-             font-size: 12px;
-             color: rgba(0, 0, 0, 0.6);
-           }
+            .hint {
+                margin: 0;
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-           .cover-page-row {
-             display: flex;
-             align-items: center;
-             gap: 12px;
-             flex-wrap: wrap;
-           }
+            .cover-page-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
 
-           .cover-page-name {
-             display: flex;
-             align-items: center;
-             gap: 4px;
-           }
-         `,
-     ],
+            .cover-page-name {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+        `,
+    ],
 })
 export class RaceDialogComponent {
     private fb = inject(FormBuilder);
@@ -310,32 +284,28 @@ export class RaceDialogComponent {
         const race = this.data.race;
         this.availablePreviousRaces = this.data.races.filter(r => r.id !== race?.id);
 
-        let date: Date | string = race?.date || '';
-        if (date && typeof date === 'string') {
-            const parts = date.split('-');
+        let date: Date | string = race?.date || "";
+        if (date && typeof date === "string") {
+            const parts = date.split("-");
             if (parts.length === 3) {
-                date = new Date(
-                    parseInt(parts[0]),
-                    parseInt(parts[1]) - 1,
-                    parseInt(parts[2])
-                );
+                date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             }
         }
 
         this.form = this.fb.group({
-            name: [race?.name || '', Validators.required],
+            name: [race?.name || "", Validators.required],
             date: [date, Validators.required],
-            organisation: [race?.organisation || ''],
-            referee: [race?.referee || ''],
-            raceDirector: [race?.raceDirector || ''],
-            timeControl: [race?.timeControl || ''],
-            routeName: [race?.routeName || ''],
-            elevationDifference: [race?.elevationDifference || ''],
-            routeLength: [race?.routeLength || ''],
-            courseSetter: [race?.courseSetter || ''],
-            weather: [race?.weather || ''],
+            organisation: [race?.organisation || ""],
+            referee: [race?.referee || ""],
+            raceDirector: [race?.raceDirector || ""],
+            timeControl: [race?.timeControl || ""],
+            routeName: [race?.routeName || ""],
+            elevationDifference: [race?.elevationDifference || ""],
+            routeLength: [race?.routeLength || ""],
+            courseSetter: [race?.courseSetter || ""],
+            weather: [race?.weather || ""],
             resultUnit: [race?.resultUnit || ResultUnit.TIME],
-            resultUnitLabel: [race?.resultUnitLabel || ''],
+            resultUnitLabel: [race?.resultUnitLabel || ""],
             sortDirection: [race?.sortDirection || SortDirection.ASC],
             previousRaceId: [race?.previousRaceId ?? null],
             startOrderReverseTopCount: [race?.startOrderReverseTopCount ?? 15, Validators.min(0)],
@@ -351,7 +321,7 @@ export class RaceDialogComponent {
     async onCoverPageFileSelected(event: Event): Promise<void> {
         const input = event.target as HTMLInputElement;
         const file = input.files?.[0];
-        input.value = '';
+        input.value = "";
         if (!file) {
             return;
         }
@@ -387,7 +357,8 @@ export class RaceDialogComponent {
                 courseSetter: formValue.courseSetter || undefined,
                 weather: formValue.weather || undefined,
                 resultUnit: formValue.resultUnit,
-                resultUnitLabel: formValue.resultUnit === ResultUnit.POINTS ? (formValue.resultUnitLabel || undefined) : undefined,
+                resultUnitLabel:
+                    formValue.resultUnit === ResultUnit.POINTS ? formValue.resultUnitLabel || undefined : undefined,
                 sortDirection: formValue.sortDirection,
                 coverPagePdf: this.coverPagePdfBase64,
                 removeCoverPage: this.removeCoverPage || undefined,
@@ -400,13 +371,13 @@ export class RaceDialogComponent {
     }
 
     private formatDate(date: Date | string): string {
-        if (typeof date === 'string') {
+        if (typeof date === "string") {
             return date;
         }
         const d = new Date(date);
         const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
         return `${year}-${month}-${day}`;
     }
 }

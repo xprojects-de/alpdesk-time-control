@@ -1,8 +1,4 @@
-import {
-    Component,
-    OnInit,
-    ChangeDetectionStrategy, inject,
-} from "@angular/core";
+import {Component, OnInit, inject} from "@angular/core";
 import {RouterOutlet} from "@angular/router";
 import {Store} from "@ngrx/store";
 import * as AuthActions from "./store/auth/auth.actions";
@@ -11,7 +7,6 @@ import * as AuthActions from "./store/auth/auth.actions";
     selector: "app-root",
     imports: [RouterOutlet],
     templateUrl: "./app.html",
-    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: "./app.scss",
 })
 export class App implements OnInit {

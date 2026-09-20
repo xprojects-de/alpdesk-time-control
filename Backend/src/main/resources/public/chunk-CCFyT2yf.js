@@ -1,1 +1,0 @@
-import{En as rx,W as Op}from"./chunk-CmjjVoXL.js";var r=rx(`team`);var c=Op(r,e=>e.teams);var m=Op(r,e=>e.loading);Op(r,e=>e.error);export{m as n,c as t};

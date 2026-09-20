@@ -40,3 +40,5 @@ for name, unit, label, direction, csv_file, key in config.RACES:
 
 print()
 print(f"TOTAL MISMATCHES ACROSS ALL RACES: {total_mismatches}")
+if total_mismatches:
+    sys.exit(f"MAIN weicht in {total_mismatches} Ergebnissen von den Stationen ab")

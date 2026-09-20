@@ -41,9 +41,10 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
+    StartGroupTemplateService startGroupTemplateService = Mock()
     TransactionOperations transactionOperations = Mock()
 
-    def calculator = new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService, ageGroupService)
+    def calculator = new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService)
 
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
             raceService, personService, ageGroupService, [calculator], transactionOperations)

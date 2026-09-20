@@ -1,16 +1,15 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {AgeGroup, AgeGroupRequest} from '../models/age-group.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {AgeGroup, AgeGroupRequest} from "../models/age-group.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class AgeGroupService {
     private http = inject(HttpClient);
     private readonly apiUrl = `${environment.apiUrl}/age-groups`;
-
 
     getAll(): Observable<AgeGroup[]> {
         return this.http.get<AgeGroup[]>(this.apiUrl);
@@ -32,4 +31,3 @@ export class AgeGroupService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 }
-

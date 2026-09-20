@@ -35,6 +35,10 @@ public record GaudiRankingLegResponse(
 
         @Nullable
         @Schema(description = "The participant's explicit DSQ/DNF/DNS status in this race, if any; null for a normal result", example = "DNF", nullable = true)
-        String status
+        String status,
+
+        @Nullable
+        @Schema(description = "Start-group block-start offset (ms) netted out of rawValue for this race, if any - TIME races only", example = "600000", nullable = true)
+        Integer startGroupOffsetMs
 ) {
 }
