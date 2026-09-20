@@ -1,9 +1,10 @@
-import {Component, inject, OnDestroy, OnInit} from "@angular/core";
+import {Component, inject, OnInit} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {Store} from "@ngrx/store";
-import {Observable, Subject, combineLatest} from "rxjs";
-import {map, takeUntil} from "rxjs/operators";
+import {Observable, combineLatest} from "rxjs";
+import {map} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
 import {MatCardModule} from "@angular/material/card";
 import {MatFormFieldModule} from "@angular/material/form-field";
@@ -131,12 +132,11 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
         `,
     ],
 })
-export class SettingsComponent implements OnInit, OnDestroy {
+export class SettingsComponent implements OnInit {
     private store = inject(Store);
     private fb = inject(FormBuilder);
     private snackBar = inject(MatSnackBar);
     private actions$ = inject(Actions);
-    private destroy$ = new Subject<void>();
 
     loading$: Observable<boolean>;
     saving$: Observable<boolean>;
@@ -165,7 +165,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
             map(([saving, settings]) => !saving && settings !== null)
         );
 
-        this.timingProviderSettings$.pipe(takeUntil(this.destroy$)).subscribe(settings => {
+        this.timingProviderSettings$.pipe(takeUntilDestroyed()).subscribe(settings => {
             if (!settings) {
                 return;
             }
@@ -181,19 +181,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
         this.actions$.pipe(
             ofType(SettingsActions.updateTimingProviderSuccess),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(() => {
             this.snackBar.open("Einstellungen gespeichert", "OK", {duration: 3000});
         });
         this.actions$.pipe(
             ofType(SettingsActions.updateTimingProviderFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Speichern: ${error}`, "OK", {duration: 5000});
         });
         this.actions$.pipe(
             ofType(SettingsActions.loadTimingProviderFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Laden: ${error}`, "OK", {duration: 5000});
         });
@@ -201,11 +201,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         this.store.dispatch(SettingsActions.loadTimingProvider());
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     typeLabel(type: TimingProviderType): string {

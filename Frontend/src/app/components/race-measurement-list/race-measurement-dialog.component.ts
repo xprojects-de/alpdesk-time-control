@@ -2,7 +2,7 @@ import {
     Component,
     AfterViewInit,
     inject,
-    OnDestroy,
+    DestroyRef,
 } from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {
@@ -24,7 +24,8 @@ import {
     MatAutocompleteSelectedEvent,
 } from "@angular/material/autocomplete";
 import {Store} from "@ngrx/store";
-import {Observable, map, startWith, combineLatest, Subject} from "rxjs";
+import {Observable, map, startWith, combineLatest} from "rxjs";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {
     RaceMeasurement,
     RaceMeasurementRequest,
@@ -32,7 +33,7 @@ import {
 import {Participant} from "../../models/participant.model";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
-import {take, takeUntil} from "rxjs/operators";
+import {take} from "rxjs/operators";
 
 @Component({
     selector: "app-race-measurement-dialog",
@@ -167,12 +168,14 @@ import {take, takeUntil} from "rxjs/operators";
          `,
      ],
 })
-export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy {
+export class RaceMeasurementDialogComponent implements AfterViewInit {
     private fb = inject(FormBuilder);
     private store = inject(Store);
     private dialogRef = inject(MatDialogRef<RaceMeasurementDialogComponent>);
     public data = inject<RaceMeasurement>(MAT_DIALOG_DATA);
-    private destroy$ = new Subject<void>();
+    // The only subscription below runs inside a setTimeout, i.e. outside the injection
+    // context, so takeUntilDestroyed needs this explicitly.
+    private destroyRef = inject(DestroyRef);
 
     form: FormGroup;
     participants$: Observable<Participant[]>;
@@ -188,7 +191,7 @@ export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy 
             setTimeout(() => {
                 this.participants$.pipe(
                     take(1),
-                    takeUntil(this.destroy$)
+                    takeUntilDestroyed(this.destroyRef)
                 ).subscribe((participants) => {
                     this.selectedParticipant =
                         participants.find((p) => p.id === this.data.participantId) || null;
@@ -232,11 +235,6 @@ export class RaceMeasurementDialogComponent implements AfterViewInit, OnDestroy 
         setTimeout(() => {
             this.store.dispatch(ParticipantActions.loadParticipants());
         }, 0);
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     onCancel(): void {

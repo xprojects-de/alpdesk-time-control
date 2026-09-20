@@ -1,6 +1,5 @@
 import {
     Component,
-    OnDestroy,
     inject,
     input,
     output,
@@ -9,8 +8,8 @@ import {
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Actions, ofType} from "@ngrx/effects";
-import {Observable, Subject} from "rxjs";
-import {takeUntil} from "rxjs/operators";
+import {Observable} from "rxjs";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatMenuModule} from "@angular/material/menu";
@@ -354,11 +353,10 @@ import {selectAllRaces} from "../../store/race/race.selectors";
         `,
     ],
 })
-export class GaudiModeDetailComponent implements OnDestroy {
+export class GaudiModeDetailComponent {
     private store = inject(Store);
     private snackBar = inject(MatSnackBar);
     private actions$ = inject(Actions);
-    private destroy$ = new Subject<void>();
 
     gaudiMode = input.required<GaudiMode>();
     closed = output<void>();
@@ -394,7 +392,7 @@ export class GaudiModeDetailComponent implements OnDestroy {
 
     constructor() {
         this.store.select(selectAllRaces)
-            .pipe(takeUntil(this.destroy$))
+            .pipe(takeUntilDestroyed())
             .subscribe(races => (this.races = races));
 
         effect(() => {
@@ -423,33 +421,28 @@ export class GaudiModeDetailComponent implements OnDestroy {
 
         this.actions$.pipe(
             ofType(GaudiModeActions.pairingFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER bei der Auslosung: ${error}`, "OK", {duration: 5000});
         });
         this.actions$.pipe(
             ofType(GaudiModeActions.loadRankingFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Laden der Rangliste: ${error}`, "OK", {duration: 5000});
         });
         this.actions$.pipe(
             ofType(GaudiModeActions.exportPdfFailure, GaudiModeActions.exportPdfByGenderFailure, GaudiModeActions.exportPdfAllAgeGroupsFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 5000});
         });
         this.actions$.pipe(
             ofType(GaudiModeActions.exportCsvFailure),
-            takeUntil(this.destroy$),
+            takeUntilDestroyed(),
         ).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim CSV-Export: ${error}`, "OK", {duration: 5000});
         });
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     close(): void {

@@ -1,4 +1,5 @@
-import {Component, inject, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectorRef, OnInit} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {CommonModule} from "@angular/common";
 import {
     FormBuilder,
@@ -32,8 +33,8 @@ import {selectAllTeams} from "../../store/team/team.selectors";
 import * as TeamActions from "../../store/team/team.actions";
 import {selectAllCategories} from "../../store/category/category.selectors";
 import * as CategoryActions from "../../store/category/category.actions";
-import {Observable, Subject, of, combineLatest} from "rxjs";
-import {take, takeUntil, debounceTime, distinctUntilChanged, switchMap, startWith} from "rxjs/operators";
+import {Observable, of, combineLatest} from "rxjs";
+import {take, debounceTime, distinctUntilChanged, switchMap, startWith} from "rxjs/operators";
 import {Race, ResultUnit} from "../../models/race.model";
 import {Team} from "../../models/team.model";
 import {Category} from "../../models/category.model";
@@ -234,14 +235,13 @@ import {PersonService} from "../../services/person.service";
         `,
     ],
 })
-export class ParticipantDialogComponent implements OnInit, OnDestroy {
+export class ParticipantDialogComponent implements OnInit {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<ParticipantDialogComponent>);
     public data = inject<Participant | null>(MAT_DIALOG_DATA);
     private store = inject(Store);
     private personService = inject(PersonService);
     private cdr = inject(ChangeDetectorRef);
-    private destroy$ = new Subject<void>();
 
     form: FormGroup;
     resultUnit = ResultUnit;
@@ -304,7 +304,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
         // so the stale personId must be cleared - otherwise a user who picks Person A, then edits
         // the text without picking a new suggestion, would silently save Person A anyway.
         this.form.get("personSearch")!.valueChanges
-            .pipe(takeUntil(this.destroy$))
+            .pipe(takeUntilDestroyed())
             .subscribe((value) => {
                 if (typeof value === "string") {
                     this.form.get("personId")!.setValue(null);
@@ -320,7 +320,7 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
         combineLatest([
             this.races$,
             this.form.get("race")!.valueChanges.pipe(startWith(this.form.value.race)),
-        ]).pipe(takeUntil(this.destroy$)).subscribe(([races, raceId]) => {
+        ]).pipe(takeUntilDestroyed()).subscribe(([races, raceId]) => {
             const found = races.find(r => r.id === Number(raceId));
             if (found) {
                 if (previousResultUnit !== null && previousResultUnit !== found.resultUnit) {
@@ -353,11 +353,6 @@ export class ParticipantDialogComponent implements OnInit, OnDestroy {
 
     isPointsRace(): boolean {
         return this.selectedRace?.resultUnit === ResultUnit.POINTS;
-    }
-
-    ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
     }
 
     onCancel(): void {
