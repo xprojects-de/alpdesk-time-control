@@ -94,14 +94,28 @@ KOMBI_DESC_EXPECTED_PDF_TEXT = "-0:29.45"
 
 # --- Gaudi-Modus: Los-Modus -----------------------------------------------------------------------
 # A dedicated 4-person race so the pair-average-vs-overall-average math is self-contained. Values
-# mirror the earlier RankingServiceSpec/LosModeCalculatorSpec unit tests: overall average of all
-# four is exactly 18804ms. Whichever way the random draw pairs them, the fixed formula (round each
-# side to its printed precision, THEN subtract) must match exactly - the old code (subtract raw,
-# round once) is provably wrong whenever a 4083/4083-vs-33525/33525 pairing occurs.
+# mirror the earlier RankingServiceSpec/LosModeCalculatorSpec unit tests. Whichever way the random
+# draw pairs them, the fixed formula (round each side to its printed precision, THEN subtract) must
+# match exactly - the old code (subtract raw, round once) is provably wrong whenever a
+# 4083/4083-vs-33525/33527 pairing occurs.
+#
+# The last value is 33527 and not 33525 on purpose, and it is the only thing in this suite that
+# catches the SECOND rounding fix - rounding once from the raw average straight to the printed
+# hundredth, instead of to a whole millisecond first:
+#
+#   overall average = 75218 / 4 = 18804.5ms
+#     once  (fixed): round(1880.45) * 10          = 18800ms -> prints 0:18.80
+#     twice (old):   round(18804.5) = 18805ms,
+#                    then round(1880.5) * 10      = 18810ms -> prints 0:18.81
+#
+# With four equal-summing values (4 x ...525, average 18804.0) both formulas agree, so the suite
+# would pass either way and the fix would be covered by the unit test alone. No pair average is
+# affected by the change, so the random draw cannot hide it: the discriminating value is the
+# overall average, which every pairing reports as referenceMs.
 LOS_RACE_NAME = "Praezision Los"
 LOS_PARTICIPANTS = {
     1: ("Gerda", "Wimmer", 1994, 4083),
     2: ("Hannes", "Fellner", 1993, 4083),
     3: ("Ines", "Schranz", 1992, 33525),
-    4: ("Jonas", "Petzold", 1991, 33525),
+    4: ("Jonas", "Petzold", 1991, 33527),
 }

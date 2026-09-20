@@ -65,10 +65,19 @@ import {notBlank} from "../../utils/validators.util";
                     <mat-form-field appearance="outline">
                         <mat-label>Zeitversatz - Minuten</mat-label>
                         <input matInput type="number" min="0" formControlName="offsetMinutes" />
+                        @if (form.get("offsetMinutes")?.hasError("min")) {
+                            <mat-error>Minuten dürfen nicht negativ sein</mat-error>
+                        }
                     </mat-form-field>
                     <mat-form-field appearance="outline">
                         <mat-label>Sekunden</mat-label>
                         <input matInput type="number" min="0" max="59" formControlName="offsetSecondsPart" />
+                        @if (form.get("offsetSecondsPart")?.hasError("min")) {
+                            <mat-error>Sekunden dürfen nicht negativ sein</mat-error>
+                        }
+                        @if (form.get("offsetSecondsPart")?.hasError("max")) {
+                            <mat-error>Sekunden müssen unter 60 liegen</mat-error>
+                        }
                     </mat-form-field>
                 </div>
                 <p class="hint">Optional, für Blockstart mit versetztem Startsignal (z.B. 10 Minuten)</p>
@@ -151,8 +160,14 @@ export class StartGroupTemplateDialogComponent {
             label: [this.data?.label || "", [Validators.required, notBlank()]],
             color: [this.data?.color || this.palette[0].hex, Validators.required],
             position: [this.data?.position ?? 0],
-            offsetMinutes: [totalOffsetSeconds != null ? Math.floor(totalOffsetSeconds / 60) : null],
-            offsetSecondsPart: [totalOffsetSeconds != null ? totalOffsetSeconds % 60 : null],
+            // The min/max attributes on the inputs only drive the spinner arrows - a typed value
+            // passes straight through without these, and the form stays "valid" until the backend
+            // rejects it (StartGroupTemplateService#validate refuses a negative offset with a 400).
+            offsetMinutes: [totalOffsetSeconds != null ? Math.floor(totalOffsetSeconds / 60) : null, Validators.min(0)],
+            offsetSecondsPart: [
+                totalOffsetSeconds != null ? totalOffsetSeconds % 60 : null,
+                [Validators.min(0), Validators.max(59)],
+            ],
         });
     }
 

@@ -45,7 +45,15 @@ const REPEAT_SUPPRESSION_MS = 15000;
 export class LoadFailureEffects {
     private actions$ = inject(Actions);
     private snackBar = inject(MatSnackBar);
-    /** Last time each message was shown, keyed by action type + message - see the filter below. */
+    /**
+     * Last time a snackbar was shown per failing action type - see the filter below.
+     *
+     * Keyed by the action type alone, not by type + message: the error text comes from the server
+     * and is not guaranteed to be stable, and a varying one (an id, a timestamp) would both defeat
+     * the suppression entirely and make this map grow without bound. The type is what identifies
+     * the failing load to the operator anyway ("Altersgruppen konnten nicht geladen werden"), and
+     * there are only as many keys as there are action types listed below.
+     */
     private readonly lastShownAt = new Map<string, number>();
 
     loadFailure$ = createEffect(
@@ -69,14 +77,13 @@ export class LoadFailureEffects {
                 // is down would queue a new snackbar on every tick. The same message is therefore
                 // shown at most once per REPEAT_SUPPRESSION_MS - long enough to stay readable, short
                 // enough that a failure the operator just caused is never swallowed.
-                filter(({type, error}) => {
-                    const key = `${type}|${error}`;
+                filter(({type}) => {
                     const now = Date.now();
-                    const last = this.lastShownAt.get(key) ?? 0;
+                    const last = this.lastShownAt.get(type) ?? 0;
                     if (now - last < REPEAT_SUPPRESSION_MS) {
                         return false;
                     }
-                    this.lastShownAt.set(key, now);
+                    this.lastShownAt.set(type, now);
                     return true;
                 }),
                 tap(({error}) => {

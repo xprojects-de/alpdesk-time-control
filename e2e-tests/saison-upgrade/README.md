@@ -37,14 +37,21 @@ Rebuild kopiert dort also nichts. Nur hier läuft er mit Inhalt.
 
 ## Wie die Fixture entsteht
 
-`make_fixture.py` baut die Datenbank aus den **V1–V3-Dateien des Repositories selbst** zusammen,
-nicht aus einer eingecheckten Binärdatei: so kann die Fixture nicht von dem abweichen, was ein
-älterer Release tatsächlich erzeugt hat, und es landet nichts Unlesbares in git.
+`make_fixture.py` baut die Datenbank auf dem Stand **V2** – dem Stand, in dem eine Installation im
+Feld tatsächlich steht, denn die letzte Version vor diesem Feature (app.version 1.4, Branch `main`)
+liefert nur V1 und V2 aus. Der Start wendet dann **V3 und V4 hintereinander** an, genau wie ein
+echtes Update. Eine Fixture auf V3 würde einen Zustand prüfen, den es nirgends gibt, und nie das
+ausführen, was bei jedem echten Update passiert.
+
+Zusammengebaut wird sie aus den **Migrationsdateien des Repositories selbst**, nicht aus einer
+eingecheckten Binärdatei: so kann die Fixture nicht von dem abweichen, was ein älterer Release
+tatsächlich erzeugt hat, und es landet nichts Unlesbares in git.
 
 Die `flyway_schema_history`-Zeilen werden von Hand mit `NULL`-Prüfsummen geschrieben. Deshalb
 startet die Instanz mit `-Dflyway.datasources.default.validate-on-migrate=false` – Flyways eigenen
 Prüfsummen-Algorithmus hier nachzubauen würde die Fixture ohne Gegenwert an ein Interna binden.
-**V4 selbst wird völlig normal angewendet**; das Flag überspringt oder verändert keine Migration.
+**V3 und V4 selbst werden völlig normal angewendet**; das Flag überspringt oder verändert keine
+Migration.
 
 ## Voraussetzungen
 

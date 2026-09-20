@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""Builds a pre-V4 database: the schema as of migration V3, with age groups already in it.
+"""Builds a pre-upgrade database: the schema as of migration V2, with age groups already in it.
 
-Assembled from the repository's own V1-V3 migration files rather than from a checked-in binary, so
+V2 and not V3 because that is the state an installation in the field is actually in: the last
+release before this feature (app.version 1.4, branch main) ships V1 and V2 only, and V3 and V4 are
+released together. A fixture at V3 would test a state that exists nowhere, and would never exercise
+what every real upgrade does - apply V3 and V4 back to back in one startup.
+
+Assembled from the repository's own V1-V2 migration files rather than from a checked-in binary, so
 the fixture cannot drift away from what an older release actually produced - and so nothing
 unreviewable ends up in git.
 
@@ -21,8 +26,10 @@ import config
 APPLIED = [
     (1, "1", "create participant", "V1__create_participant.sql"),
     (2, "2", "gaudi mode keep dns dnf dsq in ranking", "V2__gaudi_mode_keep_dns_dnf_dsq_in_ranking.sql"),
-    (3, "3", "add start group", "V3__add_start_group.sql"),
 ]
+
+# Must exist but must NOT be pre-applied: starting the instance is what runs these, in this order.
+PENDING = ["V3__add_start_group.sql", "V4__age_group_season.sql"]
 
 target = pathlib.Path(sys.argv[1])
 migrations = pathlib.Path(__file__).resolve().parents[2] / "Backend/src/main/resources/db/migration"
@@ -30,8 +37,9 @@ migrations = pathlib.Path(__file__).resolve().parents[2] / "Backend/src/main/res
 missing = [script for _, _, _, script in APPLIED if not (migrations / script).exists()]
 if missing:
     sys.exit(f"FAIL migration file(s) not found in {migrations}: {', '.join(missing)}")
-if not (migrations / "V4__age_group_season.sql").exists():
-    sys.exit("FAIL V4 migration not found - this suite tests upgrading *to* it")
+missing_pending = [script for script in PENDING if not (migrations / script).exists()]
+if missing_pending:
+    sys.exit(f"FAIL migration(s) not found: {', '.join(missing_pending)} - this suite tests upgrading *to* them")
 
 target.parent.mkdir(parents=True, exist_ok=True)
 if target.exists():
@@ -72,13 +80,15 @@ try:
 
     columns = [row[1] for row in conn.execute("PRAGMA table_info(age_group)")]
     if "season_year" in columns:
-        sys.exit("FAIL fixture already has season_year - V1-V3 are not the pre-V4 schema any more")
+        sys.exit("FAIL fixture already has season_year - V1-V2 are not the pre-upgrade schema any more")
+    if conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'start_group_template'").fetchone()[0]:
+        sys.exit("FAIL fixture already has start_group_template - V3 must be applied by the instance, not here")
     seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'age_group'").fetchone()
     if seq is None or seq[0] != config.HIGHEST_PRE_V4_ID:
         sys.exit(f"FAIL fixture AUTOINCREMENT high-water mark is {seq}, expected {config.HIGHEST_PRE_V4_ID}")
 finally:
     conn.close()
 
-print(f"pre-V4 fixture written to {target} "
-      f"(schema v3, {len(config.PRE_V4_AGE_GROUPS)} age groups, ids "
+print(f"pre-upgrade fixture written to {target} "
+      f"(schema v2, {len(config.PRE_V4_AGE_GROUPS)} age groups, ids "
       f"{', '.join(str(ag['id']) for ag in config.PRE_V4_AGE_GROUPS)})")

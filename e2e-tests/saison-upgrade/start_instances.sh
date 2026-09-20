@@ -1,6 +1,7 @@
 #!/bin/bash
 # Starts 1 isolated backend instance for the Saison-Upgrade E2E test, against a database that is
-# still at migration V3 - so starting it is what applies V4, the age_group table rebuild.
+# still at migration V2 - the state a 1.4 installation in the field is in - so starting it applies
+# V3 and then V4, the age_group table rebuild, exactly as a real upgrade does.
 # NEVER points at the real production database.
 #
 # Usage: ./start_instances.sh /path/to/time-control.jar [/path/to/work-dir]
