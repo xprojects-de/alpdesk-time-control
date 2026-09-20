@@ -1,4 +1,5 @@
 import {inject, Injectable} from '@angular/core';
+import {HttpErrorResponse} from '@angular/common/http';
 import {extractErrorMessage} from '../../utils/http-error.util';
 import {Router} from '@angular/router';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
@@ -30,7 +31,12 @@ export class AuthEffects {
                         return AuthActions.loginSuccess({response: enhancedResponse});
                     }),
                     catchError(error => of(AuthActions.loginFailure({
-                        error: extractErrorMessage(error, 'Login fehlgeschlagen')
+                        // The backend answers a rejected login with an English message (backend
+                        // texts are English by convention), but this one is shown to the operator
+                        // on the login screen, so it gets its own German wording here.
+                        error: error instanceof HttpErrorResponse && error.status === 401
+                            ? 'Benutzername oder Passwort falsch'
+                            : extractErrorMessage(error, 'Login fehlgeschlagen')
                     })))
                 )
             )

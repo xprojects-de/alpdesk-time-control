@@ -9,6 +9,7 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Error;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.authentication.AuthenticationException;
 import io.micronaut.security.authentication.AuthorizationException;
 import io.micronaut.security.rules.SecurityRule;
 import org.slf4j.Logger;
@@ -75,7 +76,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Catch-all for anything that isn't a {@link DataAccessException} or {@link AuthorizationException}
+     * Wrong username/password: Micronaut's login controller signals this by throwing an
+     * {@link AuthenticationException}, which the Throwable catch-all below would otherwise turn
+     * into a 500 ("An unexpected error occurred.") - both misleading for the operator and wrong
+     * for any client keying off the status code. Deliberately does not say which of the two was
+     * wrong, and does not distinguish a wrong password from the lockout in
+     * AuthenticationProviderUserPassword.
+     */
+    @Produces(MediaType.APPLICATION_JSON)
+    @Error(global = true, exception = AuthenticationException.class)
+    public HttpResponse<ErrorResponse> handleAuthenticationException(HttpRequest<?> request, AuthenticationException exception) {
+        LOG.debug("Failed login attempt on {} {}", request.getMethod(), request.getPath());
+        return HttpResponse.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("Invalid username or password."));
+    }
+
+    /**
+     * Catch-all for anything that isn't a {@link DataAccessException}, {@link AuthenticationException}
+     * or {@link AuthorizationException}
      * (e.g. an NPE from an unguarded optional-FK dereference, or a bug in request handling) - without
      * this, such a failure bypasses the sanitizing above entirely and falls through to Micronaut's own
      * default error handler, whose verbosity depends on the active environment.
