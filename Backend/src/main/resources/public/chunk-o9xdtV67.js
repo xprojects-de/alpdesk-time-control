@@ -1,1 +1,0 @@
-import{f as Gl,it as dm}from"./chunk-D2FZZT2z.js";var r=dm(`team`);var c=Gl(r,e=>e.teams);var m=Gl(r,e=>e.loading);Gl(r,e=>e.error);export{m as n,c as t};

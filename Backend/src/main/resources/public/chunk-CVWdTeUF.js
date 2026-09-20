@@ -1,1 +1,0 @@
-import{f as Gl,it as dm}from"./chunk-D2FZZT2z.js";var r=dm(`startGroupTemplate`);var p=Gl(r,t=>t.templates);var l=Gl(r,t=>t.loading);Gl(r,t=>t.error);export{p as n,l as t};

@@ -1,0 +1,1 @@
+import{xt as nc,z as Rm}from"./chunk-COUF65hP.js";var r=Rm(`startGroupTemplate`);var p=nc(r,t=>t.templates);var l=nc(r,t=>t.loading);nc(r,t=>t.error);export{p as n,l as t};
