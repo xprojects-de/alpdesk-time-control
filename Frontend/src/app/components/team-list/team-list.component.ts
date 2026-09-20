@@ -168,8 +168,6 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "name", "actions"];
     dataSource = new MatTableDataSource<Team>([]);
     trackById = (_index: number, team: Team) => team.id;
-    private sortInitialized = false;
-    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
@@ -233,23 +231,20 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
                 });
         });
 
+        // Assigns as soon as the signal reports the instance - no delay needed, and comparing
+        // instances (rather than a "done" flag) also re-attaches should the table ever be
+        // recreated.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
-                }, 100);
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
+                this.dataSource.sort = sortInstance;
             }
         });
 
         effect(() => {
             const paginatorInstance = this.paginator();
-            if (paginatorInstance && !this.paginatorInitialized) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                    this.paginatorInitialized = true;
-                }, 100);
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }

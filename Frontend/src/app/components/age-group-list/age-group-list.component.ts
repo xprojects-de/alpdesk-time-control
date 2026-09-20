@@ -75,83 +75,83 @@ import {Actions, ofType} from "@ngrx/effects";
                 }
 
                 <div class="table-container">
-                <table
-                        mat-table
-                        [dataSource]="dataSource"
-                        [trackBy]="trackById"
-                        matSort
-                        class="age-group-table"
-                        [class.hidden]="loading$ | async"
-                >
-                    <!-- ID Column -->
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                        <td mat-cell *matCellDef="let ageGroup">{{ ageGroup.id }}</td>
-                    </ng-container>
+                    <table
+                            mat-table
+                            [dataSource]="dataSource"
+                            [trackBy]="trackById"
+                            matSort
+                            class="age-group-table"
+                            [class.hidden]="loading$ | async"
+                    >
+                        <!-- ID Column -->
+                        <ng-container matColumnDef="id">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
+                            <td mat-cell *matCellDef="let ageGroup">{{ ageGroup.id }}</td>
+                        </ng-container>
 
-                    <!-- Name Column -->
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
-                        <td mat-cell *matCellDef="let ageGroup">
-                            {{ ageGroup.name }}
-                        </td>
-                    </ng-container>
+                        <!-- Name Column -->
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
+                            <td mat-cell *matCellDef="let ageGroup">
+                                {{ ageGroup.name }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Gender Column -->
-                    <ng-container matColumnDef="gender">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                            Geschlecht
-                        </th>
-                        <td mat-cell *matCellDef="let ageGroup">
-                            {{ getGenderLabel(ageGroup.gender) }}
-                        </td>
-                    </ng-container>
+                        <!-- Gender Column -->
+                        <ng-container matColumnDef="gender">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                                Geschlecht
+                            </th>
+                            <td mat-cell *matCellDef="let ageGroup">
+                                {{ getGenderLabel(ageGroup.gender) }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Birth Year From Column -->
-                    <ng-container matColumnDef="birthYearFrom">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                            Geburtsjahr von
-                        </th>
-                        <td mat-cell *matCellDef="let ageGroup">
-                            {{ ageGroup.birthYearFrom }}
-                        </td>
-                    </ng-container>
+                        <!-- Birth Year From Column -->
+                        <ng-container matColumnDef="birthYearFrom">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                                Geburtsjahr von
+                            </th>
+                            <td mat-cell *matCellDef="let ageGroup">
+                                {{ ageGroup.birthYearFrom }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Birth Year To Column -->
-                    <ng-container matColumnDef="birthYearTo">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                            Geburtsjahr bis
-                        </th>
-                        <td mat-cell *matCellDef="let ageGroup">
-                            {{ ageGroup.birthYearTo }}
-                        </td>
-                    </ng-container>
+                        <!-- Birth Year To Column -->
+                        <ng-container matColumnDef="birthYearTo">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                                Geburtsjahr bis
+                            </th>
+                            <td mat-cell *matCellDef="let ageGroup">
+                                {{ ageGroup.birthYearTo }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Actions Column -->
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let ageGroup">
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(ageGroup)"
-                                    matTooltip="Bearbeiten"
-                            >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
-                                    mat-icon-button
-                                    color="warn"
-                                    (click)="deleteAgeGroup(ageGroup)"
-                                    matTooltip="Löschen"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                        <!-- Actions Column -->
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let ageGroup">
+                                <button
+                                        mat-icon-button
+                                        (click)="openEditDialog(ageGroup)"
+                                        matTooltip="Bearbeiten"
+                                >
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button
+                                        mat-icon-button
+                                        color="warn"
+                                        (click)="deleteAgeGroup(ageGroup)"
+                                        matTooltip="Löschen"
+                                >
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
@@ -209,8 +209,6 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     ];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
-    private sortInitialized = false;
-    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
@@ -262,24 +260,20 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Löschen der Altersgruppe: ${error}`, "OK", {duration: 5000});
         });
 
-        // Setup sort when signal changes
+        // Assigns as soon as the signal reports the instance - no delay needed, and comparing
+        // instances (rather than a "done" flag) also re-attaches should the table ever be
+        // recreated.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
-                }, 100);
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
+                this.dataSource.sort = sortInstance;
             }
         });
 
         effect(() => {
             const paginatorInstance = this.paginator();
-            if (paginatorInstance && !this.paginatorInitialized) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                    this.paginatorInitialized = true;
-                }, 100);
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }

@@ -1,6 +1,7 @@
 import {
     Component,
     AfterViewInit,
+    signal,
     viewChild,
     OnDestroy,
     inject,
@@ -22,6 +23,7 @@ import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatInputModule} from "@angular/material/input";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatDividerModule} from "@angular/material/divider";
 import {DisqualificationStatus, Participant} from "../../models/participant.model";
@@ -62,6 +64,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatPaginatorModule,
         MatSelectModule,
         MatFormFieldModule,
+        MatInputModule,
         MatMenuModule,
         MatDividerModule,
     ],
@@ -83,6 +86,26 @@ import {Actions, ofType} from "@ngrx/effects";
                         </mat-select>
                     </mat-form-field>
                     @if ((selectedRaceId$ | async) !== null) {
+                        <mat-form-field appearance="outline" class="search-field">
+                            <mat-label>Suche (Name, Vorname, Startnummer)</mat-label>
+                            <mat-icon matPrefix>search</mat-icon>
+                            <input
+                                    matInput
+                                    [value]="searchTerm()"
+                                    (input)="onSearchChange($any($event.target).value)"
+                                    placeholder="z.B. Muster oder 12"
+                            />
+                            @if (searchTerm()) {
+                                <button
+                                        matSuffix
+                                        mat-icon-button
+                                        aria-label="Suche leeren"
+                                        (click)="clearSearch()"
+                                >
+                                    <mat-icon>close</mat-icon>
+                                </button>
+                            }
+                        </mat-form-field>
                         <button
                                 mat-raised-button
                                 color="warn"
@@ -460,6 +483,10 @@ import {Actions, ofType} from "@ngrx/effects";
             align-items: center;
           }
 
+          .search-field {
+            min-width: 280px;
+          }
+
           .header-actions {
             margin-top: 20px;
             margin-bottom: 20px;
@@ -575,6 +602,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         "actions",
     ];
     dataSource = new MatTableDataSource<Participant>([]);
+    /** Free-text search over the currently listed participants - see filterPredicate below. */
+    searchTerm = signal("");
 
     // Each 2s poll/reload replaces dataSource.data with freshly-deserialized objects, so the CDK
     // table's default identity-based diffing would otherwise tear down and rebuild every row on
@@ -589,6 +618,23 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     paginator = viewChild(MatPaginator);
 
     constructor() {
+        // Searches exactly what an operator types at the finish line: a (partial) name or a start
+        // number. Deliberately not the other columns - a search for "3" should not match every
+        // participant whose time or comment happens to contain a 3.
+        this.dataSource.filterPredicate = (participant: Participant, filter: string) => {
+            const term = filter.trim().toLowerCase();
+            if (!term) {
+                return true;
+            }
+            return [
+                participant.person?.lastName,
+                participant.person?.firstName,
+                participant.raceNumber?.toString(),
+            ]
+                .filter((value): value is string => !!value)
+                .some(value => value.toLowerCase().includes(term));
+        };
+
         this.dataSource.sortingDataAccessor = (participant: Participant, columnId: string) => {
             switch (columnId) {
                 case "firstName":
@@ -814,9 +860,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         effect(() => {
             const sortInstance = this.sort();
             if (sortInstance && this.dataSource.sort !== sortInstance) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                }, 100);
+                this.dataSource.sort = sortInstance;
             }
         });
 
@@ -825,9 +869,7 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         effect(() => {
             const paginatorInstance = this.paginator();
             if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                }, 100);
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }
@@ -996,6 +1038,19 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
 
     onRaceFilterChange(raceId: number | null): void {
         this.store.dispatch(RaceActions.selectRace({id: raceId}));
+        // The previous race's search term would otherwise silently hide rows of the new race.
+        this.clearSearch();
+    }
+
+    onSearchChange(value: string): void {
+        this.searchTerm.set(value);
+        this.dataSource.filter = value.trim().toLowerCase();
+        // Without this, a search made while on page 3 shows an empty table instead of its matches.
+        this.paginator()?.firstPage();
+    }
+
+    clearSearch(): void {
+        this.onSearchChange("");
     }
 
     openCreateDialog(): void {

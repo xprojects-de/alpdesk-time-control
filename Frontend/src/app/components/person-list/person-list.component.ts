@@ -227,8 +227,6 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     displayedColumns = ["id", "lastName", "firstName", "birthDate", "gender", "externalId", "activeRaces", "actions"];
     dataSource = new MatTableDataSource<PersonWithActiveRaces>([]);
     trackById = (_index: number, person: PersonWithActiveRaces) => person.id;
-    private sortInitialized = false;
-    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
@@ -293,23 +291,20 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             this.snackBar.open(`FEHLER beim Löschen der ungenutzten Personen: ${error}`, "OK", {duration: 5000});
         });
 
+        // Assigns as soon as the signal reports the instance - no delay needed, and comparing
+        // instances (rather than a "done" flag) also re-attaches should the table ever be
+        // recreated.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
-                }, 100);
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
+                this.dataSource.sort = sortInstance;
             }
         });
 
         effect(() => {
             const paginatorInstance = this.paginator();
-            if (paginatorInstance && !this.paginatorInitialized) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                    this.paginatorInitialized = true;
-                }, 100);
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }
