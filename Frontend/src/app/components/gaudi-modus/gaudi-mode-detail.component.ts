@@ -1,10 +1,4 @@
-import {
-    Component,
-    inject,
-    input,
-    output,
-    effect,
-} from "@angular/core";
+import {Component, inject, input, output, effect} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Actions, ofType} from "@ngrx/effects";
@@ -67,29 +61,33 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 </button>
             </mat-card-header>
             <mat-card-content>
-
                 @if (gaudiMode().type === gaudiModeType.LOS) {
                     <div class="section-actions">
                         <button mat-raised-button color="primary" (click)="draw()">
                             <mat-icon>casino</mat-icon>
-                            {{ (pairing$ | async)?.length ? 'Neu auslosen' : 'Auslosen' }}
+                            {{ (pairing$ | async)?.length ? "Neu auslosen" : "Auslosen" }}
                         </button>
                     </div>
 
                     @if ((pairing$ | async)?.length) {
                         <div class="table-container">
-                        <table mat-table [dataSource]="(pairing$ | async) || []" [trackBy]="trackByPairingId" class="detail-table">
-                            <ng-container matColumnDef="participant1">
-                                <th mat-header-cell *matHeaderCellDef>Teilnehmer 1</th>
-                                <td mat-cell *matCellDef="let p">{{ p.participant1Name }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="participant2">
-                                <th mat-header-cell *matHeaderCellDef>Teilnehmer 2</th>
-                                <td mat-cell *matCellDef="let p">{{ p.participant2Name || '(Einzel)' }}</td>
-                            </ng-container>
-                            <tr mat-header-row *matHeaderRowDef="pairingColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: pairingColumns"></tr>
-                        </table>
+                            <table
+                                mat-table
+                                [dataSource]="(pairing$ | async) || []"
+                                [trackBy]="trackByPairingId"
+                                class="detail-table"
+                            >
+                                <ng-container matColumnDef="participant1">
+                                    <th mat-header-cell *matHeaderCellDef>Teilnehmer 1</th>
+                                    <td mat-cell *matCellDef="let p">{{ p.participant1Name }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="participant2">
+                                    <th mat-header-cell *matHeaderCellDef>Teilnehmer 2</th>
+                                    <td mat-cell *matCellDef="let p">{{ p.participant2Name || "(Einzel)" }}</td>
+                                </ng-container>
+                                <tr mat-header-row *matHeaderRowDef="pairingColumns"></tr>
+                                <tr mat-row *matRowDef="let row; columns: pairingColumns"></tr>
+                            </table>
                         </div>
                     } @else {
                         <p class="hint">Noch keine Zulosung vorhanden.</p>
@@ -103,14 +101,17 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                     </button>
                     @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
                         <button
-                                mat-raised-button
-                                color="accent"
-                                [matMenuTriggerFor]="exportMenu"
-                                [disabled]="pdfExportLoading$ | async"
-                                matTooltip="PDF Export Optionen"
+                            mat-raised-button
+                            color="accent"
+                            [matMenuTriggerFor]="exportMenu"
+                            [disabled]="pdfExportLoading$ | async"
+                            matTooltip="PDF Export Optionen"
                         >
                             @if (pdfExportLoading$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                                <mat-spinner
+                                    diameter="20"
+                                    style="display: inline-block; margin-right: 8px;"
+                                ></mat-spinner>
                             } @else {
                                 <mat-icon>picture_as_pdf</mat-icon>
                             }
@@ -145,13 +146,16 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                         </mat-menu>
                     } @else {
                         <button
-                                mat-raised-button
-                                color="accent"
-                                (click)="exportPdf()"
-                                [disabled]="pdfExportLoading$ | async"
+                            mat-raised-button
+                            color="accent"
+                            (click)="exportPdf()"
+                            [disabled]="pdfExportLoading$ | async"
                         >
                             @if (pdfExportLoading$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                                <mat-spinner
+                                    diameter="20"
+                                    style="display: inline-block; margin-right: 8px;"
+                                ></mat-spinner>
                             } @else {
                                 <mat-icon>picture_as_pdf</mat-icon>
                             }
@@ -161,10 +165,10 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
                     @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
                         <button
-                                mat-raised-button
-                                [matMenuTriggerFor]="csvExportMenu"
-                                [disabled]="pdfExportLoading$ | async"
-                                matTooltip="CSV Export Optionen"
+                            mat-raised-button
+                            [matMenuTriggerFor]="csvExportMenu"
+                            [disabled]="pdfExportLoading$ | async"
+                            matTooltip="CSV Export Optionen"
                         >
                             <mat-icon>table_view</mat-icon>
                             CSV Export
@@ -197,11 +201,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                             </button>
                         </mat-menu>
                     } @else if (gaudiMode().type === gaudiModeType.TIME_COMBINATION) {
-                        <button
-                                mat-raised-button
-                                (click)="exportCsv('all')"
-                                [disabled]="pdfExportLoading$ | async"
-                        >
+                        <button mat-raised-button (click)="exportCsv('all')" [disabled]="pdfExportLoading$ | async">
                             <mat-icon>table_view</mat-icon>
                             CSV Export
                         </button>
@@ -210,83 +210,95 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
                 @if ((ranking$ | async)?.length) {
                     <div class="table-container">
-                    @if (isCombinationType()) {
-                        <table mat-table [dataSource]="(ranking$ | async) || []" [trackBy]="trackByRankingEntry" class="detail-table">
-                            <ng-container matColumnDef="place">
-                                <th mat-header-cell *matHeaderCellDef>Platz</th>
-                                <td mat-cell *matCellDef="let r">{{ r.place }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="label">
-                                <th mat-header-cell *matHeaderCellDef>Name</th>
-                                <td mat-cell *matCellDef="let r">{{ r.label }}</td>
-                            </ng-container>
-                            @for (leg of legColumns; track leg.raceId) {
-                                <ng-container [matColumnDef]="'leg_' + leg.raceId + '_value'">
-                                    <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }}</th>
-                                    <td mat-cell *matCellDef="let r" [matTooltip]="legValueTooltip(r, leg.raceId)">{{ legValueDisplay(r, leg.raceId) }}</td>
+                        @if (isCombinationType()) {
+                            <table
+                                mat-table
+                                [dataSource]="(ranking$ | async) || []"
+                                [trackBy]="trackByRankingEntry"
+                                class="detail-table"
+                            >
+                                <ng-container matColumnDef="place">
+                                    <th mat-header-cell *matHeaderCellDef>Platz</th>
+                                    <td mat-cell *matCellDef="let r">{{ r.place }}</td>
                                 </ng-container>
-                                @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
-                                    <ng-container [matColumnDef]="'leg_' + leg.raceId + '_place'">
-                                        <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }} Platz</th>
-                                        <td mat-cell *matCellDef="let r">{{ legPlaceDisplay(r, leg.raceId) }}</td>
+                                <ng-container matColumnDef="label">
+                                    <th mat-header-cell *matHeaderCellDef>Name</th>
+                                    <td mat-cell *matCellDef="let r">{{ r.label }}</td>
+                                </ng-container>
+                                @for (leg of legColumns; track leg.raceId) {
+                                    <ng-container [matColumnDef]="'leg_' + leg.raceId + '_value'">
+                                        <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }}</th>
+                                        <td mat-cell *matCellDef="let r" [matTooltip]="legValueTooltip(r, leg.raceId)">
+                                            {{ legValueDisplay(r, leg.raceId) }}
+                                        </td>
                                     </ng-container>
-                                    <ng-container [matColumnDef]="'leg_' + leg.raceId + '_points'">
-                                        <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }} Pkt.</th>
-                                        <td mat-cell *matCellDef="let r">{{ legPointsDisplay(r, leg.raceId) }}</td>
+                                    @if (gaudiMode().type === gaudiModeType.POINTS_COMBINATION) {
+                                        <ng-container [matColumnDef]="'leg_' + leg.raceId + '_place'">
+                                            <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }} Platz</th>
+                                            <td mat-cell *matCellDef="let r">{{ legPlaceDisplay(r, leg.raceId) }}</td>
+                                        </ng-container>
+                                        <ng-container [matColumnDef]="'leg_' + leg.raceId + '_points'">
+                                            <th mat-header-cell *matHeaderCellDef>{{ leg.raceName }} Pkt.</th>
+                                            <td mat-cell *matCellDef="let r">{{ legPointsDisplay(r, leg.raceId) }}</td>
+                                        </ng-container>
+                                    }
+                                }
+                                <ng-container matColumnDef="total">
+                                    <th mat-header-cell *matHeaderCellDef>Gesamt</th>
+                                    <td mat-cell *matCellDef="let r">{{ totalDisplay(r) }}</td>
+                                </ng-container>
+                                <tr mat-header-row *matHeaderRowDef="combinationColumns"></tr>
+                                <tr mat-row *matRowDef="let row; columns: combinationColumns"></tr>
+                            </table>
+                        } @else {
+                            <table
+                                mat-table
+                                [dataSource]="(ranking$ | async) || []"
+                                [trackBy]="trackByRankingEntry"
+                                class="detail-table"
+                            >
+                                <ng-container matColumnDef="place">
+                                    <th mat-header-cell *matHeaderCellDef>Platz</th>
+                                    <td mat-cell *matCellDef="let r">{{ r.place }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="label">
+                                    <th mat-header-cell *matHeaderCellDef>
+                                        {{ gaudiMode().type === gaudiModeType.LOS ? "Paarung" : "Mannschaft" }}
+                                    </th>
+                                    <td mat-cell *matCellDef="let r">{{ r.label }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="time1Ms">
+                                    <th mat-header-cell *matHeaderCellDef>Wert 1</th>
+                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time1Ms) }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="time2Ms">
+                                    <th mat-header-cell *matHeaderCellDef>Wert 2</th>
+                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time2Ms) }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="valueMs">
+                                    <th mat-header-cell *matHeaderCellDef>
+                                        {{ gaudiMode().type === gaudiModeType.LOS ? "Ø-Wert Paar" : "Gesamtwert" }}
+                                    </th>
+                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.valueMs) }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="referenceMs">
+                                    <th mat-header-cell *matHeaderCellDef>Ø-Wert Gesamt</th>
+                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.referenceMs) }}</td>
+                                </ng-container>
+                                <ng-container matColumnDef="diffMs">
+                                    <th mat-header-cell *matHeaderCellDef>Abweichung</th>
+                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
+                                </ng-container>
+                                @if (gaudiMode().type === gaudiModeType.TEAM) {
+                                    <ng-container matColumnDef="members">
+                                        <th mat-header-cell *matHeaderCellDef>Mitglieder</th>
+                                        <td mat-cell *matCellDef="let r">{{ memberSummary(r) }}</td>
                                     </ng-container>
                                 }
-                            }
-                            <ng-container matColumnDef="total">
-                                <th mat-header-cell *matHeaderCellDef>Gesamt</th>
-                                <td mat-cell *matCellDef="let r">{{ totalDisplay(r) }}</td>
-                            </ng-container>
-                            <tr mat-header-row *matHeaderRowDef="combinationColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: combinationColumns"></tr>
-                        </table>
-                    } @else {
-                        <table mat-table [dataSource]="(ranking$ | async) || []" [trackBy]="trackByRankingEntry" class="detail-table">
-                            <ng-container matColumnDef="place">
-                                <th mat-header-cell *matHeaderCellDef>Platz</th>
-                                <td mat-cell *matCellDef="let r">{{ r.place }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="label">
-                                <th mat-header-cell *matHeaderCellDef>
-                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Paarung' : 'Mannschaft' }}
-                                </th>
-                                <td mat-cell *matCellDef="let r">{{ r.label }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="time1Ms">
-                                <th mat-header-cell *matHeaderCellDef>Wert 1</th>
-                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time1Ms) }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="time2Ms">
-                                <th mat-header-cell *matHeaderCellDef>Wert 2</th>
-                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.time2Ms) }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="valueMs">
-                                <th mat-header-cell *matHeaderCellDef>
-                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Ø-Wert Paar' : 'Gesamtwert' }}
-                                </th>
-                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.valueMs) }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="referenceMs">
-                                <th mat-header-cell *matHeaderCellDef>Ø-Wert Gesamt</th>
-                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.referenceMs) }}</td>
-                            </ng-container>
-                            <ng-container matColumnDef="diffMs">
-                                <th mat-header-cell *matHeaderCellDef>Abweichung</th>
-                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
-                            </ng-container>
-                            @if (gaudiMode().type === gaudiModeType.TEAM) {
-                                <ng-container matColumnDef="members">
-                                    <th mat-header-cell *matHeaderCellDef>Mitglieder</th>
-                                    <td mat-cell *matCellDef="let r">{{ memberSummary(r) }}</td>
-                                </ng-container>
-                            }
-                            <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
-                        </table>
-                    }
+                                <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
+                                <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
+                            </table>
+                        }
                     </div>
                 } @else {
                     <p class="hint">Noch keine Wertung berechnet.</p>
@@ -298,13 +310,13 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                         <table mat-table [dataSource]="(notRanked$ | async) || []" class="detail-table">
                             <ng-container matColumnDef="name">
                                 <th mat-header-cell *matHeaderCellDef>
-                                    {{ gaudiMode().type === gaudiModeType.LOS ? 'Paarung' : 'Name' }}
+                                    {{ gaudiMode().type === gaudiModeType.LOS ? "Paarung" : "Name" }}
                                 </th>
                                 <td mat-cell *matCellDef="let e">{{ notRankedName(e) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="team">
                                 <th mat-header-cell *matHeaderCellDef>Team</th>
-                                <td mat-cell *matCellDef="let e">{{ e.team || '-' }}</td>
+                                <td mat-cell *matCellDef="let e">{{ e.team || "-" }}</td>
                             </ng-container>
                             <ng-container matColumnDef="status">
                                 <th mat-header-cell *matHeaderCellDef>Status</th>
@@ -320,36 +332,36 @@ import {selectAllRaces} from "../../store/race/race.selectors";
     `,
     styles: [
         `
-          .detail-card {
-            margin-top: 20px;
-          }
+            .detail-card {
+                margin-top: 20px;
+            }
 
-          .header-row {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            width: 100%;
-          }
+            .header-row {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                width: 100%;
+            }
 
-          .section-actions {
-            display: flex;
-            gap: 10px;
-            margin: 16px 0;
-          }
+            .section-actions {
+                display: flex;
+                gap: 10px;
+                margin: 16px 0;
+            }
 
-          .detail-table {
-            width: 100%;
-            margin-bottom: 16px;
-          }
+            .detail-table {
+                width: 100%;
+                margin-bottom: 16px;
+            }
 
-          .not-ranked-title {
-            margin: 8px 0;
-          }
+            .not-ranked-title {
+                margin: 8px 0;
+            }
 
-          .hint {
-            color: rgba(0, 0, 0, 0.6);
-            font-style: italic;
-          }
+            .hint {
+                color: rgba(0, 0, 0, 0.6);
+                font-style: italic;
+            }
         `,
     ],
 })
@@ -365,7 +377,7 @@ export class GaudiModeDetailComponent {
     pairingColumns = ["participant1", "participant2"];
     rankingColumns: string[] = [];
     combinationColumns: string[] = [];
-    legColumns: { raceId: number; raceName: string }[] = [];
+    legColumns: {raceId: number; raceName: string}[] = [];
 
     pairing$: Observable<GaudiLosPairing[]> = this.store.select(GaudiModeSelectors.selectPairing);
     ranking$: Observable<GaudiRankingEntry[]> = this.store.select(GaudiModeSelectors.selectRanking);
@@ -391,17 +403,19 @@ export class GaudiModeDetailComponent {
     private races: Race[] = [];
 
     constructor() {
-        this.store.select(selectAllRaces)
+        this.store
+            .select(selectAllRaces)
             .pipe(takeUntilDestroyed())
             .subscribe(races => (this.races = races));
 
         effect(() => {
             const gaudiMode = this.gaudiMode();
-            this.rankingColumns = gaudiMode.type === GaudiModeType.LOS
-                ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
-                : gaudiMode.type === GaudiModeType.TEAM
-                    ? ["place", "label", "valueMs", "members"]
-                    : ["place", "label", "valueMs"];
+            this.rankingColumns =
+                gaudiMode.type === GaudiModeType.LOS
+                    ? ["place", "label", "time1Ms", "time2Ms", "valueMs", "referenceMs", "diffMs"]
+                    : gaudiMode.type === GaudiModeType.TEAM
+                      ? ["place", "label", "valueMs", "members"]
+                      : ["place", "label", "valueMs"];
 
             this.legColumns = gaudiMode.races.map(r => ({raceId: r.raceId, raceName: r.raceName}));
             const cols = ["place", "label"];
@@ -419,28 +433,25 @@ export class GaudiModeDetailComponent {
             }
         });
 
-        this.actions$.pipe(
-            ofType(GaudiModeActions.pairingFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(GaudiModeActions.pairingFailure), takeUntilDestroyed()).subscribe(({error}) => {
             this.snackBar.open(`FEHLER bei der Auslosung: ${error}`, "OK", {duration: 5000});
         });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.loadRankingFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(GaudiModeActions.loadRankingFailure), takeUntilDestroyed()).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Laden der Rangliste: ${error}`, "OK", {duration: 5000});
         });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.exportPdfFailure, GaudiModeActions.exportPdfByGenderFailure, GaudiModeActions.exportPdfAllAgeGroupsFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.exportCsvFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
+        this.actions$
+            .pipe(
+                ofType(
+                    GaudiModeActions.exportPdfFailure,
+                    GaudiModeActions.exportPdfByGenderFailure,
+                    GaudiModeActions.exportPdfAllAgeGroupsFailure,
+                ),
+                takeUntilDestroyed(),
+            )
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim PDF-Export: ${error}`, "OK", {duration: 5000});
+            });
+        this.actions$.pipe(ofType(GaudiModeActions.exportCsvFailure), takeUntilDestroyed()).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim CSV-Export: ${error}`, "OK", {duration: 5000});
         });
     }
@@ -460,45 +471,53 @@ export class GaudiModeDetailComponent {
 
     exportPdf(): void {
         const gaudiMode = this.gaudiMode();
-        this.store.dispatch(GaudiModeActions.exportPdf({
-            id: gaudiMode.id,
-            filename: this.buildFilename(gaudiMode, "")
-        }));
+        this.store.dispatch(
+            GaudiModeActions.exportPdf({
+                id: gaudiMode.id,
+                filename: this.buildFilename(gaudiMode, ""),
+            }),
+        );
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
     }
 
     exportByGenderPdf(gender: string): void {
         const gaudiMode = this.gaudiMode();
-        this.store.dispatch(GaudiModeActions.exportPdfByGender({
-            id: gaudiMode.id,
-            gender,
-            filename: this.buildFilename(gaudiMode, gender.toLowerCase())
-        }));
+        this.store.dispatch(
+            GaudiModeActions.exportPdfByGender({
+                id: gaudiMode.id,
+                gender,
+                filename: this.buildFilename(gaudiMode, gender.toLowerCase()),
+            }),
+        );
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
     }
 
     exportAllAgeGroupsPdf(): void {
         const gaudiMode = this.gaudiMode();
-        this.store.dispatch(GaudiModeActions.exportPdfAllAgeGroups({
-            id: gaudiMode.id,
-            filename: this.buildFilename(gaudiMode, "altersklassen")
-        }));
+        this.store.dispatch(
+            GaudiModeActions.exportPdfAllAgeGroups({
+                id: gaudiMode.id,
+                filename: this.buildFilename(gaudiMode, "altersklassen"),
+            }),
+        );
         this.snackBar.open("PDF Export gestartet", "OK", {duration: 2000});
     }
 
     exportCsv(variant: GaudiCsvExportVariant): void {
         const gaudiMode = this.gaudiMode();
-        const suffix = variant === 'all' ? '' : variant === 'agegroups' ? 'altersklassen' : variant.toLowerCase();
-        this.store.dispatch(GaudiModeActions.exportCsv({
-            id: gaudiMode.id,
-            variant,
-            filename: this.buildFilename(gaudiMode, suffix, variant === 'agegroups' ? 'zip' : 'csv')
-        }));
+        const suffix = variant === "all" ? "" : variant === "agegroups" ? "altersklassen" : variant.toLowerCase();
+        this.store.dispatch(
+            GaudiModeActions.exportCsv({
+                id: gaudiMode.id,
+                variant,
+                filename: this.buildFilename(gaudiMode, suffix, variant === "agegroups" ? "zip" : "csv"),
+            }),
+        );
         this.snackBar.open("CSV Export gestartet", "OK", {duration: 2000});
     }
 
-    private buildFilename(gaudiMode: GaudiMode, suffix: string, extension = 'pdf'): string {
-        const base = `gaudi_${gaudiMode.name.replace(/\s+/g, '_').toLowerCase()}`;
+    private buildFilename(gaudiMode: GaudiMode, suffix: string, extension = "pdf"): string {
+        const base = `gaudi_${gaudiMode.name.replace(/\s+/g, "_").toLowerCase()}`;
         return suffix ? `${base}_${suffix}.${extension}` : `${base}.${extension}`;
     }
 
@@ -506,30 +525,34 @@ export class GaudiModeDetailComponent {
     notRankedName(entry: GaudiNotRankedEntry): string {
         // LOS pairings carry their whole label in lastName and have no firstName, so the two must
         // not be concatenated blindly - that rendered "<pairing> undefined".
-        return [entry.lastName, entry.firstName].filter(Boolean).join(' ').trim();
+        return [entry.lastName, entry.firstName].filter(Boolean).join(" ").trim();
     }
 
     memberSummary(entry: GaudiRankingEntry): string {
         if (!entry.members?.length) {
             return "-";
         }
-        return entry.members
-            .map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)})`)
-            .join(', ');
+        return entry.members.map(m => `${m.label} (${this.singleRaceValueDisplay(m.valueMs)})`).join(", ");
     }
 
     typeLabel(): string {
         switch (this.gaudiMode().type) {
-            case GaudiModeType.LOS: return "Los-Modus";
-            case GaudiModeType.TEAM: return "Mannschaftswertung";
-            case GaudiModeType.TIME_COMBINATION: return "Zeit-Kombination";
-            case GaudiModeType.POINTS_COMBINATION: return "Punkte-Mischwertung";
+            case GaudiModeType.LOS:
+                return "Los-Modus";
+            case GaudiModeType.TEAM:
+                return "Mannschaftswertung";
+            case GaudiModeType.TIME_COMBINATION:
+                return "Zeit-Kombination";
+            case GaudiModeType.POINTS_COMBINATION:
+                return "Punkte-Mischwertung";
         }
     }
 
     isCombinationType(): boolean {
-        return this.gaudiMode().type === GaudiModeType.TIME_COMBINATION
-            || this.gaudiMode().type === GaudiModeType.POINTS_COMBINATION;
+        return (
+            this.gaudiMode().type === GaudiModeType.TIME_COMBINATION ||
+            this.gaudiMode().type === GaudiModeType.POINTS_COMBINATION
+        );
     }
 
     legFor(entry: GaudiRankingEntry, raceId: number): GaudiRankingLeg | undefined {
@@ -577,8 +600,13 @@ export class GaudiModeDetailComponent {
         if (!hasOffset && !hasPenalty) {
             return "";
         }
-        return ["Messwert", hasOffset ? "(− Zeitversatz Startgruppe)" : "", hasPenalty ? `(${this.penaltySign(this.races.find(r => r.id === raceId))} Strafe)` : ""]
-            .filter(Boolean).join(" ");
+        return [
+            "Messwert",
+            hasOffset ? "(− Zeitversatz Startgruppe)" : "",
+            hasPenalty ? `(${this.penaltySign(this.races.find(r => r.id === raceId))} Strafe)` : "",
+        ]
+            .filter(Boolean)
+            .join(" ");
     }
 
     legPlaceDisplay(entry: GaudiRankingEntry, raceId: number): string {

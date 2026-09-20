@@ -1,7 +1,7 @@
-import {createReducer, on} from '@ngrx/store';
-import {AutoAssignStatus, Measurement} from '../../models/measurement.model';
-import {MeasurementImportResponse} from '../../models/measurement-import.model';
-import * as MeasurementActions from './measurement.actions';
+import {createReducer, on} from "@ngrx/store";
+import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
+import {MeasurementImportResponse} from "../../models/measurement-import.model";
+import * as MeasurementActions from "./measurement.actions";
 
 export interface MeasurementState {
     measurements: Measurement[];
@@ -45,13 +45,13 @@ export const initialState: MeasurementState = {
     isPollingDeviceConnection: false,
     autoAssignStatus: {raceId: null, active: false, nextRaceNumber: null},
     importLoading: false,
-    importResult: null
+    importResult: null,
 };
 
 const startLoading = (state: MeasurementState) => ({
     ...state,
     loadingCount: state.loadingCount + 1,
-    error: null
+    error: null,
 });
 
 // Floored at 0 defensively; every startLoading() has exactly one matching success/failure action,
@@ -65,17 +65,17 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.loadMeasurements, state => ({
         ...state,
         measurementsLoading: true,
-        error: null
+        error: null,
     })),
     on(MeasurementActions.loadMeasurementsSuccess, (state, {measurements}) => ({
         ...state,
         measurements,
-        measurementsLoading: false
+        measurementsLoading: false,
     })),
     on(MeasurementActions.loadMeasurementsFailure, (state, {error}) => ({
         ...state,
         measurementsLoading: false,
-        error
+        error,
     })),
 
     // Load measurements by participant
@@ -83,12 +83,12 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.loadMeasurementsByParticipantSuccess, (state, {measurements}) => ({
         ...state,
         measurements,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.loadMeasurementsByParticipantFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Load single measurement
@@ -96,14 +96,14 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.loadMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: state.measurements.some(m => m.id === measurement.id)
-            ? state.measurements.map(m => m.id === measurement.id ? measurement : m)
+            ? state.measurements.map(m => (m.id === measurement.id ? measurement : m))
             : [...state.measurements, measurement],
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.loadMeasurementFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Create measurement
@@ -111,25 +111,25 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.createMeasurementSuccess, (state, {measurement}) => ({
         ...state,
         measurements: [...state.measurements, measurement],
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.createMeasurementFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Update measurement
     on(MeasurementActions.updateMeasurement, startLoading),
     on(MeasurementActions.updateMeasurementSuccess, (state, {measurement}) => ({
         ...state,
-        measurements: state.measurements.map(m => m.id === measurement.id ? measurement : m),
-        loadingCount: endLoading(state)
+        measurements: state.measurements.map(m => (m.id === measurement.id ? measurement : m)),
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.updateMeasurementFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Delete measurement
@@ -138,18 +138,18 @@ export const measurementReducer = createReducer(
         ...state,
         measurements: state.measurements.filter(m => m.id !== id),
         selectedMeasurementId: state.selectedMeasurementId === id ? null : state.selectedMeasurementId,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.deleteMeasurementFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Select measurement
     on(MeasurementActions.selectMeasurement, (state, {id}) => ({
         ...state,
-        selectedMeasurementId: id
+        selectedMeasurementId: id,
     })),
 
     // Reset measurements
@@ -158,12 +158,12 @@ export const measurementReducer = createReducer(
         ...state,
         measurements: [],
         selectedMeasurementId: null,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.resetMeasurementsFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Archive measurements
@@ -172,12 +172,12 @@ export const measurementReducer = createReducer(
         ...state,
         measurements: clearAfterArchive ? [] : state.measurements,
         selectedMeasurementId: clearAfterArchive ? null : state.selectedMeasurementId,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.archiveMeasurementsFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Continuous mode
@@ -185,12 +185,12 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.setContinuousModeSuccess, (state, {enabled}) => ({
         ...state,
         continuousModeEnabled: enabled,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.setContinuousModeFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Scheduled import
@@ -198,12 +198,12 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.setScheduledImportSuccess, (state, {enabled}) => ({
         ...state,
         scheduledImportEnabled: enabled,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.setScheduledImportFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Load scheduled import status
@@ -211,12 +211,12 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.loadScheduledImportStatusSuccess, (state, {enabled}) => ({
         ...state,
         scheduledImportEnabled: enabled,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.loadScheduledImportStatusFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Load device status
@@ -224,37 +224,37 @@ export const measurementReducer = createReducer(
     on(MeasurementActions.loadDeviceStatusSuccess, (state, {status}) => ({
         ...state,
         deviceStatus: status,
-        continuousModeEnabled: status === 'continuous',
-        loadingCount: endLoading(state)
+        continuousModeEnabled: status === "continuous",
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.loadDeviceStatusFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Discard oldest start
     on(MeasurementActions.discardOldestStart, startLoading),
     on(MeasurementActions.discardOldestStartSuccess, state => ({
         ...state,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.discardOldestStartFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Export measurements as CSV
     on(MeasurementActions.exportMeasurementsCsv, startLoading),
     on(MeasurementActions.exportMeasurementsCsvSuccess, state => ({
         ...state,
-        loadingCount: endLoading(state)
+        loadingCount: endLoading(state),
     })),
     on(MeasurementActions.exportMeasurementsCsvFailure, (state, {error}) => ({
         ...state,
         loadingCount: endLoading(state),
-        error
+        error,
     })),
 
     // Import measurements from CSV with a column mapping
@@ -262,7 +262,7 @@ export const measurementReducer = createReducer(
         ...state,
         importLoading: true,
         importResult: null,
-        error: null
+        error: null,
     })),
     on(MeasurementActions.importMeasurementsMappedSuccess, (state, {result}) => {
         // The backend omits empty array fields from the JSON response entirely, so
@@ -273,38 +273,38 @@ export const measurementReducer = createReducer(
             ...state,
             measurements: [...state.measurements, ...imported],
             importLoading: false,
-            importResult: {...result, imported, errors}
+            importResult: {...result, imported, errors},
         };
     }),
     on(MeasurementActions.importMeasurementsMappedFailure, (state, {error}) => ({
         ...state,
         importLoading: false,
-        error
+        error,
     })),
 
     // Device connection polling
     on(MeasurementActions.startDeviceConnectionPolling, state => ({
         ...state,
-        isPollingDeviceConnection: true
+        isPollingDeviceConnection: true,
     })),
     on(MeasurementActions.stopDeviceConnectionPolling, state => ({
         ...state,
-        isPollingDeviceConnection: false
+        isPollingDeviceConnection: false,
     })),
     on(MeasurementActions.checkDeviceConnectionSuccess, (state, {connected}) => ({
         ...state,
-        deviceConnected: connected
+        deviceConnected: connected,
     })),
     on(MeasurementActions.checkDeviceConnectionFailure, (state, {error}) => ({
         ...state,
         deviceConnected: false,
-        error
+        error,
     })),
 
     // Live auto-assign mode
     on(MeasurementActions.loadAutoAssignStatus, state => ({
         ...state,
-        error: null
+        error: null,
     })),
     on(
         MeasurementActions.loadAutoAssignStatusSuccess,
@@ -314,8 +314,8 @@ export const measurementReducer = createReducer(
         MeasurementActions.setNextAutoAssignRaceNumberSuccess,
         (state, {status}) => ({
             ...state,
-            autoAssignStatus: status
-        })
+            autoAssignStatus: status,
+        }),
     ),
     on(
         MeasurementActions.loadAutoAssignStatusFailure,
@@ -325,7 +325,7 @@ export const measurementReducer = createReducer(
         MeasurementActions.setNextAutoAssignRaceNumberFailure,
         (state, {error}) => ({
             ...state,
-            error
-        })
-    )
+            error,
+        }),
+    ),
 );

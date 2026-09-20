@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {map} from 'rxjs/operators';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {map} from "rxjs/operators";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class HealthService {
     private http = inject(HttpClient);
@@ -15,8 +15,6 @@ export class HealthService {
     // signal. Errors (connection refused, DNS failure, timeout) propagate as a normal Observable
     // error for the caller to catch, they are not swallowed here.
     ping(): Observable<void> {
-        return this.http.get(this.apiUrl, {responseType: 'text'}).pipe(
-            map(() => void 0)
-        );
+        return this.http.get(this.apiUrl, {responseType: "text"}).pipe(map(() => void 0));
     }
 }

@@ -1,11 +1,11 @@
-import {inject, Injectable} from '@angular/core';
-import {HttpErrorResponse} from '@angular/common/http';
-import {extractErrorMessage} from '../../utils/http-error.util';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {catchError, map, mergeMap} from 'rxjs/operators';
-import {StartGroupTemplateService} from '../../services/start-group-template.service';
-import * as StartGroupTemplateActions from './start-group-template.actions';
+import {inject, Injectable} from "@angular/core";
+import {HttpErrorResponse} from "@angular/common/http";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {of} from "rxjs";
+import {catchError, map, mergeMap} from "rxjs/operators";
+import {StartGroupTemplateService} from "../../services/start-group-template.service";
+import * as StartGroupTemplateActions from "./start-group-template.actions";
 
 @Injectable()
 export class StartGroupTemplateEffects {
@@ -18,12 +18,16 @@ export class StartGroupTemplateEffects {
             mergeMap(() =>
                 this.startGroupTemplateService.getAll().pipe(
                     map(templates => StartGroupTemplateActions.loadStartGroupTemplatesSuccess({templates})),
-                    catchError(error => of(StartGroupTemplateActions.loadStartGroupTemplatesFailure({
-                        error: extractErrorMessage(error, 'Startgruppen konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            StartGroupTemplateActions.loadStartGroupTemplatesFailure({
+                                error: extractErrorMessage(error, "Startgruppen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     createStartGroupTemplate$ = createEffect(() =>
@@ -32,12 +36,16 @@ export class StartGroupTemplateEffects {
             mergeMap(({template}) =>
                 this.startGroupTemplateService.create(template).pipe(
                     map(created => StartGroupTemplateActions.createStartGroupTemplateSuccess({template: created})),
-                    catchError(error => of(StartGroupTemplateActions.createStartGroupTemplateFailure({
-                        error: extractErrorMessage(error, 'Startgruppe konnte nicht erstellt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            StartGroupTemplateActions.createStartGroupTemplateFailure({
+                                error: extractErrorMessage(error, "Startgruppe konnte nicht erstellt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     updateStartGroupTemplate$ = createEffect(() =>
@@ -46,12 +54,16 @@ export class StartGroupTemplateEffects {
             mergeMap(({id, template}) =>
                 this.startGroupTemplateService.update(id, template).pipe(
                     map(updated => StartGroupTemplateActions.updateStartGroupTemplateSuccess({template: updated})),
-                    catchError(error => of(StartGroupTemplateActions.updateStartGroupTemplateFailure({
-                        error: extractErrorMessage(error, 'Startgruppe konnte nicht aktualisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            StartGroupTemplateActions.updateStartGroupTemplateFailure({
+                                error: extractErrorMessage(error, "Startgruppe konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     deleteStartGroupTemplate$ = createEffect(() =>
@@ -62,17 +74,21 @@ export class StartGroupTemplateEffects {
                     map(() => StartGroupTemplateActions.deleteStartGroupTemplateSuccess({id})),
                     catchError(error => {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
-                            return of(StartGroupTemplateActions.deleteStartGroupTemplateConflict({
-                                id,
-                                message: extractErrorMessage(error, 'Startgruppe konnte nicht gelöscht werden')
-                            }));
+                            return of(
+                                StartGroupTemplateActions.deleteStartGroupTemplateConflict({
+                                    id,
+                                    message: extractErrorMessage(error, "Startgruppe konnte nicht gelöscht werden"),
+                                }),
+                            );
                         }
-                        return of(StartGroupTemplateActions.deleteStartGroupTemplateFailure({
-                            error: extractErrorMessage(error, 'Startgruppe konnte nicht gelöscht werden')
-                        }));
-                    })
-                )
-            )
-        )
+                        return of(
+                            StartGroupTemplateActions.deleteStartGroupTemplateFailure({
+                                error: extractErrorMessage(error, "Startgruppe konnte nicht gelöscht werden"),
+                            }),
+                        );
+                    }),
+                ),
+            ),
+        ),
     );
 }

@@ -49,7 +49,11 @@ interface NavItem {
     ],
     template: `
         <mat-toolbar color="primary">
-            <button mat-icon-button (click)="toggleNav()" [matTooltip]="navOpen() ? 'Menü einklappen' : 'Menü ausklappen'">
+            <button
+                mat-icon-button
+                (click)="toggleNav()"
+                [matTooltip]="navOpen() ? 'Menü einklappen' : 'Menü ausklappen'"
+            >
                 <mat-icon>menu</mat-icon>
             </button>
             <span>Alpdesk TimeControl - Zeitnahme System</span>
@@ -61,21 +65,16 @@ interface NavItem {
             @if (timingProviderActive$ | async) {
                 <div class="connection-status">
                     @switch (deviceConnectionStatus$ | async) {
-                        @case ('connected') {
-                            <mat-icon class="status-icon connected"
-                                      [matTooltip]="'Gerät verbunden'">
-                                wifi
-                            </mat-icon>
+                        @case ("connected") {
+                            <mat-icon class="status-icon connected" [matTooltip]="'Gerät verbunden'"> wifi </mat-icon>
                         }
-                        @case ('disconnected') {
-                            <mat-icon class="status-icon disconnected"
-                                      [matTooltip]="'Gerät nicht verbunden'">
+                        @case ("disconnected") {
+                            <mat-icon class="status-icon disconnected" [matTooltip]="'Gerät nicht verbunden'">
                                 wifi_off
                             </mat-icon>
                         }
                         @default {
-                            <mat-icon class="status-icon unknown"
-                                      [matTooltip]="'Verbindungsstatus unbekannt'">
+                            <mat-icon class="status-icon unknown" [matTooltip]="'Verbindungsstatus unbekannt'">
                                 help_outline
                             </mat-icon>
                         }
@@ -116,11 +115,16 @@ interface NavItem {
                 <mat-nav-list class="nav-list">
                     @for (group of navGroups; track $index; let first = $first) {
                         @if (!first) {
-                            <mat-divider class="nav-divider"/>
+                            <mat-divider class="nav-divider" />
                         }
                         @for (item of group; track item.path) {
-                            <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
-                               [matTooltip]="item.label" matTooltipPosition="right">
+                            <a
+                                mat-list-item
+                                [routerLink]="item.path"
+                                routerLinkActive="active-nav-item"
+                                [matTooltip]="item.label"
+                                matTooltipPosition="right"
+                            >
                                 <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
                                 <span matListItemTitle>{{ item.label }}</span>
                             </a>
@@ -134,114 +138,114 @@ interface NavItem {
                 }
             </mat-sidenav>
             <mat-sidenav-content class="dashboard-content">
-                <router-outlet/>
+                <router-outlet />
             </mat-sidenav-content>
         </mat-sidenav-container>
     `,
     styles: [
         `
-          :host {
-            display: block;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-          }
+            :host {
+                display: block;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
 
-          .dashboard-container {
-            flex: 1 1 auto;
-            min-height: 0;
-          }
+            .dashboard-container {
+                flex: 1 1 auto;
+                min-height: 0;
+            }
 
-          .backend-offline-banner {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 8px 8px 16px;
-            background: #f44336;
-            color: white;
-            font-size: 13px;
-            flex: 0 0 auto;
-          }
+            .backend-offline-banner {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 8px 8px 16px;
+                background: #f44336;
+                color: white;
+                font-size: 13px;
+                flex: 0 0 auto;
+            }
 
-          .backend-offline-banner span {
-            flex: 1 1 auto;
-          }
+            .backend-offline-banner span {
+                flex: 1 1 auto;
+            }
 
-          .backend-offline-banner mat-icon {
-            font-size: 20px;
-            width: 20px;
-            height: 20px;
-          }
+            .backend-offline-banner mat-icon {
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+            }
 
-          .backend-offline-banner button {
-            color: white;
-            flex: 0 0 auto;
-          }
+            .backend-offline-banner button {
+                color: white;
+                flex: 0 0 auto;
+            }
 
-          .app-nav {
-            width: 220px;
-            display: flex;
-            flex-direction: column;
-          }
+            .app-nav {
+                width: 220px;
+                display: flex;
+                flex-direction: column;
+            }
 
-          .nav-list {
-            flex: 1 1 auto;
-          }
+            .nav-list {
+                flex: 1 1 auto;
+            }
 
-          .nav-divider {
-            margin: 8px 0;
-          }
+            .nav-divider {
+                margin: 8px 0;
+            }
 
-          .app-version {
-            padding: 8px 16px 12px;
-            font-size: 11px;
-            color: rgba(0, 0, 0, 0.4);
-          }
+            .app-version {
+                padding: 8px 16px 12px;
+                font-size: 11px;
+                color: rgba(0, 0, 0, 0.4);
+            }
 
-          .dashboard-content {
-            padding: 20px;
-          }
+            .dashboard-content {
+                padding: 20px;
+            }
 
-          .active-nav-item {
-            background: rgba(0, 0, 0, 0.06);
-            font-weight: 600;
-          }
+            .active-nav-item {
+                background: rgba(0, 0, 0, 0.06);
+                font-weight: 600;
+            }
 
-          .spacer {
-            flex: 1 1 auto;
-          }
+            .spacer {
+                flex: 1 1 auto;
+            }
 
-          .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            cursor: default;
-          }
+            .user-info {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 16px;
+                cursor: default;
+            }
 
-          .connection-status {
-            display: flex;
-            align-items: center;
-            margin-right: 16px;
-          }
+            .connection-status {
+                display: flex;
+                align-items: center;
+                margin-right: 16px;
+            }
 
-          .status-icon {
-            font-size: 24px;
-            width: 24px;
-            height: 24px;
-          }
+            .status-icon {
+                font-size: 24px;
+                width: 24px;
+                height: 24px;
+            }
 
-          .status-icon.connected {
-            color: #4caf50;
-          }
+            .status-icon.connected {
+                color: #4caf50;
+            }
 
-          .status-icon.disconnected {
-            color: #f44336;
-          }
+            .status-icon.disconnected {
+                color: #f44336;
+            }
 
-          .status-icon.unknown {
-            color: #ff9800;
-          }
+            .status-icon.unknown {
+                color: #ff9800;
+            }
         `,
     ],
 })
@@ -250,7 +254,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // ngOnInit runs outside the injection context, so takeUntilDestroyed needs this explicitly.
     private destroyRef = inject(DestroyRef);
     username$: Observable<string | null>;
-    deviceConnectionStatus$: Observable<'connected' | 'disconnected' | 'unknown'>;
+    deviceConnectionStatus$: Observable<"connected" | "disconnected" | "unknown">;
     version$: Observable<VersionInfo | null>;
     // Emits only once the real value is known (see constructor / selectTimingProviderActive).
     timingProviderActive$: Observable<boolean>;
@@ -260,23 +264,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Rendered with a divider between groups: race setup/evaluation first, timing-related pages below.
     readonly navGroups: NavItem[][] = [
         [
-            {path: 'races', label: 'Rennen', icon: 'flag'},
-            {path: 'categories', label: 'Kategorien', icon: 'category'},
-            {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
-            {path: 'teams', label: 'Teams', icon: 'groups'},
-            {path: 'start-group-templates', label: 'Startgruppen', icon: 'palette'},
-            {path: 'persons', label: 'Personen', icon: 'badge'},
-            {path: 'participants', label: 'Teilnehmer', icon: 'person'},
-            {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
+            {path: "races", label: "Rennen", icon: "flag"},
+            {path: "categories", label: "Kategorien", icon: "category"},
+            {path: "age-groups", label: "Altersgruppen", icon: "cake"},
+            {path: "teams", label: "Teams", icon: "groups"},
+            {path: "start-group-templates", label: "Startgruppen", icon: "palette"},
+            {path: "persons", label: "Personen", icon: "badge"},
+            {path: "participants", label: "Teilnehmer", icon: "person"},
+            {path: "gaudi-mode", label: "Gaudi-Modus", icon: "celebration"},
         ],
         [
-            {path: 'settings', label: 'Zeitmessung', icon: 'settings_input_antenna'},
-            {path: 'measurements', label: 'Messungen', icon: 'timer'},
-            {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
+            {path: "settings", label: "Zeitmessung", icon: "settings_input_antenna"},
+            {path: "measurements", label: "Messungen", icon: "timer"},
+            {path: "race-measurements", label: "Zuordnung & Sync", icon: "sync_alt"},
         ],
     ];
 
-    private static readonly NAV_OPEN_KEY = 'dashboard_nav_open';
+    private static readonly NAV_OPEN_KEY = "dashboard_nav_open";
     navOpen = signal(this.readNavOpenPreference());
 
     constructor() {
@@ -284,9 +288,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Mapped to a tri-state string rather than switched on the raw boolean|null in the template:
         // `@if (x$ | async; as x)` skips its block for a falsy `x === false`, which previously made
         // a real "disconnected" reading fall through to the "unknown" branch instead.
-        this.deviceConnectionStatus$ = this.store.select(MeasurementSelectors.selectDeviceConnected).pipe(
-            map(connected => connected === true ? 'connected' : connected === false ? 'disconnected' : 'unknown'),
-        );
+        this.deviceConnectionStatus$ = this.store
+            .select(MeasurementSelectors.selectDeviceConnected)
+            .pipe(
+                map(connected => (connected === true ? "connected" : connected === false ? "disconnected" : "unknown")),
+            );
         this.version$ = this.store.select(VersionSelectors.selectVersion);
         // Waits for the real settings value (or a load failure, which falls back to "active" so
         // connection polling isn't silently disabled forever) instead of guessing while loading -
@@ -313,7 +319,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private readNavOpenPreference(): boolean {
         try {
             const stored = localStorage.getItem(DashboardComponent.NAV_OPEN_KEY);
-            return stored === null ? true : stored === 'true';
+            return stored === null ? true : stored === "true";
         } catch {
             return true;
         }
@@ -332,9 +338,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // polling dispatches again on every change is safe (the effect's switchMap cancels the
         // previous interval), so this also picks up a provider switch made on the Settings page
         // without needing a dashboard reload.
-        this.timingProviderActive$.pipe(
-            takeUntilDestroyed(this.destroyRef),
-        ).subscribe(active => {
+        this.timingProviderActive$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(active => {
             if (active) {
                 this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
                 this.store.dispatch(MeasurementActions.checkDeviceConnection());

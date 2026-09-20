@@ -33,10 +33,10 @@ export interface ParticipantCopyDialogResult {
         <h2 mat-dialog-title>Teilnehmer in andere Rennen kopieren</h2>
         <mat-dialog-content>
             <p>
-                Alle Teilnehmer von "{{ sourceRaceName() }}" werden in die ausgewählten Rennen übernommen
-                (Name, Team, Kategorie, Kommentar, Startgruppe und Startreihenfolge). Ein DNS-Status wird
-                mitkopiert, DNF und DSQ nicht. Zeiten und Strafen werden nicht übernommen. Personen,
-                die im Zielrennen bereits Teilnehmer sind, werden übersprungen.
+                Alle Teilnehmer von "{{ sourceRaceName() }}" werden in die ausgewählten Rennen übernommen (Name, Team,
+                Kategorie, Kommentar, Startgruppe und Startreihenfolge). Ein DNS-Status wird mitkopiert, DNF und DSQ
+                nicht. Zeiten und Strafen werden nicht übernommen. Personen, die im Zielrennen bereits Teilnehmer sind,
+                werden übersprungen.
             </p>
             <form [formGroup]="form">
                 <mat-form-field appearance="outline">
@@ -47,9 +47,7 @@ export interface ParticipantCopyDialogResult {
                         }
                     </mat-select>
                 </mat-form-field>
-                <mat-checkbox formControlName="carryStartNumber">
-                    Startnummern übernehmen
-                </mat-checkbox>
+                <mat-checkbox formControlName="carryStartNumber"> Startnummern übernehmen </mat-checkbox>
                 <p class="hint">
                     Bereits im Zielrennen vergebene Startnummern werden dabei übersprungen (leer gelassen).
                 </p>
@@ -62,16 +60,16 @@ export interface ParticipantCopyDialogResult {
     `,
     styles: [
         `
-          mat-form-field {
-            width: 100%;
-            min-width: 350px;
-          }
+            mat-form-field {
+                width: 100%;
+                min-width: 350px;
+            }
 
-          .hint {
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-            margin-top: 4px;
-          }
+            .hint {
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+                margin-top: 4px;
+            }
         `,
     ],
 })

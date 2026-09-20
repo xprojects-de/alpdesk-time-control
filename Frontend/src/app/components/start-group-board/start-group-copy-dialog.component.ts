@@ -14,21 +14,14 @@ export interface StartGroupCopyDialogData {
 
 @Component({
     selector: "app-start-group-copy-dialog",
-    imports: [
-        CommonModule,
-        ReactiveFormsModule,
-        MatDialogModule,
-        MatFormFieldModule,
-        MatButtonModule,
-        MatSelectModule,
-    ],
+    imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatButtonModule, MatSelectModule],
     template: `
         <h2 mat-dialog-title>Startgruppen-Zuordnung übernehmen</h2>
         <mat-dialog-content>
             <p>
-                Die gespeicherte Gruppen-Zuordnung von "{{ sourceRaceName() }}" wird in die
-                ausgewählten Rennen übernommen (per Person zugeordnet). Ein Teilnehmer, der im
-                Zielrennen nicht vorkommt, bleibt unverändert.
+                Die gespeicherte Gruppen-Zuordnung von "{{ sourceRaceName() }}" wird in die ausgewählten Rennen
+                übernommen (per Person zugeordnet). Ein Teilnehmer, der im Zielrennen nicht vorkommt, bleibt
+                unverändert.
             </p>
             <form [formGroup]="form">
                 <mat-form-field appearance="outline">
@@ -48,10 +41,10 @@ export interface StartGroupCopyDialogData {
     `,
     styles: [
         `
-          mat-form-field {
-            width: 100%;
-            min-width: 350px;
-          }
+            mat-form-field {
+                width: 100%;
+                min-width: 350px;
+            }
         `,
     ],
 })

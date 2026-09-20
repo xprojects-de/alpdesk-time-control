@@ -1,9 +1,9 @@
-import {inject, Injectable} from '@angular/core';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {interval, of} from 'rxjs';
-import {catchError, exhaustMap, map, switchMap, takeUntil, timeout} from 'rxjs/operators';
-import {HealthService} from '../../services/health.service';
-import * as BackendHealthActions from './backend-health.actions';
+import {inject, Injectable} from "@angular/core";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {interval, of} from "rxjs";
+import {catchError, exhaustMap, map, switchMap, takeUntil, timeout} from "rxjs/operators";
+import {HealthService} from "../../services/health.service";
+import * as BackendHealthActions from "./backend-health.actions";
 
 @Injectable()
 export class BackendHealthEffects {
@@ -20,10 +20,10 @@ export class BackendHealthEffects {
             switchMap(() =>
                 interval(5000).pipe(
                     map(() => BackendHealthActions.checkBackendHealth()),
-                    takeUntil(this.actions$.pipe(ofType(BackendHealthActions.stopBackendHealthPolling)))
-                )
-            )
-        )
+                    takeUntil(this.actions$.pipe(ofType(BackendHealthActions.stopBackendHealthPolling))),
+                ),
+            ),
+        ),
     );
 
     checkBackendHealth$ = createEffect(() =>
@@ -36,9 +36,9 @@ export class BackendHealthEffects {
                 this.healthService.ping().pipe(
                     timeout(4000),
                     map(() => BackendHealthActions.checkBackendHealthSuccess()),
-                    catchError(() => of(BackendHealthActions.checkBackendHealthFailure()))
-                )
-            )
-        )
+                    catchError(() => of(BackendHealthActions.checkBackendHealthFailure())),
+                ),
+            ),
+        ),
     );
 }

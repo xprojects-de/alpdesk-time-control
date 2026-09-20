@@ -1,6 +1,6 @@
-import {createReducer, on} from '@ngrx/store';
-import {TimingProviderSettings} from '../../models/timing-provider.model';
-import * as SettingsActions from './settings.actions';
+import {createReducer, on} from "@ngrx/store";
+import {TimingProviderSettings} from "../../models/timing-provider.model";
+import * as SettingsActions from "./settings.actions";
 
 export interface SettingsState {
     timingProvider: TimingProviderSettings | null;
@@ -13,7 +13,7 @@ export const initialState: SettingsState = {
     timingProvider: null,
     loading: false,
     saving: false,
-    error: null
+    error: null,
 };
 
 export const settingsReducer = createReducer(
@@ -22,32 +22,32 @@ export const settingsReducer = createReducer(
     on(SettingsActions.loadTimingProvider, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(SettingsActions.loadTimingProviderSuccess, (state, {settings}) => ({
         ...state,
         timingProvider: settings,
-        loading: false
+        loading: false,
     })),
     on(SettingsActions.loadTimingProviderFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(SettingsActions.updateTimingProvider, state => ({
         ...state,
         saving: true,
-        error: null
+        error: null,
     })),
     on(SettingsActions.updateTimingProviderSuccess, (state, {settings}) => ({
         ...state,
         timingProvider: settings,
-        saving: false
+        saving: false,
     })),
     on(SettingsActions.updateTimingProviderFailure, (state, {error}) => ({
         ...state,
         saving: false,
-        error
-    }))
+        error,
+    })),
 );

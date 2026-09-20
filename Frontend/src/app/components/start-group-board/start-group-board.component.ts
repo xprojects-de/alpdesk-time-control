@@ -4,12 +4,7 @@ import {Store} from "@ngrx/store";
 import {Observable, Subject, combineLatest, firstValueFrom} from "rxjs";
 import {map, takeUntil} from "rxjs/operators";
 import {HasUnsavedChanges} from "../../guards/unsaved-changes.guard";
-import {
-    DragDropModule,
-    CdkDragDrop,
-    moveItemInArray,
-    transferArrayItem,
-} from "@angular/cdk/drag-drop";
+import {DragDropModule, CdkDragDrop, moveItemInArray, transferArrayItem} from "@angular/cdk/drag-drop";
 import {MatCardModule} from "@angular/material/card";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -74,8 +69,11 @@ interface BoardColumn {
                 <div class="filter-section">
                     <mat-form-field appearance="outline">
                         <mat-label>Rennen</mat-label>
-                        <mat-select #raceSelect="matSelect" [value]="selectedRaceId$ | async"
-                                    (selectionChange)="onRaceChange($event.value)">
+                        <mat-select
+                            #raceSelect="matSelect"
+                            [value]="selectedRaceId$ | async"
+                            (selectionChange)="onRaceChange($event.value)"
+                        >
                             <mat-option [value]="null">Rennen auswählen...</mat-option>
                             @for (race of races$ | async; track race.id) {
                                 <mat-option [value]="race.id">{{ race.name }}</mat-option>
@@ -90,8 +88,11 @@ interface BoardColumn {
                     <div class="header-actions">
                         <mat-form-field appearance="outline" class="template-select">
                             <mat-label>Aktive Gruppen</mat-label>
-                            <mat-select [value]="activeTemplateIds" multiple
-                                        (selectionChange)="onActiveTemplatesChange($event.value)">
+                            <mat-select
+                                [value]="activeTemplateIds"
+                                multiple
+                                (selectionChange)="onActiveTemplatesChange($event.value)"
+                            >
                                 @for (template of templates$ | async; track template.id) {
                                     <mat-option [value]="template.id">
                                         <span class="option-dot" [style.background]="template.color"></span>
@@ -104,9 +105,12 @@ interface BoardColumn {
                             }
                         </mat-form-field>
 
-                        <button mat-raised-button [matMenuTriggerFor]="autoMenu"
-                                [disabled]="groupColumns.length === 0"
-                                matTooltip="Teilnehmer automatisch auf die aktiven Gruppen verteilen (überschreibt die aktuelle Zuordnung)">
+                        <button
+                            mat-raised-button
+                            [matMenuTriggerFor]="autoMenu"
+                            [disabled]="groupColumns.length === 0"
+                            matTooltip="Teilnehmer automatisch auf die aktiven Gruppen verteilen (überschreibt die aktuelle Zuordnung)"
+                        >
                             <mat-icon>auto_fix_high</mat-icon>
                             Automatisch vorschlagen
                             <mat-icon>arrow_drop_down</mat-icon>
@@ -132,16 +136,32 @@ interface BoardColumn {
                             </button>
                         </mat-menu>
 
-                        <button mat-raised-button (click)="openCopyDialog()"
-                                [disabled]="dirty"
-                                [matTooltip]="dirty ? 'Erst speichern, dann übernehmen' : 'Gespeicherte Zuordnung in andere Rennen übernehmen'">
+                        <button
+                            mat-raised-button
+                            (click)="openCopyDialog()"
+                            [disabled]="dirty"
+                            [matTooltip]="
+                                dirty
+                                    ? 'Erst speichern, dann übernehmen'
+                                    : 'Gespeicherte Zuordnung in andere Rennen übernehmen'
+                            "
+                        >
                             <mat-icon>content_copy</mat-icon>
                             Von Rennen übernehmen
                         </button>
 
-                        <button mat-raised-button (click)="generateRaceNumbers()"
-                                [disabled]="dirty || hasResults"
-                                [matTooltip]="dirty ? 'Erst speichern' : hasResults ? 'Das Rennen hat bereits Ergebnisse' : 'Startnummern aus der Gruppenreihenfolge vergeben'">
+                        <button
+                            mat-raised-button
+                            (click)="generateRaceNumbers()"
+                            [disabled]="dirty || hasResults"
+                            [matTooltip]="
+                                dirty
+                                    ? 'Erst speichern'
+                                    : hasResults
+                                      ? 'Das Rennen hat bereits Ergebnisse'
+                                      : 'Startnummern aus der Gruppenreihenfolge vergeben'
+                            "
+                        >
                             <mat-icon>format_list_numbered</mat-icon>
                             Startnummern aus Gruppierung vergeben
                         </button>
@@ -151,9 +171,17 @@ interface BoardColumn {
                         @if (dirty) {
                             <span class="dirty-hint">Ungespeicherte Änderungen</span>
                         }
-                        <button mat-raised-button color="primary" (click)="save()" [disabled]="!dirty || (saving$ | async)">
+                        <button
+                            mat-raised-button
+                            color="primary"
+                            (click)="save()"
+                            [disabled]="!dirty || (saving$ | async)"
+                        >
                             @if (saving$ | async) {
-                                <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+                                <mat-spinner
+                                    diameter="20"
+                                    style="display: inline-block; margin-right: 8px;"
+                                ></mat-spinner>
                             } @else {
                                 <mat-icon>save</mat-icon>
                             }
@@ -161,8 +189,13 @@ interface BoardColumn {
                         </button>
                     </div>
 
-                    <div class="column-headers" cdkDropList cdkDropListOrientation="horizontal"
-                         [cdkDropListData]="groupColumns" (cdkDropListDropped)="onColumnDrop($event)">
+                    <div
+                        class="column-headers"
+                        cdkDropList
+                        cdkDropListOrientation="horizontal"
+                        [cdkDropListData]="groupColumns"
+                        (cdkDropListDropped)="onColumnDrop($event)"
+                    >
                         <div class="column-header unassigned">
                             {{ unassignedColumn.label }} ({{ unassignedColumn.entries.length }})
                         </div>
@@ -179,17 +212,20 @@ interface BoardColumn {
 
                     <div class="board">
                         <div class="column">
-                            <div class="column-list" cdkDropList
-                                 [cdkDropListData]="unassignedColumn.entries"
-                                 [cdkDropListConnectedTo]="allListIds"
-                                 [id]="listId(null)"
-                                 (cdkDropListDropped)="onCardDrop($event, null)">
+                            <div
+                                class="column-list"
+                                cdkDropList
+                                [cdkDropListData]="unassignedColumn.entries"
+                                [cdkDropListConnectedTo]="allListIds"
+                                [id]="listId(null)"
+                                (cdkDropListDropped)="onCardDrop($event, null)"
+                            >
                                 @for (entry of unassignedColumn.entries; track entry.participant.id) {
                                     <div class="card" cdkDrag>
                                         <span class="grip" cdkDragHandle>
                                             <mat-icon>drag_indicator</mat-icon>
                                         </span>
-                                        <span class="bib">{{ entry.participant.raceNumber ?? '-' }}</span>
+                                        <span class="bib">{{ entry.participant.raceNumber ?? "-" }}</span>
                                         <div class="name-meta">
                                             <div class="name">{{ personName(entry.participant) }}</div>
                                             <div class="meta">{{ participantMeta(entry.participant) }}</div>
@@ -200,17 +236,20 @@ interface BoardColumn {
                         </div>
                         @for (column of groupColumns; track column.id) {
                             <div class="column">
-                                <div class="column-list" cdkDropList
-                                     [cdkDropListData]="column.entries"
-                                     [cdkDropListConnectedTo]="allListIds"
-                                     [id]="listId(column.id)"
-                                     (cdkDropListDropped)="onCardDrop($event, column.id)">
+                                <div
+                                    class="column-list"
+                                    cdkDropList
+                                    [cdkDropListData]="column.entries"
+                                    [cdkDropListConnectedTo]="allListIds"
+                                    [id]="listId(column.id)"
+                                    (cdkDropListDropped)="onCardDrop($event, column.id)"
+                                >
                                     @for (entry of column.entries; track entry.participant.id) {
                                         <div class="card" cdkDrag>
                                             <span class="grip" cdkDragHandle>
                                                 <mat-icon>drag_indicator</mat-icon>
                                             </span>
-                                            <span class="bib">{{ entry.participant.raceNumber ?? '-' }}</span>
+                                            <span class="bib">{{ entry.participant.raceNumber ?? "-" }}</span>
                                             <div class="name-meta">
                                                 <div class="name">{{ personName(entry.participant) }}</div>
                                                 <div class="meta">{{ participantMeta(entry.participant) }}</div>
@@ -229,154 +268,155 @@ interface BoardColumn {
     // mutated from store subscriptions and dialog callbacks, which OnPush wouldn't pick up.
     // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
     changeDetection: ChangeDetectionStrategy.Eager,
-    host: {'(window:beforeunload)': 'onBeforeUnload($event)'},
+    host: {"(window:beforeunload)": "onBeforeUnload($event)"},
     styles: [
         `
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          .filter-section {
-            margin-top: 20px;
-            margin-bottom: 12px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-          }
+            .filter-section {
+                margin-top: 20px;
+                margin-bottom: 12px;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
 
-          .hint {
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .hint {
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .header-actions {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 16px;
-          }
+            .header-actions {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-bottom: 16px;
+            }
 
-          .template-select {
-            min-width: 240px;
-          }
+            .template-select {
+                min-width: 240px;
+            }
 
-          .option-dot, .dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 6px;
-            vertical-align: middle;
-          }
+            .option-dot,
+            .dot {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-right: 6px;
+                vertical-align: middle;
+            }
 
-          .spacer {
-            flex: 1 1 auto;
-          }
+            .spacer {
+                flex: 1 1 auto;
+            }
 
-          .dirty-hint {
-            color: #b26a00;
-            font-size: 13px;
-          }
+            .dirty-hint {
+                color: #b26a00;
+                font-size: 13px;
+            }
 
-          .column-headers {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 6px;
-          }
+            .column-headers {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 6px;
+            }
 
-          .column-header {
-            flex: 1 1 0;
-            min-width: 160px;
-            background: #f5f5f5;
-            border-top: 4px solid transparent;
-            border-radius: 4px;
-            padding: 8px 10px;
-            font-weight: 500;
-            font-size: 13px;
-            cursor: grab;
-          }
+            .column-header {
+                flex: 1 1 0;
+                min-width: 160px;
+                background: #f5f5f5;
+                border-top: 4px solid transparent;
+                border-radius: 4px;
+                padding: 8px 10px;
+                font-weight: 500;
+                font-size: 13px;
+                cursor: grab;
+            }
 
-          .column-header.unassigned {
-            cursor: default;
-            background: #eeeeee;
-          }
+            .column-header.unassigned {
+                cursor: default;
+                background: #eeeeee;
+            }
 
-          .column-header .mismatch {
-            color: #b26a00;
-            font-weight: 400;
-          }
+            .column-header .mismatch {
+                color: #b26a00;
+                font-weight: 400;
+            }
 
-          .board {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-          }
+            .board {
+                display: flex;
+                gap: 10px;
+                align-items: flex-start;
+            }
 
-          .column {
-            flex: 1 1 0;
-            min-width: 160px;
-          }
+            .column {
+                flex: 1 1 0;
+                min-width: 160px;
+            }
 
-          .column-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            min-height: 60px;
-            background: #fafafa;
-            border-radius: 4px;
-            padding: 6px;
-          }
+            .column-list {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-height: 60px;
+                background: #fafafa;
+                border-radius: 4px;
+                padding: 6px;
+            }
 
-          .card {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: white;
-            border: 1px solid rgba(0, 0, 0, 0.12);
-            border-radius: 4px;
-            padding: 6px 8px;
-            cursor: grab;
-          }
+            .card {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                background: white;
+                border: 1px solid rgba(0, 0, 0, 0.12);
+                border-radius: 4px;
+                padding: 6px 8px;
+                cursor: grab;
+            }
 
-          .grip {
-            display: flex;
-            color: rgba(0, 0, 0, 0.4);
-          }
+            .grip {
+                display: flex;
+                color: rgba(0, 0, 0, 0.4);
+            }
 
-          .bib {
-            font-weight: 500;
-            font-size: 12px;
-            min-width: 22px;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .bib {
+                font-weight: 500;
+                font-size: 12px;
+                min-width: 22px;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .name-meta {
-            min-width: 0;
-            overflow: hidden;
-          }
+            .name-meta {
+                min-width: 0;
+                overflow: hidden;
+            }
 
-          .name {
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
+            .name {
+                font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-          .meta {
-            font-size: 11px;
-            color: rgba(0, 0, 0, 0.5);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
+            .meta {
+                font-size: 11px;
+                color: rgba(0, 0, 0, 0.5);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-          .cdk-drag-preview {
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
-          }
+            .cdk-drag-preview {
+                box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+            }
 
-          .cdk-drag-placeholder {
-            opacity: 0.3;
-          }
+            .cdk-drag-placeholder {
+                opacity: 0.3;
+            }
         `,
     ],
 })
@@ -392,14 +432,14 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
     templates$: Observable<StartGroupTemplate[]>;
     saving$: Observable<boolean>;
 
-    unassignedColumn: BoardColumn = {id: null, label: 'Nicht zugeordnet', color: '#9e9e9e', target: null, entries: []};
+    unassignedColumn: BoardColumn = {id: null, label: "Nicht zugeordnet", color: "#9e9e9e", target: null, entries: []};
     groupColumns: BoardColumn[] = [];
     activeTemplateIds: number[] = [];
     allListIds: string[] = [];
     dirty = false;
     hasResults = false;
 
-    raceSelect = viewChild<MatSelect>('raceSelect');
+    raceSelect = viewChild<MatSelect>("raceSelect");
 
     private currentRaceId: number | null = null;
     private latestTemplates: StartGroupTemplate[] = [];
@@ -410,56 +450,54 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         this.templates$ = this.store.select(StartGroupTemplateSelectors.selectAllStartGroupTemplates);
         this.saving$ = this.store.select(ParticipantSelectors.selectParticipantLoading);
 
-        this.actions$.pipe(
-            ofType(ParticipantActions.saveStartGroupAssignmentSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.dirty = false;
-            this.snackBar.open("Startgruppen-Zuordnung gespeichert", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(ParticipantActions.saveStartGroupAssignmentFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Speichern: ${error}`, "OK", {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(ParticipantActions.copyStartGroupAssignmentSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open("Zuordnung übernommen", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(ParticipantActions.copyStartGroupAssignmentFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Übernehmen: ${error}`, "OK", {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(ParticipantActions.generateRaceNumbersFromStartGroupsSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open("Startnummern vergeben", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(ParticipantActions.generateRaceNumbersFromStartGroupsFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(ParticipantActions.saveStartGroupAssignmentSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.dirty = false;
+                this.snackBar.open("Startgruppen-Zuordnung gespeichert", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.saveStartGroupAssignmentFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Speichern: ${error}`, "OK", {duration: 5000});
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.copyStartGroupAssignmentSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Zuordnung übernommen", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.copyStartGroupAssignmentFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Übernehmen: ${error}`, "OK", {duration: 5000});
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.generateRaceNumbersFromStartGroupsSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Startnummern vergeben", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.generateRaceNumbersFromStartGroupsFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER: ${error}`, "OK", {duration: 5000});
+            });
     }
 
     confirmDiscardChanges(): boolean | Observable<boolean> {
         if (!this.dirty) {
             return true;
         }
-        return this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: 'Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Verlassen der Seite gehen sie verloren. Fortfahren?',
-                confirmLabel: 'Verlassen',
-            },
-        }).afterClosed().pipe(map(confirmed => !!confirmed));
+        return this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message:
+                        "Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Verlassen der Seite gehen sie verloren. Fortfahren?",
+                    confirmLabel: "Verlassen",
+                },
+            })
+            .afterClosed()
+            .pipe(map(confirmed => !!confirmed));
     }
 
     onBeforeUnload(event: BeforeUnloadEvent): void {
@@ -477,17 +515,19 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
             this.selectedRaceId$,
             this.store.select(ParticipantSelectors.selectFilteredParticipants),
             this.templates$,
-        ]).pipe(takeUntil(this.destroy$)).subscribe(([raceId, participants, templates]) => {
-            this.latestTemplates = templates;
-            if (raceId !== this.currentRaceId) {
-                this.currentRaceId = raceId;
-                this.rebuildFromParticipants(participants, templates);
-                return;
-            }
-            if (!this.dirty) {
-                this.rebuildFromParticipants(participants, templates);
-            }
-        });
+        ])
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(([raceId, participants, templates]) => {
+                this.latestTemplates = templates;
+                if (raceId !== this.currentRaceId) {
+                    this.currentRaceId = raceId;
+                    this.rebuildFromParticipants(participants, templates);
+                    return;
+                }
+                if (!this.dirty) {
+                    this.rebuildFromParticipants(participants, templates);
+                }
+            });
     }
 
     ngOnDestroy(): void {
@@ -500,29 +540,34 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
             this.store.dispatch(RaceActions.selectRace({id: raceId}));
             return;
         }
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: 'Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Wechsel des Rennens gehen sie verloren. Fortfahren?',
-                confirmLabel: 'Wechseln',
-            },
-        }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(confirmed => {
-            if (confirmed) {
-                this.store.dispatch(RaceActions.selectRace({id: raceId}));
-            } else {
-                // mat-select already updated its own displayed selection to the clicked race on
-                // the (selectionChange) event, independently of the [value] binding. Since we
-                // never dispatch here, selectedRaceId$ never re-emits, so the binding's own
-                // value/reference is unchanged from Angular's point of view and it wouldn't push
-                // a "new" value back into mat-select - writeValue bypasses that and forces it to
-                // redisplay the still-current race directly.
-                this.raceSelect()?.writeValue(this.currentRaceId ?? null);
-            }
-        });
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message:
+                        "Es gibt ungespeicherte Änderungen an der Startgruppen-Zuordnung. Beim Wechsel des Rennens gehen sie verloren. Fortfahren?",
+                    confirmLabel: "Wechseln",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    this.store.dispatch(RaceActions.selectRace({id: raceId}));
+                } else {
+                    // mat-select already updated its own displayed selection to the clicked race on
+                    // the (selectionChange) event, independently of the [value] binding. Since we
+                    // never dispatch here, selectedRaceId$ never re-emits, so the binding's own
+                    // value/reference is unchanged from Angular's point of view and it wouldn't push
+                    // a "new" value back into mat-select - writeValue bypasses that and forces it to
+                    // redisplay the still-current race directly.
+                    this.raceSelect()?.writeValue(this.currentRaceId ?? null);
+                }
+            });
     }
 
     personName(participant: Participant): string {
-        return formatPersonName(participant.person, '-');
+        return formatPersonName(participant.person, "-");
     }
 
     participantMeta(participant: Participant): string {
@@ -531,11 +576,11 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         if (ageGroup && team) {
             return `${ageGroup} · ${team}`;
         }
-        return ageGroup || team || '';
+        return ageGroup || team || "";
     }
 
     listId(templateId: number | null): string {
-        return `start-group-column-${templateId ?? 'unassigned'}`;
+        return `start-group-column-${templateId ?? "unassigned"}`;
     }
 
     private rebuildFromParticipants(participants: Participant[], templates: StartGroupTemplate[]): void {
@@ -565,12 +610,14 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         const NO_SEQUENCE_YET = 1_000_000;
         const activeTemplates = templates
             .filter(t => usedTemplateIds.has(t.id))
-            .sort((a, b) =>
-                (minSequenceByTemplateId.get(a.id) ?? NO_SEQUENCE_YET + a.position)
-                - (minSequenceByTemplateId.get(b.id) ?? NO_SEQUENCE_YET + b.position));
+            .sort(
+                (a, b) =>
+                    (minSequenceByTemplateId.get(a.id) ?? NO_SEQUENCE_YET + a.position) -
+                    (minSequenceByTemplateId.get(b.id) ?? NO_SEQUENCE_YET + b.position),
+            );
 
         this.groupColumns = activeTemplates.map(t => this.toColumn(t));
-        this.unassignedColumn = {id: null, label: 'Nicht zugeordnet', color: '#9e9e9e', target: null, entries: []};
+        this.unassignedColumn = {id: null, label: "Nicht zugeordnet", color: "#9e9e9e", target: null, entries: []};
 
         for (const p of participants) {
             const entry: DraftEntry = {
@@ -578,9 +625,8 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
                 startGroupId: p.startGroup?.id ?? null,
                 startSequence: p.startSequence ?? null,
             };
-            const column = entry.startGroupId !== null
-                ? this.groupColumns.find(c => c.id === entry.startGroupId)
-                : undefined;
+            const column =
+                entry.startGroupId !== null ? this.groupColumns.find(c => c.id === entry.startGroupId) : undefined;
             // A group whose template isn't (or no longer) loaded lands in "Nicht zugeordnet" -
             // its id must go too, or the next save would write the stale group back.
             entry.startGroupId = column?.id ?? null;
@@ -610,7 +656,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
     onActiveTemplatesChange(newIds: number[]): void {
         const removed = this.groupColumns.filter(c => !newIds.includes(c.id as number));
         for (const col of removed) {
-            col.entries.forEach(e => e.startGroupId = null);
+            col.entries.forEach(e => (e.startGroupId = null));
             this.unassignedColumn.entries.push(...col.entries);
         }
         this.groupColumns = this.groupColumns.filter(c => newIds.includes(c.id as number));
@@ -640,7 +686,12 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         if (event.previousContainer === event.container) {
             moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
         } else {
-            transferArrayItem(event.previousContainer.data, event.container.data, event.previousIndex, event.currentIndex);
+            transferArrayItem(
+                event.previousContainer.data,
+                event.container.data,
+                event.previousIndex,
+                event.currentIndex,
+            );
             event.container.data[event.currentIndex].startGroupId = targetGroupId;
         }
         this.recomputeSequences();
@@ -648,14 +699,15 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
     }
 
     private recomputeTargets(): void {
-        const total = this.groupColumns.reduce((sum, c) => sum + c.entries.length, 0) + this.unassignedColumn.entries.length;
+        const total =
+            this.groupColumns.reduce((sum, c) => sum + c.entries.length, 0) + this.unassignedColumn.entries.length;
         const n = this.groupColumns.length;
         if (n === 0) {
             return;
         }
         const base = Math.floor(total / n);
         const remainder = total % n;
-        this.groupColumns.forEach((c, i) => c.target = base + (i < remainder ? 1 : 0));
+        this.groupColumns.forEach((c, i) => (c.target = base + (i < remainder ? 1 : 0)));
     }
 
     private recomputeSequences(): void {
@@ -674,38 +726,43 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         }
     }
 
-    confirmAutoSuggest(mode: 'blocks' | 'genderAge' | 'ageGroupGender' | 'club' | 'clubShuffled' | 'category'): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: 'Die aktuelle Zuordnung wird überschrieben und neu auf die aktiven Gruppen verteilt. Fortfahren?',
-                confirmLabel: 'Verteilen',
-            },
-        }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(confirmed => {
-            if (!confirmed) {
-                return;
-            }
-            switch (mode) {
-                case 'blocks':
-                    this.applyAutoSuggestByRaceNumberBlocks();
-                    break;
-                case 'genderAge':
-                    this.applyAutoSuggestByGenderAgeBlocks();
-                    break;
-                case 'ageGroupGender':
-                    this.applyAutoSuggestByAgeGroupGenderBlocks();
-                    break;
-                case 'club':
-                    this.applyAutoSuggestByClubBlocks();
-                    break;
-                case 'clubShuffled':
-                    this.applyAutoSuggestByClubShuffledBlocks();
-                    break;
-                case 'category':
-                    this.applyAutoSuggestByCategoryBlocks();
-                    break;
-            }
-        });
+    confirmAutoSuggest(mode: "blocks" | "genderAge" | "ageGroupGender" | "club" | "clubShuffled" | "category"): void {
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message:
+                        "Die aktuelle Zuordnung wird überschrieben und neu auf die aktiven Gruppen verteilt. Fortfahren?",
+                    confirmLabel: "Verteilen",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (!confirmed) {
+                    return;
+                }
+                switch (mode) {
+                    case "blocks":
+                        this.applyAutoSuggestByRaceNumberBlocks();
+                        break;
+                    case "genderAge":
+                        this.applyAutoSuggestByGenderAgeBlocks();
+                        break;
+                    case "ageGroupGender":
+                        this.applyAutoSuggestByAgeGroupGenderBlocks();
+                        break;
+                    case "club":
+                        this.applyAutoSuggestByClubBlocks();
+                        break;
+                    case "clubShuffled":
+                        this.applyAutoSuggestByClubShuffledBlocks();
+                        break;
+                    case "category":
+                        this.applyAutoSuggestByCategoryBlocks();
+                        break;
+                }
+            });
     }
 
     private allEntries(): DraftEntry[] {
@@ -726,12 +783,14 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
      */
     private applyAutoSuggestByGenderAgeBlocks(): void {
         this.applyAutoSuggestBlocks((a, b) => {
-            const genderDiff = StartGroupBoardComponent.GENDER_RANK(a.participant) - StartGroupBoardComponent.GENDER_RANK(b.participant);
+            const genderDiff =
+                StartGroupBoardComponent.GENDER_RANK(a.participant) -
+                StartGroupBoardComponent.GENDER_RANK(b.participant);
             if (genderDiff !== 0) {
                 return genderDiff;
             }
-            const ad = a.participant.person?.birthDate ?? '';
-            const bd = b.participant.person?.birthDate ?? '';
+            const ad = a.participant.person?.birthDate ?? "";
+            const bd = b.participant.person?.birthDate ?? "";
             return bd.localeCompare(ad);
         });
     }
@@ -747,7 +806,10 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
             if (ay !== by) {
                 return by - ay;
             }
-            return StartGroupBoardComponent.GENDER_RANK(a.participant) - StartGroupBoardComponent.GENDER_RANK(b.participant);
+            return (
+                StartGroupBoardComponent.GENDER_RANK(a.participant) -
+                StartGroupBoardComponent.GENDER_RANK(b.participant)
+            );
         });
     }
 
@@ -764,13 +826,21 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
      * of alphabetical - drawn once per invocation so every club's members still land contiguously.
      */
     private applyAutoSuggestByClubShuffledBlocks(): void {
-        const clubNames = [...new Set(this.allEntries().map(e => e.participant.team?.name).filter((n): n is string => !!n))];
+        const clubNames = [
+            ...new Set(
+                this.allEntries()
+                    .map(e => e.participant.team?.name)
+                    .filter((n): n is string => !!n),
+            ),
+        ];
         for (let i = clubNames.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [clubNames[i], clubNames[j]] = [clubNames[j], clubNames[i]];
         }
         const order = new Map(clubNames.map((name, index) => [name, index]));
-        this.applyAutoSuggestBlocks((a, b) => this.compareByClubName(a, b, (x, y) => (order.get(x) ?? Infinity) - (order.get(y) ?? Infinity)));
+        this.applyAutoSuggestBlocks((a, b) =>
+            this.compareByClubName(a, b, (x, y) => (order.get(x) ?? Infinity) - (order.get(y) ?? Infinity)),
+        );
     }
 
     private compareByClubName(a: DraftEntry, b: DraftEntry, compare: (x: string, y: string) => number): number {
@@ -819,7 +889,7 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         this.groupColumns.forEach((column, i) => {
             const size = base + (i < remainder ? 1 : 0);
             column.entries = sorted.slice(index, index + size);
-            column.entries.forEach(e => e.startGroupId = column.id);
+            column.entries.forEach(e => (e.startGroupId = column.id));
             index += size;
         });
         this.unassignedColumn.entries = [];
@@ -847,14 +917,17 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         }
         const races = await firstValueFrom(this.races$);
         const data: StartGroupCopyDialogData = {sourceRaceId: this.currentRaceId, races};
-        this.dialog.open(StartGroupCopyDialogComponent, {width: '500px', data})
+        this.dialog
+            .open(StartGroupCopyDialogComponent, {width: "500px", data})
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
             .subscribe((targetRaceIds: number[] | undefined) => {
                 if (targetRaceIds && targetRaceIds.length > 0 && this.currentRaceId !== null) {
-                    this.store.dispatch(ParticipantActions.copyStartGroupAssignment({
-                        request: {sourceRaceId: this.currentRaceId, targetRaceIds}
-                    }));
+                    this.store.dispatch(
+                        ParticipantActions.copyStartGroupAssignment({
+                            request: {sourceRaceId: this.currentRaceId, targetRaceIds},
+                        }),
+                    );
                 }
             });
     }
@@ -863,17 +936,24 @@ export class StartGroupBoardComponent implements OnInit, OnDestroy, HasUnsavedCh
         if (this.currentRaceId === null) {
             return;
         }
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: 'Startnummern werden aus der aktuellen Gruppenreihenfolge neu vergeben. Bereits vergebene Startnummern werden überschrieben. Fortfahren?',
-                confirmLabel: 'Vergeben',
-                confirmColor: 'warn',
-            },
-        }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(confirmed => {
-            if (confirmed) {
-                this.store.dispatch(ParticipantActions.generateRaceNumbersFromStartGroups({raceId: this.currentRaceId as number}));
-            }
-        });
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message:
+                        "Startnummern werden aus der aktuellen Gruppenreihenfolge neu vergeben. Bereits vergebene Startnummern werden überschrieben. Fortfahren?",
+                    confirmLabel: "Vergeben",
+                    confirmColor: "warn",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    this.store.dispatch(
+                        ParticipantActions.generateRaceNumbersFromStartGroups({raceId: this.currentRaceId as number}),
+                    );
+                }
+            });
     }
 }

@@ -1,12 +1,12 @@
-import {AgeGroup} from './age-group.model';
-import {Race} from './race.model';
-import {Team} from './team.model';
-import {Category} from './category.model';
-import {Person} from './person.model';
-import {StartGroupTemplate} from './start-group.model';
+import {AgeGroup} from "./age-group.model";
+import {Race} from "./race.model";
+import {Team} from "./team.model";
+import {Category} from "./category.model";
+import {Person} from "./person.model";
+import {StartGroupTemplate} from "./start-group.model";
 
 /** Mirrors the backend's DisqualificationStatus enum. NONE = normal, rankable result. */
-export type DisqualificationStatus = 'NONE' | 'DNS' | 'DNF' | 'DSQ';
+export type DisqualificationStatus = "NONE" | "DNS" | "DNF" | "DSQ";
 
 export interface Participant {
     id: number;

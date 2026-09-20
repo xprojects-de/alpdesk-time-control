@@ -1,11 +1,4 @@
-import {
-    Component,
-    AfterViewInit,
-    viewChild,
-    OnDestroy,
-    inject,
-    effect,
-} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
@@ -53,28 +46,20 @@ import {Actions, ofType} from "@ngrx/effects";
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neue Person
                     </button>
-                    <button
-                            mat-raised-button
-                            (click)="refreshData()"
-                            matTooltip="Daten aktualisieren"
-                    >
+                    <button mat-raised-button (click)="refreshData()" matTooltip="Daten aktualisieren">
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
                     <button
-                            mat-raised-button
-                            color="warn"
-                            [disabled]="!(unusedPersonCount$ | async)"
-                            (click)="deleteUnusedPersons()"
-                            matTooltip="Löscht alle Personen, die keinem Rennen / Teilnehmer zugewiesen sind"
+                        mat-raised-button
+                        color="warn"
+                        [disabled]="!(unusedPersonCount$ | async)"
+                        (click)="deleteUnusedPersons()"
+                        matTooltip="Löscht alle Personen, die keinem Rennen / Teilnehmer zugewiesen sind"
                     >
                         <mat-icon>delete_sweep</mat-icon>
                         Ungenutzte Personen löschen ({{ unusedPersonCount$ | async }})
@@ -88,86 +73,84 @@ import {Actions, ofType} from "@ngrx/effects";
                 }
 
                 <div class="table-container">
-                <table
+                    <table
                         mat-table
                         [dataSource]="dataSource"
                         [trackBy]="trackById"
                         matSort
                         class="person-table"
                         [class.hidden]="loading$ | async"
-                >
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                        <td mat-cell *matCellDef="let person">{{ person.id }}</td>
-                    </ng-container>
+                    >
+                        <ng-container matColumnDef="id">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
+                            <td mat-cell *matCellDef="let person">{{ person.id }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="lastName">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
-                        <td mat-cell *matCellDef="let person">{{ person.lastName }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="lastName">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
+                            <td mat-cell *matCellDef="let person">{{ person.lastName }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="firstName">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
-                        <td mat-cell *matCellDef="let person">{{ person.firstName }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="firstName">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
+                            <td mat-cell *matCellDef="let person">{{ person.firstName }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="birthDate">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Geburtsdatum</th>
-                        <td mat-cell *matCellDef="let person">{{ formatRaceDate(person.birthDate) }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="birthDate">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Geburtsdatum</th>
+                            <td mat-cell *matCellDef="let person">{{ formatRaceDate(person.birthDate) }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="gender">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Geschlecht</th>
-                        <td mat-cell *matCellDef="let person">{{ getGenderLabel(person.gender) }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="gender">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Geschlecht</th>
+                            <td mat-cell *matCellDef="let person">{{ getGenderLabel(person.gender) }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="externalId">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Externe ID</th>
-                        <td mat-cell *matCellDef="let person">{{ person.externalId || '-' }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="externalId">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Externe ID</th>
+                            <td mat-cell *matCellDef="let person">{{ person.externalId || "-" }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="activeRaces">
-                        <th mat-header-cell *matHeaderCellDef>Aktiv bei Rennen</th>
-                        <td mat-cell *matCellDef="let person">
-                            @if (person.activeRaces.length) {
-                                <mat-chip-set>
-                                    @for (race of person.activeRaces; track race.id) {
-                                        <mat-chip>{{ race.name }}</mat-chip>
-                                    }
-                                </mat-chip-set>
-                            } @else {
-                                <span class="no-races">-</span>
-                            }
-                        </td>
-                    </ng-container>
+                        <ng-container matColumnDef="activeRaces">
+                            <th mat-header-cell *matHeaderCellDef>Aktiv bei Rennen</th>
+                            <td mat-cell *matCellDef="let person">
+                                @if (person.activeRaces.length) {
+                                    <mat-chip-set>
+                                        @for (race of person.activeRaces; track race.id) {
+                                            <mat-chip>{{ race.name }}</mat-chip>
+                                        }
+                                    </mat-chip-set>
+                                } @else {
+                                    <span class="no-races">-</span>
+                                }
+                            </td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let person">
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(person)"
-                                    matTooltip="Bearbeiten"
-                            >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let person">
+                                <button mat-icon-button (click)="openEditDialog(person)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button
                                     mat-icon-button
                                     color="warn"
                                     [disabled]="person.activeRaces.length > 0"
                                     (click)="deletePerson(person)"
-                                    [matTooltip]="person.activeRaces.length > 0
-                                        ? 'Kann nicht gelöscht werden, solange die Person einem Rennen zugeordnet ist'
-                                        : 'Löschen'"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                                    [matTooltip]="
+                                        person.activeRaces.length > 0
+                                            ? 'Kann nicht gelöscht werden, solange die Person einem Rennen zugeordnet ist'
+                                            : 'Löschen'
+                                    "
+                                >
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
@@ -175,42 +158,42 @@ import {Actions, ofType} from "@ngrx/effects";
     `,
     styles: [
         `
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 8px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          .person-table {
-            width: 100%;
-          }
+            .person-table {
+                width: 100%;
+            }
 
-          .hidden {
-            display: none;
-          }
+            .hidden {
+                display: none;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          th.mat-sort-header-sorted {
-            color: black;
-          }
+            th.mat-sort-header-sorted {
+                color: black;
+            }
 
-          .no-races {
-            color: rgba(0, 0, 0, 0.4);
-          }
+            .no-races {
+                color: rgba(0, 0, 0, 0.4);
+            }
 
-          mat-chip-set {
-            max-width: 320px;
-          }
+            mat-chip-set {
+                max-width: 320px;
+            }
         `,
     ],
 })
@@ -235,61 +218,41 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         this.persons$ = this.store.select(PersonSelectors.selectPersonsWithActiveRaces);
         this.loading$ = this.store.select(PersonSelectors.selectPersonLoading);
         this.unusedPersonCount$ = this.persons$.pipe(
-            map(persons => persons.filter(p => p.activeRaces.length === 0).length)
+            map(persons => persons.filter(p => p.activeRaces.length === 0).length),
         );
 
-        this.actions$.pipe(
-            ofType(PersonActions.createPersonSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(PersonActions.createPersonSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Person erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(PersonActions.createPersonFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(PersonActions.createPersonFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Erstellen der Person: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(PersonActions.updatePersonSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(PersonActions.updatePersonSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Person erfolgreich aktualisiert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(PersonActions.updatePersonFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(PersonActions.updatePersonFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Aktualisieren der Person: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(PersonActions.deletePersonSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(PersonActions.deletePersonSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Person erfolgreich gelöscht", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(PersonActions.deletePersonFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(PersonActions.deletePersonFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen der Person: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(PersonActions.deleteUnusedPersonsSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(({deletedCount}) => {
-            this.snackBar.open(`${deletedCount} ungenutzte Person(en) gelöscht`, "OK", {duration: 3000});
-            this.store.dispatch(PersonActions.loadPersons());
-        });
-        this.actions$.pipe(
-            ofType(PersonActions.deleteUnusedPersonsFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen der ungenutzten Personen: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(PersonActions.deleteUnusedPersonsSuccess), takeUntil(this.destroy$))
+            .subscribe(({deletedCount}) => {
+                this.snackBar.open(`${deletedCount} ungenutzte Person(en) gelöscht`, "OK", {duration: 3000});
+                this.store.dispatch(PersonActions.loadPersons());
+            });
+        this.actions$
+            .pipe(ofType(PersonActions.deleteUnusedPersonsFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen der ungenutzten Personen: ${error}`, "OK", {duration: 5000});
+            });
 
         // Assigns as soon as the signal reports the instance - no delay needed, and comparing
         // instances (rather than a "done" flag) also re-attaches should the table ever be
@@ -315,11 +278,9 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         // registered for - not loaded by the Person store itself, and this page can now be opened
         // without ever having visited "Teilnehmer" first.
         this.store.dispatch(ParticipantActions.loadParticipants());
-        this.persons$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((persons) => {
-                this.dataSource.data = persons;
-            });
+        this.persons$.pipe(takeUntil(this.destroy$)).subscribe(persons => {
+            this.dataSource.data = persons;
+        });
     }
 
     ngOnDestroy(): void {
@@ -335,7 +296,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(PersonActions.createPerson({person: result}));
                 }
@@ -348,13 +309,12 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             data: person,
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        PersonActions.updatePerson({id: person.id, person: result}),
-                    );
+                    this.store.dispatch(PersonActions.updatePerson({id: person.id, person: result}));
                 }
             });
     }
@@ -363,17 +323,18 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         if (person.activeRaces.length > 0) {
             return;
         }
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie die Person "${person.lastName} ${person.firstName}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie die Person "${person.lastName} ${person.firstName}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(PersonActions.deletePerson({id: person.id}));
                 }
@@ -385,17 +346,18 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             if (count === 0) {
                 return;
             }
-            this.dialog.open(ConfirmDialogComponent, {
-                width: '450px',
-                data: {
-                    message: `Möchten Sie wirklich alle ${count} Person(en) löschen, die keinem Rennen / Teilnehmer zugewiesen sind?`,
-                    confirmLabel: 'Löschen',
-                    confirmColor: 'warn',
-                },
-            })
+            this.dialog
+                .open(ConfirmDialogComponent, {
+                    width: "450px",
+                    data: {
+                        message: `Möchten Sie wirklich alle ${count} Person(en) löschen, die keinem Rennen / Teilnehmer zugewiesen sind?`,
+                        confirmLabel: "Löschen",
+                        confirmColor: "warn",
+                    },
+                })
                 .afterClosed()
                 .pipe(takeUntil(this.destroy$))
-                .subscribe((confirmed) => {
+                .subscribe(confirmed => {
                     if (confirmed) {
                         this.store.dispatch(PersonActions.deleteUnusedPersons());
                     }

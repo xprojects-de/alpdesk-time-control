@@ -1,13 +1,13 @@
-import {createReducer, on} from '@ngrx/store';
-import {AuthState} from '../../models/auth.model';
-import * as AuthActions from './auth.actions';
+import {createReducer, on} from "@ngrx/store";
+import {AuthState} from "../../models/auth.model";
+import * as AuthActions from "./auth.actions";
 
 export const initialState: AuthState = {
     token: null,
     username: null,
     isAuthenticated: false,
     loading: false,
-    error: null
+    error: null,
 };
 
 export const authReducer = createReducer(
@@ -17,7 +17,7 @@ export const authReducer = createReducer(
     on(AuthActions.login, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(AuthActions.loginSuccess, (state, {response}) => ({
         ...state,
@@ -25,7 +25,7 @@ export const authReducer = createReducer(
         username: response.username || null,
         isAuthenticated: true,
         loading: false,
-        error: null
+        error: null,
     })),
     on(AuthActions.loginFailure, (state, {error}) => ({
         ...state,
@@ -33,33 +33,32 @@ export const authReducer = createReducer(
         error,
         isAuthenticated: false,
         token: null,
-        username: null
+        username: null,
     })),
 
     // Logout
     on(AuthActions.logout, state => ({
         ...state,
-        loading: true
+        loading: true,
     })),
     on(AuthActions.logoutSuccess, () => ({
-        ...initialState
+        ...initialState,
     })),
 
     // Check Auth
     on(AuthActions.checkAuth, state => ({
         ...state,
-        loading: true
+        loading: true,
     })),
     on(AuthActions.checkAuthSuccess, (state, {token, username}) => ({
         ...state,
         token,
         username,
         isAuthenticated: true,
-        loading: false
+        loading: false,
     })),
     on(AuthActions.checkAuthFailure, () => ({
         ...initialState,
-        loading: false
-    }))
+        loading: false,
+    })),
 );
-

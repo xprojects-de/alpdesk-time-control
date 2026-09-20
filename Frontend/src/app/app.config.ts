@@ -1,21 +1,8 @@
-import {
-    ApplicationConfig,
-    provideBrowserGlobalErrorListeners,
-    isDevMode,
-    LOCALE_ID,
-} from "@angular/core";
+import {ApplicationConfig, provideBrowserGlobalErrorListeners, isDevMode, LOCALE_ID} from "@angular/core";
 import {provideRouter} from "@angular/router";
-import {
-    provideHttpClient,
-    withInterceptors,
-    withXhr,
-} from "@angular/common/http";
+import {provideHttpClient, withInterceptors, withXhr} from "@angular/common/http";
 import {provideAnimationsAsync} from "@angular/platform-browser/animations/async";
-import {
-    MAT_DATE_LOCALE,
-    MAT_DATE_FORMATS,
-    DateAdapter,
-} from "@angular/material/core";
+import {MAT_DATE_LOCALE, MAT_DATE_FORMATS, DateAdapter} from "@angular/material/core";
 import {MatPaginatorIntl} from "@angular/material/paginator";
 import {registerLocaleData} from "@angular/common";
 import localeDe from "@angular/common/locales/de";
@@ -109,15 +96,35 @@ export const appConfig: ApplicationConfig = {
             startGroupTemplate: startGroupTemplateReducer,
             backendHealth: backendHealthReducer,
         }),
-        provideEffects([AuthEffects, RaceEffects, ParticipantEffects, MeasurementEffects, RaceMeasurementEffects, AgeGroupEffects, TeamEffects, CategoryEffects, PersonEffects, GaudiModeEffects, VersionEffects, SettingsEffects, PointsScaleEffects, StartGroupTemplateEffects, BackendHealthEffects]),
+        provideEffects([
+            AuthEffects,
+            RaceEffects,
+            ParticipantEffects,
+            MeasurementEffects,
+            RaceMeasurementEffects,
+            AgeGroupEffects,
+            TeamEffects,
+            CategoryEffects,
+            PersonEffects,
+            GaudiModeEffects,
+            VersionEffects,
+            SettingsEffects,
+            PointsScaleEffects,
+            StartGroupTemplateEffects,
+            BackendHealthEffects,
+        ]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.
-        ...(isDevMode() ? [provideStoreDevtools({
-            maxAge: 25,
-            logOnly: false,
-            autoPause: true,
-            trace: false,
-            traceLimit: 75,
-        })] : []),
+        ...(isDevMode()
+            ? [
+                  provideStoreDevtools({
+                      maxAge: 25,
+                      logOnly: false,
+                      autoPause: true,
+                      trace: false,
+                      traceLimit: 75,
+                  }),
+              ]
+            : []),
     ],
 };

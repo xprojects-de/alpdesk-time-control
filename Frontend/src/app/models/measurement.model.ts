@@ -21,4 +21,3 @@ export interface AutoAssignEnableRequest {
     raceId: number;
     startRaceNumber?: number | null;
 }
-

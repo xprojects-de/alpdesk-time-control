@@ -75,16 +75,16 @@ import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.co
     `,
     styles: [
         `
-          .scales-table {
-            width: 100%;
-            min-width: 420px;
-          }
+            .scales-table {
+                width: 100%;
+                min-width: 420px;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 24px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 24px;
+            }
         `,
     ],
 })
@@ -103,63 +103,57 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         this.store.dispatch(PointsScaleActions.loadPointsScales());
 
-        this.actions$.pipe(
-            ofType(PointsScaleActions.createPointsScaleSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open("Punkteschema erfolgreich erstellt", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.createPointsScaleFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
-        });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.createPointsScaleSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Punkteschema erfolgreich erstellt", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.createPointsScaleFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
+            });
 
-        this.actions$.pipe(
-            ofType(PointsScaleActions.updatePointsScaleSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open("Punkteschema erfolgreich aktualisiert", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.updatePointsScaleFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
-        });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.updatePointsScaleSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Punkteschema erfolgreich aktualisiert", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.updatePointsScaleFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
+            });
 
-        this.actions$.pipe(
-            ofType(PointsScaleActions.deletePointsScaleSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open("Punkteschema erfolgreich gelöscht", "OK", {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.deletePointsScaleFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.deletePointsScaleConflict),
-            takeUntil(this.destroy$),
-        ).subscribe(({id, message}) => {
-            // Backend rejects with 409 when a Gaudi-Modus still references this scale unless
-            // force=true - surface its message (which already asks "delete anyway?") as a second
-            // confirmation instead of a dead-end error.
-            this.dialog.open(ConfirmDialogComponent, {
-                width: '450px',
-                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
-            })
-                .afterClosed()
-                .pipe(takeUntil(this.destroy$))
-                .subscribe((confirmed) => {
-                    if (confirmed) {
-                        this.store.dispatch(PointsScaleActions.deletePointsScale({id, force: true}));
-                    }
-                });
-        });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.deletePointsScaleSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Punkteschema erfolgreich gelöscht", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.deletePointsScaleFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
+            });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.deletePointsScaleConflict), takeUntil(this.destroy$))
+            .subscribe(({id, message}) => {
+                // Backend rejects with 409 when a Gaudi-Modus still references this scale unless
+                // force=true - surface its message (which already asks "delete anyway?") as a second
+                // confirmation instead of a dead-end error.
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {message, confirmLabel: "Löschen", confirmColor: "warn"},
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (confirmed) {
+                            this.store.dispatch(PointsScaleActions.deletePointsScale({id, force: true}));
+                        }
+                    });
+            });
     }
 
     ngOnDestroy(): void {
@@ -168,7 +162,8 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
     }
 
     createNew(): void {
-        this.dialog.open(PointsScaleDialogComponent, {width: "480px"})
+        this.dialog
+            .open(PointsScaleDialogComponent, {width: "480px"})
             .afterClosed()
             .subscribe(result => {
                 if (!result) {
@@ -179,7 +174,8 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
     }
 
     edit(scale: PointsScale): void {
-        this.dialog.open(PointsScaleDialogComponent, {width: "480px", data: scale})
+        this.dialog
+            .open(PointsScaleDialogComponent, {width: "480px", data: scale})
             .afterClosed()
             .subscribe(result => {
                 if (!result) {
@@ -190,17 +186,18 @@ export class PointsScaleManagerDialogComponent implements OnInit, OnDestroy {
     }
 
     delete(scale: PointsScale): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Punkteschema "${scale.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Punkteschema "${scale.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(PointsScaleActions.deletePointsScale({id: scale.id}));
                 }

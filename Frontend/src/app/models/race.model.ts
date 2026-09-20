@@ -1,26 +1,26 @@
 export enum ResultUnit {
-    TIME = 'TIME',
-    POINTS = 'POINTS',
+    TIME = "TIME",
+    POINTS = "POINTS",
 }
 
 export const ResultUnitLabels: Record<ResultUnit, string> = {
-    [ResultUnit.TIME]: 'Zeit',
-    [ResultUnit.POINTS]: 'Punkte/Sonstiges',
+    [ResultUnit.TIME]: "Zeit",
+    [ResultUnit.POINTS]: "Punkte/Sonstiges",
 };
 
 export enum SortDirection {
-    ASC = 'ASC',
-    DESC = 'DESC',
+    ASC = "ASC",
+    DESC = "DESC",
 }
 
 export const SortDirectionLabels: Record<SortDirection, string> = {
-    [SortDirection.ASC]: 'Niedriger ist besser',
-    [SortDirection.DESC]: 'Höher ist besser',
+    [SortDirection.ASC]: "Niedriger ist besser",
+    [SortDirection.DESC]: "Höher ist besser",
 };
 
 /** How a race's start order is derived from its linked previousRaceId race - only one mode exists today. */
 export enum StartOrderMode {
-    REVERSE_TOP_N = 'REVERSE_TOP_N',
+    REVERSE_TOP_N = "REVERSE_TOP_N",
 }
 
 export interface Race {

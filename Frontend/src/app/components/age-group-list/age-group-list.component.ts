@@ -1,11 +1,4 @@
-import {
-    Component,
-    AfterViewInit,
-    viewChild,
-    OnDestroy,
-    inject,
-    effect,
-} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
@@ -50,19 +43,11 @@ import {Actions, ofType} from "@ngrx/effects";
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neue Altersgruppe
                     </button>
-                    <button
-                            mat-raised-button
-                            (click)="refreshData()"
-                            matTooltip="Daten aktualisieren"
-                    >
+                    <button mat-raised-button (click)="refreshData()" matTooltip="Daten aktualisieren">
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
@@ -76,12 +61,12 @@ import {Actions, ofType} from "@ngrx/effects";
 
                 <div class="table-container">
                     <table
-                            mat-table
-                            [dataSource]="dataSource"
-                            [trackBy]="trackById"
-                            matSort
-                            class="age-group-table"
-                            [class.hidden]="loading$ | async"
+                        mat-table
+                        [dataSource]="dataSource"
+                        [trackBy]="trackById"
+                        matSort
+                        class="age-group-table"
+                        [class.hidden]="loading$ | async"
                     >
                         <!-- ID Column -->
                         <ng-container matColumnDef="id">
@@ -99,9 +84,7 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <!-- Gender Column -->
                         <ng-container matColumnDef="gender">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                                Geschlecht
-                            </th>
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Geschlecht</th>
                             <td mat-cell *matCellDef="let ageGroup">
                                 {{ getGenderLabel(ageGroup.gender) }}
                             </td>
@@ -109,9 +92,7 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <!-- Birth Year From Column -->
                         <ng-container matColumnDef="birthYearFrom">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                                Geburtsjahr von
-                            </th>
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Geburtsjahr von</th>
                             <td mat-cell *matCellDef="let ageGroup">
                                 {{ ageGroup.birthYearFrom }}
                             </td>
@@ -119,9 +100,7 @@ import {Actions, ofType} from "@ngrx/effects";
 
                         <!-- Birth Year To Column -->
                         <ng-container matColumnDef="birthYearTo">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                                Geburtsjahr bis
-                            </th>
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Geburtsjahr bis</th>
                             <td mat-cell *matCellDef="let ageGroup">
                                 {{ ageGroup.birthYearTo }}
                             </td>
@@ -131,18 +110,14 @@ import {Actions, ofType} from "@ngrx/effects";
                         <ng-container matColumnDef="actions">
                             <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                             <td mat-cell *matCellDef="let ageGroup">
-                                <button
-                                        mat-icon-button
-                                        (click)="openEditDialog(ageGroup)"
-                                        matTooltip="Bearbeiten"
-                                >
+                                <button mat-icon-button (click)="openEditDialog(ageGroup)" matTooltip="Bearbeiten">
                                     <mat-icon>edit</mat-icon>
                                 </button>
                                 <button
-                                        mat-icon-button
-                                        color="warn"
-                                        (click)="deleteAgeGroup(ageGroup)"
-                                        matTooltip="Löschen"
+                                    mat-icon-button
+                                    color="warn"
+                                    (click)="deleteAgeGroup(ageGroup)"
+                                    matTooltip="Löschen"
                                 >
                                     <mat-icon>delete</mat-icon>
                                 </button>
@@ -159,34 +134,34 @@ import {Actions, ofType} from "@ngrx/effects";
     `,
     styles: [
         `
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 8px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          .age-group-table {
-            width: 100%;
-          }
+            .age-group-table {
+                width: 100%;
+            }
 
-          .hidden {
-            display: none;
-          }
+            .hidden {
+                display: none;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          th.mat-sort-header-sorted {
-            color: black;
-          }
+            th.mat-sort-header-sorted {
+                color: black;
+            }
         `,
     ],
 })
@@ -199,14 +174,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
 
     ageGroups$: Observable<AgeGroup[]>;
     loading$: Observable<boolean>;
-    displayedColumns = [
-        "id",
-        "name",
-        "gender",
-        "birthYearFrom",
-        "birthYearTo",
-        "actions",
-    ];
+    displayedColumns = ["id", "name", "gender", "birthYearFrom", "birthYearTo", "actions"];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
 
@@ -214,51 +182,35 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     paginator = viewChild.required(MatPaginator);
 
     constructor() {
-        this.ageGroups$ = this.store.select(
-            AgeGroupSelectors.selectAllAgeGroups,
-        );
-        this.loading$ = this.store.select(
-            AgeGroupSelectors.selectAgeGroupLoading,
-        );
+        this.ageGroups$ = this.store.select(AgeGroupSelectors.selectAllAgeGroups);
+        this.loading$ = this.store.select(AgeGroupSelectors.selectAgeGroupLoading);
 
-        this.actions$.pipe(
-            ofType(AgeGroupActions.createAgeGroupSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(AgeGroupActions.createAgeGroupSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Altersgruppe erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(AgeGroupActions.createAgeGroupFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Erstellen der Altersgruppe: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(AgeGroupActions.createAgeGroupFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Erstellen der Altersgruppe: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(AgeGroupActions.updateAgeGroupSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(AgeGroupActions.updateAgeGroupSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Altersgruppe erfolgreich aktualisiert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(AgeGroupActions.updateAgeGroupFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Aktualisieren der Altersgruppe: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(AgeGroupActions.updateAgeGroupFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Aktualisieren der Altersgruppe: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(AgeGroupActions.deleteAgeGroupSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(AgeGroupActions.deleteAgeGroupSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Altersgruppe erfolgreich gelöscht", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(AgeGroupActions.deleteAgeGroupFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen der Altersgruppe: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(AgeGroupActions.deleteAgeGroupFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen der Altersgruppe: ${error}`, "OK", {duration: 5000});
+            });
 
         // Assigns as soon as the signal reports the instance - no delay needed, and comparing
         // instances (rather than a "done" flag) also re-attaches should the table ever be
@@ -280,11 +232,9 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
 
     ngAfterViewInit(): void {
         this.store.dispatch(AgeGroupActions.loadAgeGroups());
-        this.ageGroups$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((ageGroups) => {
-                this.dataSource.data = ageGroups;
-            });
+        this.ageGroups$.pipe(takeUntil(this.destroy$)).subscribe(ageGroups => {
+            this.dataSource.data = ageGroups;
+        });
     }
 
     ngOnDestroy(): void {
@@ -304,11 +254,9 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        AgeGroupActions.createAgeGroup({ageGroup: result}),
-                    );
+                    this.store.dispatch(AgeGroupActions.createAgeGroup({ageGroup: result}));
                 }
             });
     }
@@ -319,9 +267,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             data: ageGroup,
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(
                         AgeGroupActions.updateAgeGroup({
@@ -334,21 +283,20 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteAgeGroup(ageGroup: AgeGroup): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie die Altersgruppe "${ageGroup.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie die Altersgruppe "${ageGroup.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
-                    this.store.dispatch(
-                        AgeGroupActions.deleteAgeGroup({id: ageGroup.id}),
-                    );
+                    this.store.dispatch(AgeGroupActions.deleteAgeGroup({id: ageGroup.id}));
                 }
             });
     }
@@ -360,4 +308,3 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         });
     }
 }
-

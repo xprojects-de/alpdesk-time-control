@@ -1,5 +1,5 @@
-import {createReducer, on} from '@ngrx/store';
-import * as BackendHealthActions from './backend-health.actions';
+import {createReducer, on} from "@ngrx/store";
+import * as BackendHealthActions from "./backend-health.actions";
 
 // A single failed check can be a one-off blip (a dropped packet, a momentary stall) rather than
 // a real outage - requiring this many consecutive failures before flipping to "unreachable"
@@ -15,7 +15,7 @@ export interface BackendHealthState {
 
 export const initialState: BackendHealthState = {
     reachable: null,
-    consecutiveFailures: 0
+    consecutiveFailures: 0,
 };
 
 export const backendHealthReducer = createReducer(
@@ -24,14 +24,14 @@ export const backendHealthReducer = createReducer(
     on(BackendHealthActions.checkBackendHealthSuccess, state => ({
         ...state,
         reachable: true,
-        consecutiveFailures: 0
+        consecutiveFailures: 0,
     })),
     on(BackendHealthActions.checkBackendHealthFailure, state => {
         const consecutiveFailures = state.consecutiveFailures + 1;
         return {
             ...state,
             consecutiveFailures,
-            reachable: consecutiveFailures >= CONSECUTIVE_FAILURES_BEFORE_UNREACHABLE ? false : state.reachable
+            reachable: consecutiveFailures >= CONSECUTIVE_FAILURES_BEFORE_UNREACHABLE ? false : state.reachable,
         };
-    })
+    }),
 );

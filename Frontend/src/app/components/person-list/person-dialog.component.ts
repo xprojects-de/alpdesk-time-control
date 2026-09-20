@@ -1,28 +1,19 @@
-import {Component, inject} from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from '@angular/forms';
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-} from '@angular/material/dialog';
-import {MatFormFieldModule} from '@angular/material/form-field';
-import {MatInputModule} from '@angular/material/input';
-import {MatButtonModule} from '@angular/material/button';
-import {MatDatepickerModule} from '@angular/material/datepicker';
-import {MatNativeDateModule} from '@angular/material/core';
-import {MatSelectModule} from '@angular/material/select';
-import {Person, PersonRequest} from '../../models/person.model';
-import {Gender, GenderLabels} from '../../models/gender.model';
-import {notBlank} from '../../utils/validators.util';
+import {Component, inject} from "@angular/core";
+import {CommonModule} from "@angular/common";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
+import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatInputModule} from "@angular/material/input";
+import {MatButtonModule} from "@angular/material/button";
+import {MatDatepickerModule} from "@angular/material/datepicker";
+import {MatNativeDateModule} from "@angular/material/core";
+import {MatSelectModule} from "@angular/material/select";
+import {Person, PersonRequest} from "../../models/person.model";
+import {Gender, GenderLabels} from "../../models/gender.model";
+import {notBlank} from "../../utils/validators.util";
 
 @Component({
-    selector: 'app-person-dialog',
+    selector: "app-person-dialog",
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -36,30 +27,28 @@ import {notBlank} from '../../utils/validators.util';
     ],
     template: `
         <h2 mat-dialog-title>
-            {{ data ? 'Person bearbeiten' : 'Neue Person' }}
+            {{ data ? "Person bearbeiten" : "Neue Person" }}
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="person-form">
                 <mat-form-field appearance="outline">
                     <mat-label>Vorname</mat-label>
-                    <input matInput formControlName="firstName" required/>
-                    @if (form.get('firstName')?.hasError('required') &&
-                    form.get('firstName')?.touched) {
+                    <input matInput formControlName="firstName" required />
+                    @if (form.get("firstName")?.hasError("required") && form.get("firstName")?.touched) {
                         <mat-error>Vorname ist erforderlich</mat-error>
                     }
-                    @if (form.get('firstName')?.hasError('blank')) {
+                    @if (form.get("firstName")?.hasError("blank")) {
                         <mat-error>Vorname darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Nachname</mat-label>
-                    <input matInput formControlName="lastName" required/>
-                    @if (form.get('lastName')?.hasError('required') &&
-                    form.get('lastName')?.touched) {
+                    <input matInput formControlName="lastName" required />
+                    @if (form.get("lastName")?.hasError("required") && form.get("lastName")?.touched) {
                         <mat-error>Nachname ist erforderlich</mat-error>
                     }
-                    @if (form.get('lastName')?.hasError('blank')) {
+                    @if (form.get("lastName")?.hasError("blank")) {
                         <mat-error>Nachname darf nicht nur aus Leerzeichen bestehen</mat-error>
                     }
                 </mat-form-field>
@@ -67,26 +56,24 @@ import {notBlank} from '../../utils/validators.util';
                 <mat-form-field appearance="outline">
                     <mat-label>Geburtsdatum</mat-label>
                     <input
-                            matInput
-                            [matDatepicker]="picker"
-                            formControlName="birthDate"
-                            placeholder="TT.MM.JJJJ"
-                            required
-                            [min]="minBirthDate"
-                            [max]="maxBirthDate"
+                        matInput
+                        [matDatepicker]="picker"
+                        formControlName="birthDate"
+                        placeholder="TT.MM.JJJJ"
+                        required
+                        [min]="minBirthDate"
+                        [max]="maxBirthDate"
                     />
-                    <mat-datepicker-toggle
-                            matSuffix
-                            [for]="picker"
-                    ></mat-datepicker-toggle>
+                    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
                     <mat-datepicker #picker></mat-datepicker>
                     <mat-hint>Format: TT.MM.JJJJ (z.B. 24.3.2022)</mat-hint>
-                    @if (form.get('birthDate')?.hasError('required') &&
-                    form.get('birthDate')?.touched) {
+                    @if (form.get("birthDate")?.hasError("required") && form.get("birthDate")?.touched) {
                         <mat-error>Geburtsdatum ist erforderlich</mat-error>
                     }
-                    @if (form.get('birthDate')?.hasError('matDatepickerMin') ||
-                    form.get('birthDate')?.hasError('matDatepickerMax')) {
+                    @if (
+                        form.get("birthDate")?.hasError("matDatepickerMin") ||
+                        form.get("birthDate")?.hasError("matDatepickerMax")
+                    ) {
                         <mat-error>Geburtsdatum muss zwischen 1900 und heute liegen</mat-error>
                     }
                 </mat-form-field>
@@ -98,44 +85,36 @@ import {notBlank} from '../../utils/validators.util';
                             <mat-option [value]="gender.value">{{ gender.label }}</mat-option>
                         }
                     </mat-select>
-                    @if (form.get('gender')?.hasError('required') &&
-                    form.get('gender')?.touched) {
+                    @if (form.get("gender")?.hasError("required") && form.get("gender")?.touched) {
                         <mat-error>Geschlecht ist erforderlich</mat-error>
                     }
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
                     <mat-label>Externe ID (optional)</mat-label>
-                    <input matInput formControlName="externalId"/>
+                    <input matInput formControlName="externalId" />
                     <mat-hint>Vereins-/Verbandsnummer, falls vorhanden</mat-hint>
                 </mat-form-field>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!form.valid"
-            >
-                Speichern
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
     styles: [
         `
-          .person-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-            margin-top: 16px;
-          }
+            .person-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 400px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field {
+                width: 100%;
+            }
         `,
     ],
 })
@@ -158,24 +137,20 @@ export class PersonDialogComponent {
     ];
 
     constructor() {
-        let birthDate: Date | string = this.data?.birthDate || '';
-        if (birthDate && typeof birthDate === 'string') {
-            const parts = birthDate.split('-');
+        let birthDate: Date | string = this.data?.birthDate || "";
+        if (birthDate && typeof birthDate === "string") {
+            const parts = birthDate.split("-");
             if (parts.length === 3) {
-                birthDate = new Date(
-                    parseInt(parts[0]),
-                    parseInt(parts[1]) - 1,
-                    parseInt(parts[2])
-                );
+                birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             }
         }
 
         this.form = this.fb.group({
-            firstName: [this.data?.firstName || '', [Validators.required, notBlank()]],
-            lastName: [this.data?.lastName || '', [Validators.required, notBlank()]],
+            firstName: [this.data?.firstName || "", [Validators.required, notBlank()]],
+            lastName: [this.data?.lastName || "", [Validators.required, notBlank()]],
             birthDate: [birthDate, Validators.required],
-            gender: [this.data?.gender || '', Validators.required],
-            externalId: [this.data?.externalId || ''],
+            gender: [this.data?.gender || "", Validators.required],
+            externalId: [this.data?.externalId || ""],
         });
     }
 
@@ -198,13 +173,13 @@ export class PersonDialogComponent {
     }
 
     private formatDate(date: Date | string): string {
-        if (typeof date === 'string') {
+        if (typeof date === "string") {
             return date;
         }
         const d = new Date(date);
         const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
         return `${year}-${month}-${day}`;
     }
 }

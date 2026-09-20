@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {TimingProviderSettings, TimingProviderSettingsRequest} from '../models/timing-provider.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {TimingProviderSettings, TimingProviderSettingsRequest} from "../models/timing-provider.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class SettingsService {
     private http = inject(HttpClient);

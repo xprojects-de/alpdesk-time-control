@@ -1,11 +1,4 @@
-import {
-    Component,
-    AfterViewInit,
-    viewChild,
-    OnDestroy,
-    inject,
-    effect,
-} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
@@ -49,19 +42,11 @@ import {Actions, ofType} from "@ngrx/effects";
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neues Team
                     </button>
-                    <button
-                            mat-raised-button
-                            (click)="refreshData()"
-                            matTooltip="Daten aktualisieren"
-                    >
+                    <button mat-raised-button (click)="refreshData()" matTooltip="Daten aktualisieren">
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
@@ -74,50 +59,41 @@ import {Actions, ofType} from "@ngrx/effects";
                 }
 
                 <div class="table-container">
-                <table
+                    <table
                         mat-table
                         [dataSource]="dataSource"
                         [trackBy]="trackById"
                         matSort
                         class="team-table"
                         [class.hidden]="loading$ | async"
-                >
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                        <td mat-cell *matCellDef="let team">{{ team.id }}</td>
-                    </ng-container>
+                    >
+                        <ng-container matColumnDef="id">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
+                            <td mat-cell *matCellDef="let team">{{ team.id }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
-                        <td mat-cell *matCellDef="let team">
-                            {{ team.name }}
-                        </td>
-                    </ng-container>
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
+                            <td mat-cell *matCellDef="let team">
+                                {{ team.name }}
+                            </td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let team">
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(team)"
-                                    matTooltip="Bearbeiten"
-                            >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
-                                    mat-icon-button
-                                    color="warn"
-                                    (click)="deleteTeam(team)"
-                                    matTooltip="Löschen"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let team">
+                                <button mat-icon-button (click)="openEditDialog(team)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button mat-icon-button color="warn" (click)="deleteTeam(team)" matTooltip="Löschen">
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
@@ -125,34 +101,34 @@ import {Actions, ofType} from "@ngrx/effects";
     `,
     styles: [
         `
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 8px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          .team-table {
-            width: 100%;
-          }
+            .team-table {
+                width: 100%;
+            }
 
-          .hidden {
-            display: none;
-          }
+            .hidden {
+                display: none;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          th.mat-sort-header-sorted {
-            color: black;
-          }
+            th.mat-sort-header-sorted {
+                color: black;
+            }
         `,
     ],
 })
@@ -176,60 +152,42 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
         this.teams$ = this.store.select(TeamSelectors.selectAllTeams);
         this.loading$ = this.store.select(TeamSelectors.selectTeamLoading);
 
-        this.actions$.pipe(
-            ofType(TeamActions.createTeamSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(TeamActions.createTeamSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Team erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(TeamActions.createTeamFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(TeamActions.createTeamFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Erstellen des Teams: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(TeamActions.updateTeamSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(TeamActions.updateTeamSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Team erfolgreich aktualisiert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(TeamActions.updateTeamFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(TeamActions.updateTeamFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Aktualisieren des Teams: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(TeamActions.deleteTeamSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(TeamActions.deleteTeamSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Team erfolgreich gelöscht", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(TeamActions.deleteTeamFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
+        this.actions$.pipe(ofType(TeamActions.deleteTeamFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
             this.snackBar.open(`FEHLER beim Löschen des Teams: ${error}`, "OK", {duration: 5000});
         });
-        this.actions$.pipe(
-            ofType(TeamActions.deleteTeamConflict),
-            takeUntil(this.destroy$),
-        ).subscribe(({id, message}) => {
-            this.dialog.open(ConfirmDialogComponent, {
-                width: '450px',
-                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
-            })
-                .afterClosed()
-                .pipe(takeUntil(this.destroy$))
-                .subscribe((confirmed) => {
-                    if (confirmed) {
-                        this.store.dispatch(TeamActions.deleteTeam({id, force: true}));
-                    }
-                });
-        });
+        this.actions$
+            .pipe(ofType(TeamActions.deleteTeamConflict), takeUntil(this.destroy$))
+            .subscribe(({id, message}) => {
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {message, confirmLabel: "Löschen", confirmColor: "warn"},
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (confirmed) {
+                            this.store.dispatch(TeamActions.deleteTeam({id, force: true}));
+                        }
+                    });
+            });
 
         // Assigns as soon as the signal reports the instance - no delay needed, and comparing
         // instances (rather than a "done" flag) also re-attaches should the table ever be
@@ -251,11 +209,9 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
 
     ngAfterViewInit(): void {
         this.store.dispatch(TeamActions.loadTeams());
-        this.teams$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((teams) => {
-                this.dataSource.data = teams;
-            });
+        this.teams$.pipe(takeUntil(this.destroy$)).subscribe(teams => {
+            this.dataSource.data = teams;
+        });
     }
 
     ngOnDestroy(): void {
@@ -271,7 +227,7 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(TeamActions.createTeam({team: result}));
                 }
@@ -284,29 +240,29 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
             data: team,
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        TeamActions.updateTeam({id: team.id, team: result}),
-                    );
+                    this.store.dispatch(TeamActions.updateTeam({id: team.id, team: result}));
                 }
             });
     }
 
     deleteTeam(team: Team): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie das Team "${team.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie das Team "${team.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(TeamActions.deleteTeam({id: team.id}));
                 }

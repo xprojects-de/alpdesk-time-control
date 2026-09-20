@@ -1,6 +1,6 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
 import {
     GaudiCsvExportVariant,
     GaudiLosPairing,
@@ -8,11 +8,11 @@ import {
     GaudiModeRequest,
     GaudiNotRankedEntry,
     GaudiRankingEntry,
-} from '../models/gaudi-mode.model';
-import {environment} from '../../environments/environment';
+} from "../models/gaudi-mode.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class GaudiModeService {
     private http = inject(HttpClient);
@@ -57,31 +57,29 @@ export class GaudiModeService {
 
     exportPdf(id: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/${id}/export/pdf`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     // Punkte-Mischwertung only
     exportPdfByGender(id: number, gender: string): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/${id}/export/pdf/gender/${gender}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     // Punkte-Mischwertung only
     exportPdfAllAgeGroups(id: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/${id}/export/pdf/agegroups/all`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     // Zeit-Kombination / Punkte-Mischwertung - see GaudiCsvExportVariant
     exportCsv(id: number, variant: GaudiCsvExportVariant): Observable<Blob> {
-        const path = variant === 'all' ? ''
-            : variant === 'agegroups' ? '/agegroups/all'
-                : `/gender/${variant}`;
+        const path = variant === "all" ? "" : variant === "agegroups" ? "/agegroups/all" : `/gender/${variant}`;
         return this.http.get(`${this.apiUrl}/${id}/export/csv${path}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 }

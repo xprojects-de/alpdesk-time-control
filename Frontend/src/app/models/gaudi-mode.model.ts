@@ -1,15 +1,15 @@
 export enum GaudiModeType {
-    LOS = 'LOS',
-    TEAM = 'TEAM',
-    TIME_COMBINATION = 'TIME_COMBINATION',
-    POINTS_COMBINATION = 'POINTS_COMBINATION',
+    LOS = "LOS",
+    TEAM = "TEAM",
+    TIME_COMBINATION = "TIME_COMBINATION",
+    POINTS_COMBINATION = "POINTS_COMBINATION",
 }
 
 export const GaudiModeTypeLabels: Record<GaudiModeType, string> = {
-    [GaudiModeType.LOS]: 'Los-Modus',
-    [GaudiModeType.TEAM]: 'Mannschaftswertung',
-    [GaudiModeType.TIME_COMBINATION]: 'Zeit-Kombination',
-    [GaudiModeType.POINTS_COMBINATION]: 'Punkte-Mischwertung',
+    [GaudiModeType.LOS]: "Los-Modus",
+    [GaudiModeType.TEAM]: "Mannschaftswertung",
+    [GaudiModeType.TIME_COMBINATION]: "Zeit-Kombination",
+    [GaudiModeType.POINTS_COMBINATION]: "Punkte-Mischwertung",
 };
 
 export interface GaudiModeRaceEntry {
@@ -115,4 +115,4 @@ export interface GaudiRankingEntry {
  * Punkte-Mischwertung; the others are Punkte-Mischwertung only, and 'agegroups' downloads a ZIP
  * with one CSV per age group x gender.
  */
-export type GaudiCsvExportVariant = 'all' | 'FEMALE' | 'MALE' | 'agegroups';
+export type GaudiCsvExportVariant = "all" | "FEMALE" | "MALE" | "agegroups";

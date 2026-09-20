@@ -30,15 +30,15 @@ export interface StartGroupCopyRequest {
  * on a printed hall sign - not a free-form picker. Grün/Orange/Blau match the club's existing
  * Kondi-Wettkampf hall color-coding (Halle 1/2/3).
  */
-export const START_GROUP_COLOR_PALETTE: { label: string; hex: string }[] = [
-    {label: 'Grün', hex: '#92D050'},
-    {label: 'Orange', hex: '#FFC000'},
-    {label: 'Blau', hex: '#00B0F0'},
-    {label: 'Rot', hex: '#E53935'},
-    {label: 'Lila', hex: '#8E5FD6'},
-    {label: 'Türkis', hex: '#26A69A'},
-    {label: 'Gelb', hex: '#FDD835'},
-    {label: 'Pink', hex: '#EC407A'},
-    {label: 'Braun', hex: '#8D6E63'},
-    {label: 'Grau', hex: '#78909C'},
+export const START_GROUP_COLOR_PALETTE: {label: string; hex: string}[] = [
+    {label: "Grün", hex: "#92D050"},
+    {label: "Orange", hex: "#FFC000"},
+    {label: "Blau", hex: "#00B0F0"},
+    {label: "Rot", hex: "#E53935"},
+    {label: "Lila", hex: "#8E5FD6"},
+    {label: "Türkis", hex: "#26A69A"},
+    {label: "Gelb", hex: "#FDD835"},
+    {label: "Pink", hex: "#EC407A"},
+    {label: "Braun", hex: "#8D6E63"},
+    {label: "Grau", hex: "#78909C"},
 ];

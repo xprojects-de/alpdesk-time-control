@@ -17,7 +17,7 @@ import {TimingProviderLabels, TimingProviderSettings, TimingProviderType} from "
 import * as SettingsActions from "../../store/settings/settings.actions";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
 
-const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }[] = [
+const ALPDESK_CONFIG_FIELDS: {key: string; label: string; placeholder: string}[] = [
     {key: "baseUrl", label: "Basis-URL des Geräts", placeholder: "http://192.168.4.1"},
 ];
 
@@ -56,8 +56,8 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
                             <mat-hint>Legt fest, welches Gerät der geplante Import abfragt</mat-hint>
                         </mat-form-field>
 
-                        @switch (form.get('type')?.value) {
-                            @case ('ALPDESK_TIMECONTROL') {
+                        @switch (form.get("type")?.value) {
+                            @case ("ALPDESK_TIMECONTROL") {
                                 <div class="provider-config" formGroupName="config">
                                     <p class="provider-config-hint">
                                         Leer lassen, um den Standardwert aus der Server-Konfiguration zu verwenden.
@@ -65,7 +65,11 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
                                     @for (field of alpdeskFields; track field.key) {
                                         <mat-form-field appearance="outline">
                                             <mat-label>{{ field.label }}</mat-label>
-                                            <input matInput [formControlName]="field.key" [placeholder]="field.placeholder"/>
+                                            <input
+                                                matInput
+                                                [formControlName]="field.key"
+                                                [placeholder]="field.placeholder"
+                                            />
                                         </mat-form-field>
                                     }
                                 </div>
@@ -73,8 +77,13 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
                         }
 
                         <div class="actions">
-                            <button mat-raised-button color="primary" type="button"
-                                    [disabled]="!(canSave$ | async)" (click)="save()">
+                            <button
+                                mat-raised-button
+                                color="primary"
+                                type="button"
+                                [disabled]="!(canSave$ | async)"
+                                (click)="save()"
+                            >
                                 @if (saving$ | async) {
                                     Speichern...
                                 } @else {
@@ -89,46 +98,46 @@ const ALPDESK_CONFIG_FIELDS: { key: string; label: string; placeholder: string }
     `,
     styles: [
         `
-          mat-card {
-            margin: 20px;
-            max-width: 640px;
-          }
-
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 8px;
-          }
-
-          .settings-form {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-top: 20px;
-          }
-
-          .provider-config {
-            display: flex;
-            flex-direction: column;
-          }
-
-          .provider-config-hint {
-            color: rgba(0, 0, 0, 0.6);
-            font-size: 13px;
-            margin: 0 0 8px;
-          }
-
-          .actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 8px;
-          }
-
-          @media (max-width: 768px) {
             mat-card {
-              margin: 8px;
+                margin: 20px;
+                max-width: 640px;
             }
-          }
+
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
+
+            .settings-form {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-top: 20px;
+            }
+
+            .provider-config {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .provider-config-hint {
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 13px;
+                margin: 0 0 8px;
+            }
+
+            .actions {
+                display: flex;
+                justify-content: flex-end;
+                margin-top: 8px;
+            }
+
+            @media (max-width: 768px) {
+                mat-card {
+                    margin: 8px;
+                }
+            }
         `,
     ],
 })
@@ -152,9 +161,7 @@ export class SettingsComponent implements OnInit {
 
     form: FormGroup = this.fb.group({
         type: ["NONE", Validators.required],
-        config: this.fb.group(
-            Object.fromEntries(ALPDESK_CONFIG_FIELDS.map(f => [f.key, [""]]))
-        ),
+        config: this.fb.group(Object.fromEntries(ALPDESK_CONFIG_FIELDS.map(f => [f.key, [""]]))),
     });
 
     constructor() {
@@ -162,7 +169,7 @@ export class SettingsComponent implements OnInit {
         this.saving$ = this.store.select(SettingsSelectors.selectSettingsSaving);
         this.timingProviderSettings$ = this.store.select(SettingsSelectors.selectTimingProviderSettings);
         this.canSave$ = combineLatest([this.saving$, this.timingProviderSettings$]).pipe(
-            map(([saving, settings]) => !saving && settings !== null)
+            map(([saving, settings]) => !saving && settings !== null),
         );
 
         this.timingProviderSettings$.pipe(takeUntilDestroyed()).subscribe(settings => {
@@ -179,24 +186,19 @@ export class SettingsComponent implements OnInit {
             });
         });
 
-        this.actions$.pipe(
-            ofType(SettingsActions.updateTimingProviderSuccess),
-            takeUntilDestroyed(),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(SettingsActions.updateTimingProviderSuccess), takeUntilDestroyed()).subscribe(() => {
             this.snackBar.open("Einstellungen gespeichert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(SettingsActions.updateTimingProviderFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Speichern: ${error}`, "OK", {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(SettingsActions.loadTimingProviderFailure),
-            takeUntilDestroyed(),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Laden: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(SettingsActions.updateTimingProviderFailure), takeUntilDestroyed())
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Speichern: ${error}`, "OK", {duration: 5000});
+            });
+        this.actions$
+            .pipe(ofType(SettingsActions.loadTimingProviderFailure), takeUntilDestroyed())
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Laden: ${error}`, "OK", {duration: 5000});
+            });
     }
 
     ngOnInit(): void {
@@ -212,13 +214,15 @@ export class SettingsComponent implements OnInit {
         // server-side default instead of being saved as an empty-string override.
         const rawConfig = this.form.value.config as Record<string, string>;
         const config = Object.fromEntries(
-            Object.entries(rawConfig).filter(([, value]) => value != null && value.trim() !== "")
+            Object.entries(rawConfig).filter(([, value]) => value != null && value.trim() !== ""),
         );
-        this.store.dispatch(SettingsActions.updateTimingProvider({
-            request: {
-                type: this.form.value.type,
-                config,
-            },
-        }));
+        this.store.dispatch(
+            SettingsActions.updateTimingProvider({
+                request: {
+                    type: this.form.value.type,
+                    config,
+                },
+            }),
+        );
     }
 }

@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {StartGroupTemplate, StartGroupTemplateRequest} from '../models/start-group.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {StartGroupTemplate, StartGroupTemplateRequest} from "../models/start-group.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class StartGroupTemplateService {
     private http = inject(HttpClient);

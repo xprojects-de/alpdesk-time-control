@@ -28,22 +28,18 @@ export interface ConfirmDialogData {
             @if (!data.hideCancel) {
                 <button mat-button (click)="onCancel()">{{ data.cancelLabel || "Abbrechen" }}</button>
             }
-            <button
-                    mat-raised-button
-                    [color]="data.confirmColor || 'primary'"
-                    (click)="onConfirm()"
-            >
+            <button mat-raised-button [color]="data.confirmColor || 'primary'" (click)="onConfirm()">
                 {{ data.confirmLabel || "OK" }}
             </button>
         </mat-dialog-actions>
     `,
     styles: [
         `
-          .confirm-dialog-message {
-            white-space: pre-line;
-            min-width: 300px;
-            max-width: 500px;
-          }
+            .confirm-dialog-message {
+                white-space: pre-line;
+                min-width: 300px;
+                max-width: 500px;
+            }
         `,
     ],
 })

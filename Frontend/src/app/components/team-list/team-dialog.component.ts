@@ -1,16 +1,7 @@
 import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from "@angular/forms";
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-} from "@angular/material/dialog";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
@@ -19,14 +10,7 @@ import {notBlank} from "../../utils/validators.util";
 
 @Component({
     selector: "app-team-dialog",
-    imports: [
-        CommonModule,
-        ReactiveFormsModule,
-        MatDialogModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatButtonModule,
-    ],
+    imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
     template: `
         <h2 mat-dialog-title>
             {{ data ? "Team bearbeiten" : "Neues Team" }}
@@ -35,9 +19,8 @@ import {notBlank} from "../../utils/validators.util";
             <form [formGroup]="form" class="team-form">
                 <mat-form-field appearance="outline">
                     <mat-label>Name</mat-label>
-                    <input matInput formControlName="name" required/>
-                    @if (form.get("name")?.hasError("required") &&
-                    form.get("name")?.touched) {
+                    <input matInput formControlName="name" required />
+                    @if (form.get("name")?.hasError("required") && form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
                     }
                     @if (form.get("name")?.hasError("blank")) {
@@ -49,29 +32,22 @@ import {notBlank} from "../../utils/validators.util";
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!form.valid"
-            >
-                Speichern
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
     styles: [
         `
-          .team-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-            margin-top: 16px;
-          }
+            .team-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 400px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field {
+                width: 100%;
+            }
         `,
     ],
 })

@@ -13,17 +13,20 @@ const REQUEST_TIMEOUT_MS = 30000;
 export const timeoutInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req).pipe(
         timeout(REQUEST_TIMEOUT_MS),
-        catchError((error) => {
+        catchError(error => {
             if (error instanceof TimeoutError) {
                 // Re-thrown as an HttpErrorResponse (rather than the raw TimeoutError) so it flows
                 // through extractErrorMessage's normal backendMessage path with a German message,
                 // instead of falling back to error.message and leaking TimeoutError's English text.
-                return throwError(() => new HttpErrorResponse({
-                    error: {message: "Zeitüberschreitung: Der Server hat nicht rechtzeitig geantwortet"},
-                    status: 0,
-                    statusText: "Timeout",
-                    url: req.url,
-                }));
+                return throwError(
+                    () =>
+                        new HttpErrorResponse({
+                            error: {message: "Zeitüberschreitung: Der Server hat nicht rechtzeitig geantwortet"},
+                            status: 0,
+                            statusText: "Timeout",
+                            url: req.url,
+                        }),
+                );
             }
             return throwError(() => error);
         }),

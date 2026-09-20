@@ -1,9 +1,4 @@
-import {
-    Component,
-    AfterViewInit,
-    OnDestroy,
-    inject,
-} from "@angular/core";
+import {Component, AfterViewInit, OnDestroy, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
@@ -55,8 +50,10 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
                 <div class="filter-section">
                     <mat-form-field appearance="outline">
                         <mat-label>Nach Rennen filtern</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async"
-                                    (selectionChange)="onRaceFilterChange($event.value)">
+                        <mat-select
+                            [value]="selectedRaceId$ | async"
+                            (selectionChange)="onRaceFilterChange($event.value)"
+                        >
                             <mat-option [value]="null">Alle Rennen</mat-option>
                             @for (race of races$ | async; track race.id) {
                                 <mat-option [value]="race.id">{{ race.name }}</mat-option>
@@ -82,83 +79,88 @@ import {PointsScaleManagerDialogComponent} from "./points-scale-manager-dialog.c
                 }
 
                 <div class="table-container">
-                <table mat-table [dataSource]="(filteredGaudiModes$ | async) || []" [trackBy]="trackById" class="gaudi-mode-table">
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef>Name</th>
-                        <td mat-cell *matCellDef="let gm">{{ gm.name }}</td>
-                    </ng-container>
+                    <table
+                        mat-table
+                        [dataSource]="(filteredGaudiModes$ | async) || []"
+                        [trackBy]="trackById"
+                        class="gaudi-mode-table"
+                    >
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef>Name</th>
+                            <td mat-cell *matCellDef="let gm">{{ gm.name }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="type">
-                        <th mat-header-cell *matHeaderCellDef>Modus</th>
-                        <td mat-cell *matCellDef="let gm">{{ getTypeLabel(gm.type) }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="type">
+                            <th mat-header-cell *matHeaderCellDef>Modus</th>
+                            <td mat-cell *matCellDef="let gm">{{ getTypeLabel(gm.type) }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="teamSize">
-                        <th mat-header-cell *matHeaderCellDef>Teamgröße</th>
-                        <td mat-cell *matCellDef="let gm">{{ gm.teamSize || "-" }}</td>
-                    </ng-container>
+                        <ng-container matColumnDef="teamSize">
+                            <th mat-header-cell *matHeaderCellDef>Teamgröße</th>
+                            <td mat-cell *matCellDef="let gm">{{ gm.teamSize || "-" }}</td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let gm">
-                            @if ((selectedGaudiModeId$ | async) === gm.id) {
-                                <button mat-raised-button (click)="closeDetail()" matTooltip="Ausblenden">
-                                    <mat-icon>visibility_off</mat-icon>
-                                    Ausblenden
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let gm">
+                                @if ((selectedGaudiModeId$ | async) === gm.id) {
+                                    <button mat-raised-button (click)="closeDetail()" matTooltip="Ausblenden">
+                                        <mat-icon>visibility_off</mat-icon>
+                                        Ausblenden
+                                    </button>
+                                } @else {
+                                    <button mat-raised-button (click)="selectGaudiMode(gm)" matTooltip="Anzeigen">
+                                        <mat-icon>visibility</mat-icon>
+                                        Anzeigen
+                                    </button>
+                                }
+                                <button mat-icon-button (click)="openEditDialog(gm)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
                                 </button>
-                            } @else {
-                                <button mat-raised-button (click)="selectGaudiMode(gm)" matTooltip="Anzeigen">
-                                    <mat-icon>visibility</mat-icon>
-                                    Anzeigen
+                                <button mat-icon-button color="warn" (click)="deleteGaudiMode(gm)" matTooltip="Löschen">
+                                    <mat-icon>delete</mat-icon>
                                 </button>
-                            }
-                            <button mat-icon-button (click)="openEditDialog(gm)" matTooltip="Bearbeiten">
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button mat-icon-button color="warn" (click)="deleteGaudiMode(gm)" matTooltip="Löschen">
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
 
                 @if (selectedGaudiMode$ | async; as selected) {
-                    <app-gaudi-mode-detail [gaudiMode]="selected" (closed)="closeDetail()"/>
+                    <app-gaudi-mode-detail [gaudiMode]="selected" (closed)="closeDetail()" />
                 }
             </mat-card-content>
         </mat-card>
     `,
     styles: [
         `
-          .filter-section {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-          }
+            .filter-section {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 8px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          .gaudi-mode-table {
-            width: 100%;
-          }
+            .gaudi-mode-table {
+                width: 100%;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          mat-form-field {
-            min-width: 250px;
-          }
+            mat-form-field {
+                min-width: 250px;
+            }
         `,
     ],
 })
@@ -186,56 +188,38 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
         this.loading$ = this.store.select(GaudiModeSelectors.selectGaudiModeLoading);
         this.selectedGaudiMode$ = this.store.select(GaudiModeSelectors.selectSelectedGaudiMode);
         this.selectedGaudiModeId$ = this.store.select(GaudiModeSelectors.selectSelectedGaudiModeId);
-        this.filteredGaudiModes$ = this.store.select(
-            GaudiModeSelectors.selectGaudiModesByRace(null)
-        );
+        this.filteredGaudiModes$ = this.store.select(GaudiModeSelectors.selectGaudiModesByRace(null));
 
-        this.selectedRaceId$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(raceId => {
-                this.filteredGaudiModes$ = this.store.select(
-                    GaudiModeSelectors.selectGaudiModesByRace(raceId)
-                );
-            });
+        this.selectedRaceId$.pipe(takeUntil(this.destroy$)).subscribe(raceId => {
+            this.filteredGaudiModes$ = this.store.select(GaudiModeSelectors.selectGaudiModesByRace(raceId));
+        });
 
-        this.actions$.pipe(
-            ofType(GaudiModeActions.createGaudiModeSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(GaudiModeActions.createGaudiModeSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Gaudi-Modus erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.createGaudiModeFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Erstellen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(GaudiModeActions.createGaudiModeFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Erstellen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(GaudiModeActions.updateGaudiModeSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(GaudiModeActions.updateGaudiModeSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Gaudi-Modus erfolgreich aktualisiert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.updateGaudiModeFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Aktualisieren des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(GaudiModeActions.updateGaudiModeFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Aktualisieren des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(GaudiModeActions.deleteGaudiModeSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(GaudiModeActions.deleteGaudiModeSuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Gaudi-Modus erfolgreich gelöscht", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(GaudiModeActions.deleteGaudiModeFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(GaudiModeActions.deleteGaudiModeFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen des Gaudi-Modus: ${error}`, "OK", {duration: 5000});
+            });
     }
 
     ngAfterViewInit(): void {
@@ -266,7 +250,7 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
             dialogRef
                 .afterClosed()
                 .pipe(takeUntil(this.destroy$))
-                .subscribe((result) => {
+                .subscribe(result => {
                     if (result) {
                         this.store.dispatch(GaudiModeActions.createGaudiMode({gaudiMode: result}));
                     }
@@ -283,7 +267,7 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(GaudiModeActions.updateGaudiMode({id: gaudiMode.id, gaudiMode: result}));
                 }
@@ -303,17 +287,18 @@ export class GaudiModusComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteGaudiMode(gaudiMode: GaudiMode): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie den Gaudi-Modus "${gaudiMode.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie den Gaudi-Modus "${gaudiMode.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(GaudiModeActions.deleteGaudiMode({id: gaudiMode.id}));
                 }

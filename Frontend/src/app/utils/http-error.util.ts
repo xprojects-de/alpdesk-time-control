@@ -1,4 +1,4 @@
-import {HttpErrorResponse} from '@angular/common/http';
+import {HttpErrorResponse} from "@angular/common/http";
 
 /**
  * Extracts a user-facing message from a failed HTTP call.
@@ -11,8 +11,8 @@ import {HttpErrorResponse} from '@angular/common/http';
  */
 export function extractErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpErrorResponse) {
-        const backendMessage = (error.error as { message?: unknown } | null)?.message;
-        if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
+        const backendMessage = (error.error as {message?: unknown} | null)?.message;
+        if (typeof backendMessage === "string" && backendMessage.trim().length > 0) {
             return backendMessage;
         }
         return error.message || fallback;

@@ -1,6 +1,6 @@
-import {createReducer, on} from '@ngrx/store';
-import {GaudiLosPairing, GaudiMode, GaudiNotRankedEntry, GaudiRankingEntry} from '../../models/gaudi-mode.model';
-import * as GaudiModeActions from './gaudi-mode.actions';
+import {createReducer, on} from "@ngrx/store";
+import {GaudiLosPairing, GaudiMode, GaudiNotRankedEntry, GaudiRankingEntry} from "../../models/gaudi-mode.model";
+import * as GaudiModeActions from "./gaudi-mode.actions";
 
 export interface GaudiModeState {
     gaudiModes: GaudiMode[];
@@ -21,7 +21,7 @@ export const initialState: GaudiModeState = {
     notRanked: [],
     loading: false,
     pdfExportLoading: false,
-    error: null
+    error: null,
 };
 
 export const gaudiModeReducer = createReducer(
@@ -30,66 +30,66 @@ export const gaudiModeReducer = createReducer(
     on(GaudiModeActions.loadGaudiModes, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.loadGaudiModesSuccess, (state, {gaudiModes}) => ({
         ...state,
         gaudiModes,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.loadGaudiModesFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.createGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.createGaudiModeSuccess, (state, {gaudiMode}) => ({
         ...state,
         gaudiModes: [...state.gaudiModes, gaudiMode],
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.createGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.updateGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.updateGaudiModeSuccess, (state, {gaudiMode}) => ({
         ...state,
-        gaudiModes: state.gaudiModes.map(g => g.id === gaudiMode.id ? gaudiMode : g),
-        loading: false
+        gaudiModes: state.gaudiModes.map(g => (g.id === gaudiMode.id ? gaudiMode : g)),
+        loading: false,
     })),
     on(GaudiModeActions.updateGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.deleteGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.deleteGaudiModeSuccess, (state, {id}) => ({
         ...state,
         gaudiModes: state.gaudiModes.filter(g => g.id !== id),
         selectedGaudiModeId: state.selectedGaudiModeId === id ? null : state.selectedGaudiModeId,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.deleteGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.selectGaudiMode, (state, {id}) => ({
@@ -97,95 +97,95 @@ export const gaudiModeReducer = createReducer(
         selectedGaudiModeId: id,
         pairing: [],
         ranking: [],
-        notRanked: []
+        notRanked: [],
     })),
 
     on(GaudiModeActions.drawPairing, GaudiModeActions.loadPairing, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.pairingSuccess, (state, {pairing}) => ({
         ...state,
         pairing,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.pairingFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.loadRanking, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.loadRankingSuccess, (state, {ranking, notRanked}) => ({
         ...state,
         ranking,
         notRanked,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.loadRankingFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdf, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdfByGender, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfByGenderSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfByGenderFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdfAllAgeGroups, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfAllAgeGroupsSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfAllAgeGroupsFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportCsv, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportCsvSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportCsvFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
-    }))
+        error,
+    })),
 );

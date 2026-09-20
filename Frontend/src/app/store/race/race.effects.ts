@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpErrorResponse} from '@angular/common/http';
-import {extractErrorMessage} from '../../utils/http-error.util';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {map, catchError, mergeMap, switchMap} from 'rxjs/operators';
-import {RaceService} from '../../services/race.service';
-import * as RaceActions from './race.actions';
+import {Injectable, inject} from "@angular/core";
+import {HttpErrorResponse} from "@angular/common/http";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {of} from "rxjs";
+import {map, catchError, mergeMap, switchMap} from "rxjs/operators";
+import {RaceService} from "../../services/race.service";
+import * as RaceActions from "./race.actions";
 
 @Injectable()
 export class RaceEffects {
@@ -18,12 +18,16 @@ export class RaceEffects {
             mergeMap(() =>
                 this.raceService.getAll().pipe(
                     map(races => RaceActions.loadRacesSuccess({races})),
-                    catchError(error => of(RaceActions.loadRacesFailure({
-                        error: extractErrorMessage(error, 'Rennen konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceActions.loadRacesFailure({
+                                error: extractErrorMessage(error, "Rennen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     // switchMap: read-only, and only the most recently opened dialog's links matter.
@@ -33,13 +37,17 @@ export class RaceEffects {
             switchMap(({raceId}) =>
                 this.raceService.getLiveLinks(raceId).pipe(
                     map(links => RaceActions.loadLiveLinksSuccess({raceId, links})),
-                    catchError(error => of(RaceActions.loadLiveLinksFailure({
-                        raceId,
-                        error: extractErrorMessage(error, 'Live-Links konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceActions.loadLiveLinksFailure({
+                                raceId,
+                                error: extractErrorMessage(error, "Live-Links konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     createRace$ = createEffect(() =>
@@ -48,12 +56,16 @@ export class RaceEffects {
             mergeMap(({race}) =>
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceSuccess({race})),
-                    catchError(error => of(RaceActions.createRaceFailure({
-                        error: extractErrorMessage(error, 'Rennen konnte nicht erstellt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceActions.createRaceFailure({
+                                error: extractErrorMessage(error, "Rennen konnte nicht erstellt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     createRaceForResultImport$ = createEffect(() =>
@@ -62,12 +74,16 @@ export class RaceEffects {
             mergeMap(({race}) =>
                 this.raceService.create(race).pipe(
                     map(race => RaceActions.createRaceForResultImportSuccess({race})),
-                    catchError(error => of(RaceActions.createRaceForResultImportFailure({
-                        error: extractErrorMessage(error, 'Rennen konnte nicht erstellt werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceActions.createRaceForResultImportFailure({
+                                error: extractErrorMessage(error, "Rennen konnte nicht erstellt werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     updateRace$ = createEffect(() =>
@@ -76,12 +92,16 @@ export class RaceEffects {
             mergeMap(({id, race}) =>
                 this.raceService.update(id, race).pipe(
                     map(race => RaceActions.updateRaceSuccess({race})),
-                    catchError(error => of(RaceActions.updateRaceFailure({
-                        error: extractErrorMessage(error, 'Rennen konnte nicht aktualisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceActions.updateRaceFailure({
+                                error: extractErrorMessage(error, "Rennen konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     deleteRace$ = createEffect(() =>
@@ -92,18 +112,21 @@ export class RaceEffects {
                     map(() => RaceActions.deleteRaceSuccess({id})),
                     catchError(error => {
                         if (error instanceof HttpErrorResponse && error.status === 409) {
-                            return of(RaceActions.deleteRaceConflict({
-                                id,
-                                message: extractErrorMessage(error, 'Rennen konnte nicht gelöscht werden')
-                            }));
+                            return of(
+                                RaceActions.deleteRaceConflict({
+                                    id,
+                                    message: extractErrorMessage(error, "Rennen konnte nicht gelöscht werden"),
+                                }),
+                            );
                         }
-                        return of(RaceActions.deleteRaceFailure({
-                            error: extractErrorMessage(error, 'Rennen konnte nicht gelöscht werden')
-                        }));
-                    })
-                )
-            )
-        )
+                        return of(
+                            RaceActions.deleteRaceFailure({
+                                error: extractErrorMessage(error, "Rennen konnte nicht gelöscht werden"),
+                            }),
+                        );
+                    }),
+                ),
+            ),
+        ),
     );
 }
-

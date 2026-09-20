@@ -1,5 +1,5 @@
-import {CanDeactivateFn} from '@angular/router';
-import {Observable} from 'rxjs';
+import {CanDeactivateFn} from "@angular/router";
+import {Observable} from "rxjs";
 
 /** Implemented by pages that hold unsaved local edits (e.g. the start-group board). */
 export interface HasUnsavedChanges {
@@ -11,5 +11,4 @@ export interface HasUnsavedChanges {
  * Asks before in-app navigation (sidenav etc.) throws away unsaved edits - window:beforeunload
  * only covers reloading/closing the browser tab, not router navigation.
  */
-export const unsavedChangesGuard: CanDeactivateFn<HasUnsavedChanges> =
-    component => component.confirmDiscardChanges();
+export const unsavedChangesGuard: CanDeactivateFn<HasUnsavedChanges> = component => component.confirmDiscardChanges();

@@ -15,41 +15,38 @@ import {MatIconModule} from "@angular/material/icon";
                  /dashboard/age-groups), so this stays correct on its own if the default landing
                  page ever changes - that's decided once by the {path: '', redirectTo: ...} child
                  route in app.routes.ts, which this link rides along with. -->
-            <a mat-flat-button color="primary" routerLink="/dashboard">
-                Zur Startseite
-            </a>
+            <a mat-flat-button color="primary" routerLink="/dashboard"> Zur Startseite </a>
         </div>
     `,
     styles: [
         `
-          .not-found {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 64px 16px;
-            text-align: center;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .not-found {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                padding: 64px 16px;
+                text-align: center;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .not-found-icon {
-            font-size: 48px;
-            width: 48px;
-            height: 48px;
-            color: rgba(0, 0, 0, 0.35);
-          }
+            .not-found-icon {
+                font-size: 48px;
+                width: 48px;
+                height: 48px;
+                color: rgba(0, 0, 0, 0.35);
+            }
 
-          h2 {
-            margin: 0;
-            color: rgba(0, 0, 0, 0.87);
-          }
+            h2 {
+                margin: 0;
+                color: rgba(0, 0, 0, 0.87);
+            }
 
-          p {
-            margin: 0 0 8px;
-          }
+            p {
+                margin: 0 0 8px;
+            }
         `,
     ],
 })
-export class DashboardNotFoundComponent {
-}
+export class DashboardNotFoundComponent {}

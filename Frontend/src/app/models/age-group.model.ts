@@ -1,4 +1,4 @@
-import { Gender } from './gender.model';
+import {Gender} from "./gender.model";
 
 export interface AgeGroup {
     id: number;
@@ -14,4 +14,3 @@ export interface AgeGroupRequest {
     birthYearTo: number;
     gender: Gender;
 }
-

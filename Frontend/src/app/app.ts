@@ -1,8 +1,4 @@
-import {
-    Component,
-    OnInit,
-    inject,
-} from "@angular/core";
+import {Component, OnInit, inject} from "@angular/core";
 import {RouterOutlet} from "@angular/router";
 import {Store} from "@ngrx/store";
 import * as AuthActions from "./store/auth/auth.actions";

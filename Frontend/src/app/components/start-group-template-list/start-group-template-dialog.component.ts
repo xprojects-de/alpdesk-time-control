@@ -1,25 +1,12 @@
 import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from "@angular/forms";
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-} from "@angular/material/dialog";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {
-    StartGroupTemplate,
-    StartGroupTemplateRequest,
-    START_GROUP_COLOR_PALETTE,
-} from "../../models/start-group.model";
+import {StartGroupTemplate, StartGroupTemplateRequest, START_GROUP_COLOR_PALETTE} from "../../models/start-group.model";
 import {notBlank} from "../../utils/validators.util";
 
 @Component({
@@ -41,7 +28,7 @@ import {notBlank} from "../../utils/validators.util";
             <form [formGroup]="form" class="start-group-form">
                 <mat-form-field appearance="outline">
                     <mat-label>Label</mat-label>
-                    <input matInput formControlName="label" required/>
+                    <input matInput formControlName="label" required />
                     @if (form.get("label")?.hasError("required") && form.get("label")?.touched) {
                         <mat-error>Label ist erforderlich</mat-error>
                     }
@@ -56,12 +43,12 @@ import {notBlank} from "../../utils/validators.util";
                     <div class="color-swatches">
                         @for (color of palette; track color.hex) {
                             <button
-                                    type="button"
-                                    class="swatch"
-                                    [class.selected]="form.value.color === color.hex"
-                                    [style.background]="color.hex"
-                                    [matTooltip]="color.label"
-                                    (click)="selectColor(color.hex)"
+                                type="button"
+                                class="swatch"
+                                [class.selected]="form.value.color === color.hex"
+                                [style.background]="color.hex"
+                                [matTooltip]="color.label"
+                                (click)="selectColor(color.hex)"
                             ></button>
                         }
                     </div>
@@ -69,18 +56,18 @@ import {notBlank} from "../../utils/validators.util";
 
                 <mat-form-field appearance="outline">
                     <mat-label>Position</mat-label>
-                    <input matInput type="number" formControlName="position"/>
+                    <input matInput type="number" formControlName="position" />
                     <mat-hint>Reihenfolge dieser Vorlage gegenüber anderen (kleiner = früher)</mat-hint>
                 </mat-form-field>
 
                 <div class="offset-row">
                     <mat-form-field appearance="outline">
                         <mat-label>Zeitversatz - Minuten</mat-label>
-                        <input matInput type="number" min="0" formControlName="offsetMinutes"/>
+                        <input matInput type="number" min="0" formControlName="offsetMinutes" />
                     </mat-form-field>
                     <mat-form-field appearance="outline">
                         <mat-label>Sekunden</mat-label>
-                        <input matInput type="number" min="0" max="59" formControlName="offsetSecondsPart"/>
+                        <input matInput type="number" min="0" max="59" formControlName="offsetSecondsPart" />
                     </mat-form-field>
                 </div>
                 <p class="hint">Optional, für Blockstart mit versetztem Startsignal (z.B. 10 Minuten)</p>
@@ -88,70 +75,63 @@ import {notBlank} from "../../utils/validators.util";
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!form.valid"
-            >
-                Speichern
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
     styles: [
         `
-          .start-group-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 400px;
-            margin-top: 16px;
-          }
+            .start-group-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 400px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field {
+                width: 100%;
+            }
 
-          .color-picker-label {
-            display: block;
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-            margin-bottom: 6px;
-          }
+            .color-picker-label {
+                display: block;
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+                margin-bottom: 6px;
+            }
 
-          .color-swatches {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-          }
+            .color-swatches {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
 
-          .swatch {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 2px solid transparent;
-            cursor: pointer;
-            padding: 0;
-          }
+            .swatch {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                border: 2px solid transparent;
+                cursor: pointer;
+                padding: 0;
+            }
 
-          .swatch.selected {
-            border-color: rgba(0, 0, 0, 0.7);
-          }
+            .swatch.selected {
+                border-color: rgba(0, 0, 0, 0.7);
+            }
 
-          .offset-row {
-            display: flex;
-            gap: 12px;
-          }
+            .offset-row {
+                display: flex;
+                gap: 12px;
+            }
 
-          .offset-row mat-form-field {
-            flex: 1 1 0;
-          }
+            .offset-row mat-form-field {
+                flex: 1 1 0;
+            }
 
-          .hint {
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-            margin-top: -12px;
-          }
+            .hint {
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+                margin-top: -12px;
+            }
         `,
     ],
 })

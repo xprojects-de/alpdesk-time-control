@@ -1,4 +1,4 @@
-import {Measurement} from './measurement.model';
+import {Measurement} from "./measurement.model";
 
 export interface MeasurementImportRowError {
     lineNumber: number;
@@ -23,9 +23,9 @@ export interface MeasurementImportTargetField {
 
 // Our measurement fields the user can map a source CSV column onto - matches MeasurementRequest.
 export const MEASUREMENT_IMPORT_TARGET_FIELDS: MeasurementImportTargetField[] = [
-    {key: 'participantId', label: 'Teilnehmer-ID', required: false},
-    {key: 'durationMs', label: 'Dauer (ms)', required: true},
-    {key: 'measuredAt', label: 'Gemessen am', required: false},
+    {key: "participantId", label: "Teilnehmer-ID", required: false},
+    {key: "durationMs", label: "Dauer (ms)", required: true},
+    {key: "measuredAt", label: "Gemessen am", required: false},
 ];
 
 export interface MeasurementImportPreviewResponse {

@@ -50,18 +50,21 @@ type ArchiveMode = "reset" | "keep" | "noclear";
                 <mat-radio-group formControlName="mode" class="mode-group">
                     <mat-radio-button value="reset">
                         Archivieren (inkl. Gerät-Reset)
-                        <p class="hint">Aktuelle Messungen werden diesem Rennen zugeordnet, danach werden
-                            Datenbank und Gerät geleert. Bereit für das nächste Rennen.</p>
+                        <p class="hint">
+                            Aktuelle Messungen werden diesem Rennen zugeordnet, danach werden Datenbank und Gerät
+                            geleert. Bereit für das nächste Rennen.
+                        </p>
                     </mat-radio-button>
                     <mat-radio-button value="keep">
                         Archivieren (nur Datenbank)
-                        <p class="hint">Wie oben, aber nur die Datenbank wird geleert, das Gerät bleibt
-                            unverändert.</p>
+                        <p class="hint">Wie oben, aber nur die Datenbank wird geleert, das Gerät bleibt unverändert.</p>
                     </mat-radio-button>
                     <mat-radio-button value="noclear">
                         Archivieren (ohne Löschen)
-                        <p class="hint">Aktuelle Messungen werden diesem Rennen zugeordnet. Datenbank und Gerät
-                            werden dabei NICHT verändert.</p>
+                        <p class="hint">
+                            Aktuelle Messungen werden diesem Rennen zugeordnet. Datenbank und Gerät werden dabei NICHT
+                            verändert.
+                        </p>
                     </mat-radio-button>
                 </mat-radio-group>
                 @if (form.get("mode")?.hasError("required") && form.get("mode")?.touched) {
@@ -71,36 +74,34 @@ type ArchiveMode = "reset" | "keep" | "noclear";
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">
-                Archivieren
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Archivieren</button>
         </mat-dialog-actions>
     `,
     styles: [
         `
-          .archive-form {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            min-width: 420px;
-            margin-top: 16px;
-          }
+            .archive-form {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                min-width: 420px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field {
+                width: 100%;
+            }
 
-          .mode-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          }
+            .mode-group {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
 
-          .hint {
-            margin: 2px 0 0;
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .hint {
+                margin: 2px 0 0;
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+            }
         `,
     ],
 })

@@ -1,19 +1,19 @@
-import {Component, inject} from '@angular/core';
-import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
-import {Store} from '@ngrx/store';
-import {Actions, ofType} from '@ngrx/effects';
-import {filter} from 'rxjs/operators';
-import {CommonModule} from '@angular/common';
-import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from '@angular/material/dialog';
-import {MatButtonModule} from '@angular/material/button';
-import {MatIconModule} from '@angular/material/icon';
-import {MatListModule} from '@angular/material/list';
-import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
-import {Race, RaceLiveLink} from '../../models/race.model';
-import * as RaceActions from '../../store/race/race.actions';
-import * as RaceSelectors from '../../store/race/race.selectors';
-import {toAbsoluteUrl} from '../../utils/absolute-url.util';
+import {Component, inject} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
+import {Store} from "@ngrx/store";
+import {Actions, ofType} from "@ngrx/effects";
+import {filter} from "rxjs/operators";
+import {CommonModule} from "@angular/common";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
+import {MatButtonModule} from "@angular/material/button";
+import {MatIconModule} from "@angular/material/icon";
+import {MatListModule} from "@angular/material/list";
+import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
+import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
+import {Race, RaceLiveLink} from "../../models/race.model";
+import * as RaceActions from "../../store/race/race.actions";
+import * as RaceSelectors from "../../store/race/race.selectors";
+import {toAbsoluteUrl} from "../../utils/absolute-url.util";
 import {MatTooltip} from "@angular/material/tooltip";
 
 export interface RaceLiveLinksDialogData {
@@ -24,7 +24,7 @@ export interface RaceLiveLinksDialogData {
  * category) as ready-to-open/copy links - fetched entirely from the backend (via RaceActions.loadLiveLinks)
  * so this dialog never has to know or reconstruct any part of a live-results URL itself. */
 @Component({
-    selector: 'app-race-live-links-dialog',
+    selector: "app-race-live-links-dialog",
     imports: [
         CommonModule,
         MatDialogModule,
@@ -65,25 +65,27 @@ export interface RaceLiveLinksDialogData {
             <button mat-button mat-dialog-close>Schließen</button>
         </mat-dialog-actions>
     `,
-    styles: [`
-        .spinner-row {
-            display: flex;
-            justify-content: center;
-            padding: 24px;
-        }
+    styles: [
+        `
+            .spinner-row {
+                display: flex;
+                justify-content: center;
+                padding: 24px;
+            }
 
-        .url {
-            color: rgba(0, 0, 0, 0.6);
-            font-size: 0.85em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+            .url {
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 0.85em;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-        mat-dialog-content {
-            min-width: 420px;
-            max-width: 80vw;
-        }
-    `],
+            mat-dialog-content {
+                min-width: 420px;
+                max-width: 80vw;
+            }
+        `,
+    ],
 })
 export class RaceLiveLinksDialogComponent {
     private store = inject(Store);
@@ -95,13 +97,15 @@ export class RaceLiveLinksDialogComponent {
     links = this.store.selectSignal(RaceSelectors.selectLiveLinks);
 
     constructor() {
-        inject(Actions).pipe(
-            ofType(RaceActions.loadLiveLinksFailure),
-            filter(({raceId}) => raceId === this.data.race.id),
-            takeUntilDestroyed(),
-        ).subscribe(() => {
-            this.snackBar.open('Live-Links konnten nicht geladen werden', 'OK', {duration: 3000});
-        });
+        inject(Actions)
+            .pipe(
+                ofType(RaceActions.loadLiveLinksFailure),
+                filter(({raceId}) => raceId === this.data.race.id),
+                takeUntilDestroyed(),
+            )
+            .subscribe(() => {
+                this.snackBar.open("Live-Links konnten nicht geladen werden", "OK", {duration: 3000});
+            });
         this.store.dispatch(RaceActions.loadLiveLinks({raceId: this.data.race.id}));
     }
 
@@ -109,17 +113,19 @@ export class RaceLiveLinksDialogComponent {
         return toAbsoluteUrl(link.path);
     }
     open(link: RaceLiveLink): void {
-        window.open(this.absoluteUrl(link), '_blank');
+        window.open(this.absoluteUrl(link), "_blank");
     }
 
     async copy(link: RaceLiveLink): Promise<void> {
         try {
             await navigator.clipboard.writeText(this.absoluteUrl(link));
-            this.snackBar.open(`"${link.label}"-Link kopiert`, 'OK', {duration: 2000});
+            this.snackBar.open(`"${link.label}"-Link kopiert`, "OK", {duration: 2000});
         } catch {
             // Clipboard write can fail (permission denied, insecure context, ...) - the user
             // still needs feedback instead of a click that silently does nothing.
-            this.snackBar.open('Kopieren nicht möglich - Link steht oben zum manuellen Markieren', 'OK', {duration: 4000});
+            this.snackBar.open("Kopieren nicht möglich - Link steht oben zum manuellen Markieren", "OK", {
+                duration: 4000,
+            });
         }
     }
 }

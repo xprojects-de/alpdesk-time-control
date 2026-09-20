@@ -1,19 +1,17 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from '../models/measurement.model';
-import {MeasurementImportPreviewResponse, MeasurementImportResponse} from '../models/measurement-import.model';
-import {environment} from '../../environments/environment';
-import {buildImportFormData} from '../utils/import-form-data.util';
-
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {AutoAssignEnableRequest, AutoAssignStatus, Measurement, MeasurementRequest} from "../models/measurement.model";
+import {MeasurementImportPreviewResponse, MeasurementImportResponse} from "../models/measurement-import.model";
+import {environment} from "../../environments/environment";
+import {buildImportFormData} from "../utils/import-form-data.util";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class MeasurementService {
     private http = inject(HttpClient);
     private readonly apiUrl = `${environment.apiUrl}/measurements`;
-
 
     getAll(): Observable<Measurement[]> {
         return this.http.get<Measurement[]>(this.apiUrl);
@@ -39,32 +37,31 @@ export class MeasurementService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 
-
     reset(resetDevice: boolean): Observable<string> {
         return this.http.delete(`${this.apiUrl}/reset`, {
-            params: { resetDevice: resetDevice.toString() },
-            responseType: 'text'
+            params: {resetDevice: resetDevice.toString()},
+            responseType: "text",
         });
     }
 
     archive(raceId: number, resetDevice: boolean, clearAfterArchive: boolean): Observable<string> {
         return this.http.post(`${environment.apiUrl}/races/${raceId}/archive-measurements`, null, {
-            params: { resetDevice: resetDevice.toString(), clearAfterArchive: clearAfterArchive.toString() },
-            responseType: 'text'
+            params: {resetDevice: resetDevice.toString(), clearAfterArchive: clearAfterArchive.toString()},
+            responseType: "text",
         });
     }
 
     setContinuousMode(enable: boolean): Observable<string> {
         return this.http.put(`${this.apiUrl}/continuous-mode`, null, {
-            params: { enable: enable.toString() },
-            responseType: 'text'
+            params: {enable: enable.toString()},
+            responseType: "text",
         });
     }
 
     setScheduledImport(enable: boolean): Observable<string> {
         return this.http.put(`${this.apiUrl}/scheduled-import`, null, {
-            params: { enable: enable.toString() },
-            responseType: 'text'
+            params: {enable: enable.toString()},
+            responseType: "text",
         });
     }
 
@@ -74,18 +71,18 @@ export class MeasurementService {
 
     getDeviceStatus(): Observable<string> {
         return this.http.get(`${this.apiUrl}/device-status`, {
-            responseType: 'text'
+            responseType: "text",
         });
     }
 
     discardOldestStart(): Observable<string> {
         return this.http.post(`${this.apiUrl}/discard`, null, {
-            responseType: 'text'
+            responseType: "text",
         });
     }
 
     exportCsv(): Observable<Blob> {
-        return this.http.get(`${this.apiUrl}/export/csv`, {responseType: 'blob'});
+        return this.http.get(`${this.apiUrl}/export/csv`, {responseType: "blob"});
     }
 
     previewImport(file: File, delimiter?: string): Observable<MeasurementImportPreviewResponse> {
@@ -97,9 +94,13 @@ export class MeasurementService {
     // "map nothing" and only falls back to the auto-suggested mapping when the part is omitted
     // entirely, so a deliberately cleared mapping (every dropdown set to "nicht importieren") must
     // not be silently dropped here (see ParticipantService#importResultsMapped for the same pattern).
-    importMapped(file: File, delimiter: string | undefined, mapping: Record<string, string>): Observable<MeasurementImportResponse> {
+    importMapped(
+        file: File,
+        delimiter: string | undefined,
+        mapping: Record<string, string>,
+    ): Observable<MeasurementImportResponse> {
         const formData = buildImportFormData(file, {delimiter});
-        formData.append('mapping', JSON.stringify(mapping ?? {}));
+        formData.append("mapping", JSON.stringify(mapping ?? {}));
         return this.http.post<MeasurementImportResponse>(`${this.apiUrl}/import-mapped`, formData);
     }
 
@@ -125,21 +126,22 @@ export class MeasurementService {
 
     checkDeviceConnection(): Observable<boolean> {
         return new Observable<boolean>(observer => {
-            this.http.get(`${this.apiUrl}/device-connection`, {
-                observe: 'response'
-            }).subscribe({
-                next: (response) => {
-                    observer.next(response.status === 200);
-                    observer.complete();
-                },
-                error: () => {
-                    // 503 = device not connected, treat as false
-                    // Any other error also means not connected
-                    observer.next(false);
-                    observer.complete();
-                }
-            });
+            this.http
+                .get(`${this.apiUrl}/device-connection`, {
+                    observe: "response",
+                })
+                .subscribe({
+                    next: response => {
+                        observer.next(response.status === 200);
+                        observer.complete();
+                    },
+                    error: () => {
+                        // 503 = device not connected, treat as false
+                        // Any other error also means not connected
+                        observer.next(false);
+                        observer.complete();
+                    },
+                });
         });
     }
 }
-

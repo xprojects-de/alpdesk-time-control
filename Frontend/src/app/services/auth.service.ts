@@ -1,19 +1,18 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {tap} from 'rxjs/operators';
-import {LoginRequest, LoginResponse} from '../models/auth.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {tap} from "rxjs/operators";
+import {LoginRequest, LoginResponse} from "../models/auth.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class AuthService {
     private http = inject(HttpClient);
     private readonly apiUrl = `${environment.apiUrl}/login`;
-    private readonly TOKEN_KEY = 'auth_token';
-    private readonly USERNAME_KEY = 'auth_username';
-
+    private readonly TOKEN_KEY = "auth_token";
+    private readonly USERNAME_KEY = "auth_username";
 
     login(credentials: LoginRequest): Observable<LoginResponse> {
         return this.http.post<LoginResponse>(this.apiUrl, credentials).pipe(
@@ -23,7 +22,7 @@ export class AuthService {
                     this.setToken(token);
                     this.setUsername(credentials.username);
                 }
-            })
+            }),
         );
     }
 
@@ -65,28 +64,27 @@ export class AuthService {
 
             const expirationDate = payload.exp * 1000;
             return Date.now() >= expirationDate;
-
         } catch (error) {
             return true;
         }
     }
 
-    private decodeToken(token: string): { exp?: number; [key: string]: unknown } {
+    private decodeToken(token: string): {exp?: number; [key: string]: unknown} {
         try {
-            const payload = token.split('.')[1];
+            const payload = token.split(".")[1];
             // JWT payloads are Base64URL (RFC 4648 §5): '-'/'_' instead of '+'/'/', no padding.
             // atob() only understands standard Base64 and throws on '-'/'_', so normalize first.
-            const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+            const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
             const decodedPayload = decodeURIComponent(
                 atob(padded)
-                    .split('')
-                    .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
-                    .join('')
+                    .split("")
+                    .map(c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
+                    .join(""),
             );
             return JSON.parse(decodedPayload);
         } catch (error) {
-            throw new Error('Invalid token format');
+            throw new Error("Invalid token format");
         }
     }
 
@@ -98,4 +96,3 @@ export class AuthService {
         localStorage.setItem(this.USERNAME_KEY, username);
     }
 }
-
