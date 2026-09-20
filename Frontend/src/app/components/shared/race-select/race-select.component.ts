@@ -220,8 +220,16 @@ export class RaceSelectComponent implements ControlValueAccessor {
             // circular dependency that providing the component to itself would create.
             this.ngControl.valueAccessor = this;
         }
-        effect(() => this.selectedValue.set(this.value()));
-        effect(() => this.disabledState.set(this.disabled()));
+        // Only mirror the plain inputs when no form control drives this component. A call site
+        // uses either formControlName or [value]/[disabled], never both - and with a form control
+        // the unbound inputs keep their defaults (null / false), so mirroring them would run right
+        // after writeValue()/setDisabledState() during the first change detection and wipe out
+        // exactly the value the form had just pushed in. That showed up as an empty "Rennen" field
+        // when editing an existing participant, with the form control still holding the race.
+        if (!this.ngControl) {
+            effect(() => this.selectedValue.set(this.value()));
+            effect(() => this.disabledState.set(this.disabled()));
+        }
         effect(() => this.innerControl.setValue(this.selectedValue(), {emitEvent: false}));
         effect(() => {
             this.innerControl.setValidators(this.required() ? [Validators.required] : []);
@@ -238,11 +246,23 @@ export class RaceSelectComponent implements ControlValueAccessor {
         return value === null || value === undefined ? [] : [value];
     });
 
+    /**
+     * Newest race first. The callers hand this component the order the backend returns, and
+     * RaceRepository.findAll() has no ORDER BY - that is insertion order, which buries the race
+     * just created for today's event at the very bottom of every dropdown. Sorting by date rather
+     * than by id also puts a race entered late for an earlier event where it belongs. ISO dates
+     * compare correctly as plain strings; equal dates fall back to the name. Kept as its own
+     * computed so typing a search term re-filters without re-sorting the whole list every keystroke.
+     */
+    private sortedRaces = computed<Race[]>(() =>
+        [...this.races()].sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)),
+    );
+
     visibleRaces = computed<Race[]>(() => {
         // Every whitespace-separated word has to match somewhere, in any order - "kondi 2021"
         // has to find "Kondi-Cup 2021", which a single contiguous substring search would miss.
         const terms = this.search().toLowerCase().split(/\s+/).filter(Boolean);
-        const races = this.byDateDescending(this.races());
+        const races = this.sortedRaces();
         // An already selected race always stays in the list, both while searching and under the
         // unsearched cap below. mat-select tracks its selection through the options actually
         // rendered, so dropping a selected one would silently drop it from the value on the next
@@ -270,12 +290,13 @@ export class RaceSelectComponent implements ControlValueAccessor {
         return Math.max(0, this.races().length - this.visibleRaces().length);
     });
 
-    showEmptyOption = computed(
-        () =>
-            this.emptyOptionLabel() !== null &&
-            !this.multiple() &&
-            (!this.search().trim() || this.selectedValue() === null),
-    );
+    /**
+     * Shown whenever the call site defines one, search term or not: for most pickers this entry is
+     * an action rather than a placeholder ("- kein Rennen -" stops the auto-assign, "Kein" unlinks
+     * a previous run, "Alle Rennen" clears a filter), so hiding it mid-search would take that
+     * action away exactly while someone is narrowing the list down.
+     */
+    showEmptyOption = computed(() => this.emptyOptionLabel() !== null && !this.multiple());
 
     triggerLabel = computed(() => {
         const ids = this.selectedIds();
@@ -354,17 +375,6 @@ export class RaceSelectComponent implements ControlValueAccessor {
 
     setDisabledState(isDisabled: boolean): void {
         this.disabledState.set(isDisabled);
-    }
-
-    /**
-     * Newest race first. The callers hand this component the order the backend returns, and
-     * RaceRepository.findAll() has no ORDER BY - that is insertion order, which buries the race
-     * just created for today's event at the very bottom of every dropdown. Sorting by date rather
-     * than by id also puts a race entered late for an earlier event where it belongs. ISO dates
-     * compare correctly as plain strings; equal dates fall back to the name.
-     */
-    private byDateDescending(races: Race[]): Race[] {
-        return [...races].sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
     }
 
     /** Exposed for the option template, which renders name and date as separate elements. */
