@@ -682,8 +682,13 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                 case "race":
                     return participant.race?.name ?? "";
                 case "durationMs": {
-                    if (participant.durationMs === undefined || participant.durationMs === null) {
-                        return "";
+                    // Same rule as RankingService#adjustedValue: a DSQ/DNF/DNS result never counts,
+                    // even when a duration was measured (disqualified after crossing the line).
+                    // Those rows - and rows without a result - sort to the end instead of being
+                    // compared as "", which MatTableDataSource coerced to 0, i.e. ahead of the leader.
+                    const ranked = !participant.status || participant.status === "NONE";
+                    if (!ranked || participant.durationMs === undefined || participant.durationMs === null) {
+                        return Number.MAX_SAFE_INTEGER;
                     }
                     const penalty = participant.penalty ?? 0;
                     const isDesc = participant.race?.sortDirection === SortDirection.DESC;

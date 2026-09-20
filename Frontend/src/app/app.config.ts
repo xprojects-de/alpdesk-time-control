@@ -51,6 +51,7 @@ import {SettingsEffects} from "./store/settings/settings.effects";
 import {PointsScaleEffects} from "./store/points-scale/points-scale.effects";
 import {StartGroupTemplateEffects} from "./store/start-group-template/start-group-template.effects";
 import {BackendHealthEffects} from "./store/backend-health/backend-health.effects";
+import {LoadFailureEffects} from "./store/load-failure/load-failure.effects";
 import {authInterceptor} from "./interceptors/auth.interceptor";
 import {timeoutInterceptor} from "./interceptors/timeout.interceptor";
 
@@ -112,6 +113,7 @@ export const appConfig: ApplicationConfig = {
             PointsScaleEffects,
             StartGroupTemplateEffects,
             BackendHealthEffects,
+            LoadFailureEffects,
         ]),
         // Only connect the DevTools extension in dev mode - the JWT and login credentials that
         // flow through the store must not be inspectable via the browser extension in production.

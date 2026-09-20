@@ -4,12 +4,15 @@ import * as RaceMeasurementActions from "./race-measurement.actions";
 
 export interface RaceMeasurementState {
     raceMeasurements: RaceMeasurement[];
+    /** Race the rows in `raceMeasurements` belong to - see the loadRaceMeasurements handler. */
+    loadedRaceId: number | null;
     loading: boolean;
     error: string | null;
 }
 
 export const initialState: RaceMeasurementState = {
     raceMeasurements: [],
+    loadedRaceId: null,
     loading: false,
     error: null,
 };
@@ -18,8 +21,14 @@ export const raceMeasurementReducer = createReducer(
     initialState,
 
     // Load race measurements
-    on(RaceMeasurementActions.loadRaceMeasurements, state => ({
+    // Switching races drops the old rows right away: the table stays interactive while the
+    // request is in flight, so leaving them would let an operator delete or reassign a
+    // measurement of the race they just navigated away from. A refresh of the same race keeps
+    // its rows so the table doesn't flicker.
+    on(RaceMeasurementActions.loadRaceMeasurements, (state, {raceId}) => ({
         ...state,
+        raceMeasurements: state.loadedRaceId === raceId ? state.raceMeasurements : [],
+        loadedRaceId: raceId,
         loading: true,
         error: null,
     })),

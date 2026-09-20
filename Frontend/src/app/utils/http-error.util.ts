@@ -3,11 +3,13 @@ import {HttpErrorResponse} from "@angular/common/http";
 /**
  * Extracts a user-facing message from a failed HTTP call.
  *
- * `HttpErrorResponse.message` is Angular's own generic string (e.g. "Http failure
- * response for .../teams: 409 Conflict") - it never contains the server's actual
- * error text. The real message from the backend's JSON error body lives at
- * `error.error.message`. Falls back to the generic Angular message, then to the
- * given default, in case the server didn't return a JSON body (e.g. network error).
+ * The real message from the backend's JSON error body lives at `error.error.message`; that one
+ * wins. Everything else falls back to the caller's German default.
+ *
+ * Deliberately NOT falling back to `HttpErrorResponse.message`: that is Angular's own generic
+ * English string (e.g. "Http failure response for .../teams: 409 Conflict"), and since it is
+ * always set it used to shadow every German fallback in this app - including for blob downloads,
+ * where `error.error` is a Blob and never carries a message.
  */
 export function extractErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpErrorResponse) {
@@ -15,7 +17,7 @@ export function extractErrorMessage(error: unknown, fallback: string): string {
         if (typeof backendMessage === "string" && backendMessage.trim().length > 0) {
             return backendMessage;
         }
-        return error.message || fallback;
+        return fallback;
     }
     if (error instanceof Error && error.message) {
         return error.message;
