@@ -413,10 +413,10 @@ public class GaudiModeService {
         // Only the season of these races applies - an age class means different birth years in
         // different seasons, so filtering by the class name "U14" is only meaningful within one.
         // A Gaudi-Modus spanning several is scored against the first race's season (SeasonService
-        // #scopeOf reports the span); one whose races have all been deleted has nothing to
+        // #scoringSeasonOf); one whose races have all been deleted has nothing to
         // categorise against, and personIds is empty then anyway.
         List<AgeGroup> ageGroups = filterAgeGroup != null && !races.isEmpty()
-                ? ageGroupService.findBySeason(seasonService.scopeOf(races).season())
+                ? ageGroupService.findBySeason(seasonService.scoringSeasonOf(races))
                 : List.of();
         Map<Long, Person> personsById = personService.findByIds(personIds);
 

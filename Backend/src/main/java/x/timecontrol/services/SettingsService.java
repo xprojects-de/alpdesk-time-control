@@ -26,7 +26,7 @@ public class SettingsService {
     private final ObjectMapper objectMapper;
 
     /**
-     * The single settings row, cached after the first read and cleared by every write below.
+     * The single settings row, cached after the first read and refreshed by every write below.
      * <p>
      * This table is a one-row, rarely-written configuration, but it is now on a hot read path:
      * {@link SeasonService#seasonStart} consults it to resolve a race's season, and the
@@ -105,8 +105,10 @@ public class SettingsService {
     }
 
     /**
-     * Writes the settings row and refreshes {@link #cached} from what the database actually
-     * returned, so the next read cannot serve a row that the update transformed on its way in.
+     * The one place the settings row is written, so it is also the one place {@link #cached} has to
+     * be kept in step. Every mutator goes through here rather than calling the repository directly -
+     * a write that forgot to update the cache would serve the old boundary until the next restart,
+     * and the operator would see their season change simply not take effect.
      */
     private AppSettings store(AppSettings settings) {
         AppSettings persisted = repository.update(settings);

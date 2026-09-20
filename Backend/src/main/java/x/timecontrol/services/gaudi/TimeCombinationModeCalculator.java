@@ -205,9 +205,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         }
 
         // Scoped to the season these races are scored in; a combination spanning two is scored
-        // against the first race's season, which SeasonService also reports (see #scopeOf).
+        // against the first race's season, which SeasonService also reports (see #scoringSeasonOf).
         List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.scopeOf(races.stream().map(RaceParticipants::race).toList()).season());
+                seasonService.scoringSeasonOf(races.stream().map(RaceParticipants::race).toList()));
         Map<Long, Person> personsById = personService.findByIds(incomplete.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(incomplete));
 

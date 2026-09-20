@@ -63,51 +63,36 @@ class SeasonServiceSpec extends Specification {
         service.seasonOf(raceOn(LocalDate.of(2023, 2, 4))) == 2023
     }
 
-    def "scopeOf returns the single season a set of races shares"() {
+    def "scoringSeasonOf returns the single season a set of races shares"() {
         given:
         def service = serviceWithBoundary(1, 1)
 
-        when:
-        def scope = service.scopeOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2026, 3, 8))])
-
-        then:
-        scope.season() == 2026
-        !scope.spansSeveralSeasons()
-        scope.allSeasons() == [2026]
+        expect:
+        service.scoringSeasonOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2026, 3, 8))]) == 2026
     }
 
-    def "scopeOf scores races spanning two seasons against the first race's season, and reports the span"() {
+    def "scoringSeasonOf scores races spanning two seasons against the first race's season instead of refusing"() {
         given: "a ski winter's club championship with the default boundary - December and January"
         def service = serviceWithBoundary(1, 1)
 
-        when: "the December race is the first (configured) one, so it heads the export"
-        def scope = service.scopeOf([raceOn(LocalDate.of(2025, 12, 14)), raceOn(LocalDate.of(2026, 1, 11))])
-
-        then: "a combined ranking is still produced rather than the whole export failing mid-event"
-        scope.season() == 2025
-        scope.spansSeveralSeasons()
-        scope.allSeasons() == [2025, 2026]
+        expect: "a combined ranking is still produced rather than the whole export failing mid-event"
+        service.scoringSeasonOf([raceOn(LocalDate.of(2025, 12, 14)), raceOn(LocalDate.of(2026, 1, 11))]) == 2025
     }
 
-    def "scopeOf takes the season from the first race, not the earliest one"() {
+    def "scoringSeasonOf takes the season from the first race, not the earliest one"() {
         given: "order is the operator's configured leg order, which is what heads the document"
         def service = serviceWithBoundary(1, 1)
 
         expect:
-        service.scopeOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2025, 12, 14))]).season() == 2026
+        service.scoringSeasonOf([raceOn(LocalDate.of(2026, 1, 11)), raceOn(LocalDate.of(2025, 12, 14))]) == 2026
     }
 
-    def "scopeOf on no races resolves to the current season and spans nothing"() {
+    def "scoringSeasonOf on no races resolves to the current season rather than failing"() {
         given: "every race of a Gaudi-Modus deleted since - nothing left to categorise"
         def service = serviceWithBoundary(1, 1)
 
-        when:
-        def scope = service.scopeOf([])
-
-        then: "no exception: the caller has an empty field anyway and must not fail over it"
-        scope.season() == service.currentSeason()
-        !scope.spansSeveralSeasons()
-        scope.allSeasons().isEmpty()
+        expect: "the caller has an empty field anyway and must not fail over it"
+        service.scoringSeasonOf([]) == service.currentSeason()
     }
 
     def "seasonsWithRaces reports each season that has a race, newest first, through the configured boundary"() {

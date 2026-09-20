@@ -95,45 +95,38 @@ public class SeasonService {
      * club championship over a December and a January race with the default 1 January boundary),
      * and failing the whole export mid-event is worse than scoring it against one season. So the
      * first race's season wins - the same race whose name and date already head the exported
-     * document - and the span is reported so the operator can see it and, if they want the two
-     * races to count as one season, move the season boundary.
+     * document, so ranking and export cannot disagree.
+     * <p>
+     * That the races span seasons at all is surfaced to the operator by the Gaudi-Modus view, which
+     * derives it from the races' own {@code seasonYear}; it is not returned here, because no
+     * server-side caller acts on it.
      *
      * @param races the Gaudi-Modus' races <em>in their configured order</em>; the first one decides
-     * @return the resolved season plus every season the races actually fall into. An empty set of
-     *         races resolves to the current season with no spanned seasons - there is nothing to
-     *         categorise, and callers treat it as "no age groups apply".
+     * @return the season every age-group lookup for these races is scoped to. An empty set of races
+     *         resolves to the current season - there is nothing to categorise, and callers treat it
+     *         as "no age groups apply".
      */
-    public SeasonScope scopeOf(List<Race> races) {
+    public int scoringSeasonOf(List<Race> races) {
         if (races.isEmpty()) {
-            return new SeasonScope(currentSeason(), List.of());
+            return currentSeason();
         }
         MonthDay seasonStart = seasonStart();
-        SortedSet<Integer> seasons = races.stream()
-                .map(race -> seasonOf(race.date(), seasonStart))
-                .collect(Collectors.toCollection(TreeSet::new));
         int resolved = seasonOf(races.getFirst().date(), seasonStart);
-        if (seasons.size() > 1) {
-            LOG.warn("These races span several seasons ({}); age classes are configured per season and a "
-                            + "participant changes class between them, so they are scored against season {} "
-                            + "(the first race's). Move the season boundary if they should count as one season.",
-                    seasons.stream().map(String::valueOf).collect(Collectors.joining(", ")), resolved);
+        // Debug, not warn: a by-age-group export calls this once per printed section, so a warning
+        // here would be dozens of identical lines for one click, and the operator already sees the
+        // span in the Gaudi-Modus view. This line is only for reading a log after the fact.
+        if (LOG.isDebugEnabled()) {
+            SortedSet<Integer> seasons = races.stream()
+                    .map(race -> seasonOf(race.date(), seasonStart))
+                    .collect(Collectors.toCollection(TreeSet::new));
+            if (seasons.size() > 1) {
+                LOG.debug("These races span several seasons ({}); age classes are configured per season and a "
+                                + "participant changes class between them, so they are scored against season {} "
+                                + "(the first race's). Move the season boundary if they should count as one season.",
+                        seasons.stream().map(String::valueOf).collect(Collectors.joining(", ")), resolved);
+            }
         }
-        return new SeasonScope(resolved, List.copyOf(seasons));
-    }
-
-    /**
-     * The outcome of {@link #scopeOf}: the season that actually applies, plus every season the
-     * races fall into so a caller can surface an ambiguous combination instead of hiding it.
-     *
-     * @param season      the season every age-group lookup for these races is scoped to
-     * @param allSeasons  every season the races fall into, ascending; a single entry (or none, for
-     *                    an empty set of races) means there is nothing ambiguous
-     */
-    public record SeasonScope(int season, List<Integer> allSeasons) {
-
-        public boolean spansSeveralSeasons() {
-            return allSeasons.size() > 1;
-        }
+        return resolved;
     }
 
     /** The season today falls into - the default preselected when configuring age groups. */

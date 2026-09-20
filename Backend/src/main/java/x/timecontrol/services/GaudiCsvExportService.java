@@ -90,8 +90,10 @@ public class GaudiCsvExportService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        // The header race is one of the Gaudi-Modus' own races, so its season is the season the
-        // whole combination was run in - the calculators already refuse a mode spanning several.
+        // The header race is the Gaudi-Modus' first race, which is exactly the one
+        // {@link SeasonService#scoringSeasonOf} resolves the calculators' season from - so a combination
+        // spanning two seasons prints the same classes here as the ranking it accompanies, rather
+        // than each side picking its own.
         List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonService.seasonOf(headerRace));
 
         StringBuilder csv = new StringBuilder();
