@@ -69,6 +69,11 @@ export type RaceSelectValue = number | number[] | null;
                 @if (visibleRaces().length === 0) {
                     <div class="race-select-empty">Kein Rennen gefunden</div>
                 }
+                @if (hiddenCount() > 0) {
+                    <div class="race-select-empty">
+                        {{ hiddenCount() }} ältere Rennen ausgeblendet - zum Suchen tippen
+                    </div>
+                }
             </mat-select>
             @if (hint()) {
                 <mat-hint>{{ hint() }}</mat-hint>
@@ -159,6 +164,12 @@ export class RaceSelectComponent implements ControlValueAccessor {
      */
     private static readonly NAVIGATION_KEYS = ["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab", "PageUp", "PageDown"];
 
+    /**
+     * How many races the panel offers before anything is typed. Roughly what fits without
+     * scrolling; the rest stay reachable through the search field.
+     */
+    private static readonly UNSEARCHED_LIMIT = 5;
+
     races = input.required<Race[]>();
     label = input("Rennen");
     multiple = input(false);
@@ -232,15 +243,31 @@ export class RaceSelectComponent implements ControlValueAccessor {
         // has to find "Kondi-Cup 2021", which a single contiguous substring search would miss.
         const terms = this.search().toLowerCase().split(/\s+/).filter(Boolean);
         const races = this.byDateDescending(this.races());
-        if (terms.length === 0) {
-            return races;
-        }
-        // An already selected race always stays in the list. mat-select tracks its selection
-        // through the options actually rendered, so filtering a selected one out would drop it
-        // from the value on the next selection change - silently, and in the Gaudi dialog that
-        // would mean losing a leg of a saved combination.
+        // An already selected race always stays in the list, both while searching and under the
+        // unsearched cap below. mat-select tracks its selection through the options actually
+        // rendered, so dropping a selected one would silently drop it from the value on the next
+        // selection change - in the Gaudi dialog that means losing a leg of a saved combination.
         const selected = new Set(this.selectedIds());
+        if (terms.length === 0) {
+            // Unsearched, only the most recent races are offered: after a few seasons the full
+            // list is hundreds of rows, and the race being worked on is virtually always one of
+            // the newest. Everything else is one search term away - see the hint in the template.
+            const recent = new Set(races.slice(0, RaceSelectComponent.UNSEARCHED_LIMIT).map(race => race.id));
+            return races.filter(race => recent.has(race.id) || selected.has(race.id));
+        }
         return races.filter(race => selected.has(race.id) || this.matches(race, terms));
+    });
+
+    /**
+     * How many races the unsearched list leaves out. Zero as soon as something is typed: from then
+     * on the list is filtered rather than capped, and telling someone to start typing while they
+     * are typing would be nonsense.
+     */
+    hiddenCount = computed(() => {
+        if (this.search().trim()) {
+            return 0;
+        }
+        return Math.max(0, this.races().length - this.visibleRaces().length);
     });
 
     showEmptyOption = computed(
