@@ -40,6 +40,9 @@ if status == 200:
     check("Saison läuft über den Jahreswechsel",
           [resp["currentSeasonStart"][5:], resp["currentSeasonEnd"][5:]], ["07-01", "06-30"])
 
+# Gleichzeitig der Regressionsschutz für den Settings-Cache in SettingsService: die Grenze wird
+# gecacht, und wenn ein Schreibvorgang den Cache nicht auffrischt, antwortet der Server hier noch
+# mit der alten Zuordnung - die Einstellung wäre dann scheinbar wirkungslos.
 check("Dezember und Januar liegen jetzt in derselben Saison", season_of_races(), (2025, 2025))
 
 # Beide Rennen werden jetzt nach den 2025er Klassen gewertet - Bene also auch im Januar-Rennen als

@@ -773,19 +773,20 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
         this.participants$ = this.store.select(ParticipantSelectors.selectFilteredParticipants);
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
-        // Bewusst über alle Teilnehmer des Rennens, nicht über die gefilterte Tabellenansicht: die
-        // Aussage betrifft das ganze Rennen. Aus der gefilterten Liste abgeleitet würde eine Suche,
-        // die zufällig nur Teilnehmer ohne passende Altersklasse trifft, die Warnung auslösen.
-        this.noAgeGroupsForRace$ = this.store
-            .select(ParticipantSelectors.selectAllParticipants)
-            .pipe(
-                map(
-                    participants =>
-                        participants.length > 0 &&
-                        participants.some(p => p.person?.birthDate) &&
-                        participants.every(p => !p.ageGroup),
-                ),
-            );
+        // Aus participants$ (selectFilteredParticipants) und nicht aus selectAllParticipants: der
+        // Selektor filtert auf das ausgewählte Rennen, der Store dagegen hält je nach Vorgeschichte
+        // auch Teilnehmer anderer Rennen (mergeById im Reducer ersetzt nur, leert nicht). Über den
+        // ganzen Store gerechnet würde ein anderes Rennen mit Altersklassen die Warnung für dieses
+        // hier verschlucken. Die Textsuche sitzt nicht hier, sondern in dataSource.filter, die
+        // Aussage betrifft also wie beabsichtigt das ganze Rennen.
+        this.noAgeGroupsForRace$ = this.participants$.pipe(
+            map(
+                participants =>
+                    participants.length > 0 &&
+                    participants.some(p => p.person?.birthDate) &&
+                    participants.every(p => !p.ageGroup),
+            ),
+        );
         this.selectedRace$ = combineLatest([this.races$, this.selectedRaceId$]).pipe(
             map(([races, id]) => races.find(r => r.id === id)),
         );

@@ -91,10 +91,13 @@ export class SettingsEffects {
     );
 
     /**
-     * Welcher Saison ein Rennen angehört, rechnet ausschließlich das Backend aus (Race.seasonYear)
-     * - und genau das ändert sich mit der Saisongrenze. Ohne dieses Nachladen zeigen die
-     * Saison-Spalte der Rennliste und das Altersklassen-Badge der Teilnehmerliste noch die alten
-     * Werte, also ausgerechnet dort falsch, wo man die Auswirkung der Änderung prüfen will.
+     * Race.seasonYear rechnet ausschließlich das Backend aus - und genau das ändert sich mit der
+     * Saisongrenze, womit jedes Rennen im Store veraltet ist. Rennlisten- und Teilnehmerseite laden
+     * zwar beim Betreten ohnehin neu, aber darauf zu bauen heißt, sich auf das Mount-Verhalten
+     * jedes künftigen Consumers zu verlassen; die Rennen sind wenige Zeilen, also wird der Store
+     * hier direkt wieder stimmig gemacht. Teilnehmer bleiben außen vor: deren Altersklasse hängt
+     * genauso an der Saison, aber sie alle zu laden wäre für eine Einstellung unverhältnismäßig -
+     * die Teilnehmerseite lädt sie beim Öffnen neu.
      */
     reloadRacesAfterSeasonChange$ = createEffect(() =>
         this.actions$.pipe(

@@ -261,6 +261,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     // nothing yet - otherwise there would be no way to select the season you want to set up.
     seasonOptions = signal<number[]>([]);
     private selectedSeason: number | null = null;
+    private currentSeason: number | null = null;
     displayedColumns = ["id", "name", "gender", "birthYearFrom", "birthYearTo", "actions"];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
@@ -308,6 +309,8 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             });
 
         // Reload whenever the selected season changes - the table only ever shows one season.
+        this.currentSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => (this.currentSeason = season));
+
         this.selectedSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => {
             this.selectedSeason = season;
             if (season != null) {
@@ -428,9 +431,19 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     }
 
     openCreateDialog(): void {
+        // Kein Rückfall auf das Kalenderjahr: mit verschobener Saisongrenze ist das nicht die
+        // laufende Saison, und eine Altersgruppe im falschen Jahr anzulegen ist genau der Fehler,
+        // den die Saisonbindung verhindern soll. Die laufende Saison rechnet das Backend aus; ist
+        // noch keine geladen, wird gar kein Dialog geöffnet - die Saison steht dann auch im
+        // Auswähler noch nicht.
+        const seasonYear = this.selectedSeason ?? this.currentSeason;
+        if (seasonYear == null) {
+            this.snackBar.open("Saison wird noch geladen - bitte kurz warten", "OK", {duration: 3000});
+            return;
+        }
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {
             width: "500px",
-            data: {ageGroup: null, seasonYear: this.selectedSeason ?? new Date().getFullYear()},
+            data: {ageGroup: null, seasonYear},
         });
 
         dialogRef
