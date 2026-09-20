@@ -47,7 +47,15 @@ npm start                # ng serve, dev server on http://localhost:4200 (calls 
 npm run build             # development build
 npm run deploy             # production build → dist/time-control/browser (what copyFrontend consumes)
 npm test                  # Angular's unit-test builder (Vitest under the hood)
+npm run lint              # ng lint: ESLint (angular-eslint) + Prettier as a lint rule
+npm run lint:fix          # ng lint --fix: formats with Prettier and auto-fixes what ESLint can
 ```
+
+Formatting is owned by Prettier (`.prettierrc.json`: 4 spaces, double quotes, no bracket spacing,
+120 columns - chosen to match the existing code, not Prettier's defaults) and enforced through
+ESLint via `eslint-plugin-prettier`, so `ng lint` is the single entry point for both formatting and
+linting. `src/index.html` is excluded: it is a plain HTML document, and the Angular template parser
+used for `**/*.html` fails on its doctype.
 
 CORS in `application.properties` only allows `http://localhost:4200` as an origin, so the Angular
 dev server must run on that exact port when talking to a locally running backend.

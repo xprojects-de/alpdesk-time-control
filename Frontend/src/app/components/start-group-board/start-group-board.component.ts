@@ -227,6 +227,7 @@ interface BoardColumn {
     `,
     // Eager on purpose: the board state (groupColumns, dirty, hasResults, ...) is plain fields
     // mutated from store subscriptions and dialog callbacks, which OnPush wouldn't pick up.
+    // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
     changeDetection: ChangeDetectionStrategy.Eager,
     host: {'(window:beforeunload)': 'onBeforeUnload($event)'},
     styles: [
