@@ -17,6 +17,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Owns the connection of the selected {@link StreamingTimingImporter}: started when the app comes
@@ -51,10 +52,15 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
     private final Executor switcher;
     private final ExecutorService ownedSwitcher;
 
-    // Guarded by this instance's monitor. The switcher above already serializes the switches
-    // themselves; the monitor additionally covers runningProviderType(), which is read from
-    // request threads while a switch is in flight.
-    private StreamingTimingImporter running;
+    // An explicit lock rather than this instance's monitor, because shutdown() has to be able to
+    // give up waiting for it: a provider hanging in start() holds it for as long as its connect
+    // timeout lasts, and a monitor cannot be acquired with a timeout. The switcher above already
+    // serializes the switches themselves; this additionally covers runningProviderType(), read
+    // from request threads while a switch is in flight.
+    private final ReentrantLock switchLock = new ReentrantLock();
+
+    // volatile so shutdown() can still read it to close the device when it gave up on the lock.
+    private volatile StreamingTimingImporter running;
     private TimingProviderType runningType;
     private Map<String, String> runningConfig;
 
@@ -107,7 +113,16 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         switcher.execute(this::applySettings);
     }
 
-    private synchronized void applySettings() {
+    private void applySettings() {
+        switchLock.lock();
+        try {
+            applySettingsLocked();
+        } finally {
+            switchLock.unlock();
+        }
+    }
+
+    private void applySettingsLocked() {
         AppSettings settings = settingsService.getSettings();
         TimingProviderType type = settings.timingProviderType();
         Map<String, String> config = settingsService.getProviderConfig(settings);
@@ -137,19 +152,27 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
             runningConfig = Map.copyOf(config);
             LOG.info("Started streaming timing provider {}", type);
         } catch (Exception e) {
+            LOG.error("Could not start streaming timing provider {}: {}", type, e.getMessage(), e);
+            // start() may well have opened the serial port / socket / reader thread before it threw.
+            // Without this the provider would keep that resource - and keep feeding the sink - with
+            // nothing left holding a reference to stop it: the next switch sees running == null and
+            // stops nothing, and the next start() of the same device fails with "already in use".
+            stopQuietly(selected, type);
             // Left as not-running on purpose: the next syncWithSettings() (another settings change,
             // or a restart) retries from a known state instead of from a half-started provider.
             running = null;
             runningType = null;
             runningConfig = null;
-            LOG.error("Could not start streaming timing provider {}: {}", type, e.getMessage(), e);
         }
     }
 
     /**
-     * Not {@code synchronized}: it waits for an in-flight switch to finish, and that switch holds
-     * this instance's monitor - taking it here first would deadlock the shutdown against the very
-     * thread it is waiting for.
+     * Closes the running provider on the way down, and - this is the point - never waits
+     * indefinitely to do it. A provider hanging in {@code start()} (device off, connect timeout
+     * running) holds {@link #switchLock}, so both the wait for the switcher thread and the wait for
+     * the lock are bounded. Whatever is still open then is closed without the lock and, failing
+     * that, released by the exiting process; an application that will not quit is the worse
+     * outcome, and this runs on the way out anyway.
      */
     @PreDestroy
     public void shutdown() {
@@ -163,25 +186,38 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
                 Thread.currentThread().interrupt();
             }
         }
-        stopRunningLocked();
-    }
 
-    private synchronized void stopRunningLocked() {
-        stopRunning();
+        boolean locked = false;
+        try {
+            locked = switchLock.tryLock(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        if (locked) {
+            try {
+                stopRunning();
+            } finally {
+                switchLock.unlock();
+            }
+            return;
+        }
+
+        // A switch is still in flight and will not let go. Best effort on the volatile reference -
+        // stop() is required to tolerate being called on a provider that is already stopped.
+        LOG.warn("Timing provider switch did not finish - closing the device without the switch lock");
+        StreamingTimingImporter current = running;
+        if (current != null) {
+            stopQuietly(current, runningType);
+        }
     }
 
     private void stopRunning() {
         if (running == null) {
             return;
         }
-        TimingProviderType stoppedType = runningType;
         try {
-            running.stop();
-            LOG.info("Stopped streaming timing provider {}", stoppedType);
-        } catch (Exception e) {
-            // Swallowed deliberately: this runs right before starting the next provider, and an
-            // exception from a provider that is being discarded anyway must not stop that.
-            LOG.warn("Error stopping streaming timing provider {}: {}", stoppedType, e.getMessage());
+            stopQuietly(running, runningType);
         } finally {
             running = null;
             runningType = null;
@@ -189,8 +225,27 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         }
     }
 
+    /**
+     * Stops a provider without letting its failure propagate: every caller is either discarding it
+     * anyway (before starting the next one, after a failed start) or on the shutdown path, and in
+     * none of those may an exception from a provider being thrown away stop what comes next.
+     */
+    private void stopQuietly(StreamingTimingImporter importer, TimingProviderType type) {
+        try {
+            importer.stop();
+            LOG.info("Stopped streaming timing provider {}", type);
+        } catch (Exception e) {
+            LOG.warn("Error stopping streaming timing provider {}: {}", type, e.getMessage());
+        }
+    }
+
     /** @return the currently running streaming provider's type, or empty if none is running */
-    public synchronized Optional<TimingProviderType> runningProviderType() {
-        return Optional.ofNullable(runningType);
+    public Optional<TimingProviderType> runningProviderType() {
+        switchLock.lock();
+        try {
+            return Optional.ofNullable(runningType);
+        } finally {
+            switchLock.unlock();
+        }
     }
 }

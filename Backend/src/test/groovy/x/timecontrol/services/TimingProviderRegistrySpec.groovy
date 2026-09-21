@@ -169,6 +169,42 @@ class TimingProviderRegistrySpec extends Specification {
         registryFor(new FakePolling(), TimingProviderType.ALPDESK_TIMECONTROL).activeCapabilities() == Set.of(DeviceCapability.RESET)
     }
 
+    def "a selection this build has no bean for leaves the settings page usable"() {
+        given: "app_settings names a provider whose bean is missing - e.g. an unmet @Requires"
+        AppSettings settings = new AppSettings(1L, TimingProviderType.ALPDESK_TIMECONTROL, null, 7, 1)
+        settingsService.getSettings() >> settings
+        settingsService.getProviderConfig(_) >> [:]
+        def registry = new TimingProviderRegistry([], settingsService)
+
+        when: "the settings endpoint builds its response"
+        def capabilities = registry.activeCapabilities()
+        def manualImport = registry.activeSupportsManualImport()
+
+        then: "no exception: a 500 here would take away the only page where the operator can"
+        // switch back to NONE - i.e. the only way out of exactly this state
+        capabilities.isEmpty()
+        !manualImport
+
+        when: "the provider is actually used, rather than just described"
+        registry.getActiveImporter()
+
+        then: "that still fails loudly - it is a real misconfiguration"
+        thrown(IllegalStateException)
+    }
+
+    def "describing capabilities does not re-configure the provider"() {
+        given:
+        def polling = new FakePolling()
+        def registry = registryFor(polling, TimingProviderType.ALPDESK_TIMECONTROL)
+
+        when: "the settings page is opened - a pure question about what the device can do"
+        registry.activeCapabilities()
+        registry.activeSupportsManualImport()
+
+        then: "no side effect on the device's configuration"
+        polling.configureCount == 0
+    }
+
     def "a declared capability with no implementation fails loudly instead of reporting a device error"() {
         given: "FakePolling declares RESET but never overrides resetDevice()"
         def polling = new FakePolling()

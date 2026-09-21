@@ -25,6 +25,7 @@ class TimingProviderLifecycleSpec extends Specification {
         int startCount = 0
         int stopCount = 0
         boolean failOnStart = false
+        boolean resourceOpen = false
 
         @Override
         TimingProviderType type() { TimingProviderType.ALPDESK_TIMECONTROL }
@@ -35,13 +36,19 @@ class TimingProviderLifecycleSpec extends Specification {
         @Override
         void start(TimingEventSink sink) {
             if (failOnStart) {
+                // wie ein echter Provider, der den Port/Socket schon offen hat, wenn er scheitert
+                resourceOpen = true
                 throw new IllegalStateException("device unreachable")
             }
+            resourceOpen = true
             startCount++
         }
 
         @Override
-        void stop() { stopCount++ }
+        void stop() {
+            stopCount++
+            resourceOpen = false
+        }
 
         @Override
         String getDeviceStatus() { "connected" }
@@ -173,6 +180,48 @@ class TimingProviderLifecycleSpec extends Specification {
 
         cleanup:
         gate.countDown()
+        executor.shutdownNow()
+    }
+
+    def "a provider that throws after opening its port is closed again"() {
+        given: "start() opens the serial port, then fails - the port must not stay open"
+        streaming.failOnStart = true
+        settingsSelect(TimingProviderType.ALPDESK_TIMECONTROL, [host: "10.0.0.5"], streaming)
+
+        when:
+        lifecycle.syncWithSettings()
+
+        then: "otherwise nothing holds a reference to stop it and the next start() hits 'port in use'"
+        streaming.stopCount == 1
+        !streaming.resourceOpen
+        lifecycle.runningProviderType().empty
+    }
+
+    def "shutdown does not hang on a switch that is stuck in start()"() {
+        given: "a device that is off: start() blocks for the length of its connect timeout"
+        def stuck = new FakeStreamingImporter()
+        def released = new java.util.concurrent.CountDownLatch(1)
+        def entered = new java.util.concurrent.CountDownLatch(1)
+        stuck.metaClass.start = { TimingEventSink s ->
+            entered.countDown()
+            released.await(30, java.util.concurrent.TimeUnit.SECONDS)
+        }
+        def executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        def async = new TimingProviderLifecycle(registry, settingsService, sink, executor)
+        settingsSelect(TimingProviderType.ALPDESK_TIMECONTROL, [host: "10.0.0.5"], stuck)
+        async.syncWithSettings()
+        entered.await(5, java.util.concurrent.TimeUnit.SECONDS)
+
+        when: "the operator quits the desktop app while the switch is stuck"
+        def start = System.nanoTime()
+        async.shutdown()
+        def elapsedSec = (System.nanoTime() - start) / 1_000_000_000
+
+        then: "it gives up on the lock instead of waiting for the hung switch forever"
+        elapsedSec < 4
+
+        cleanup:
+        released.countDown()
         executor.shutdownNow()
     }
 

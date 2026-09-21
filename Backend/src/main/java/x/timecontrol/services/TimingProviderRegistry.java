@@ -54,7 +54,7 @@ public class TimingProviderRegistry {
      * callers can gate a command without special-casing "no device" separately
      */
     public Set<DeviceCapability> activeCapabilities() {
-        return getActiveImporter().map(TimingDataImporter::capabilities).orElse(Set.of());
+        return selectedImporter().map(TimingDataImporter::capabilities).orElse(Set.of());
     }
 
     /**
@@ -63,7 +63,23 @@ public class TimingProviderRegistry {
      * nothing to do
      */
     public boolean activeSupportsManualImport() {
-        return getActivePollingImporter().isPresent();
+        return selectedImporter().filter(PollingTimingImporter.class::isInstance).isPresent();
+    }
+
+    /**
+     * The selected provider for a pure question about what it <i>can</i> do, as opposed to actually
+     * using it. Two deliberate differences from {@link #getActiveImporter()}:
+     * <ul>
+     *   <li>it does not apply config - describing a device's capabilities must not have the side
+     *       effect of re-configuring it, and these are read on every settings request;</li>
+     *   <li>it answers "nothing" instead of throwing when app_settings names a provider this build
+     *       has no bean for. That answer is what keeps the settings page loading in exactly the
+     *       situation where the operator needs it: it is the only place they can select a different
+     *       provider and get out of that state again.</li>
+     * </ul>
+     */
+    private Optional<TimingDataImporter> selectedImporter() {
+        return findByType(settingsService.getSettings().timingProviderType());
     }
 
     /**
