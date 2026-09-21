@@ -1,7 +1,7 @@
 # ⏱️ Alpdesk Time Control
 
-**Zeitnahme, Auswertung und Live-Ergebnisse für Vereinswettkämpfe – vom Konditionswettkampf mit
-mehreren Stationen bis zum Skirennen. Auf einem Laptop, ohne Cloud, ohne Internet, ohne Abo.**
+**Zeitnahme, Auswertung und Live-Ergebnisse für Vereinswettkämpfe aller Art – mit Zeit, Punkten oder
+Weite, an einer Station oder an vielen. Auf einem Laptop, ohne Cloud, ohne Internet, ohne Abo.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Backend: Micronaut / Java 25](https://img.shields.io/badge/Backend-Micronaut%20%2F%20Java%2025-blue.svg)](Backend)
@@ -20,29 +20,61 @@ irgendwo – in der Turnhalle oder am Hang gibt es das meistens sowieso nicht.
 
 ## Wofür ist das gedacht?
 
-### Konditionswettkämpfe – der Hauptanwendungsfall
+### Wettkämpfe aller Art – an einer Station oder an vielen
 
-Ein Wettkampf mit mehreren **Stationen**, die sich nicht über einen Kamm scheren lassen:
-Schnelligkeit und Ausdauerlauf werden in Zeit gewertet (schnellste gewinnt), Gleichgewicht in
-Metern, Kraft in Wiederholungen oder Zeit – jede Station mit **eigener Einheit und eigener
-Sortierrichtung**. Genau dafür ist Time Control gebaut:
+Time Control ist auf keine Sportart festgelegt. Ein **Wettkampf** besteht aus einer oder mehreren
+**Stationen** (in der Oberfläche jeweils ein „Rennen“), und jede Station hat ihre **eigene Wertung**:
 
-- Jede Station ist ein eigener „Wettkampf“ mit eigener Wertung; die Gesamtwertung entsteht
-  daraus über die **Punkte-Mischwertung** – Platz je Station → Punkte laut frei definierbarem
-  Punkteschema, gewichtbar je Station.
-- **Stationsbetrieb auf mehreren Rechnern:** Jede Station kann ihre eigene Instanz auf einem
+- in **Zeit** (schnellste gewinnt oder langsamer ist besser)  – Sprint, Ausdauerlauf, Slalom,
+- in **Weite oder Strecke** (größter oder kleinster Wert gewinnt) – Weitsprung, Gleichgewicht in Metern,
+- in **Punkten, Wiederholungen, etc** – Kraftstation, Geschicklichkeitsparcours, Torwandschießen.
+
+Einheit und Sortierrichtung sind je Station frei wählbar. Ob ein Wettkampf nur aus einem einzigen
+Lauf besteht oder aus zehn Stationen, ist der Software egal.
+
+**Ein Beispiel: der Konditionswettkampf.** Schnelligkeit und Ausdauerlauf werden in Zeit gewertet,
+Gleichgewicht in Metern, Kraft in Wiederholungen – jede Station mit eigener Einheit und eigener
+Sortierrichtung, am Ende eine Gesamtwertung. Genau so ein Ablauf lässt sich in Time Control abbilden. 
+Dasselbe Prinzip funktioniert aber genauso für Vereinsmeisterschaften, Sportfeste, Mehrkämpfe, Gaudiwettbewerbe oder ein einzelnes
+Skirennen.
+
+Was dabei möglich ist:
+
+- **Einzel- und Gesamtwertung.** Jede Station wird für sich ausgewertet – gesamt, nach Geschlecht,
+  nach Altersklassen und nach Kategorien. Darüber liegt die **Gesamtwertung über alle Stationen**
+  (Gaudi-Modus): als Punkte-Mischwertung, Zeit-Kombination, Mannschaftswertung oder Los-Modus.
+- **Punkte-Mischwertung mit Gewichtung.** Platz je Station → Punkte laut frei definierbarem
+  Punkteschema (z.B. FIS-Schema), **gewichtbar je Station**: Zählt der Ausdauerlauf doppelt, bekommt er Gewicht 2;
+  eine Station mit Gewicht 0 wird ignoriert.
+- **Strafen.** Zu jedem Ergebnis lässt sich eine Strafe eintragen (z. B. Torfehler, Fehlversuch,
+  Übertritt). Sie verschlechtert das Ergebnis immer – bei Zeitwertung wird sie aufgeschlagen, bei
+  „größter Wert gewinnt“ abgezogen – und fließt in Rangliste, PDF, CSV und Live-Ansicht ein.
+  Daneben gibt es die Status **DNS / DNF / DSQ**, die einen Teilnehmer aus der Wertung nehmen.
+- **Stationsbetrieb auf mehreren Rechnern.** Jede Station kann ihre eigene Instanz auf einem
   eigenen Laptop fahren – auch völlig ohne Netzwerk. Die Hauptinstanz exportiert die
   Teilnehmerliste, jede Station importiert sie, trägt ihre Ergebnisse ein und gibt eine
   Ergebnis-CSV zurück, die die Hauptinstanz einliest. Teilimporte in den Wettkampfpausen sind
   ausdrücklich vorgesehen und überschreiben nichts doppelt.
-- **Oder alles auf einem Rechner:** Hängen die Stationen im selben WLAN, arbeiten sie einfach per
+- **Oder alles auf einem Rechner.** Hängen die Stationen im selben WLAN, arbeiten sie einfach per
   Browser auf derselben Instanz – dann entfällt das Hin und Her mit Dateien ganz.
-- Ausgewertet wird anschließend gesamt, nach Geschlecht, nach Altersklassen und nach Kategorien –
-  als PDF für den Aushang und als CSV für alles Weitere.
+- Natürlich können die einzelnen Stationen die Ergebnisse auch in ein vorher aus der Hauptinstanz exportiertes CSV mit Excel eintragen was dann wieder zurück in die Hauptinstanz importiert werden kann
 
-Dieser Ablauf ist nicht theoretisch, sondern durch eine eigene End-to-End-Testsuite abgesichert,
-die fünf Instanzen startet und die komplette Zusammenführung inklusive Nachrechnung der Rangfolge
-prüft (`e2e-tests/kondi2025-federation/`).
+### Import und Export per CSV – der rote Faden
+
+Time Control ist bewusst dateifreundlich: Fast alles, was in die Software hineingeht oder aus ihr
+herauskommt, gibt es als **CSV** – lesbar in Excel, Numbers und LibreOffice, ohne Sonderformat.
+
+| Was | Import | Export |
+|---|---|---|
+| **Teilnehmer** | CSV (beliebiges Trennzeichen) oder DSV-Wettkampfdatei, mit interaktiver Spaltenzuordnung | Startliste als CSV (inkl. Startgruppe und Zeitversatz) |
+| **Ergebnisse je Station** | über die Startnummer zu vorhandenen Teilnehmern – oder als komplettes neues Rennen | Ergebnisse als CSV, um sie einer anderen Instanz zu geben |
+| **Komplettes Rennen** | „Rennergebnisse importieren“ legt ein Rennen aus der Datei neu an | Alle Ergebnisse inkl. Personendaten und Zeiten |
+| **Messungen** (Zeitgerät, Rohdaten) | CSV mit Spaltenzuordnung | Alle Messungen als CSV |
+| **Gesamtwertung (Gaudi-Modus)** | – | CSV für Gesamt, Damen, Herren, Altersklassen (als ZIP) |
+
+So lassen sich Teilnehmerlisten aus der Anmeldesoftware oder aus Excel übernehmen, Stationen ohne
+Netzwerk anbinden, Zwischenstände zusammenführen und alles für die Weiterverarbeitung wieder
+herausholen. Die Exporte sind reines UTF-8 ohne Sonderzeichen-Kennung.
 
 ### Skirennen – kann Time Control auch
 
@@ -60,16 +92,16 @@ und es kostet nichts, läuft offline und gehört einem selbst.
 
 ## Was Time Control kann
 
-> In der Oberfläche heißt jeder Wettkampf und jede Station schlicht **„Rennen“** – ob dahinter ein
+> In der Oberfläche heißt jede Station und jeder Lauf schlicht **„Rennen“** – ob dahinter ein
 > Slalom, ein Sprint oder eine Station „Klimmzüge“ steckt, ist der Software egal.
 
 **Wettkämpfe & Stammdaten**
 - Beliebig viele Rennen mit Datum, Veranstalter, Schiedsrichter, Streckendaten und eigenem
   PDF-Deckblatt.
-- Gewertet wird wahlweise nach **Zeit** oder nach **Punkten/Weite** – mit frei wählbarer
+- Gewertet wird wahlweise nach **Zeit** oder nach **Punkten/Weite/etc.** – mit frei wählbarer
   Sortierrichtung („kleinster Wert gewinnt“ oder „größter Wert gewinnt“) und frei benennbarer
-  Einheit wie „m“, „Wiederholungen“ oder „Punkte“.
-- Personen werden einmal angelegt und über Jahre wiederverwendet; Teams/Vereine, frei definierbare
+  Einheit wie „m“, „Wiederholungen“ oder „Punkte“, etc
+- Personen werden einmal angelegt und wiederverwendet; Teams/Vereine, frei definierbare
   Kategorien und saisonbezogene Altersklassen (Geburtsjahrgänge je Geschlecht) ordnen sich
   automatisch zu.
 - **Saisonlogik**: Der Saisonstart ist einstellbar – mit dem 1. Januar entspricht eine Saison dem
@@ -80,7 +112,7 @@ und es kostet nichts, läuft offline und gehört einem selbst.
 - Teilnehmerimport aus **CSV (beliebiges Trennzeichen) oder DSV-Wettkampfdatei (XML)** – mit
   interaktiver Spaltenzuordnung, die passende Felder selbst vorschlägt.
 - Startnummern zufällig innerhalb der Altersklassen vergeben.
-- **Startgruppen-Board**: Teilnehmer per Drag-and-drop auf farbige Startgruppen mit Zeitversatz
+- (optional) **Startgruppen-Board**: Teilnehmer per Drag-and-drop auf farbige Startgruppen mit Zeitversatz
   verteilen – oder automatisch vorschlagen lassen (nach Startnummernblöcken, Geschlecht/Alter,
   Altersklasse, Verein, ausgelostem Verein oder Kategorie). Ideal für Riegen, die stationsweise
   rotieren.
@@ -89,21 +121,23 @@ und es kostet nichts, läuft offline und gehört einem selbst.
 - Startlisten als PDF und CSV.
 
 **Ergebnisse erfassen**
-- **Von Hand**: Zeiten, Weiten oder Punkte direkt in der Teilnehmerliste eintragen – der
+- **Von Hand**: Zeiten, Weiten oder Punkte direkt in der Teilnehmerliste eintragen oder eben in die CSV – der
   Normalfall an einer Kondi-Station mit Stoppuhr und Maßband.
 - **Vom Zeitmessgerät**: Anbindung an das Alpdesk-TimeControl-Zielgerät über WLAN, Messungen werden
-  alle 5 Sekunden automatisch abgeholt; ein Statussymbol zeigt, ob das Gerät erreichbar ist.
+  alle 5 Sekunden automatisch abgeholt; ein Statussymbol zeigt, ob das Gerät erreichbar ist. (derzeit sind die etablierten Zeitmessgeräte noch nicht angebunden)
 - **Automatische Zuordnung**: Jede neue Messung wandert auf den nächsten erwarteten Starter – in
   Startnummern- oder abgeleiteter Startreihenfolge. Wer nicht startet, wird mit einem Klick
   übersprungen; ein Sturz wird dem Gerät direkt gemeldet.
 - **Aus Dateien**: Ergebnisse als CSV importieren – wahlweise als komplette Teilnehmerliste oder
   nur als Ergebnisse zu bereits vorhandenen Startnummern.
-- Alles bleibt korrigierbar – inklusive Strafsekunden, Kommentar und den Status
+- Alles bleibt korrigierbar – inklusive **Strafe**, Kommentar und den Status
   **DNS / DNF / DSQ**.
 
 **Auswertung**
+- **Einzelwertung je Station** und **Gesamtwertung über alle Stationen** – beides aus denselben
+  Daten, jeweils gesamt, nach Geschlecht, Altersklasse und Kategorie.
 - Ranglisten mit korrekter Platzvergabe bei Gleichstand (Standard „1224“), Rückstand zum Sieger
-  und Strafzeiten – berechnet an *einer* Stelle im Code, damit PDF, CSV und Live-Ansicht nie
+  und Strafen – berechnet an *einer* Stelle im Code, damit PDF, CSV und Live-Ansicht nie
   auseinanderlaufen.
 - PDF-Exporte für Gesamtwertung, Damen, Herren, alle Altersklassen einzeln – jeweils zusätzlich
   nach Kategorie getrennt.
@@ -116,15 +150,17 @@ und es kostet nichts, läuft offline und gehört einem selbst.
   aktuellen Stand.
 
 **Wertungen über mehrere Wettkämpfe („Gaudi-Modus“)**
-- **Punkte-Mischwertung** – die Gesamtwertung eines Konditionswettkampfs: Platz je Station wird
-  über ein frei definierbares Punkteschema in Punkte umgerechnet, je Station gewichtbar. Wer eine
+- **Punkte-Mischwertung** – die Gesamtwertung über mehrere Stationen (z. B. eines Konditionswettkampfs):
+  Platz je Station wird über ein frei definierbares Punkteschema in Punkte umgerechnet und mit einer
+  **Gewichtung je Station** multipliziert – so zählt eine Station doppelt oder gar nicht. Wer eine
   Station nicht absolviert hat, fällt standardmäßig heraus – oder bleibt auf Wunsch mit 0 Punkten
   drin.
 - **Zeit-Kombination** – Zeiten mehrerer Durchgänge oder Läufe addiert.
 - **Mannschaftswertung** – die *n* besten Teilnehmer je Verein zählen.
 - **Los-Modus** – zufällig gepaarte Zweier-Teams; gewonnen hat das Paar, dessen Durchschnitt dem
   Gesamtdurchschnitt am nächsten kommt. Anfänger und Profis haben dieselbe Chance – der perfekte
-  Abschluss für den Vereinsabend.
+  Abschluss für den Vereinsabend
+- Gerne noch mehr für die Zukunft...
 
 **Im Betrieb**
 - Alles liegt in einer lokalen SQLite-Datei – ein Backup ist ein Dateikopiervorgang.
@@ -138,18 +174,19 @@ und es kostet nichts, läuft offline und gehört einem selbst.
 
 ## Ein Wettkampftag in Kurzform
 
-**Konditionswettkampf mit Stationen**
+**Wettkampf mit mehreren Stationen (Beispiel: Konditionswettkampf)**
 
 1. **Vorher:** Altersklassen der Saison prüfen, je Station ein Rennen anlegen (Einheit und
    Sortierrichtung festlegen), Teilnehmer importieren, Startnummern und Riegen vergeben,
    Startlisten drucken.
 2. **Verteilen:** Entweder alle Stationen arbeiten im WLAN auf derselben Instanz – oder jede
-   Station bekommt ihre eigene Instanz und den Teilnehmer-Export der Hauptinstanz oder sogar nur Excel um direkt in der CSV zu arbeiten.
-3. **Während des Wettkampfs:** Ergebnisse je Station eintragen; in den Pausen Zwischenstände als
+   Station bekommt ihre eigene Instanz und den Teilnehmer-Export der Hauptinstanz – oder sogar nur
+   die CSV, in der direkt in Excel gearbeitet wird.
+3. **Während des Wettkampfs:** Ergebnisse je Station eintragen (Strafen gleich mit); in den Pausen Zwischenstände als
    CSV an die Hauptinstanz zurückgeben.
-4. **Nach dem Wettkampf:** Gesamtwertung als Punkte-Mischwertung anlegen, Gewichtung je Station
-   setzen, Live-Link teilen.
-5. **Siegerehrung:** Ergebnislisten je Altersklasse drucken.
+4. **Nach dem Wettkampf:** Einzelwertungen je Station prüfen, Gesamtwertung als Punkte-Mischwertung anlegen,
+   Gewichtung je Station setzen, Live-Link teilen.
+5. **Siegerehrung:** Ergebnislisten nach Wahl als PDF drucken.
 
 **Skirennen**
 
@@ -174,31 +211,7 @@ und es kostet nichts, läuft offline und gehört einem selbst.
 
 Fertige Downloads für macOS, Windows und Linux liegen bei jedem
 [Release](../../releases). Nach dem Start öffnet sich der Browser automatisch auf
-`http://localhost:18000`; der erste Login ist `time-control` / `time-control`.
-
----
-
-### Beim Update auf saisonbezogene Altersklassen
-
-Ab dieser Version gelten Altersgruppen **pro Saison**: "U14" heißt in Saison 2025 die Jahrgänge
-2012–2013 und in Saison 2026 die Jahrgänge 2013–2014. Welcher Saison ein Rennen angehört, ergibt
-sich aus seinem Datum und dem konfigurierten Saisonstart (Einstellungen → Saison, Standard 1. Januar).
-
-Beim Update werden die vorhandenen Altersgruppen der Saison zugeordnet, in der das Update läuft –
-das ist die Saison, für die sie eingestellt waren. Für **Rennen aus früheren Saisons** gibt es damit
-zunächst keine Altersgruppen: deren Auswertungen erscheinen unter "ohne Altersklasse". Es geht
-nichts verloren, und es ist schnell behoben:
-
-1. **Altersgruppen** öffnen und im Saison-Auswähler die betroffene Saison wählen – Saisons mit
-   Rennen stehen dort auch dann zur Wahl, wenn für sie noch nichts eingestellt ist.
-2. **"Aus Saison … übernehmen"** klicken. Die Jahrgänge werden um die Jahresdifferenz verschoben,
-   rückwärts genauso wie vorwärts.
-3. Feste Jahrgangsklassen ("Jahrgang 2012") danach von Hand korrigieren – die verschieben sich nicht.
-
-Wenn bei euch ein Winter über den Jahreswechsel geht, verschiebt den Saisonstart unter
-**Einstellungen → Saison** z.B. auf den 1. Juli. Dann zählen ein Dezember- und ein Januar-Rennen
-zur selben Saison. Eine Gaudi-Wertung über zwei Saisons wird weiterhin ausgewertet – nach den
-Klassen der Saison des ersten Rennens –, meldet das aber sichtbar in der Wertungsansicht.
+`http://localhost:18000`; Logindaten sind im Fenster der Anwendung (nicht Browser) auf dem Rechner sichtbar.
 
 ---
 
@@ -220,11 +233,11 @@ Das Repository enthält zwei eigenständige Projekte:
 |---|---|
 | `Backend/` | Micronaut-REST-API (Java 25, Gradle), SQLite + Flyway-Migrationen, PDF/CSV-Export, Zeitnahme-Anbindung |
 | `Frontend/` | Angular-22-SPA (Angular Material, NgRx), wird in den Backend-Jar einkopiert |
-| `e2e-tests/` | End-to-End-Testsuites gegen echte, wegwerfbare Backend-Instanzen – unter anderem der Fünf-Instanzen-Stationsbetrieb eines Konditionswettkampfs |
+| `e2e-tests/` | End-to-End-Testsuites gegen echte, wegwerfbare Backend-Instanzen – unter anderem der Fünf-Instanzen-Stationsbetrieb eines mehrstationigen Wettkampfs |
 
 ```bash
 # Frontend (Ordner Frontend/)
-npm ci --legacy-peer-deps
+npm ci
 npm start            # Dev-Server auf http://localhost:4200
 
 # Backend (Ordner Backend/)
@@ -252,9 +265,10 @@ bitte `./gradlew test` (Backend) und `npm run lint` (Frontend) laufen lassen.
 ---
 
 *English summary: Alpdesk Time Control is a self-contained timing and scoring application for club
-sports events – primarily multi-station fitness competitions, and ski races as well. It is a
+sports events of any kind – timed, scored or measured, at a single station or several (multi-station
+fitness competitions are one example, ski races another). It is a
 Micronaut/Java backend serving a REST API plus an Angular frontend, backed by a local SQLite
 database and packaged as a single desktop app. It covers start lists, per-station result units and
-sort directions, optional timing-device import, combined scoring across stations, PDF/CSV exports
+sort directions, optional timing-device import, penalties, individual and combined scoring across stations (with per-station weighting), CSV import/export, PDF exports
 and public live results. The user interface and documentation are in German, since that is who it
 is built for.*
