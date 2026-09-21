@@ -51,7 +51,7 @@ public class RaceLiveService {
 
         switch (view) {
             case STARTLIST -> {
-                startList = rankingViewService.createStartListEntries(participants);
+                startList = rankingViewService.createStartListEntries(participants, race);
                 viewLabel = "Startliste";
             }
             case OVERALL -> {
@@ -65,7 +65,7 @@ public class RaceLiveService {
                 viewLabel = "Wertung " + rankingViewService.genderLabel(gender);
                 sections.add(new RaceLiveRankingSection(viewLabel,
                         rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, null, null, lookup)));
-                notRanked = rankingViewService.createDnsRows(participants, race, lookup);
+                notRanked = rankingViewService.createDnsRows(participants, race, gender, null, null, lookup);
             }
             case AGEGROUP_GENDER -> {
                 if (ageGroup == null || ageGroup.isBlank()) {
@@ -75,17 +75,17 @@ public class RaceLiveService {
                 viewLabel = "Wertung " + ageGroup + " " + rankingViewService.genderLabel(gender);
                 sections.add(new RaceLiveRankingSection(viewLabel,
                         rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null, lookup)));
-                notRanked = rankingViewService.createDnsRows(participants, race, lookup);
+                notRanked = rankingViewService.createDnsRows(participants, race, gender, ageGroup, null, lookup);
             }
             case ALL_AGEGROUPS -> {
                 viewLabel = "Alle Altersklassen";
-                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(race)) {
                     for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(
                                 participants, race, gender, ageGroupName, null, lookup);
                         if (!entries.isEmpty()) {
                             sections.add(new RaceLiveRankingSection(
-                                    "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender), entries));
+                                    "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender), entries));
                         }
                     }
                 }
@@ -113,19 +113,19 @@ public class RaceLiveService {
                                 "Wertung " + category.name() + " " + rankingViewService.genderLabel(gender), entries));
                     }
                 }
-                notRanked = rankingViewService.createDnsRows(participants, race, lookup);
+                notRanked = rankingViewService.createDnsRows(participants, race, gender, null, null, lookup);
             }
             case ALL_AGEGROUPS_BY_CATEGORY -> {
                 viewLabel = "Alle Altersklassen nach Kategorie";
                 List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
-                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst()) {
+                for (String ageGroupName : rankingViewService.uniqueAgeGroupNamesYoungestFirst(race)) {
                     for (Gender gender : List.of(Gender.FEMALE, Gender.MALE)) {
                         for (Category category : categories) {
                             List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(
                                     participants, race, gender, ageGroupName, category.id(), lookup);
                             if (!entries.isEmpty()) {
                                 sections.add(new RaceLiveRankingSection(
-                                        "Wertung " + ageGroupName + " " + rankingViewService.genderLabel(gender) + " " + category.name(),
+                                        "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender) + " " + category.name(),
                                         entries));
                             }
                         }
@@ -141,7 +141,7 @@ public class RaceLiveService {
                 viewLabel = "Wertung " + categoryName;
                 sections.add(new RaceLiveRankingSection(viewLabel,
                         rankingViewService.createRankingEntriesFromParticipants(participants, race, null, null, categoryId, lookup)));
-                notRanked = rankingViewService.createDnsRows(participants, race, lookup);
+                notRanked = rankingViewService.createDnsRows(participants, race, null, null, categoryId, lookup);
             }
             default -> throw new IllegalArgumentException("Unsupported view: " + view);
         }

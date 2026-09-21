@@ -22,15 +22,19 @@ import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.CategoryService;
-import x.timecontrol.services.DataImportScheduler;
+import x.timecontrol.services.DeviceCapability;
+import x.timecontrol.services.DeviceImportGate;
+import x.timecontrol.services.PollingTimingImporter;
 import x.timecontrol.services.RaceLiveService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.TimingDataImporter;
 import x.timecontrol.services.TimingProviderRegistry;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -49,7 +53,7 @@ public class RaceController {
     TimingProviderRegistry timingProviderRegistry;
 
     @Inject
-    DataImportScheduler dataImportScheduler;
+    DeviceImportGate importGate;
 
     @Inject
     RaceLiveService raceLiveService;
@@ -57,14 +61,25 @@ public class RaceController {
     @Inject
     CategoryService categoryService;
 
+    @Inject
+    SeasonService seasonService;
+
     @Produces(MediaType.APPLICATION_JSON)
     @Get
     @Operation(summary = "List all races", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of all races", content = @Content(schema = @Schema(implementation = RaceResponse.class)))
     public HttpResponse<List<RaceResponse>> list() {
-        Iterable<Race> races = service.findAll();
-        List<RaceResponse> response = StreamSupport.stream(races.spliterator(), false)
-                .map(RaceResponse::from)
+        // Without the cover-page BLOBs: this list is loaded on practically every screen (the race
+        // selector) and only needs to know whether a race has one, which findIdsWithCoverPage
+        // answers in a second, tiny query.
+        List<Race> races = service.findAllWithoutCoverPage();
+        Set<Long> withCoverPage = service.findIdsWithCoverPage();
+        // Season boundary read once for the whole list: seasonOf(race) would otherwise re-read the
+        // settings row for every race.
+        java.time.MonthDay seasonStart = seasonService.seasonStart();
+        List<RaceResponse> response = races.stream()
+                .map(r -> RaceResponse.from(r, seasonService.seasonOf(r.date(), seasonStart),
+                        withCoverPage.contains(r.id())))
                 .toList();
         return HttpResponse.ok(response);
     }
@@ -76,7 +91,7 @@ public class RaceController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<RaceResponse> getById(@PathVariable Long id) {
         Optional<Race> race = service.findById(id);
-        return race.map(r -> HttpResponse.ok(RaceResponse.from(r)))
+        return race.map(r -> HttpResponse.ok(RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -87,7 +102,7 @@ public class RaceController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<RaceResponse> getByName(@PathVariable String name) {
         Optional<Race> race = service.findByName(name);
-        return race.map(r -> HttpResponse.ok(RaceResponse.from(r)))
+        return race.map(r -> HttpResponse.ok(RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -122,7 +137,7 @@ public class RaceController {
         try {
             Race race = service.createFromRequest(request);
             Race created = service.create(race);
-            return HttpResponse.created(RaceResponse.from(created));
+            return HttpResponse.created(RaceResponse.from(created, seasonService.seasonOf(created)));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
@@ -155,7 +170,7 @@ public class RaceController {
         } catch (IllegalStateException e) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
-        return updated.map(r -> HttpResponse.ok((Object) RaceResponse.from(r)))
+        return updated.map(r -> HttpResponse.ok((Object) RaceResponse.from(r, seasonService.seasonOf(r))))
                 .orElse(HttpResponse.notFound());
     }
 
@@ -187,7 +202,7 @@ public class RaceController {
     public HttpResponse<?> archiveMeasurements(@PathVariable Long raceId,
                                                       @QueryValue(defaultValue = "true") boolean resetDevice,
                                                       @QueryValue(defaultValue = "true") boolean clearAfterArchive) {
-        if (service.findById(raceId).isEmpty()) {
+        if (!service.existsById(raceId)) {
             return HttpResponse.notFound();
         }
 
@@ -204,7 +219,7 @@ public class RaceController {
             }
         }
 
-        return dataImportScheduler.pauseDuring(() -> {
+        return importGate.pauseDuring(() -> {
             try {
                 // If device reset is requested AND a timing device is actually configured, pull in
                 // anything the device recorded since the last scheduled poll before wiping it -
@@ -214,10 +229,17 @@ public class RaceController {
                 // archiving must keep working in evaluation-only (NONE) mode.
                 boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    // A device that has no reset command is treated like no device at all - see
+                    // MeasurementController#resetAll.
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter()
+                            .filter(i -> i.capabilities().contains(DeviceCapability.RESET));
                     if (importerOpt.isPresent()) {
                         TimingDataImporter importer = importerOpt.get();
-                        importer.importDataFromDevice();
+                        // Nothing to pull for a streaming provider: it has already pushed whatever
+                        // the device recorded.
+                        if (importer instanceof PollingTimingImporter polling) {
+                            polling.importDataFromDevice();
+                        }
                         boolean deviceReset = importer.resetDevice();
                         if (!deviceReset) {
                             return HttpResponse.serverError()

@@ -15,6 +15,13 @@ public record AppSettings(
         // JSON-encoded Map<String, String> of provider-specific overrides (e.g. device URLs, COM
         // port, baud rate). Kept as a flat string rather than per-provider columns so adding a new
         // provider's config never needs a schema migration.
-        @Nullable String timingProviderConfig
+        @Nullable String timingProviderConfig,
+
+        // Start of the season year as month/day - the boundary SeasonService uses to decide which
+        // season a race's date belongs to, and with it which AgeGroup rows apply to that race.
+        // Defaults to 1/1 (a season is a calendar year); a club whose season spans the turn of the
+        // year can move it to e.g. 1 July so a December and a January race count as one season.
+        Integer seasonStartMonth,
+        Integer seasonStartDay
 ) {
 }

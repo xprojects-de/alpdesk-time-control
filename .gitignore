@@ -1,17 +1,90 @@
-/Backend/database/
-/Backend/build/
-/Backend/.gradle
-/Backend/dist/
-/Frontend/.angular
-/Frontend/dist
-/Frontend/node_modules
+# ---------------------------------------------------------------------------
+# Personenbezogene Daten
+#
+# Der wichtigste Block. Echte Renndaten - Teilnehmerlisten, Ergebnisse, Datenbanken,
+# exportierte Wertungen - enthalten Namen, Jahrgaenge und Vereine meist minderjaehriger
+# Teilnehmer. Was einmal committet wurde, bleibt in der Historie, auch wenn die Datei
+# spaeter geloescht wird. Die Tests laufen deshalb auf synthetischen Demodaten; echte
+# Daten gehoeren nach local-data/ oder ganz ausserhalb des Repos.
+# Siehe docs/datenschutz.md.
+# ---------------------------------------------------------------------------
 
-# e2e-tests: generated per-run artifacts (state files, PDFs, CSV exports) - each suite
-# writes these under its own results/ subfolder instead of the suite dir itself
+# SQLite-Datenbanken samt WAL-Dateien - an jeder Stelle im Baum, nicht nur im
+# Standard-Datenverzeichnis: eine zum Debuggen hereinkopierte Produktionsdatenbank
+# waere der folgenschwerste Fehler, den man hier machen kann.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+/Backend/database/
+
+# Echte Renndaten fuer die e2e-Suites. Die Suites finden sie ueber eine
+# Umgebungsvariable (z.B. KONDI_DATA_DIR), siehe das README der jeweiligen Suite.
+local-data/
+
+# Generierte Artefakte der e2e-Laeufe (Zustandsdateien, PDFs, CSV-Exporte). Jede Suite
+# schreibt sie in ihren eigenen results/-Unterordner.
 /e2e-tests/*/results/
 
-# Python bytecode cache, regenerated on every e2e run
+# Git-Bundles sind vollstaendige Repository-Kopien - typischerweise Sicherungen vor
+# einem Historien-Umbau, und damit potenziell voll mit allem, was man gerade entfernt.
+*.bundle
+
+# ---------------------------------------------------------------------------
+# Build-Ergebnisse
+#
+# Ausnahme: Backend/src/main/resources/public ist bewusst eingecheckt, obwohl es das
+# gebaute Frontend ist - so kommt man ohne npm zu einem lauffaehigen Jar. Warum, steht
+# in CONTRIBUTING.md.
+# ---------------------------------------------------------------------------
+/Backend/build/
+/Backend/.gradle/
+/Backend/dist/
+/Frontend/.angular/
+/Frontend/dist/
+/Frontend/node_modules/
+/Frontend/coverage/
+/build/
+/.gradle/
+out/
+
+# ---------------------------------------------------------------------------
+# IDE und Editor
+#
+# .idea/ ist bewusst komplett ausgenommen: Die Dateien sind rechnerspezifisch (sie
+# verweisen auf lokale SDK-Namen wie "corretto-25", die es anderswo nicht gibt), und
+# eine eingecheckte Konfiguration veraltet unbemerkt - die hier zuletzt versionierte
+# stand noch auf JDK 21, obwohl das Projekt Java 25 braucht.
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+*~
+*.swp
+*.swo
+
+# ---------------------------------------------------------------------------
+# Werkzeuge
+# ---------------------------------------------------------------------------
+
+# Lokale Claude-Code-Einstellungen: enthalten die Berechtigungen des jeweiligen
+# Entwicklers, nicht die des Projekts.
+.claude/settings.local.json
+
+# Python-Bytecode und virtuelle Umgebungen, die bei den e2e-Skripten entstehen koennen.
 __pycache__/
 *.pyc
+.venv/
+venv/
 
+# Logdateien
+*.log
+
+# ---------------------------------------------------------------------------
+# Betriebssystem
+# ---------------------------------------------------------------------------
 .DS_Store
+._*
+Thumbs.db
+desktop.ini

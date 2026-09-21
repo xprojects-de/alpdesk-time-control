@@ -13,6 +13,7 @@ import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.Team
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.StartGroupTemplateService
 import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
@@ -22,7 +23,8 @@ class TeamModeCalculatorSpec extends Specification {
 
     TeamService teamService = Mock()
     PersonService personService = Mock()
-    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(), personService)
+    StartGroupTemplateService startGroupTemplateService = Mock()
+    TeamModeCalculator calculator = new TeamModeCalculator(teamService, new RankingService(startGroupTemplateService), personService)
 
     private static Race race(SortDirection direction) {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -196,6 +198,29 @@ class TeamModeCalculatorSpec extends Specification {
         def ranking = calculator.computeRanking(teamMode(1), races)
 
         then:
+        ranking*.place() == [1, 1]
+    }
+
+    /**
+     * Every member time is printed rounded to the hundredth, so the team total has to be the sum of
+     * those printed values - otherwise the column the organizer can add up by hand does not match
+     * the total next to it, and two teams whose members print identically get different places.
+     * Same rule TimeCombinationModeCalculator already applies to its legs.
+     */
+    def "team total is the sum of the printed member times, not of the raw milliseconds"() {
+        given: "both teams' members print as 0:10.00 each - 10004ms and 10000ms round alike"
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
+        def participants = [
+                participant(1L, 1L, 10004), participant(2L, 1L, 10004),
+                participant(3L, 2L, 10000), participant(4L, 2L, 10000),
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then: "identical printed members give an identical total - and therefore a shared place"
+        ranking*.valueMs() == [20000, 20000]
         ranking*.place() == [1, 1]
     }
 }

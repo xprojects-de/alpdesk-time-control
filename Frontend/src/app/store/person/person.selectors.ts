@@ -1,30 +1,19 @@
-import {createFeatureSelector, createSelector} from '@ngrx/store';
-import {PersonState} from './person.reducer';
-import {Person} from '../../models/person.model';
-import {Race} from '../../models/race.model';
-import * as ParticipantSelectors from '../participant/participant.selectors';
+import {createFeatureSelector, createSelector} from "@ngrx/store";
+import {PersonState} from "./person.reducer";
+import {Person} from "../../models/person.model";
+import {Race} from "../../models/race.model";
+import * as ParticipantSelectors from "../participant/participant.selectors";
 
-export const selectPersonState = createFeatureSelector<PersonState>('person');
+export const selectPersonState = createFeatureSelector<PersonState>("person");
 
-export const selectAllPersons = createSelector(
-    selectPersonState,
-    state => state.persons
-);
+export const selectAllPersons = createSelector(selectPersonState, state => state.persons);
 
-export const selectPersonLoading = createSelector(
-    selectPersonState,
-    state => state.loading
-);
+export const selectPersonLoading = createSelector(selectPersonState, state => state.loading);
 
-export const selectPersonError = createSelector(
-    selectPersonState,
-    state => state.error
-);
+export const selectPersonError = createSelector(selectPersonState, state => state.error);
 
-export const selectPersonById = (id: number) => createSelector(
-    selectAllPersons,
-    persons => persons.find(p => p.id === id)
-);
+export const selectPersonById = (id: number) =>
+    createSelector(selectAllPersons, persons => persons.find(p => p.id === id));
 
 export interface PersonWithActiveRaces extends Person {
     activeRaces: Race[];
@@ -54,5 +43,5 @@ export const selectPersonsWithActiveRaces = createSelector(
             ...person,
             activeRaces: racesByPersonId.get(person.id) ?? [],
         }));
-    }
+    },
 );

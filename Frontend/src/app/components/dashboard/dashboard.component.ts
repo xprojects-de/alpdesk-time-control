@@ -1,11 +1,13 @@
-import {Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, signal, OnInit, OnDestroy, DestroyRef} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {CommonModule} from "@angular/common";
 import {RouterOutlet, RouterLink, RouterLinkActive} from "@angular/router";
 import {Store} from "@ngrx/store";
-import {Observable, Subject} from "rxjs";
-import {distinctUntilChanged, filter, map, takeUntil} from "rxjs/operators";
+import {Observable} from "rxjs";
+import {distinctUntilChanged, filter, map} from "rxjs/operators";
 import {MatSidenavModule} from "@angular/material/sidenav";
 import {MatListModule} from "@angular/material/list";
+import {MatDividerModule} from "@angular/material/divider";
 import {MatToolbarModule} from "@angular/material/toolbar";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -19,6 +21,8 @@ import * as VersionActions from "../../store/version/version.actions";
 import * as VersionSelectors from "../../store/version/version.selectors";
 import * as SettingsActions from "../../store/settings/settings.actions";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
+import * as BackendHealthActions from "../../store/backend-health/backend-health.actions";
+import * as BackendHealthSelectors from "../../store/backend-health/backend-health.selectors";
 import {VersionInfo} from "../../models/version.model";
 
 interface NavItem {
@@ -29,7 +33,6 @@ interface NavItem {
 
 @Component({
     selector: "app-dashboard",
-    standalone: true,
     imports: [
         CommonModule,
         RouterOutlet,
@@ -37,6 +40,7 @@ interface NavItem {
         RouterLinkActive,
         MatSidenavModule,
         MatListModule,
+        MatDividerModule,
         MatToolbarModule,
         MatButtonModule,
         MatIconModule,
@@ -45,7 +49,11 @@ interface NavItem {
     ],
     template: `
         <mat-toolbar color="primary">
-            <button mat-icon-button (click)="toggleNav()" [matTooltip]="navOpen() ? 'Menü einklappen' : 'Menü ausklappen'">
+            <button
+                mat-icon-button
+                (click)="toggleNav()"
+                [matTooltip]="navOpen() ? 'Menü einklappen' : 'Menü ausklappen'"
+            >
                 <mat-icon>menu</mat-icon>
             </button>
             <span>Alpdesk TimeControl - Zeitnahme System</span>
@@ -57,21 +65,16 @@ interface NavItem {
             @if (timingProviderActive$ | async) {
                 <div class="connection-status">
                     @switch (deviceConnectionStatus$ | async) {
-                        @case ('connected') {
-                            <mat-icon class="status-icon connected"
-                                      [matTooltip]="'Gerät verbunden'">
-                                wifi
-                            </mat-icon>
+                        @case ("connected") {
+                            <mat-icon class="status-icon connected" [matTooltip]="'Gerät verbunden'"> wifi </mat-icon>
                         }
-                        @case ('disconnected') {
-                            <mat-icon class="status-icon disconnected"
-                                      [matTooltip]="'Gerät nicht verbunden'">
+                        @case ("disconnected") {
+                            <mat-icon class="status-icon disconnected" [matTooltip]="'Gerät nicht verbunden'">
                                 wifi_off
                             </mat-icon>
                         }
                         @default {
-                            <mat-icon class="status-icon unknown"
-                                      [matTooltip]="'Verbindungsstatus unbekannt'">
+                            <mat-icon class="status-icon unknown" [matTooltip]="'Verbindungsstatus unbekannt'">
                                 help_outline
                             </mat-icon>
                         }
@@ -94,15 +97,38 @@ interface NavItem {
             </mat-menu>
         </mat-toolbar>
 
+        <!-- Only rendered once a check has actually failed (=== false, not just "not yet known"
+             which is null) - a lost backend connection risks silent data loss (nothing saves
+             while it's down), so this is a persistent banner rather than a small toolbar icon. -->
+        @if ((backendReachable$ | async) === false) {
+            <div class="backend-offline-banner">
+                <mat-icon>cloud_off</mat-icon>
+                <span>Backend nicht erreichbar - Änderungen werden möglicherweise nicht gespeichert.</span>
+                <button mat-icon-button (click)="retryBackendHealthCheck()" matTooltip="Jetzt erneut prüfen">
+                    <mat-icon>refresh</mat-icon>
+                </button>
+            </div>
+        }
+
         <mat-sidenav-container class="dashboard-container">
             <mat-sidenav mode="side" [opened]="navOpen()" class="app-nav">
                 <mat-nav-list class="nav-list">
-                    @for (item of navItems; track item.path) {
-                        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-nav-item"
-                           [matTooltip]="item.label" matTooltipPosition="right">
-                            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-                            <span matListItemTitle>{{ item.label }}</span>
-                        </a>
+                    @for (group of navGroups; track $index; let first = $first) {
+                        @if (!first) {
+                            <mat-divider class="nav-divider" />
+                        }
+                        @for (item of group; track item.path) {
+                            <a
+                                mat-list-item
+                                [routerLink]="item.path"
+                                routerLinkActive="active-nav-item"
+                                [matTooltip]="item.label"
+                                matTooltipPosition="right"
+                            >
+                                <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+                                <span matListItemTitle>{{ item.label }}</span>
+                            </a>
+                        }
                     }
                 </mat-nav-list>
                 @if (version$ | async; as version) {
@@ -112,111 +138,151 @@ interface NavItem {
                 }
             </mat-sidenav>
             <mat-sidenav-content class="dashboard-content">
-                <router-outlet/>
+                <router-outlet />
             </mat-sidenav-content>
         </mat-sidenav-container>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          :host {
-            display: block;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-          }
+            :host {
+                display: block;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
 
-          .dashboard-container {
-            flex: 1 1 auto;
-            min-height: 0;
-          }
+            .dashboard-container {
+                flex: 1 1 auto;
+                min-height: 0;
+            }
 
-          .app-nav {
-            width: 220px;
-            display: flex;
-            flex-direction: column;
-          }
+            .backend-offline-banner {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 8px 8px 16px;
+                background: #f44336;
+                color: white;
+                font-size: 13px;
+                flex: 0 0 auto;
+            }
 
-          .nav-list {
-            flex: 1 1 auto;
-          }
+            .backend-offline-banner span {
+                flex: 1 1 auto;
+            }
 
-          .app-version {
-            padding: 8px 16px 12px;
-            font-size: 11px;
-            color: rgba(0, 0, 0, 0.4);
-          }
+            .backend-offline-banner mat-icon {
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+            }
 
-          .dashboard-content {
-            padding: 20px;
-          }
+            .backend-offline-banner button {
+                color: white;
+                flex: 0 0 auto;
+            }
 
-          .active-nav-item {
-            background: rgba(0, 0, 0, 0.06);
-            font-weight: 600;
-          }
+            .app-nav {
+                width: 220px;
+                display: flex;
+                flex-direction: column;
+            }
 
-          .spacer {
-            flex: 1 1 auto;
-          }
+            .nav-list {
+                flex: 1 1 auto;
+            }
 
-          .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            cursor: default;
-          }
+            .nav-divider {
+                margin: 8px 0;
+            }
 
-          .connection-status {
-            display: flex;
-            align-items: center;
-            margin-right: 16px;
-          }
+            .app-version {
+                padding: 8px 16px 12px;
+                font-size: 11px;
+                color: rgba(0, 0, 0, 0.4);
+            }
 
-          .status-icon {
-            font-size: 24px;
-            width: 24px;
-            height: 24px;
-          }
+            .dashboard-content {
+                padding: 20px;
+            }
 
-          .status-icon.connected {
-            color: #4caf50;
-          }
+            .active-nav-item {
+                background: rgba(0, 0, 0, 0.06);
+                font-weight: 600;
+            }
 
-          .status-icon.disconnected {
-            color: #f44336;
-          }
+            .spacer {
+                flex: 1 1 auto;
+            }
 
-          .status-icon.unknown {
-            color: #ff9800;
-          }
+            .user-info {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 16px;
+                cursor: default;
+            }
+
+            .connection-status {
+                display: flex;
+                align-items: center;
+                margin-right: 16px;
+            }
+
+            .status-icon {
+                font-size: 24px;
+                width: 24px;
+                height: 24px;
+            }
+
+            .status-icon.connected {
+                color: #4caf50;
+            }
+
+            .status-icon.disconnected {
+                color: #f44336;
+            }
+
+            .status-icon.unknown {
+                color: #ff9800;
+            }
         `,
     ],
 })
 export class DashboardComponent implements OnInit, OnDestroy {
     private store = inject(Store);
-    private destroy$ = new Subject<void>();
+    // ngOnInit runs outside the injection context, so takeUntilDestroyed needs this explicitly.
+    private destroyRef = inject(DestroyRef);
     username$: Observable<string | null>;
-    deviceConnectionStatus$: Observable<'connected' | 'disconnected' | 'unknown'>;
+    deviceConnectionStatus$: Observable<"connected" | "disconnected" | "unknown">;
     version$: Observable<VersionInfo | null>;
     // Emits only once the real value is known (see constructor / selectTimingProviderActive).
     timingProviderActive$: Observable<boolean>;
+    // null until the first health check completes (see BackendHealthState.reachable).
+    backendReachable$: Observable<boolean | null>;
 
-    readonly navItems: NavItem[] = [
-        {path: 'age-groups', label: 'Altersgruppen', icon: 'cake'},
-        {path: 'races', label: 'Rennen', icon: 'flag'},
-        {path: 'teams', label: 'Teams', icon: 'groups'},
-        {path: 'categories', label: 'Kategorien', icon: 'category'},
-        {path: 'persons', label: 'Personen', icon: 'badge'},
-        {path: 'participants', label: 'Teilnehmer', icon: 'person'},
-        {path: 'measurements', label: 'Messungen', icon: 'timer'},
-        {path: 'race-measurements', label: 'Zuordnung & Sync', icon: 'sync_alt'},
-        {path: 'gaudi-mode', label: 'Gaudi-Modus', icon: 'celebration'},
-        {path: 'settings', label: 'Zeitmessung', icon: 'settings_input_antenna'},
+    // Rendered with a divider between groups: race setup/evaluation first, timing-related pages below.
+    readonly navGroups: NavItem[][] = [
+        [
+            {path: "races", label: "Rennen", icon: "flag"},
+            {path: "categories", label: "Kategorien", icon: "category"},
+            {path: "age-groups", label: "Altersgruppen", icon: "cake"},
+            {path: "teams", label: "Teams", icon: "groups"},
+            {path: "start-group-templates", label: "Startgruppen", icon: "palette"},
+            {path: "persons", label: "Personen", icon: "badge"},
+            {path: "participants", label: "Teilnehmer", icon: "person"},
+            {path: "gaudi-mode", label: "Gaudi-Modus", icon: "celebration"},
+        ],
+        [
+            {path: "measurements", label: "Messungen", icon: "timer"},
+            {path: "race-measurements", label: "Zuordnung & Sync", icon: "sync_alt"},
+        ],
+        // Its own group: the page is no longer only about the timing device (it also holds the
+        // season boundary), so it no longer belongs inside the timing block above.
+        [{path: "settings", label: "Einstellungen", icon: "settings"}],
     ];
 
-    private static readonly NAV_OPEN_KEY = 'dashboard_nav_open';
+    private static readonly NAV_OPEN_KEY = "dashboard_nav_open";
     navOpen = signal(this.readNavOpenPreference());
 
     constructor() {
@@ -224,9 +290,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Mapped to a tri-state string rather than switched on the raw boolean|null in the template:
         // `@if (x$ | async; as x)` skips its block for a falsy `x === false`, which previously made
         // a real "disconnected" reading fall through to the "unknown" branch instead.
-        this.deviceConnectionStatus$ = this.store.select(MeasurementSelectors.selectDeviceConnected).pipe(
-            map(connected => connected === true ? 'connected' : connected === false ? 'disconnected' : 'unknown'),
-        );
+        this.deviceConnectionStatus$ = this.store
+            .select(MeasurementSelectors.selectDeviceConnected)
+            .pipe(
+                map(connected => (connected === true ? "connected" : connected === false ? "disconnected" : "unknown")),
+            );
         this.version$ = this.store.select(VersionSelectors.selectVersion);
         // Waits for the real settings value (or a load failure, which falls back to "active" so
         // connection polling isn't silently disabled forever) instead of guessing while loading -
@@ -236,6 +304,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             filter((active): active is boolean => active !== null),
             distinctUntilChanged(),
         );
+        this.backendReachable$ = this.store.select(BackendHealthSelectors.selectBackendReachable);
     }
 
     toggleNav(): void {
@@ -252,7 +321,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private readNavOpenPreference(): boolean {
         try {
             const stored = localStorage.getItem(DashboardComponent.NAV_OPEN_KEY);
-            return stored === null ? true : stored === 'true';
+            return stored === null ? true : stored === "true";
         } catch {
             return true;
         }
@@ -262,13 +331,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.store.dispatch(VersionActions.loadVersion());
         this.store.dispatch(SettingsActions.loadTimingProvider());
 
+        // Unlike the timing-device poll below, this runs unconditionally - a missing backend
+        // matters regardless of whether a timing device is even configured.
+        this.store.dispatch(BackendHealthActions.startBackendHealthPolling());
+        this.store.dispatch(BackendHealthActions.checkBackendHealth());
+
         // Only poll device connection while a timing device is actually configured - starting
         // polling dispatches again on every change is safe (the effect's switchMap cancels the
         // previous interval), so this also picks up a provider switch made on the Settings page
         // without needing a dashboard reload.
-        this.timingProviderActive$.pipe(
-            takeUntil(this.destroy$),
-        ).subscribe(active => {
+        this.timingProviderActive$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(active => {
             if (active) {
                 this.store.dispatch(MeasurementActions.startDeviceConnectionPolling());
                 this.store.dispatch(MeasurementActions.checkDeviceConnection());
@@ -278,14 +350,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
         });
     }
 
+    // Kept despite takeUntilDestroyed: unsubscribing locally does not stop the two polling
+    // effects, they need their explicit stop actions.
     ngOnDestroy(): void {
-        this.destroy$.next();
-        this.destroy$.complete();
         // Stop polling when component is destroyed
         this.store.dispatch(MeasurementActions.stopDeviceConnectionPolling());
+        this.store.dispatch(BackendHealthActions.stopBackendHealthPolling());
     }
 
     logout(): void {
         this.store.dispatch(AuthActions.logout());
+    }
+
+    retryBackendHealthCheck(): void {
+        this.store.dispatch(BackendHealthActions.checkBackendHealth());
     }
 }

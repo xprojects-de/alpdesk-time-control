@@ -6,7 +6,6 @@ import x.timecontrol.entities.Measurement;
 import x.timecontrol.repositories.MeasurementRepository;
 import jakarta.inject.Singleton;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -35,6 +34,15 @@ public class MeasurementService {
                 assertParticipantNotAlreadyAssigned(measurement.participantId(), null);
             }
             Measurement toSave = measurement;
+            if (toSave.deviceMeasurementId() != null) {
+                // Checked here, inside the table lock, rather than by the caller: device_measurement_id
+                // is unique-indexed (see V1__create_participant.sql), so a duplicate would otherwise
+                // surface as a raw constraint violation from repository.save() - which the CSV import
+                // (the only path that supplies an explicit id, see #importMapped) cannot turn into a
+                // per-row message. Under the lock it also can't race a device poll writing the same id
+                // between a pre-check and the insert.
+                assertDeviceMeasurementIdFree(toSave.deviceMeasurementId());
+            }
             if (toSave.deviceMeasurementId() == null) {
                 // device_measurement_id is NOT NULL (see V1__create_participant.sql), so this must be
                 // resolved before the insert, not after - repository.save() would otherwise fail the
@@ -67,6 +75,12 @@ public class MeasurementService {
     // device_measurement_id), so the second one would silently coexist until archiving picks
     // whichever one "wins" in an unspecified order - overwriting the participant's correct finish
     // time with the wrong one.
+    private void assertDeviceMeasurementIdFree(Long deviceMeasurementId) {
+        if (repository.findByDeviceMeasurementId(deviceMeasurementId).isPresent()) {
+            throw new IllegalStateException("A measurement with device id " + deviceMeasurementId + " already exists");
+        }
+    }
+
     private void assertParticipantNotAlreadyAssigned(Long participantId, Long excludingMeasurementId) {
         boolean conflict = repository.findByParticipantId(participantId).stream()
                 .anyMatch(m -> excludingMeasurementId == null || !m.id().equals(excludingMeasurementId));
@@ -144,7 +158,7 @@ public class MeasurementService {
      * for building/pre-filling the column-mapping UI. Never touches the database.
      */
     public MeasurementImportPreviewResponse previewImport(byte[] fileBytes, Character delimiter) {
-        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> suggested = MeasurementImportParsers.suggestMapping(parsed.fields());
         List<Map<String, String>> sample = parsed.rows().stream().limit(5).toList();
         return new MeasurementImportPreviewResponse(parsed.fields(), suggested, sample);
@@ -163,11 +177,12 @@ public class MeasurementService {
      * an explicitly empty map, meaning "map nothing" - and only falls back to the auto-suggested
      * mapping when it's entirely omitted ({@code null}), mirroring
      * {@link ParticipantService#importResultsByRaceNumber}. Rows that fail validation (missing/
-     * invalid durationMs, unparseable measuredAt/participantId) are skipped and reported rather than
+     * invalid durationMs, unparseable measuredAt/participantId/deviceMeasurementId, a
+     * deviceMeasurementId that is already taken) are skipped and reported rather than
      * rejecting the whole file.
      */
     public MeasurementImportResult importMapped(byte[] fileBytes, Character delimiter, Map<String, String> mapping) {
-        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        MeasurementImportParsers.ParsedRows parsed = MeasurementImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> effectiveMapping = (mapping == null)
                 ? MeasurementImportParsers.suggestMapping(parsed.fields())
                 : mapping;
@@ -179,6 +194,7 @@ public class MeasurementService {
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
 
+            String deviceMeasurementIdRaw = valueFor(row, effectiveMapping, "deviceMeasurementId");
             String participantIdRaw = valueFor(row, effectiveMapping, "participantId");
             String durationRaw = valueFor(row, effectiveMapping, "durationMs");
             String measuredAtRaw = valueFor(row, effectiveMapping, "measuredAt");
@@ -221,14 +237,45 @@ public class MeasurementService {
                 }
             }
 
+            Long deviceMeasurementId;
             try {
-                imported.add(create(new Measurement(null, null, participantId, durationMs, measuredAt)));
+                deviceMeasurementId = parseImportedDeviceMeasurementId(deviceMeasurementIdRaw);
+            } catch (NumberFormatException e) {
+                errors.add(new MeasurementImportRowError(rowNumber, row.toString(), "deviceMeasurementId is not a valid number"));
+                continue;
+            }
+
+            try {
+                // A non-null device id is passed through to create() as-is, which rejects one that
+                // is already taken (including by an earlier row of this same file) with a per-row
+                // error instead of failing the whole import.
+                imported.add(create(new Measurement(null, deviceMeasurementId, participantId, durationMs, measuredAt)));
             } catch (IllegalStateException e) {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), e.getMessage()));
             }
         }
 
         return new MeasurementImportResult(imported, errors);
+    }
+
+    /**
+     * Turns the CSV's deviceMeasurementId cell into what {@link #create} expects: the device's own
+     * counter, or null for "this row had no device - generate a synthetic id for it".
+     * <p>
+     * Everything that means "no real device id" maps to null rather than to a row error: an empty
+     * cell, the "-" the measurement screens print for a synthetic id (so a file typed off that
+     * screen imports), and any value {@code <= 0}, since a real device counter is always positive
+     * and our own synthetic ids are always negative - carrying such a value over verbatim would
+     * both claim an id the next synthetic one may hand out again and be meaningless to the operator.
+     *
+     * @throws NumberFormatException if the cell holds something that is neither blank, "-", nor a number
+     */
+    private static Long parseImportedDeviceMeasurementId(String raw) {
+        if (raw == null || raw.isBlank() || "-".equals(raw.trim())) {
+            return null;
+        }
+        long value = Long.parseLong(raw.trim());
+        return value > 0 ? value : null;
     }
 
     private static String valueFor(Map<String, String> row, Map<String, String> mapping, String targetField) {
@@ -251,6 +298,11 @@ public class MeasurementService {
         csv.append(String.join(String.valueOf(EXPORT_DELIMITER), MeasurementImportParsers.TARGET_FIELDS)).append('\n');
         for (Measurement m : measurements) {
             List<String> values = List.of(
+                    // Synthetic (negative) ids are exported as an empty cell, not as their internal
+                    // value: they mean "this row never came from a device", so re-importing the file
+                    // has to mint a fresh one rather than reinstate a number that is only unique
+                    // within the table it was generated for.
+                    m.deviceMeasurementId() != null && m.deviceMeasurementId() > 0 ? m.deviceMeasurementId().toString() : "",
                     m.participantId() != null ? m.participantId().toString() : "",
                     m.durationMs() != null ? m.durationMs().toString() : "",
                     m.measuredAt() != null ? m.measuredAt().toString() : ""

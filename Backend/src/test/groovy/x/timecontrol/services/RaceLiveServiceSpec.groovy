@@ -2,6 +2,7 @@ package x.timecontrol.services
 
 import spock.lang.Specification
 import x.timecontrol.dto.RaceLiveViewType
+import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.Participant
@@ -11,6 +12,8 @@ import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 
 import java.time.LocalDate
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
 
 /**
  * RaceLiveService.buildResponse() is a straight port of PdfExportService's generate*Ranking
@@ -26,9 +29,18 @@ class RaceLiveServiceSpec extends Specification {
     AgeGroupService ageGroupService = Mock()
     TeamService teamService = Mock()
     PersonService personService = Mock()
+    StartGroupTemplateService startGroupTemplateService = Mock()
+
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
 
     RankingViewService rankingViewService = new RankingViewService(
-            ageGroupService, categoryService, teamService, personService, new RankingService())
+            ageGroupService, seasonService, categoryService, teamService, personService, new RankingService(startGroupTemplateService), startGroupTemplateService)
     RaceLiveService raceLiveService = new RaceLiveService(participantService, categoryService, rankingViewService)
 
     private static Race race() {
@@ -45,7 +57,7 @@ class RaceLiveServiceSpec extends Specification {
     }
 
     def setup() {
-        ageGroupService.findAll() >> []
+        ageGroupService.findBySeason(2026) >> []
         ageGroupService.calculateAgeGroupName(*_) >> "AK"
         teamService.findByIds(_) >> [:]
         categoryService.sortedByName() >> []
@@ -117,5 +129,31 @@ class RaceLiveServiceSpec extends Specification {
         then:
         response.sections().size() == 1
         response.sections().first().entries()*.name() == ["Bert Slow"]
+    }
+
+    def "ALL_AGEGROUPS view adds an 'ohne Altersklasse' section for participants matching no age group instead of dropping them"() {
+        given: "Anna falls into U14, Bert (born outside every configured range) matches none"
+        def ageGroups = Stub(AgeGroupService) {
+            findBySeason(2026) >> [new AgeGroup(1L, "U14", 2026, 2012, 2013, Gender.BOTH)]
+            calculateAgeGroupName(_, Gender.FEMALE, _) >> "U14"
+            calculateAgeGroupName(_, Gender.MALE, _) >> AgeGroupService.UNKNOWN_AGE_GROUP
+        }
+        def viewService = new RankingViewService(ageGroups, seasonService, categoryService, teamService, personService,
+                new RankingService(startGroupTemplateService), startGroupTemplateService)
+        def liveService = new RaceLiveService(participantService, categoryService, viewService)
+        participantService.findByRaceId(1L) >> [participant(1L, 50000), participant(2L, 60000)]
+        personService.findByIds(_) >> [
+                1L: person(1L, "Anna", "Fast", Gender.FEMALE),
+                2L: person(2L, "Bert", "Nomatch", Gender.MALE),
+        ]
+
+        when:
+        def response = liveService.buildResponse(race(), RaceLiveViewType.ALL_AGEGROUPS, null, null, null)
+
+        then: "Bert is ranked in his own trailing section, and still not listed as nicht gewertet"
+        response.sections()*.title() == ["Wertung U14 weiblich", "Wertung ohne Altersklasse männlich"]
+        response.sections()[1].entries()*.name() == ["Bert Nomatch"]
+        response.sections()[1].entries()*.place() == [1]
+        response.notRanked().isEmpty()
     }
 }

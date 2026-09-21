@@ -1,12 +1,4 @@
-import {
-    Component,
-    AfterViewInit,
-    viewChild,
-    OnDestroy,
-    inject,
-    effect,
-    ChangeDetectionStrategy,
-} from "@angular/core";
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, Subject} from "rxjs";
@@ -30,7 +22,6 @@ import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
     selector: "app-category-list",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -51,19 +42,11 @@ import {Actions, ofType} from "@ngrx/effects";
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neue Kategorie
                     </button>
-                    <button
-                            mat-raised-button
-                            (click)="refreshData()"
-                            matTooltip="Daten aktualisieren"
-                    >
+                    <button mat-raised-button (click)="refreshData()" matTooltip="Daten aktualisieren">
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
@@ -71,91 +54,81 @@ import {Actions, ofType} from "@ngrx/effects";
 
                 @if (loading$ | async) {
                     <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
                 }
 
                 <div class="table-container">
-                <table
+                    <table
                         mat-table
                         [dataSource]="dataSource"
                         [trackBy]="trackById"
                         matSort
                         class="category-table"
                         [class.hidden]="loading$ | async"
-                >
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                        <td mat-cell *matCellDef="let category">{{ category.id }}</td>
-                    </ng-container>
+                    >
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
+                            <td mat-cell *matCellDef="let category">
+                                {{ category.name }}
+                            </td>
+                        </ng-container>
 
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
-                        <td mat-cell *matCellDef="let category">
-                            {{ category.name }}
-                        </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let category">
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(category)"
-                                    matTooltip="Bearbeiten"
-                            >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let category">
+                                <button mat-icon-button (click)="openEditDialog(category)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button
                                     mat-icon-button
                                     color="warn"
                                     (click)="deleteCategory(category)"
                                     matTooltip="Löschen"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                                >
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 40px;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          .category-table {
-            width: 100%;
-          }
+            .category-table {
+                width: 100%;
+            }
 
-          .hidden {
-            display: none;
-          }
+            .hidden {
+                display: none;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            mat-card {
+                margin: 20px;
+            }
 
-          th.mat-sort-header-sorted {
-            color: black;
-          }
+            th.mat-sort-header-sorted {
+                color: black;
+            }
         `,
     ],
 })
@@ -168,11 +141,9 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
 
     categories$: Observable<Category[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "name", "actions"];
+    displayedColumns = ["name", "actions"];
     dataSource = new MatTableDataSource<Category>([]);
     trackById = (_index: number, category: Category) => category.id;
-    private sortInitialized = false;
-    private paginatorInitialized = false;
 
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
@@ -181,89 +152,72 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
         this.categories$ = this.store.select(CategorySelectors.selectAllCategories);
         this.loading$ = this.store.select(CategorySelectors.selectCategoryLoading);
 
-        this.actions$.pipe(
-            ofType(CategoryActions.createCategorySuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(CategoryActions.createCategorySuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Kategorie erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(CategoryActions.createCategoryFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Erstellen der Kategorie: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(CategoryActions.createCategoryFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Erstellen der Kategorie: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(CategoryActions.updateCategorySuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(CategoryActions.updateCategorySuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Kategorie erfolgreich aktualisiert", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(CategoryActions.updateCategoryFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Aktualisieren der Kategorie: ${error}`, "OK", {duration: 5000});
-        });
+        this.actions$
+            .pipe(ofType(CategoryActions.updateCategoryFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Aktualisieren der Kategorie: ${error}`, "OK", {duration: 5000});
+            });
 
-        this.actions$.pipe(
-            ofType(CategoryActions.deleteCategorySuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
+        this.actions$.pipe(ofType(CategoryActions.deleteCategorySuccess), takeUntil(this.destroy$)).subscribe(() => {
             this.snackBar.open("Kategorie erfolgreich gelöscht", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(CategoryActions.deleteCategoryFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen der Kategorie: ${error}`, "OK", {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(CategoryActions.deleteCategoryConflict),
-            takeUntil(this.destroy$),
-        ).subscribe(({id, message}) => {
-            this.dialog.open(ConfirmDialogComponent, {
-                width: '450px',
-                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
-            })
-                .afterClosed()
-                .pipe(takeUntil(this.destroy$))
-                .subscribe((confirmed) => {
-                    if (confirmed) {
-                        this.store.dispatch(CategoryActions.deleteCategory({id, force: true}));
-                    }
-                });
-        });
+        this.actions$
+            .pipe(ofType(CategoryActions.deleteCategoryFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen der Kategorie: ${error}`, "OK", {duration: 5000});
+            });
+        this.actions$
+            .pipe(ofType(CategoryActions.deleteCategoryConflict), takeUntil(this.destroy$))
+            .subscribe(({id, message}) => {
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {message, confirmLabel: "Löschen", confirmColor: "warn"},
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (confirmed) {
+                            this.store.dispatch(CategoryActions.deleteCategory({id, force: true}));
+                        }
+                    });
+            });
 
+        // Assigns as soon as the signal reports the instance - no delay needed, and comparing
+        // instances (rather than a "done" flag) also re-attaches should the table ever be
+        // recreated.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
-                }, 100);
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
+                this.dataSource.sort = sortInstance;
             }
         });
 
         effect(() => {
             const paginatorInstance = this.paginator();
-            if (paginatorInstance && !this.paginatorInitialized) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                    this.paginatorInitialized = true;
-                }, 100);
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }
 
     ngAfterViewInit(): void {
         this.store.dispatch(CategoryActions.loadCategories());
-        this.categories$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((categories) => {
-                this.dataSource.data = categories;
-            });
+        this.categories$.pipe(takeUntil(this.destroy$)).subscribe(categories => {
+            this.dataSource.data = categories;
+        });
     }
 
     ngOnDestroy(): void {
@@ -279,7 +233,7 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(CategoryActions.createCategory({category: result}));
                 }
@@ -292,29 +246,29 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
             data: category,
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        CategoryActions.updateCategory({id: category.id, category: result}),
-                    );
+                    this.store.dispatch(CategoryActions.updateCategory({id: category.id, category: result}));
                 }
             });
     }
 
     deleteCategory(category: Category): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie die Kategorie "${category.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie die Kategorie "${category.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(CategoryActions.deleteCategory({id: category.id}));
                 }

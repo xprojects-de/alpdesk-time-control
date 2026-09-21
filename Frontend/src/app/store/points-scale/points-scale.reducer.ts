@@ -1,6 +1,6 @@
-import {createReducer, on} from '@ngrx/store';
-import {PointsScale} from '../../models/points-scale.model';
-import * as PointsScaleActions from './points-scale.actions';
+import {createReducer, on} from "@ngrx/store";
+import {PointsScale} from "../../models/points-scale.model";
+import * as PointsScaleActions from "./points-scale.actions";
 
 export interface PointsScaleState {
     pointsScales: PointsScale[];
@@ -11,7 +11,7 @@ export interface PointsScaleState {
 export const initialState: PointsScaleState = {
     pointsScales: [],
     loading: false,
-    error: null
+    error: null,
 };
 
 export const pointsScaleReducer = createReducer(
@@ -20,68 +20,68 @@ export const pointsScaleReducer = createReducer(
     on(PointsScaleActions.loadPointsScales, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(PointsScaleActions.loadPointsScalesSuccess, (state, {pointsScales}) => ({
         ...state,
         pointsScales,
-        loading: false
+        loading: false,
     })),
     on(PointsScaleActions.loadPointsScalesFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(PointsScaleActions.createPointsScale, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(PointsScaleActions.createPointsScaleSuccess, (state, {pointsScale}) => ({
         ...state,
         pointsScales: [...state.pointsScales, pointsScale],
-        loading: false
+        loading: false,
     })),
     on(PointsScaleActions.createPointsScaleFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(PointsScaleActions.updatePointsScale, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(PointsScaleActions.updatePointsScaleSuccess, (state, {pointsScale}) => ({
         ...state,
-        pointsScales: state.pointsScales.map(p => p.id === pointsScale.id ? pointsScale : p),
-        loading: false
+        pointsScales: state.pointsScales.map(p => (p.id === pointsScale.id ? pointsScale : p)),
+        loading: false,
     })),
     on(PointsScaleActions.updatePointsScaleFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(PointsScaleActions.deletePointsScale, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(PointsScaleActions.deletePointsScaleSuccess, (state, {id}) => ({
         ...state,
         pointsScales: state.pointsScales.filter(p => p.id !== id),
-        loading: false
+        loading: false,
     })),
     on(PointsScaleActions.deletePointsScaleFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
     on(PointsScaleActions.deletePointsScaleConflict, state => ({
         ...state,
-        loading: false
-    }))
+        loading: false,
+    })),
 );

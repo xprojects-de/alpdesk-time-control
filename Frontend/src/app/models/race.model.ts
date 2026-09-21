@@ -1,32 +1,38 @@
 export enum ResultUnit {
-    TIME = 'TIME',
-    POINTS = 'POINTS',
+    TIME = "TIME",
+    POINTS = "POINTS",
 }
 
 export const ResultUnitLabels: Record<ResultUnit, string> = {
-    [ResultUnit.TIME]: 'Zeit',
-    [ResultUnit.POINTS]: 'Punkte/Sonstiges',
+    [ResultUnit.TIME]: "Zeit",
+    [ResultUnit.POINTS]: "Punkte/Sonstiges",
 };
 
 export enum SortDirection {
-    ASC = 'ASC',
-    DESC = 'DESC',
+    ASC = "ASC",
+    DESC = "DESC",
 }
 
 export const SortDirectionLabels: Record<SortDirection, string> = {
-    [SortDirection.ASC]: 'Niedriger ist besser',
-    [SortDirection.DESC]: 'Höher ist besser',
+    [SortDirection.ASC]: "Niedriger ist besser",
+    [SortDirection.DESC]: "Höher ist besser",
 };
 
 /** How a race's start order is derived from its linked previousRaceId race - only one mode exists today. */
 export enum StartOrderMode {
-    REVERSE_TOP_N = 'REVERSE_TOP_N',
+    REVERSE_TOP_N = "REVERSE_TOP_N",
 }
 
 export interface Race {
     id: number;
     name: string;
     date: string;
+    /**
+     * The season this race is scored in - and therefore which age groups apply to it. Derived by
+     * the backend from the date and the configured season boundary, so with a boundary other than
+     * 1 January this is NOT the calendar year of `date`. Read-only; never sent back.
+     */
+    seasonYear: number;
     organisation?: string;
     referee?: string;
     raceDirector?: string;
@@ -52,7 +58,7 @@ export interface Race {
 /** One discoverable public live-results view for a race - see RaceService.getLiveLinks. */
 export interface RaceLiveLink {
     label: string;
-    /** Path relative to the backend's own origin - resolve with RaceService.toAbsoluteUrl before displaying/sharing. */
+    /** Path relative to the backend's own origin - resolve with toAbsoluteUrl (utils/absolute-url.util) before displaying/sharing. */
     path: string;
 }
 

@@ -22,6 +22,9 @@ public record RaceResponse(
         @Schema(description = "Date of the race", example = "2026-01-15")
         LocalDate date,
 
+        @Schema(description = "Season this race is scored in, derived from its date and the configured season boundary. Which age groups apply to this race is decided by this value, not by the calendar year.", example = "2026")
+        Integer seasonYear,
+
         @Schema(description = "Organisation hosting the race", example = "Skiclub Musterhausen")
         String organisation,
 
@@ -79,11 +82,27 @@ public record RaceResponse(
      * {@code RaceLiveController}) are a separate, on-demand endpoint, not a field here - nothing
      * about them belongs on every plain race response.
      */
-    public static RaceResponse from(Race race) {
+    /**
+     * {@code seasonYear} is resolved by {@link x.timecontrol.services.SeasonService} rather than
+     * derived here: with a season boundary other than 1 January, it is not the date's calendar
+     * year, and recomputing that rule per call site (or in the client) would be a second place for
+     * it to drift.
+     */
+    public static RaceResponse from(Race race, int seasonYear) {
+        return from(race, seasonYear, race.coverPagePdf() != null);
+    }
+
+    /**
+     * For callers whose Race came from a projection that leaves the cover page out (see
+     * {@link x.timecontrol.repositories.RaceRepository#findAllWithoutCoverPage()}), so
+     * {@code race.coverPagePdf() != null} would wrongly report "no cover page" for every race.
+     */
+    public static RaceResponse from(Race race, int seasonYear, boolean hasCoverPage) {
         return new RaceResponse(
                 race.id(),
                 race.name(),
                 race.date(),
+                seasonYear,
                 race.organisation(),
                 race.referee(),
                 race.raceDirector(),
@@ -96,7 +115,7 @@ public record RaceResponse(
                 race.resultUnit(),
                 race.resultUnitLabel(),
                 race.sortDirection(),
-                race.coverPagePdf() != null,
+                hasCoverPage,
                 race.previousRaceId(),
                 race.startOrderMode(),
                 race.startOrderReverseTopCount()

@@ -1,19 +1,8 @@
-import {
-    Component,
-    AfterViewInit,
-    OnDestroy,
-    inject,
-    ChangeDetectionStrategy,
-} from "@angular/core";
+import {Component, AfterViewInit, OnDestroy, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, combineLatest, Subject} from "rxjs";
-import {
-    map,
-    takeUntil,
-    distinctUntilChanged,
-    filter,
-} from "rxjs/operators";
+import {map, takeUntil, distinctUntilChanged, filter} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -22,10 +11,12 @@ import {MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
-import {MatSelectModule} from "@angular/material/select";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceMeasurement} from "../../models/race-measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
+import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
+import {formatParticipantMeta} from "../../utils/participant-meta.util";
 import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as RaceMeasurementActions from "../../store/race-measurement/race-measurement.actions";
@@ -40,11 +31,12 @@ import {Actions, ofType} from "@ngrx/effects";
 
 interface RaceMeasurementWithParticipant extends RaceMeasurement {
     participantName?: string;
+    /** Start number, age group and team of the assigned participant - see formatParticipantMeta. */
+    participantMeta?: string;
 }
 
 @Component({
     selector: "app-race-measurement-list",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -55,7 +47,7 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
         MatSnackBarModule,
         MatCardModule,
         MatTooltipModule,
-        MatSelectModule,
+        RaceSelectComponent,
         MatFormFieldModule,
     ],
     template: `
@@ -65,33 +57,25 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
             </mat-card-header>
             <mat-card-content>
                 <div class="filter-section">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async"
-                                    (selectionChange)="onRaceChange($event.value)">
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})
-                                </mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        (valueChange)="onRaceChange($any($event))"
+                    />
                 </div>
 
                 @if (selectedRaceId$ | async; as selectedRaceId) {
                     <div class="header-actions">
-                        <button
-                                mat-raised-button
-                                (click)="manualRefresh(selectedRaceId)"
-                        >
+                        <button mat-raised-button (click)="manualRefresh(selectedRaceId)">
                             <mat-icon>refresh</mat-icon>
                             Aktualisieren
                         </button>
 
                         <button
-                                mat-raised-button
-                                color="accent"
-                                (click)="syncToParticipants(selectedRaceId)"
-                                matTooltip="Archivierte Messungen dieses Rennens mit Teilnehmern synchronisieren"
+                            mat-raised-button
+                            color="accent"
+                            (click)="syncToParticipants(selectedRaceId)"
+                            matTooltip="Archivierte Messungen dieses Rennens mit Teilnehmern synchronisieren"
                         >
                             <mat-icon>sync</mat-icon>
                             Sync zu Teilnehmern
@@ -105,66 +89,83 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                     }
 
                     <div class="table-container">
-                    <table
+                        <table
                             mat-table
                             [dataSource]="(raceMeasurementsWithParticipants$ | async) || []"
                             [trackBy]="trackById"
                             class="race-measurement-table"
                             [class.loading]="loading$ | async"
-                    >
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef>ID</th>
-                            <td mat-cell *matCellDef="let m">{{ m.id }}</td>
-                        </ng-container>
+                        >
+                            <ng-container matColumnDef="deviceMeasurementId">
+                                <th mat-header-cell *matHeaderCellDef>Geräte-Nr.</th>
+                                <td
+                                    mat-cell
+                                    *matCellDef="let m"
+                                    [matTooltip]="
+                                        isSyntheticDeviceMeasurementId(m.deviceMeasurementId)
+                                            ? 'Ohne Gerät erfasst (manuell oder CSV-Import)'
+                                            : ''
+                                    "
+                                >
+                                    {{ formatDeviceMeasurementId(m.deviceMeasurementId) }}
+                                </td>
+                            </ng-container>
 
-                        <ng-container matColumnDef="deviceMeasurementId">
-                            <th mat-header-cell *matHeaderCellDef>Geräte-ID</th>
-                            <td mat-cell *matCellDef="let m">{{ m.deviceMeasurementId }}</td>
-                        </ng-container>
+                            <ng-container matColumnDef="participant">
+                                <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
+                                <td mat-cell *matCellDef="let m">
+                                    @if (m.participantName) {
+                                        <div class="participant-cell">
+                                            <span>{{ m.participantName }}</span>
+                                            @if (m.participantMeta) {
+                                                <span class="participant-meta">{{ m.participantMeta }}</span>
+                                            }
+                                        </div>
+                                    } @else {
+                                        -
+                                    }
+                                </td>
+                            </ng-container>
 
-                        <ng-container matColumnDef="participant">
-                            <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
-                            <td mat-cell *matCellDef="let m">{{ m.participantName || "-" }}</td>
-                        </ng-container>
+                            <ng-container matColumnDef="duration">
+                                <th mat-header-cell *matHeaderCellDef>Dauer</th>
+                                <td mat-cell *matCellDef="let m">{{ formatDuration(m.durationMs) }}</td>
+                            </ng-container>
 
-                        <ng-container matColumnDef="duration">
-                            <th mat-header-cell *matHeaderCellDef>Dauer</th>
-                            <td mat-cell *matCellDef="let m">{{ formatDuration(m.durationMs) }}</td>
-                        </ng-container>
+                            <ng-container matColumnDef="measuredAt">
+                                <th mat-header-cell *matHeaderCellDef>Gemessen am</th>
+                                <td mat-cell *matCellDef="let m">{{ m.measuredAt | date: "dd.MM.yyyy HH:mm:ss" }}</td>
+                            </ng-container>
 
-                        <ng-container matColumnDef="measuredAt">
-                            <th mat-header-cell *matHeaderCellDef>Gemessen am</th>
-                            <td mat-cell *matCellDef="let m">{{ m.measuredAt | date: "dd.MM.yyyy HH:mm:ss" }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="actions">
-                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                            <td mat-cell *matCellDef="let m">
-                                <button
+                            <ng-container matColumnDef="actions">
+                                <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                                <td mat-cell *matCellDef="let m">
+                                    <button
                                         mat-icon-button
                                         (click)="openEditDialog(m)"
                                         matTooltip="Teilnehmer zuordnen / bearbeiten"
-                                >
-                                    <mat-icon>edit</mat-icon>
-                                </button>
-                                <button
+                                    >
+                                        <mat-icon>edit</mat-icon>
+                                    </button>
+                                    <button
                                         mat-icon-button
                                         color="warn"
                                         (click)="deleteRaceMeasurement(m)"
                                         matTooltip="Löschen"
-                                >
-                                    <mat-icon>delete</mat-icon>
-                                </button>
-                            </td>
-                        </ng-container>
+                                    >
+                                        <mat-icon>delete</mat-icon>
+                                    </button>
+                                </td>
+                            </ng-container>
 
-                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                    </table>
+                            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                            <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                        </table>
                     </div>
 
                     <div class="count-info">
-                        Anzahl der archivierten Messungen: {{ ((raceMeasurementsWithParticipants$ | async) || []).length }}
+                        Anzahl der archivierten Messungen:
+                        {{ ((raceMeasurementsWithParticipants$ | async) || []).length }}
                     </div>
                 } @else {
                     <p class="hint">Bitte ein Rennen auswählen, um dessen archivierte Messungen zuzuordnen.</p>
@@ -172,82 +173,99 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .filter-section {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-          }
+            .filter-section {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
 
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 16px;
-            position: relative;
-            flex-wrap: wrap;
-            align-items: center;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 16px;
+                position: relative;
+                flex-wrap: wrap;
+                align-items: center;
+            }
 
-          .loading-overlay {
-            position: absolute;
-            top: 0;
-            right: 0;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px;
-          }
-
-          .race-measurement-table {
-            width: 100%;
-            transition: opacity 0.2s ease;
-          }
-
-          .race-measurement-table.loading {
-            opacity: 0.6;
-          }
-
-          mat-card {
-            margin: 20px;
-          }
-
-          mat-card-content {
-            position: relative;
-          }
-
-          mat-form-field {
-            min-width: 250px;
-          }
-
-          .count-info {
-            margin-top: 16px;
-            padding: 12px 16px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            color: rgba(0, 0, 0, 0.87);
-          }
-
-          .hint {
-            color: rgba(0, 0, 0, 0.6);
-          }
-
-          @media (max-width: 768px) {
-            mat-card {
-              margin: 8px;
+            .loading-overlay {
+                position: absolute;
+                top: 0;
+                right: 0;
+                z-index: 10;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 10px;
             }
 
             .race-measurement-table {
-              font-size: 12px;
+                width: 100%;
+                transition: opacity 0.2s ease;
             }
-          }
+
+            .race-measurement-table.loading {
+                opacity: 0.6;
+            }
+
+            /*
+             * Start number, age group and team below the name: what tells two runners of the same
+             * name apart, and what an operator checks a manual assignment against. Kept visually
+             * secondary so the name is still what the eye scans the column for.
+             */
+            .participant-cell {
+                display: flex;
+                flex-direction: column;
+                line-height: 1.3;
+                padding: 4px 0;
+            }
+
+            .participant-meta {
+                font-size: 11px;
+                color: var(--mat-sys-on-surface-variant);
+            }
+
+            mat-card {
+                margin: 20px;
+            }
+
+            mat-card-content {
+                position: relative;
+            }
+
+            mat-form-field,
+            app-race-select {
+                min-width: 250px;
+            }
+
+            .count-info {
+                margin-top: 16px;
+                padding: 12px 16px;
+                background-color: #f5f5f5;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(0, 0, 0, 0.87);
+            }
+
+            .hint {
+                color: rgba(0, 0, 0, 0.6);
+            }
+
+            @media (max-width: 768px) {
+                mat-card {
+                    margin: 8px;
+                }
+
+                .race-measurement-table {
+                    font-size: 12px;
+                }
+            }
         `,
     ],
 })
@@ -269,107 +287,98 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     raceMeasurementsWithParticipants$: Observable<RaceMeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "deviceMeasurementId", "participant", "duration", "measuredAt", "actions"];
+    displayedColumns = ["deviceMeasurementId", "participant", "duration", "measuredAt", "actions"];
 
     constructor() {
-        this.raceMeasurements$ = this.store.select(
-            RaceMeasurementSelectors.selectAllRaceMeasurements,
-        );
-        this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
-        );
+        this.raceMeasurements$ = this.store.select(RaceMeasurementSelectors.selectAllRaceMeasurements);
+        this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.selectedRaceId$ = this.store.select(RaceSelectors.selectSelectedRaceId);
-        this.loading$ = this.store.select(
-            RaceMeasurementSelectors.selectRaceMeasurementLoading,
-        );
+        this.loading$ = this.store.select(RaceMeasurementSelectors.selectRaceMeasurementLoading);
 
-        this.raceMeasurementsWithParticipants$ = combineLatest([
-            this.raceMeasurements$,
-            this.participants$,
-        ]).pipe(
+        this.raceMeasurementsWithParticipants$ = combineLatest([this.raceMeasurements$, this.participants$]).pipe(
             map(([raceMeasurements, participants]) =>
-                raceMeasurements.map((m) => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
+                raceMeasurements.map(m => {
+                    const participant = m.participantId ? participants.find(p => p.id === m.participantId) : undefined;
+                    return {
+                        ...m,
+                        participantName: participant?.person
+                            ? `${participant.person.firstName} ${participant.person.lastName}`
+                            : undefined,
+                        participantMeta: formatParticipantMeta(participant),
+                    };
+                }),
             ),
             distinctUntilChanged(shallowArrayEqual),
         );
 
         // Reload the archived measurements whenever the selected race changes
-        this.selectedRaceId$.pipe(
-            distinctUntilChanged(),
-            filter((raceId): raceId is number => raceId !== null),
-            takeUntil(this.destroy$),
-        ).subscribe((raceId) => {
-            this.store.dispatch(RaceMeasurementActions.loadRaceMeasurements({raceId}));
-        });
+        this.selectedRaceId$
+            .pipe(
+                distinctUntilChanged(),
+                filter((raceId): raceId is number => raceId !== null),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(raceId => {
+                this.store.dispatch(RaceMeasurementActions.loadRaceMeasurements({raceId}));
+            });
 
         // Listen for successful update
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.updateRaceMeasurementSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("Messung erfolgreich aktualisiert", "OK", {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.updateRaceMeasurementSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messung erfolgreich aktualisiert", "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed update
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.updateRaceMeasurementFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("FEHLER beim Aktualisieren der Messung", "OK", {
-                duration: 10000,
-                panelClass: "error-snackbar"
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.updateRaceMeasurementFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Aktualisieren der Messung", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful sync
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({response}) => {
-            this.snackBar.open(response.message, "OK", {
-                duration: 5000,
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess), takeUntil(this.destroy$))
+            .subscribe(({response}) => {
+                this.snackBar.open(response.message, "OK", {
+                    duration: 5000,
+                });
             });
-        });
 
         // Listen for failed sync
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("FEHLER beim Synchronisieren der Messungen", "OK", {
-                duration: 10000,
-                panelClass: "error-snackbar"
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Synchronisieren der Messungen", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful delete
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.deleteRaceMeasurementSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("Messung erfolgreich gelöscht", "OK", {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.deleteRaceMeasurementSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messung erfolgreich gelöscht", "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed delete
-        this.actions$.pipe(
-            ofType(RaceMeasurementActions.deleteRaceMeasurementFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open("FEHLER beim Löschen der Messung", "OK", {
-                duration: 10000,
-                panelClass: "error-snackbar"
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.deleteRaceMeasurementFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Löschen der Messung", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
     }
 
     ngAfterViewInit(): void {
@@ -391,15 +400,18 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         this.snackBar.open("Daten wurden aktualisiert", "OK", {duration: 2000});
     }
 
-    getParticipantName(
-        participantId: number,
-        participants: Participant[],
-    ): string {
-        const participant = participants.find((p) => p.id === participantId);
-        return participant?.person
-            ? `${participant.person.firstName} ${participant.person.lastName}`
-            : "-";
+    formatDeviceMeasurementId = formatDeviceMeasurementId;
+
+    /**
+     * Names an archived measurement the way the table shows it - by the device counter, not by the
+     * database id the table no longer prints.
+     */
+    describeRaceMeasurement(raceMeasurement: RaceMeasurement): string {
+        return isSyntheticDeviceMeasurementId(raceMeasurement.deviceMeasurementId)
+            ? `die manuell erfasste archivierte Messung (${this.formatDuration(raceMeasurement.durationMs)})`
+            : `die archivierte Messung Geräte-Nr. ${raceMeasurement.deviceMeasurementId} (${this.formatDuration(raceMeasurement.durationMs)})`;
     }
+    isSyntheticDeviceMeasurementId = isSyntheticDeviceMeasurementId;
 
     formatDuration(ms: number): string {
         const totalSeconds = Math.floor(ms / 1000);
@@ -417,17 +429,6 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         }
     }
 
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const year = parts[0];
-            const month = parts[1];
-            const day = parts[2];
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
-    }
-
     openEditDialog(raceMeasurement: RaceMeasurement): void {
         const dialogRef = this.dialog.open(RaceMeasurementDialogComponent, {
             width: "500px",
@@ -437,7 +438,7 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(
                         RaceMeasurementActions.updateRaceMeasurement({
@@ -450,21 +451,20 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteRaceMeasurement(raceMeasurement: RaceMeasurement): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie die archivierte Messung #${raceMeasurement.id} wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie ${this.describeRaceMeasurement(raceMeasurement)} wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
-                    this.store.dispatch(
-                        RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}),
-                    );
+                    this.store.dispatch(RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}));
                 }
             });
     }

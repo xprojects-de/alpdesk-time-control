@@ -11,13 +11,14 @@ import org.slf4j.LoggerFactory;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.TimingProviderType;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Singleton
-public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
+public class AlpdeskTimeControlDataImportService implements PollingTimingImporter {
 
     private static final Logger LOG = LoggerFactory.getLogger(AlpdeskTimeControlDataImportService.class);
 
@@ -36,10 +37,10 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
     HttpClient httpClient;
 
     @Inject
-    MeasurementService measurementService;
+    TimingEventSink timingEventSink;
 
     @Inject
-    MeasurementTableLock measurementTableLock;
+    DeviceImportGate importGate;
 
     // A plain instance field here would be a shared-mutable-state race: TimingProviderRegistry
     // calls configure() then immediately hands the (single, singleton) importer back to the caller
@@ -54,6 +55,13 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
     @Override
     public TimingProviderType type() {
         return TimingProviderType.ALPDESK_TIMECONTROL;
+    }
+
+    @Override
+    public Set<DeviceCapability> capabilities() {
+        // This controller offers all of them - it holds the measurements itself, can be switched
+        // between continuous and manual triggering, and keeps a start queue.
+        return EnumSet.allOf(DeviceCapability.class);
     }
 
     @Override
@@ -98,8 +106,13 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
 
     @Override
     public List<Measurement> importDataFromDevice() {
-        List<Measurement> createdMeasurements = new ArrayList<>();
         String dataUrl = dataUrl();
+
+        // Read BEFORE the device is asked, not after the answer arrives: if a reset/archive starts
+        // while this request is in flight, everything below describes the race that was just
+        // archived. Handing the epoch to the sink is what lets it tell that apart from a poll
+        // issued after the reset - see DeviceImportGate#currentImportEpoch().
+        long requestedAtEpoch = importGate.currentImportEpoch();
 
         LOG.info("Fetching data from {}", dataUrl);
 
@@ -110,78 +123,103 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         // nothing new". DataImportScheduler's periodic poll already wraps this whole call in its
         // own try/catch, so propagating here doesn't change its "retry every 5s" behavior, just
         // what it logs.
+        // exchange(), not retrieve(): retrieve(String) turns a 200 with an EMPTY body into an
+        // "Empty body" HttpClientResponseException instead of returning "". The device answers
+        // exactly that when it holds no measurements - the normal state before a race and right
+        // after a reset - and the safety pull inside reset/archive then failed the whole operation
+        // with "Could not connect to device", making it impossible to reset an empty device.
+        // exchange() hands back the response and leaves the body an empty Optional.
         String response;
         try {
-            response = httpClient.toBlocking().retrieve(HttpRequest.GET(dataUrl));
+            response = httpClient.toBlocking().exchange(HttpRequest.GET(dataUrl), String.class)
+                    .getBody().orElse("");
         } catch (HttpClientException e) {
             throw new IllegalStateException("Could not connect to device at " + dataUrl + ": " + e.getMessage(), e);
         }
 
         if (response.trim().isEmpty()) {
             LOG.debug("No data received from device");
-            return createdMeasurements;
+            return List.of();
         }
 
-        String[] lines = response.split("\\r?\\n");
-        LocalDateTime now = LocalDateTime.now();
+        List<TimingEvent> events = parseEvents(response);
 
-        // Locked so a concurrent archive/reset can't observe or clear the measurement table
-        // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
-        // device can't block archive/reset operations.
-        measurementTableLock.run(() -> {
-            for (String line : lines) {
+        // Everything about what this does to the measurement table - dedup against what is stored,
+        // skipping rows that did not change, the pause window around a device reset - lives in the
+        // sink, shared with every other provider. This service only speaks the device's protocol.
+        List<Measurement> imported = timingEventSink.acceptBatch(events, requestedAtEpoch);
 
-                String trimmedLine = line.trim();
-                if (trimmedLine.isEmpty()) {
+        LOG.info("Successfully imported {} measurements", imported.size());
+        return imported;
+    }
+
+    /**
+     * Parses the device's response body - one {@code <deviceId>,<durationMs>} line per measurement,
+     * the device's whole list on every poll, not just what is new. A line that cannot be read is
+     * skipped with a warning rather than failing the poll: one garbled line (serial noise, firmware
+     * glitch) must not cost the rest of the field's times.
+     */
+    private List<TimingEvent> parseEvents(String response) {
+        List<TimingEvent> events = new ArrayList<>();
+
+        for (String line : response.split("\\r?\\n")) {
+
+            String trimmedLine = line.trim();
+            if (trimmedLine.isEmpty()) {
+                continue;
+            }
+
+            try {
+
+                String[] parts = trimmedLine.split(",");
+                if (parts.length != 2) {
+                    LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
                     continue;
                 }
 
-                try {
+                long deviceId = Long.parseLong(parts[0].trim());
 
-                    String[] parts = trimmedLine.split(",");
-                    if (parts.length != 2) {
-                        LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
-                        continue;
-                    }
-
-                    long deviceId = Long.parseLong(parts[0].trim());
-                    double timeValue = Double.parseDouble(parts[1].trim());
-                    long roundedDurationMs = Math.round(timeValue);
-
-                    // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose
-                    // value parses as a huge double: narrowing straight to int would silently wrap
-                    // around, possibly landing on a small, plausible-looking positive number that
-                    // the durationMs < 0 check below would never catch.
-                    if (roundedDurationMs < 0 || roundedDurationMs > Integer.MAX_VALUE) {
-                        LOG.warn("Ignoring out-of-range duration from device for ID {}: {} ms", deviceId, roundedDurationMs);
-                        continue;
-                    }
-                    int durationMs = (int) roundedDurationMs;
-
-                    // Looked up (and upserted below) by the device's own id, kept in a column
-                    // separate from this table's own `id` PK - see Measurement#deviceMeasurementId.
-                    var existingMeasurement = measurementService.findByDeviceMeasurementId(deviceId);
-                    Long existingParticipantId = existingMeasurement
-                            .map(Measurement::participantId)
-                            .orElse(null);
-                    LocalDateTime timestamp = existingMeasurement
-                            .map(Measurement::measuredAt)
-                            .orElse(now);
-
-                    Measurement saved = measurementService.upsertByDeviceMeasurementId(deviceId, existingParticipantId, durationMs, timestamp);
-                    createdMeasurements.add(saved);
-                    LOG.debug("Upserted measurement, device ID {}: {} ms", deviceId, durationMs);
-
-                } catch (NumberFormatException e) {
-                    LOG.warn("Could not parse line: {}", trimmedLine);
-                } catch (Exception e) {
-                    LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+                // A real device counter is always positive. MeasurementService reserves the
+                // negative range for the synthetic ids it gives manually entered and CSV imported
+                // rows, so a garbled line claiming id -3 would upsert onto the manual measurement
+                // holding that synthetic id - silently replacing a time an official typed in.
+                if (deviceId <= 0) {
+                    LOG.warn("Ignoring line with an out-of-range device measurement id: {}", trimmedLine);
+                    continue;
                 }
-            }
-        });
 
-        LOG.info("Successfully imported {} measurements", createdMeasurements.size());
-        return createdMeasurements;
+                double timeValue = Double.parseDouble(parts[1].trim());
+
+                // Checked BEFORE rounding: parseDouble accepts "NaN" and "Infinity", and
+                // Math.round(NaN) is 0 - a value that passes the range check below and then ranks
+                // ahead of the entire field. (Infinity rounds to Long.MAX_VALUE, which that check
+                // does catch, but there is no reason to depend on it.)
+                if (!Double.isFinite(timeValue)) {
+                    LOG.warn("Ignoring non-numeric duration from device for ID {}: {}", deviceId, parts[1].trim());
+                    continue;
+                }
+
+                long roundedDurationMs = Math.round(timeValue);
+
+                // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose
+                // value parses as a huge double: narrowing straight to int would silently wrap
+                // around, possibly landing on a small, plausible-looking positive number that the
+                // sink's negative-duration check would never catch.
+                if (roundedDurationMs < 0 || roundedDurationMs > Integer.MAX_VALUE) {
+                    LOG.warn("Ignoring out-of-range duration from device for ID {}: {} ms", deviceId, roundedDurationMs);
+                    continue;
+                }
+
+                events.add(TimingEvent.fromDevice(deviceId, (int) roundedDurationMs));
+
+            } catch (NumberFormatException e) {
+                LOG.warn("Could not parse line: {}", trimmedLine);
+            } catch (Exception e) {
+                LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+            }
+        }
+
+        return events;
     }
 
     @Override
@@ -192,7 +230,9 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         try {
 
             LOG.info("Resetting device at {}", resetUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(resetUrl));
+            // exchange() without a body type - see importDataFromDevice(): this command's answer is
+            // its status code, and retrieve() would fail it outright on an empty body.
+            httpClient.toBlocking().exchange(HttpRequest.GET(resetUrl));
             LOG.info("Successfully reset device");
 
             return true;
@@ -249,7 +289,8 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         try {
 
             LOG.info("Getting device status from {}", statusUrl);
-            String response = httpClient.toBlocking().retrieve(HttpRequest.GET(statusUrl));
+            String response = httpClient.toBlocking().exchange(HttpRequest.GET(statusUrl), String.class)
+                    .getBody().orElse("");
             LOG.info("Device status: {}", response);
 
             return response.trim();
@@ -275,7 +316,7 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         try {
 
             LOG.info("Discarding oldest start at {}", discardUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(discardUrl));
+            httpClient.toBlocking().exchange(HttpRequest.GET(discardUrl));
             LOG.info("Successfully discarded oldest start");
 
             return true;
@@ -301,7 +342,7 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
         try {
 
             LOG.debug("Checking device connection at {}", pingUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(pingUrl));
+            httpClient.toBlocking().exchange(HttpRequest.GET(pingUrl));
             LOG.debug("Device is connected");
 
             return true;

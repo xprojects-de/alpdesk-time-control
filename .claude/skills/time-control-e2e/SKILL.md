@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, and the Rundung rounding-consistency regression test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, the Saison season-scoped age-class test, and the Saison-Upgrade migration test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -8,7 +8,15 @@ description: "Run all Time Control end-to-end test suites under e2e-tests/ (curr
 Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
 
 - `e2e-tests/bergsprint/` — single race, real device-import path, category + Los-Modus scoring.
-- `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations),
+  Has a second runnable variant, `run_manual.sh` (own fresh instance needed, same reason as
+  kondi's variants): the same race without live auto-assign — measurements poll in unassigned,
+  get archived onto the race, are assigned to participants by hand via
+  `PUT /race-measurements/{id}` (incl. the duplicate-assignment 409 and a corrected mix-up),
+  DNF/DSQ are recorded before the sync, and its times carry deliberate rounding edge cases.
+  Its last step (`manual_verify_dns_scope.py`) checks that the "nicht gewertet" list is scoped
+  like the ranking above it across all 13 PDF variants and the live results in both forms (the
+  `/results` JSON and the `/results-html` page spectators open).
+- `e2e-tests/kondi-federation/` — 5-instance station federation test (1 main + 4 stations),
   with four runnable variants, each needing its own fresh set of 5 instances (they all create
   races with the same names, so none can run against instances another variant already used):
   - `run_all.sh` — the baseline scenario: stations enter results, export, MAIN imports them back,
@@ -26,7 +34,7 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
     `keepDsqInRanking` flag combination and verify each against an independent Python
     recalculation (JSON ranking + PDF "nicht gewertet" list), then a guardrail check that these
     flags have no effect on `TIME_COMBINATION` mode.
-  See its [README.md](../../e2e-tests/kondi2025-federation/README.md) for full detail on each
+  See its [README.md](../../e2e-tests/kondi-federation/README.md) for full detail on each
   variant — treat it as authoritative if a new variant script appears there that isn't listed here.
 - `e2e-tests/nachtslalom/` — two-run race exercising every `AutoAssignService` combination/error
   case (enable/skip/set-next/disable, default-by-raceNumber vs. default-by-startSequence, a
@@ -41,6 +49,25 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   against the actual PDF text via `pdftotext`, not just the JSON API). No timing device involved -
   results are set directly via `PUT`/`POST /participants` - so it runs much faster than
   bergsprint/nachtslalom.
+- `e2e-tests/saison/` — season-scoped age classes end to end: which season a race is scored in
+  follows its *date* and the configured season boundary, and with it which age classes apply.
+  Covers the post-upgrade state (only the upgrade year configured, so a past season's race comes
+  out "ohne Altersklasse" without any export failing), the rollover in both directions, moving and
+  un-moving the season boundary, and a Gaudi-Modus spanning two seasons — which must produce a
+  ranking, a "nicht gewertet" list, a PDF and a CSV rather than an error, scored against the first
+  race's season. Birth years are chosen so the same person is U16 in one season and U14 in the
+  other, which is what makes a wrong season visible. No timing device, no external data.
+- `e2e-tests/saison-upgrade/` — migration V4 (the `age_group` table rebuild) applied to a database
+  that already holds age groups: no row lost, **ids preserved** (the fixture uses non-contiguous
+  ids on purpose), AUTOINCREMENT high-water mark carried over, no leftover `age_group_v1`, and the
+  point of the rebuild — the same class name now allowed once per season. Then the consequence for
+  race history: a past season's race comes out "ohne Altersklasse" and is fixable from the UI by
+  rolling a season backwards. The only suite that does **not** start on an empty database:
+  `make_fixture.py` assembles a V3-schema database from the repo's own V1-V3 migration files, and
+  `start_instances.sh` passes `-Dflyway.datasources.default.validate-on-migrate=false` because that
+  fixture's flyway history is hand-written with NULL checksums (V4 itself is applied normally).
+  Its `run_all.sh` takes the instance's DB path — `start_instances.sh` prints it — as an argument;
+  pass it, or the SQLite-level checks are skipped.
 
 Each suite starts its own throwaway backend instance(s) via its own `start_instances.sh` into a
 fresh `mktemp -d` work dir with an isolated SQLite DB — **never** the real
@@ -66,12 +93,10 @@ found.
    install before building/running (`/usr/libexec/java_home -V` lists installed JVMs) — and
    re-export it in every subsequent command, since exported env vars don't persist between
    separate shell invocations.
-2. For `kondi2025-federation`, check its 4 required CSVs exist first (see its
-   [README.md](../../e2e-tests/kondi2025-federation/README.md)):
-   `race1_schnelligkeit_import.csv`, `race2_gleichgewicht_import.csv`,
-   `race3_kraft_import.csv`, `race4_lauf_import.csv`. This repo ships without real participant
-   data for privacy reasons, so if any are missing, **skip this suite** with a clear note in the
-   final summary instead of failing.
+2. `kondi-federation` runs on the synthetic demo data under its `fixtures/` directory, which
+   is checked in — no extra setup, and never point it at real participant data (see its
+   [README.md](../../e2e-tests/kondi-federation/README.md)). If `fixtures/` is missing,
+   regenerate it with `python3 make_fixtures.py` rather than skipping the suite.
 3. Run the runnable suites **one at a time** (not in parallel — cleanup of one must not race
    another's ports/PIDs/work dir), each from its own directory:
    a. `./start_instances.sh <absolute-path-to-time-control.jar>` — let it create its own temp
@@ -79,17 +104,19 @@ found.
    b. Check the printed health-check output shows the expected ports responding (HTTP 200/302
       etc., not connection failures) before continuing.
    c. `./run_all.sh` — record pass/fail. The scripts use `set -euo pipefail`, so they stop at
-      the first failed step/verification.
+      the first failed step/verification. For `saison-upgrade` only, pass the instance database
+      path that its `start_instances.sh` printed (`./run_all.sh <work-dir>/app/database/time-control.db`);
+      without it that suite skips its SQLite-level checks and says so.
    d. Clean up regardless of outcome: `pkill -f 'time-control.jar'` (plus
       `pkill -f 'fake_device.py'` for bergsprint/nachtslalom), then `rm -rf` that suite's temp work dir.
-   e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d three more times, once
+   e. For `kondi-federation` only, if step 2 didn't skip it: repeat a-d three more times, once
       each with `./run_phased.sh`, `./run_phased_results.sh`, and
       `./run_phased_results_with_status.sh` instead of `./run_all.sh` — fresh instances/work dir
       each time, same CSVs, same cleanup.
 4. Report a final summary with three parts:
    a. A short recap of what was actually done — whether the jar was (re)built or reused, which
       suites ran, which were skipped and why (e.g. missing CSVs), and which of the four
-      `kondi2025-federation` variants ran.
+      `kondi-federation` variants ran.
    b. A summary table: suite → ran/skipped, pass/fail, and for any failure point at
       `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and
       the failing script's output.

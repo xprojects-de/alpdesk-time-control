@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
+import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiLosPairingResponse;
 import x.timecontrol.dto.GaudiModeRaceResponse;
 import x.timecontrol.dto.GaudiModeRequest;
@@ -27,6 +28,7 @@ import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.GaudiCsvExportService;
 import x.timecontrol.services.GaudiModeService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
@@ -34,8 +36,11 @@ import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RaceService;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -59,14 +64,23 @@ public class GaudiModeController {
     @Inject
     PersonService personService;
 
+    @Inject
+    GaudiCsvExportService gaudiCsvExportService;
+
     @Produces(MediaType.APPLICATION_JSON)
     @Get
     @Operation(summary = "List Gaudi-Modus instances, optionally filtered by race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of Gaudi-Modus instances", content = @Content(schema = @Schema(implementation = GaudiModeResponse.class)))
     public HttpResponse<List<GaudiModeResponse>> list(@QueryValue Optional<Long> raceId) {
-        Iterable<GaudiMode> gaudiModes = raceId.isPresent() ? service.findByRaceId(raceId.get()) : service.findAll();
+        // Both projections leave the cover-page BLOB out - this endpoint only reports whether one
+        // is set, and loading several MB per instance to answer a boolean is what it used to do.
+        Iterable<GaudiMode> gaudiModes = raceId.isPresent()
+                ? service.findByRaceIdWithoutCoverPage(raceId.get())
+                : service.findAllWithoutCoverPage();
+        Set<Long> idsWithCoverPage = service.findIdsWithCoverPage();
         List<GaudiModeResponse> response = StreamSupport.stream(gaudiModes.spliterator(), false)
-                .map(gm -> GaudiModeResponse.from(gm, buildRaceResponses(gm.id())))
+                .map(gm -> GaudiModeResponse.from(gm, buildRaceResponses(gm.id()),
+                        idsWithCoverPage.contains(gm.id())))
                 .toList();
         return HttpResponse.ok(response);
     }
@@ -179,8 +193,40 @@ public class GaudiModeController {
             return HttpResponse.ok(service.computeRanking(gaudiMode.get()));
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // A refused-by-design state, not a server fault. Same 409-for-IllegalStateException
+            // mapping the rest of the controllers use, so the reason reaches the operator as a
+            // handled error instead of the GlobalExceptionHandler's generic 500.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to compute ranking: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/{id}/not-ranked")
+    @Operation(summary = "Get the entries excluded from a Gaudi-Modus ranking (\"nicht gewertet\")",
+            description = "Persons (Zeit-Kombination / Punkte-Mischwertung) or pairs (Los-Modus) missing a valid result - the same list the PDF export prints below the ranking. Always empty for Mannschaftswertung.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Excluded entries", content = @Content(schema = @Schema(implementation = GaudiDnsEntryResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance not found")
+    @ApiResponse(responseCode = "409", description = "List refused by design (see the message)")
+    public HttpResponse<?> getNotRanked(@PathVariable Long id) {
+        Optional<GaudiMode> gaudiMode = service.findById(id);
+        if (gaudiMode.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        try {
+            return HttpResponse.ok(service.computeDnsEntries(gaudiMode.get()));
+        } catch (DataAccessException e) {
+            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // Same 409-for-IllegalStateException mapping as getRanking and the exports: without it
+            // a refused-by-design state reaches the operator as the GlobalExceptionHandler's
+            // generic "An unexpected error occurred", with the actual reason dropped.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
         }
     }
 
@@ -189,27 +235,18 @@ public class GaudiModeController {
     @Operation(summary = "Export the computed ranking of a Gaudi-Modus instance as PDF", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF generated successfully")
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "409", description = "Ranking refused by design (see the message)")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdf(@PathVariable Long id) {
-        Optional<GaudiMode> gaudiModeOpt = service.findById(id);
-        if (gaudiModeOpt.isEmpty()) {
-            return HttpResponse.notFound();
-        }
-        GaudiMode gaudiMode = gaudiModeOpt.get();
-
-        List<Race> races = service.findRacesFor(gaudiMode.id()).stream()
-                .map(gmr -> raceService.findById(gmr.raceId()))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .toList();
-        if (races.isEmpty()) {
-            return HttpResponse.notFound();
-        }
-
-        try {
+        // Routed through the same scaffold as the type-restricted exports below (every type is
+        // allowed here) rather than repeating the race lookup and error handling: the duplicated
+        // copy is how this endpoint ended up without their IllegalStateException -> 409 mapping and
+        // turned a refused-by-design state into a 500.
+        return exportFile(id, EnumSet.allOf(GaudiModeType.class), ".pdf", "PDF", (gaudiMode, races) -> {
             List<GaudiRankingEntryResponse> ranking = service.computeRanking(gaudiMode);
-            byte[] pdfBytes = switch (gaudiMode.type()) {
-                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst());
+            return switch (gaudiMode.type()) {
+                case LOS -> pdfExportService.generateLosModeRanking(gaudiMode, ranking, races.getFirst(),
+                        service.computeDnsEntries(gaudiMode));
                 case TEAM -> pdfExportService.generateTeamModeRanking(gaudiMode, ranking, races.getFirst());
                 case TIME_COMBINATION ->
                         pdfExportService.generateTimeCombinationRanking(gaudiMode, ranking, races, races.getFirst(),
@@ -218,19 +255,7 @@ public class GaudiModeController {
                         pdfExportService.generatePointsCombinationRanking(gaudiMode, ranking, races, races.getFirst(),
                                 service.computeDnsEntries(gaudiMode));
             };
-
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + ".pdf");
-        } catch (DataAccessException e) {
-            throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
-        } catch (Exception e) {
-            // The method-level @Produces forces "application/pdf" on a plain HttpResponse.serverError();
-            // overriding the content type here is what makes the JSON ErrorResponse body actually readable
-            // as JSON instead of being mislabeled as a (broken) PDF download.
-            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))
-                    .contentType(MediaType.APPLICATION_JSON);
-        }
+        });
     }
 
     @Produces("application/pdf")
@@ -243,12 +268,14 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByGender(@PathVariable Long id, @PathVariable String gender) {
-        return exportPointsCombinationPdf(id, gender.toLowerCase() + ".pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
+                    Gender filterGender = Gender.valueOf(gender.toUpperCase());
                     List<GaudiRankingEntryResponse> ranking =
-                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
+                            service.computeRankingForCategory(gaudiMode, filterGender, null);
                     return pdfExportService.generatePointsCombinationGenderRanking(
-                            gaudiMode, ranking, races, races.getFirst(), gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), gender,
+                            service.computeDnsEntries(gaudiMode, filterGender, null));
                 });
     }
 
@@ -262,12 +289,14 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
-        return exportPointsCombinationPdf(id, ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
+                    Gender filterGender = Gender.valueOf(gender.toUpperCase());
                     List<GaudiRankingEntryResponse> ranking =
-                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
+                            service.computeRankingForCategory(gaudiMode, filterGender, ageGroup);
                     return pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                            gaudiMode, ranking, races, races.getFirst(), ageGroup, gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), ageGroup, gender,
+                            service.computeDnsEntries(gaudiMode, filterGender, ageGroup));
                 });
     }
 
@@ -281,32 +310,102 @@ public class GaudiModeController {
     @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
     @ApiResponse(responseCode = "500", description = "PDF generation failed")
     public HttpResponse<?> exportPdfAllAgeGroups(@PathVariable Long id) {
-        return exportPointsCombinationPdf(id, "altersklassen.pdf",
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_altersklassen.pdf", "PDF",
                 (gaudiMode, races) -> pdfExportService.generatePointsCombinationAllAgeGroupsRanking(
                         gaudiMode, races, races.getFirst(),
                         (gender, ageGroupName) -> service.computeRankingForCategory(gaudiMode, gender, ageGroupName),
                         service.computeDnsEntries(gaudiMode)));
     }
 
+    @Produces("text/csv")
+    @Get("/{id}/export/csv")
+    @Operation(summary = "Export the ranking of a Zeit-Kombination / Punkte-Mischwertung as CSV",
+            description = "One row per ranked person in ranking order: Platz, Name, Vorname, Team, Altersklasse, Externe ID, Wert " +
+                    "(total time or total points). ';'-delimited, UTF-8. Only valid for types TIME_COMBINATION and POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type TIME_COMBINATION or POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsv(@PathVariable Long id) {
+        return exportFile(id, COMBINATION_TYPES, ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(
+                        gaudiMode.type(), service.computeRanking(gaudiMode), races.getFirst()));
+    }
+
+    @Produces("text/csv")
+    @Get("/{id}/export/csv/gender/{gender}")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking filtered by gender as CSV",
+            description = "Same columns as /export/csv. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsvByGender(@PathVariable Long id, @PathVariable String gender) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + gender.toLowerCase() + ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(gaudiMode.type(),
+                        service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null),
+                        races.getFirst()));
+    }
+
+    @Produces("text/csv")
+    @Get("/{id}/export/csv/agegroup/{ageGroup}/gender/{gender}")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking filtered by age group and gender as CSV",
+            description = "Same columns as /export/csv. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "CSV generation failed")
+    public HttpResponse<?> exportCsvByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".csv", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateRanking(gaudiMode.type(),
+                        service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup),
+                        races.getFirst()));
+    }
+
+    @Produces("application/zip")
+    @Get("/{id}/export/csv/agegroups/all")
+    @Operation(summary = "Export a Punkte-Mischwertung ranking split into all age groups and genders as a ZIP of CSV files",
+            description = "One CSV (same columns as /export/csv) per non-empty age group x gender. Only valid for type POINTS_COMBINATION.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "ZIP generated successfully")
+    @ApiResponse(responseCode = "400", description = "Gaudi-Modus instance is not of type POINTS_COMBINATION")
+    @ApiResponse(responseCode = "404", description = "Gaudi-Modus instance or race not found")
+    @ApiResponse(responseCode = "500", description = "ZIP generation failed")
+    public HttpResponse<?> exportCsvAllAgeGroups(@PathVariable Long id) {
+        return exportFile(id, POINTS_COMBINATION_ONLY, "_altersklassen.zip", "CSV",
+                (gaudiMode, races) -> gaudiCsvExportService.generateAllAgeGroupsZip(gaudiMode.type(), races.getFirst(),
+                        (g, ageGroupName) -> service.computeRankingForCategory(gaudiMode, g, ageGroupName)));
+    }
+
+    private static final Set<GaudiModeType> POINTS_COMBINATION_ONLY = EnumSet.of(GaudiModeType.POINTS_COMBINATION);
+    private static final Set<GaudiModeType> COMBINATION_TYPES =
+            EnumSet.of(GaudiModeType.TIME_COMBINATION, GaudiModeType.POINTS_COMBINATION);
+
     @FunctionalInterface
-    private interface PointsCombinationPdfBody {
+    private interface ExportBody {
         byte[] generate(GaudiMode gaudiMode, List<Race> races) throws Exception;
     }
 
     /**
-     * Shared race-lookup + type-check + generate + error-handling scaffold for the Punkte-Mischwertung
-     * gender/age-group PDF export endpoints above, mirroring {@code exportPdf} in
-     * {@code ParticipantController}.
+     * Shared race-lookup + type-check + generate + error-handling scaffold for the
+     * type-restricted PDF/CSV export endpoints above, mirroring {@code exportPdf} in
+     * {@code ParticipantController}. {@code filenameSuffix} is appended to "gaudi_&lt;id&gt;".
      */
-    private HttpResponse<?> exportPointsCombinationPdf(Long id, String filenameSuffix, PointsCombinationPdfBody body) {
+    private HttpResponse<?> exportFile(Long id, Set<GaudiModeType> allowedTypes, String filenameSuffix,
+                                       String formatLabel, ExportBody body) {
         Optional<GaudiMode> gaudiModeOpt = service.findById(id);
         if (gaudiModeOpt.isEmpty()) {
             return HttpResponse.notFound();
         }
         GaudiMode gaudiMode = gaudiModeOpt.get();
-        if (gaudiMode.type() != GaudiModeType.POINTS_COMBINATION) {
+        if (!allowedTypes.contains(gaudiMode.type())) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(
-                    "This export is only available for Gaudi-Modus instances of type POINTS_COMBINATION"));
+                    "This export is only available for Gaudi-Modus instances of type " +
+                            allowedTypes.stream().map(Enum::name).collect(Collectors.joining(" or "))))
+                    .contentType(MediaType.APPLICATION_JSON);
         }
 
         List<Race> races = service.findRacesFor(gaudiMode.id()).stream()
@@ -319,14 +418,19 @@ public class GaudiModeController {
         }
 
         try {
-            byte[] pdfBytes = body.generate(gaudiMode, races);
-            return HttpResponse.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + "_" + filenameSuffix);
+            byte[] bytes = body.generate(gaudiMode, races);
+            return HttpResponse.ok(bytes)
+                    .header("Content-Disposition", "attachment; filename=gaudi_" + gaudiMode.id() + filenameSuffix);
         } catch (DataAccessException e) {
             throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
+        } catch (IllegalStateException e) {
+            // See getRanking: a refused-by-design state is a 409 with its reason, not a 500.
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT)
+                    .body(new x.timecontrol.dto.ErrorResponse(e.getMessage()))
+                    .contentType(MediaType.APPLICATION_JSON);
         } catch (Exception e) {
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate PDF: " + reason))
+            return HttpResponse.serverError(new x.timecontrol.dto.ErrorResponse("Failed to generate " + formatLabel + ": " + reason))
                     .contentType(MediaType.APPLICATION_JSON);
         }
     }

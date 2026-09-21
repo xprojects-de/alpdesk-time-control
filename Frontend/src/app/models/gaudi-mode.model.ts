@@ -1,15 +1,15 @@
 export enum GaudiModeType {
-    LOS = 'LOS',
-    TEAM = 'TEAM',
-    TIME_COMBINATION = 'TIME_COMBINATION',
-    POINTS_COMBINATION = 'POINTS_COMBINATION',
+    LOS = "LOS",
+    TEAM = "TEAM",
+    TIME_COMBINATION = "TIME_COMBINATION",
+    POINTS_COMBINATION = "POINTS_COMBINATION",
 }
 
 export const GaudiModeTypeLabels: Record<GaudiModeType, string> = {
-    [GaudiModeType.LOS]: 'Los-Modus',
-    [GaudiModeType.TEAM]: 'Mannschaftswertung',
-    [GaudiModeType.TIME_COMBINATION]: 'Zeit-Kombination',
-    [GaudiModeType.POINTS_COMBINATION]: 'Punkte-Mischwertung',
+    [GaudiModeType.LOS]: "Los-Modus",
+    [GaudiModeType.TEAM]: "Mannschaftswertung",
+    [GaudiModeType.TIME_COMBINATION]: "Zeit-Kombination",
+    [GaudiModeType.POINTS_COMBINATION]: "Punkte-Mischwertung",
 };
 
 export interface GaudiModeRaceEntry {
@@ -74,11 +74,25 @@ export interface GaudiRankingLeg {
     points?: number;
     /** The participant's explicit DSQ/DNF/DNS status in this race, if any. */
     status?: string;
+    /** Start-group block-start offset (ms) netted out of rawValue, if any - TIME races only. */
+    startGroupOffsetMs?: number | null;
 }
 
 export interface GaudiTeamMember {
     label: string;
     valueMs?: number;
+}
+
+/** An entry excluded from a Gaudi-Modus ranking ("nicht gewertet"); for Los-Modus lastName carries the pair label. */
+export interface GaudiNotRankedEntry {
+    /** For LOS pairings this holds the whole pairing label and firstName is absent. */
+    lastName: string;
+    /** Omitted by the backend for LOS pairings (it sends an empty string, which serde drops). */
+    firstName?: string;
+    team?: string;
+    ageGroup: string;
+    externalId?: string;
+    status: string;
 }
 
 export interface GaudiRankingEntry {
@@ -95,3 +109,10 @@ export interface GaudiRankingEntry {
     members?: GaudiTeamMember[];
     personId?: number;
 }
+
+/**
+ * CSV export variants of a Gaudi-Modus ranking. 'all' works for Zeit-Kombination and
+ * Punkte-Mischwertung; the others are Punkte-Mischwertung only, and 'agegroups' downloads a ZIP
+ * with one CSV per age group x gender.
+ */
+export type GaudiCsvExportVariant = "all" | "FEMALE" | "MALE" | "agegroups";

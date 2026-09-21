@@ -1,44 +1,35 @@
-import {
-    Component,
-    AfterViewInit,
-    viewChild,
-    OnDestroy,
-    inject,
-    effect,
-    ChangeDetectionStrategy,
-} from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {Store} from '@ngrx/store';
-import {Observable, Subject, firstValueFrom} from 'rxjs';
-import {MatTableModule, MatTableDataSource} from '@angular/material/table';
-import {MatButtonModule} from '@angular/material/button';
-import {MatIconModule} from '@angular/material/icon';
-import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatDialog, MatDialogModule} from '@angular/material/dialog';
-import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
-import {MatCardModule} from '@angular/material/card';
-import {MatTooltipModule} from '@angular/material/tooltip';
-import {MatSortModule, MatSort} from '@angular/material/sort';
-import {MatPaginatorModule, MatPaginator} from '@angular/material/paginator';
-import {Race, RaceRequest} from '../../models/race.model';
-import * as RaceActions from '../../store/race/race.actions';
-import * as RaceSelectors from '../../store/race/race.selectors';
-import * as ParticipantActions from '../../store/participant/participant.actions';
-import {RaceDialogComponent} from './race-dialog.component';
-import {RaceLiveLinksDialogComponent} from './race-live-links-dialog.component';
+import {Component, AfterViewInit, viewChild, OnDestroy, inject, effect, signal} from "@angular/core";
+import {CommonModule} from "@angular/common";
+import {Store} from "@ngrx/store";
+import {Observable, Subject, firstValueFrom} from "rxjs";
+import {MatTableModule, MatTableDataSource} from "@angular/material/table";
+import {MatButtonModule} from "@angular/material/button";
+import {MatIconModule} from "@angular/material/icon";
+import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
+import {MatDialog, MatDialogModule} from "@angular/material/dialog";
+import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
+import {MatCardModule} from "@angular/material/card";
+import {MatTooltipModule} from "@angular/material/tooltip";
+import {MatSortModule, MatSort} from "@angular/material/sort";
+import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
+import {MatFormFieldModule} from "@angular/material/form-field";
+import {MatInputModule} from "@angular/material/input";
+import {Race, RaceRequest} from "../../models/race.model";
+import * as RaceActions from "../../store/race/race.actions";
+import * as RaceSelectors from "../../store/race/race.selectors";
+import * as ParticipantActions from "../../store/participant/participant.actions";
+import {RaceDialogComponent} from "./race-dialog.component";
+import {RaceLiveLinksDialogComponent} from "./race-live-links-dialog.component";
 import {
     ParticipantImportMappingDialogComponent,
-    ParticipantImportMappingDialogResult
-} from '../participant-list/participant-import-mapping-dialog.component';
-import {RaceService} from '../../services/race.service';
-import {ParticipantService} from '../../services/participant.service';
-import {ConfirmDialogComponent} from '../shared/confirm-dialog/confirm-dialog.component';
-import {takeUntil} from 'rxjs/operators';
-import {Actions, ofType} from '@ngrx/effects';
+    ParticipantImportMappingDialogResult,
+} from "../participant-list/participant-import-mapping-dialog.component";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
+import {takeUntil} from "rxjs/operators";
+import {Actions, ofType} from "@ngrx/effects";
 
 @Component({
-    selector: 'app-race-list',
-    standalone: true,
+    selector: "app-race-list",
     imports: [
         CommonModule,
         MatTableModule,
@@ -51,6 +42,8 @@ import {Actions, ofType} from '@ngrx/effects';
         MatTooltipModule,
         MatSortModule,
         MatPaginatorModule,
+        MatFormFieldModule,
+        MatInputModule,
     ],
     template: `
         <mat-card>
@@ -58,27 +51,37 @@ import {Actions, ofType} from '@ngrx/effects';
                 <mat-card-title>Rennen</mat-card-title>
             </mat-card-header>
             <mat-card-content>
+                <div class="filter-section">
+                    <mat-form-field appearance="outline" class="search-field">
+                        <mat-label>Suche (Name, Datum)</mat-label>
+                        <mat-icon matPrefix>search</mat-icon>
+                        <input
+                            matInput
+                            [value]="searchTerm()"
+                            (input)="onSearchChange($any($event.target).value)"
+                            placeholder="z.B. Slalom oder 19.09."
+                        />
+                        @if (searchTerm()) {
+                            <button matSuffix mat-icon-button aria-label="Suche leeren" (click)="clearSearch()">
+                                <mat-icon>close</mat-icon>
+                            </button>
+                        }
+                    </mat-form-field>
+                </div>
+
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neues Rennen
                     </button>
-                    <button
-                            mat-raised-button
-                            (click)="refreshData()"
-                            matTooltip="Daten aktualisieren"
-                    >
+                    <button mat-raised-button (click)="refreshData()" matTooltip="Daten aktualisieren">
                         <mat-icon>refresh</mat-icon>
                         Aktualisieren
                     </button>
                     <button
-                            mat-raised-button
-                            (click)="importRaceResults()"
-                            matTooltip="Neues Rennen aus einer Ergebnisdatei (CSV) anlegen, z.B. dem Export eines Rennens aus einer anderen Instanz"
+                        mat-raised-button
+                        (click)="importRaceResults()"
+                        matTooltip="Neues Rennen aus einer Ergebnisdatei (CSV) anlegen, z.B. dem Export eines Rennens aus einer anderen Instanz"
                     >
                         <mat-icon>upload_file</mat-icon>
                         Rennergebnisse importieren
@@ -87,114 +90,125 @@ import {Actions, ofType} from '@ngrx/effects';
 
                 @if (loading$ | async) {
                     <div class="loading-container">
-                        <mat-spinner></mat-spinner>
+                        <mat-spinner diameter="30"></mat-spinner>
                     </div>
                 }
 
                 <div class="table-container">
-                <table
+                    <table
                         mat-table
                         [dataSource]="dataSource"
                         [trackBy]="trackById"
                         matSort
                         class="race-table"
                         [class.hidden]="loading$ | async"
-                >
-                    <!-- ID Column -->
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                        <td mat-cell *matCellDef="let race">{{ race.id }}</td>
-                    </ng-container>
+                    >
+                        <!-- Name Column -->
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
+                            <td mat-cell *matCellDef="let race">{{ race.name }}</td>
+                        </ng-container>
 
-                    <!-- Name Column -->
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
-                        <td mat-cell *matCellDef="let race">{{ race.name }}</td>
-                    </ng-container>
+                        <!-- Date Column -->
+                        <ng-container matColumnDef="date">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Datum</th>
+                            <td mat-cell *matCellDef="let race">
+                                {{ race.date | date: "dd.MM.yyyy" }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Date Column -->
-                    <ng-container matColumnDef="date">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Datum</th>
-                        <td mat-cell *matCellDef="let race">
-                            {{ race.date | date: 'dd.MM.yyyy' }}
-                        </td>
-                    </ng-container>
+                        <!-- Which season a race is scored in, and with it which age groups apply
+                             to it. Worth its own column here (unlike in the participant list, which
+                             only ever shows one race): with a season boundary other than 1 January,
+                             a January race belongs to the previous season, which its date alone
+                             does not reveal. -->
+                        <ng-container matColumnDef="seasonYear">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header>Saison</th>
+                            <td mat-cell *matCellDef="let race" class="season-cell">
+                                {{ race.seasonYear }}
+                            </td>
+                        </ng-container>
 
-                    <!-- Actions Column -->
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let race">
-                            <button
+                        <!-- Actions Column -->
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let race">
+                                <button
                                     mat-icon-button
                                     (click)="openLiveLinksDialog(race)"
                                     matTooltip="Live-Ergebnisse-Links"
-                            >
-                                <mat-icon>link</mat-icon>
-                            </button>
-                            <button
+                                >
+                                    <mat-icon>link</mat-icon>
+                                </button>
+                                <button
                                     mat-icon-button
                                     (click)="exportResults(race)"
                                     matTooltip="Rennergebnisse als CSV exportieren (Teilnehmer, Personendaten, Zeiten)"
-                            >
-                                <mat-icon>download</mat-icon>
-                            </button>
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(race)"
-                                    matTooltip="Bearbeiten"
-                            >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
-                                    mat-icon-button
-                                    color="warn"
-                                    (click)="deleteRace(race)"
-                                    matTooltip="Löschen"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                                >
+                                    <mat-icon>download</mat-icon>
+                                </button>
+                                <button mat-icon-button (click)="openEditDialog(race)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button mat-icon-button color="warn" (click)="deleteRace(race)" matTooltip="Löschen">
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-          }
+            .filter-section {
+                margin-top: 20px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
 
-          .loading-container {
-            display: flex;
-            justify-content: center;
-            padding: 40px;
-          }
+            .search-field {
+                min-width: 280px;
+            }
 
-          .race-table {
-            width: 100%;
-          }
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+            }
 
-          .hidden {
-            display: none;
-          }
+            .loading-container {
+                display: flex;
+                justify-content: center;
+                padding: 8px;
+            }
 
-          mat-card {
-            margin: 20px;
-          }
+            .race-table {
+                width: 100%;
+            }
 
-          th.mat-sort-header-sorted {
-            color: black;
-          }
+            .season-cell {
+                color: rgba(0, 0, 0, 0.6);
+            }
+
+            .hidden {
+                display: none;
+            }
+
+            mat-card {
+                margin: 20px;
+            }
+
+            th.mat-sort-header-sorted {
+                color: black;
+            }
         `,
     ],
 })
@@ -203,109 +217,143 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
     private dialog = inject(MatDialog);
     private snackBar = inject(MatSnackBar);
     private actions$ = inject(Actions);
-    private raceService = inject(RaceService);
-    private participantService = inject(ParticipantService);
     private destroy$ = new Subject<void>();
 
     races$: Observable<Race[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ['id', 'name', 'date', 'actions'];
+    displayedColumns = ["name", "date", "seasonYear", "actions"];
     dataSource = new MatTableDataSource<Race>([]);
     trackById = (_index: number, race: Race) => race.id;
-    private sortInitialized = false;
-    private paginatorInitialized = false;
+
+    /** Free-text search over the loaded races - see filterPredicate below. */
+    searchTerm = signal("");
 
     sort = viewChild.required(MatSort);
     paginator = viewChild.required(MatPaginator);
 
     constructor() {
+        // Name plus the date as it is displayed, so "19.09." finds a race the operator sees in the
+        // table without having to type the ISO form the backend stores.
+        this.dataSource.filterPredicate = (race: Race, filter: string) => {
+            const term = filter.trim().toLowerCase();
+            if (!term) {
+                return true;
+            }
+            const [jahr, monat, tag] = (race.date ?? "").split("-");
+            const datumAnzeige = tag && monat && jahr ? `${tag}.${monat}.${jahr}` : (race.date ?? "");
+            return [race.name, datumAnzeige]
+                .filter((value): value is string => !!value)
+                .some(value => value.toLowerCase().includes(term));
+        };
+
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
         this.loading$ = this.store.select(RaceSelectors.selectRaceLoading);
 
-        this.actions$.pipe(
-            ofType(RaceActions.createRaceSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open('Rennen erfolgreich erstellt', 'OK', {duration: 3000});
+        this.actions$.pipe(ofType(RaceActions.createRaceSuccess), takeUntil(this.destroy$)).subscribe(() => {
+            this.snackBar.open("Rennen erfolgreich erstellt", "OK", {duration: 3000});
         });
-        this.actions$.pipe(
-            ofType(RaceActions.createRaceFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Erstellen des Rennens: ${error}`, 'OK', {duration: 5000});
+        this.actions$.pipe(ofType(RaceActions.createRaceFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Erstellen des Rennens: ${error}`, "OK", {duration: 5000});
         });
 
-        this.actions$.pipe(
-            ofType(RaceActions.updateRaceSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open('Rennen erfolgreich aktualisiert', 'OK', {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(RaceActions.updateRaceFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Aktualisieren des Rennens: ${error}`, 'OK', {duration: 5000});
-        });
-
-        this.actions$.pipe(
-            ofType(RaceActions.deleteRaceSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(() => {
-            this.snackBar.open('Rennen erfolgreich gelöscht', 'OK', {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(RaceActions.deleteRaceFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen des Rennens: ${error}`, 'OK', {duration: 5000});
-        });
-        this.actions$.pipe(
-            ofType(RaceActions.deleteRaceConflict),
-            takeUntil(this.destroy$),
-        ).subscribe(({id, message}) => {
-            this.dialog.open(ConfirmDialogComponent, {
-                width: '450px',
-                data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
-            })
-                .afterClosed()
-                .pipe(takeUntil(this.destroy$))
-                .subscribe((confirmed) => {
-                    if (confirmed) {
-                        this.store.dispatch(RaceActions.deleteRace({id, force: true}));
-                    }
+        this.actions$
+            .pipe(ofType(RaceActions.createRaceForResultImportSuccess), takeUntil(this.destroy$))
+            .subscribe(({race}) => this.openResultImportDialog(race));
+        this.actions$
+            .pipe(ofType(RaceActions.createRaceForResultImportFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Anlegen des Rennens: ${error}`, "OK", {
+                    duration: 5000,
+                    panelClass: ["error-snackbar"],
                 });
+            });
+        // The import result lands in the participant slice (shared with the participant list's own
+        // import); show it here and clear it, so the participant list doesn't re-display it later.
+        this.actions$
+            .pipe(ofType(ParticipantActions.importParticipantsMappedSuccess), takeUntil(this.destroy$))
+            .subscribe(({result}) => {
+                this.snackBar.open(
+                    `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`,
+                    "OK",
+                    {duration: 5000},
+                );
+                const errors = result.errors ?? [];
+                if (errors.length > 0) {
+                    const details = errors.map(e => `Zeile ${e.lineNumber}: ${e.reason}`).join("\n");
+                    this.dialog.open(ConfirmDialogComponent, {
+                        width: "500px",
+                        data: {
+                            title: "Übersprungene Zeilen",
+                            message: details,
+                            confirmLabel: "OK",
+                            hideCancel: true,
+                        },
+                    });
+                }
+                this.store.dispatch(ParticipantActions.clearImportResult());
+            });
+        this.actions$
+            .pipe(ofType(ParticipantActions.importParticipantsMappedFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Import: ${error}`, "OK", {
+                    duration: 5000,
+                    panelClass: ["error-snackbar"],
+                });
+            });
+
+        this.actions$.pipe(ofType(RaceActions.updateRaceSuccess), takeUntil(this.destroy$)).subscribe(() => {
+            this.snackBar.open("Rennen erfolgreich aktualisiert", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(ofType(RaceActions.updateRaceFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Aktualisieren des Rennens: ${error}`, "OK", {duration: 5000});
         });
 
-        // Setup sort when signal changes
+        this.actions$.pipe(ofType(RaceActions.deleteRaceSuccess), takeUntil(this.destroy$)).subscribe(() => {
+            this.snackBar.open("Rennen erfolgreich gelöscht", "OK", {duration: 3000});
+        });
+        this.actions$.pipe(ofType(RaceActions.deleteRaceFailure), takeUntil(this.destroy$)).subscribe(({error}) => {
+            this.snackBar.open(`FEHLER beim Löschen des Rennens: ${error}`, "OK", {duration: 5000});
+        });
+        this.actions$
+            .pipe(ofType(RaceActions.deleteRaceConflict), takeUntil(this.destroy$))
+            .subscribe(({id, message}) => {
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {message, confirmLabel: "Löschen", confirmColor: "warn"},
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (confirmed) {
+                            this.store.dispatch(RaceActions.deleteRace({id, force: true}));
+                        }
+                    });
+            });
+
+        // Assigns as soon as the signal reports the instance - no delay needed, and comparing
+        // instances (rather than a "done" flag) also re-attaches should the table ever be
+        // recreated.
         effect(() => {
             const sortInstance = this.sort();
-            if (sortInstance && !this.sortInitialized) {
-                setTimeout(() => {
-                    this.dataSource.sort = sortInstance;
-                    this.sortInitialized = true;
-                }, 100);
+            if (sortInstance && this.dataSource.sort !== sortInstance) {
+                this.dataSource.sort = sortInstance;
             }
         });
 
         effect(() => {
             const paginatorInstance = this.paginator();
-            if (paginatorInstance && !this.paginatorInitialized) {
-                setTimeout(() => {
-                    this.dataSource.paginator = paginatorInstance;
-                    this.paginatorInitialized = true;
-                }, 100);
+            if (paginatorInstance && this.dataSource.paginator !== paginatorInstance) {
+                this.dataSource.paginator = paginatorInstance;
             }
         });
     }
 
     ngAfterViewInit(): void {
         this.store.dispatch(RaceActions.loadRaces());
-        this.races$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((races) => {
-                this.dataSource.data = races;
-            });
+        this.races$.pipe(takeUntil(this.destroy$)).subscribe(races => {
+            this.dataSource.data = races;
+        });
     }
 
     ngOnDestroy(): void {
@@ -315,79 +363,90 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
 
     openCreateDialog(): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
-            width: '500px',
+            width: "500px",
             data: {race: null, races: this.dataSource.data},
         });
 
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        RaceActions.createRace({race: result})
-                    );
+                    this.store.dispatch(RaceActions.createRace({race: result}));
                 }
             });
     }
 
     openEditDialog(race: Race): void {
         const dialogRef = this.dialog.open(RaceDialogComponent, {
-            width: '500px',
+            width: "500px",
             data: {race, races: this.dataSource.data},
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(
                         RaceActions.updateRace({
                             id: race.id,
                             race: result,
-                        })
+                        }),
                     );
                 }
             });
     }
 
     deleteRace(race: Race): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie das Rennen "${race.name}" wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie das Rennen "${race.name}" wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
-                    this.store.dispatch(
-                        RaceActions.deleteRace({id: race.id})
-                    );
+                    this.store.dispatch(RaceActions.deleteRace({id: race.id}));
                 }
             });
     }
 
+    onSearchChange(value: string): void {
+        this.searchTerm.set(value);
+        this.dataSource.filter = value.trim().toLowerCase();
+        // Without this, a search made while on page 3 shows an empty table instead of its matches.
+        this.paginator()?.firstPage();
+    }
+
+    clearSearch(): void {
+        this.onSearchChange("");
+    }
+
     refreshData(): void {
         this.store.dispatch(RaceActions.loadRaces());
-        this.snackBar.open('Daten werden aktualisiert...', 'OK', {
+        this.snackBar.open("Daten werden aktualisiert...", "OK", {
             duration: 2000,
         });
     }
 
     exportResults(race: Race): void {
-        this.store.dispatch(ParticipantActions.exportParticipantsCsv({
-            raceId: race.id,
-            filename: `rennergebnisse_${race.name}.csv`,
-        }));
+        this.store.dispatch(
+            ParticipantActions.exportParticipantsCsv({
+                raceId: race.id,
+                filename: `rennergebnisse_${race.name}.csv`,
+            }),
+        );
     }
 
     openLiveLinksDialog(race: Race): void {
         this.dialog.open(RaceLiveLinksDialogComponent, {
-            width: '500px',
+            width: "500px",
             data: {race},
         });
     }
@@ -396,73 +455,39 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
      * Full race migration from another instance: create a new race here (name/date decided locally,
      * not carried from the export - the source instance's export doesn't include them), then import
      * the roster+results CSV into it via the same mapping dialog the participant list uses.
+     * Continues in the createRaceForResultImportSuccess listener set up in the constructor.
      */
     async importRaceResults(): Promise<void> {
         const raceDialogRef = this.dialog.open(RaceDialogComponent, {
-            width: '500px',
+            width: "500px",
             data: {race: null, races: this.dataSource.data},
         });
         const raceRequest: RaceRequest | undefined = await firstValueFrom(raceDialogRef.afterClosed());
         if (!raceRequest) {
             return;
         }
+        this.store.dispatch(RaceActions.createRaceForResultImport({race: raceRequest}));
+    }
 
-        this.raceService.create(raceRequest).subscribe({
-            next: (createdRace) => {
-                this.store.dispatch(RaceActions.loadRaces());
-                this.snackBar.open(`Rennen "${createdRace.name}" angelegt - jetzt die Ergebnisdatei wählen`, 'OK', {duration: 3000});
-
-                const importDialogRef = this.dialog.open(ParticipantImportMappingDialogComponent, {width: '900px'});
-                importDialogRef
-                    .afterClosed()
-                    .pipe(takeUntil(this.destroy$))
-                    .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
-                        if (!result) {
-                            return;
-                        }
-                        this.participantService
-                            .importMapped(createdRace.id, result.file, result.format, result.delimiter, result.mapping)
-                            .subscribe({
-                                next: (importResult) => {
-                                    this.snackBar.open(
-                                        `Import abgeschlossen: ${importResult.importedCount} importiert, ${importResult.skippedCount} übersprungen`,
-                                        'OK',
-                                        {duration: 5000},
-                                    );
-                                    const errors = importResult.errors ?? [];
-                                    if (errors.length > 0) {
-                                        const details = errors
-                                            .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
-                                            .join('\n');
-                                        this.dialog.open(ConfirmDialogComponent, {
-                                            width: '500px',
-                                            data: {
-                                                title: 'Übersprungene Zeilen',
-                                                message: details,
-                                                confirmLabel: 'OK',
-                                                hideCancel: true,
-                                            },
-                                        });
-                                    }
-                                },
-                                error: (err) => {
-                                    this.snackBar.open(
-                                        `FEHLER beim Import: ${err?.error?.message ?? 'Unbekannter Fehler'}`,
-                                        'OK',
-                                        {duration: 5000, panelClass: ['error-snackbar']},
-                                    );
-                                },
-                            });
-                    });
-            },
-            error: (err) => {
-                this.snackBar.open(
-                    `FEHLER beim Anlegen des Rennens: ${err?.error?.message ?? 'Unbekannter Fehler'}`,
-                    'OK',
-                    {duration: 5000, panelClass: ['error-snackbar']},
+    private openResultImportDialog(race: Race): void {
+        this.snackBar.open(`Rennen "${race.name}" angelegt - jetzt die Ergebnisdatei wählen`, "OK", {duration: 3000});
+        this.dialog
+            .open(ParticipantImportMappingDialogComponent, {width: "900px"})
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((result: ParticipantImportMappingDialogResult | undefined) => {
+                if (!result) {
+                    return;
+                }
+                this.store.dispatch(
+                    ParticipantActions.importParticipantsMapped({
+                        raceId: race.id,
+                        file: result.file,
+                        format: result.format,
+                        delimiter: result.delimiter,
+                        mapping: result.mapping,
+                    }),
                 );
-            },
-        });
+            });
     }
 }
-

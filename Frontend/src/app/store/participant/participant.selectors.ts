@@ -1,75 +1,39 @@
-import {createFeatureSelector, createSelector} from '@ngrx/store';
-import {ParticipantState} from './participant.reducer';
-import * as RaceSelectors from '../race/race.selectors';
+import {createFeatureSelector, createSelector} from "@ngrx/store";
+import {ParticipantState} from "./participant.reducer";
+import * as RaceSelectors from "../race/race.selectors";
 
-export const selectParticipantState = createFeatureSelector<ParticipantState>('participant');
+export const selectParticipantState = createFeatureSelector<ParticipantState>("participant");
 
-export const selectAllParticipants = createSelector(
-    selectParticipantState,
-    state => state.participants
-);
+export const selectAllParticipants = createSelector(selectParticipantState, state => state.participants);
 
-export const selectParticipantLoading = createSelector(
-    selectParticipantState,
-    state => state.loadingCount > 0
-);
+export const selectParticipantLoading = createSelector(selectParticipantState, state => state.loadingCount > 0);
 
-export const selectPdfExportLoading = createSelector(
-    selectParticipantState,
-    state => state.pdfExportLoading
-);
+export const selectPdfExportLoading = createSelector(selectParticipantState, state => state.pdfExportLoading);
 
-export const selectImportLoading = createSelector(
-    selectParticipantState,
-    state => state.importLoading
-);
+export const selectImportLoading = createSelector(selectParticipantState, state => state.importLoading);
 
-export const selectImportResult = createSelector(
-    selectParticipantState,
-    state => state.importResult
-);
+export const selectImportResult = createSelector(selectParticipantState, state => state.importResult);
 
-export const selectResultImportLoading = createSelector(
-    selectParticipantState,
-    state => state.resultImportLoading
-);
+export const selectResultImportLoading = createSelector(selectParticipantState, state => state.resultImportLoading);
 
-export const selectResultImportResult = createSelector(
-    selectParticipantState,
-    state => state.resultImportResult
-);
+export const selectResultImportResult = createSelector(selectParticipantState, state => state.resultImportResult);
 
-export const selectCopyLoading = createSelector(
-    selectParticipantState,
-    state => state.copyLoading
-);
+export const selectCopyLoading = createSelector(selectParticipantState, state => state.copyLoading);
 
-export const selectCopyResult = createSelector(
-    selectParticipantState,
-    state => state.copyResult
-);
+export const selectCopyResult = createSelector(selectParticipantState, state => state.copyResult);
 
-export const selectParticipantError = createSelector(
-    selectParticipantState,
-    state => state.error
-);
+export const selectParticipantError = createSelector(selectParticipantState, state => state.error);
 
-export const selectSelectedParticipantId = createSelector(
-    selectParticipantState,
-    state => state.selectedParticipantId
-);
+export const selectSelectedParticipantId = createSelector(selectParticipantState, state => state.selectedParticipantId);
 
 export const selectSelectedParticipant = createSelector(
     selectAllParticipants,
     selectSelectedParticipantId,
-    (participants, selectedId) =>
-        selectedId ? participants.find(p => p.id === selectedId) : null
+    (participants, selectedId) => (selectedId ? participants.find(p => p.id === selectedId) : null),
 );
 
-export const selectParticipantById = (id: number) => createSelector(
-    selectAllParticipants,
-    participants => participants.find(p => p.id === id)
-);
+export const selectParticipantById = (id: number) =>
+    createSelector(selectAllParticipants, participants => participants.find(p => p.id === id));
 
 /**
  * Participants for the currently selected race, or none at all if no race is selected - showing
@@ -84,6 +48,5 @@ export const selectFilteredParticipants = createSelector(
             return [];
         }
         return participants.filter(p => p.race?.id === selectedRaceId);
-    }
+    },
 );
-

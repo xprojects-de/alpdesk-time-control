@@ -11,8 +11,11 @@ import x.timecontrol.repositories.ParticipantRepository;
 import x.timecontrol.repositories.RaceRepository;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -42,8 +45,12 @@ public class RaceService {
         return repository.save(toSave);
     }
 
+    /**
+     * For the public live-results pages only: the returned Race never carries its cover page PDF
+     * (see {@link RaceRepository#findByLiveTokenWithoutCoverPage}).
+     */
     public Optional<Race> findByLiveToken(String liveToken) {
-        return repository.findByLiveToken(liveToken);
+        return repository.findByLiveTokenWithoutCoverPage(liveToken);
     }
 
     /**
@@ -65,6 +72,38 @@ public class RaceService {
 
     public Iterable<Race> findAll() {
         return repository.findAll();
+    }
+
+    /**
+     * The race list without the cover-page BLOBs, plus the ids of the races that have one - see
+     * {@link RaceRepository#findAllWithoutCoverPage()} for why the list endpoint must not use
+     * {@link #findAll()}. The returned races have {@code coverPagePdf == null} regardless.
+     */
+    public List<Race> findAllWithoutCoverPage() {
+        return repository.findAllWithoutCoverPage();
+    }
+
+    public Set<Long> findIdsWithCoverPage() {
+        return new HashSet<>(repository.findIdsWithCoverPage());
+    }
+
+    /**
+     * The date of every race, distinct - for deciding which seasons have races at all
+     * ({@link SeasonService#seasonsWithRaces}) without pulling each race's cover-page BLOB along.
+     */
+    public List<LocalDate> findDistinctRaceDates() {
+        return repository.findDistinctRaceDates();
+    }
+
+    /**
+     * Whether a race with this id exists - the answer every "does this race exist?" guard actually
+     * needs. {@link #findById} selects the row's cover_page_pdf along with it (up to several MB, see
+     * {@link RaceRepository#findAllWithoutCoverPage()}) only for such a caller to throw the whole
+     * row away; this never materialises a Race at all, so it also cannot hand one on with its cover
+     * page missing.
+     */
+    public boolean existsById(Long id) {
+        return repository.existsById(id);
     }
 
     public Optional<Race> findById(Long id) {

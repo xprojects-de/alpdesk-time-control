@@ -1,0 +1,1 @@
+function n(r,e=``){return r?`${r.lastName} ${r.firstName}`:e}export{n as t};

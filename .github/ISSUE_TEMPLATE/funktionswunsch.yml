@@ -1,0 +1,50 @@
+name: Funktionswunsch
+description: Etwas fehlt oder sollte anders laufen
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Beschreib am besten den **Wettkampf-Ablauf** dahinter, nicht nur die gewünschte Funktion.
+        Time Control ist aus konkreten Veranstaltungen gewachsen, und die Frage „wie läuft das bei
+        euch ab?" führt meist zu einer besseren Lösung als ein fertiger Umsetzungsvorschlag.
+
+        Bitte **keine echten Teilnehmerdaten** in Beispielen.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+      description: Was geht heute nicht oder nur umständlich?
+      placeholder: |
+        Unser Verband wertet die Mannschaftswertung anders: es zählen die besten 3 statt der
+        besten 4 …
+    validations:
+      required: true
+
+  - type: textarea
+    id: ablauf
+    attributes:
+      label: Wie läuft das bei euch konkret ab?
+      description: |
+        Art der Veranstaltung, Anzahl Stationen, wie gewertet wird, wer die Software bedient.
+        Wenn es ein Regelwerk dazu gibt, gern verlinken oder zitieren.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idee
+    attributes:
+      label: Hast du schon eine Vorstellung, wie es aussehen könnte?
+      description: Optional — auch „keine Ahnung, Hauptsache es geht" ist eine gültige Antwort.
+
+  - type: dropdown
+    id: mitmachen
+    attributes:
+      label: Würdest du das selbst umsetzen wollen?
+      options:
+        - "Nein, ich melde es nur"
+        - "Vielleicht, mit etwas Hilfestellung"
+        - "Ja, ich mache einen Pull Request"
+    validations:
+      required: true

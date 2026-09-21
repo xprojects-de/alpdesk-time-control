@@ -48,6 +48,16 @@ public record GaudiModeResponse(
         boolean hasCoverPage
 ) {
     public static GaudiModeResponse from(GaudiMode gaudiMode, List<GaudiModeRaceResponse> races) {
+        return from(gaudiMode, races, gaudiMode.coverPagePdf() != null);
+    }
+
+    /**
+     * For callers whose GaudiMode came from a projection that leaves the cover page out (see
+     * {@link x.timecontrol.repositories.GaudiModeRepository#findAllWithoutCoverPage()}), so
+     * {@code gaudiMode.coverPagePdf() != null} would wrongly report "no cover page" for every one.
+     */
+    public static GaudiModeResponse from(GaudiMode gaudiMode, List<GaudiModeRaceResponse> races,
+                                         boolean hasCoverPage) {
         return new GaudiModeResponse(
                 gaudiMode.id(),
                 races,
@@ -59,7 +69,7 @@ public record GaudiModeResponse(
                 gaudiMode.keepDnfInRanking(),
                 gaudiMode.keepDsqInRanking(),
                 gaudiMode.createdAt(),
-                gaudiMode.coverPagePdf() != null
+                hasCoverPage
         );
     }
 }

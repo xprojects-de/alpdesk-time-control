@@ -1,0 +1,1 @@
+import{Nt as rc,_ as Fm}from"./chunk-DKLC6Of2.js";var r=Fm(`startGroupTemplate`);var p=rc(r,t=>t.templates);var l=rc(r,t=>t.loading);rc(r,t=>t.error);export{p as n,l as t};

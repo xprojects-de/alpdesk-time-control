@@ -1,28 +1,28 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {Participant, ParticipantRequest} from '../models/participant.model';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {Participant, ParticipantRequest} from "../models/participant.model";
 import {
     ParticipantImportFileFormat,
     ParticipantImportPreviewResponse,
-    ParticipantImportResponse
-} from '../models/participant-import.model';
+    ParticipantImportResponse,
+} from "../models/participant-import.model";
 import {
     ParticipantResultImportPreviewResponse,
     ParticipantResultImportResponse,
-    ResultTimeFormat
-} from '../models/participant-result-import.model';
-import {ParticipantCopyRequest, ParticipantCopyResponse} from '../models/participant-copy.model';
-import {environment} from '../../environments/environment';
-import {buildImportFormData} from '../utils/import-form-data.util';
+    ResultTimeFormat,
+} from "../models/participant-result-import.model";
+import {ParticipantCopyRequest, ParticipantCopyResponse} from "../models/participant-copy.model";
+import {StartGroupAssignmentEntry, StartGroupCopyRequest} from "../models/start-group.model";
+import {environment} from "../../environments/environment";
+import {buildImportFormData} from "../utils/import-form-data.util";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class ParticipantService {
     private http = inject(HttpClient);
     private readonly apiUrl = `${environment.apiUrl}/participants`;
-
 
     getAll(): Observable<Participant[]> {
         return this.http.get<Participant[]>(this.apiUrl);
@@ -67,7 +67,35 @@ export class ParticipantService {
         return this.http.post<Participant[]>(
             `${this.apiUrl}/race/${raceId}/apply-start-order-from-previous-race`,
             {},
-            {params: {includeUnranked}}
+            {params: {includeUnranked}},
+        );
+    }
+
+    /**
+     * Applies a start-group assignment to a race's participants - sets startGroupId and the
+     * resulting startSequence for every listed entry; anyone left out keeps their current
+     * assignment. See StartGroupTemplate / StartGroupAssignmentEntry.
+     */
+    saveStartGroupAssignment(raceId: number, assignments: StartGroupAssignmentEntry[]): Observable<Participant[]> {
+        return this.http.put<Participant[]>(`${this.apiUrl}/race/${raceId}/start-groups`, {assignments});
+    }
+
+    /**
+     * Copies a race's start-group assignment (startGroupId + startSequence) into one or more
+     * other races, matched by person - the "Von Rennen übernehmen" action.
+     */
+    copyStartGroupAssignment(request: StartGroupCopyRequest): Observable<Participant[]> {
+        return this.http.post<Participant[]>(`${this.apiUrl}/start-groups/copy`, request);
+    }
+
+    /**
+     * Assigns race numbers (bibs) from a race's current start-group order (group position, then
+     * startSequence within the group) - the "Startnummern aus Gruppierung vergeben" action.
+     */
+    generateRaceNumbersFromStartGroups(raceId: number): Observable<Participant[]> {
+        return this.http.post<Participant[]>(
+            `${this.apiUrl}/race/${raceId}/generate-race-numbers-from-start-groups`,
+            {},
         );
     }
 
@@ -80,7 +108,11 @@ export class ParticipantService {
      * best-effort suggested mapping onto our fields, and a few sample rows - for building/pre-filling
      * the column-mapping UI.
      */
-    previewImport(file: File, format: ParticipantImportFileFormat, delimiter?: string): Observable<ParticipantImportPreviewResponse> {
+    previewImport(
+        file: File,
+        format: ParticipantImportFileFormat,
+        delimiter?: string,
+    ): Observable<ParticipantImportPreviewResponse> {
         const formData = buildImportFormData(file, {format, delimiter});
         return this.http.post<ParticipantImportPreviewResponse>(`${this.apiUrl}/import-preview`, formData);
     }
@@ -90,10 +122,16 @@ export class ParticipantService {
      * fields onto the file's source fields/columns (see PARTICIPANT_IMPORT_TARGET_FIELDS). A field
      * left out of mapping is simply not imported for any row.
      */
-    importMapped(raceId: number, file: File, format: ParticipantImportFileFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantImportResponse> {
+    importMapped(
+        raceId: number,
+        file: File,
+        format: ParticipantImportFileFormat,
+        delimiter: string | undefined,
+        mapping: Record<string, string>,
+    ): Observable<ParticipantImportResponse> {
         const formData = buildImportFormData(file, {format, delimiter});
         if (mapping && Object.keys(mapping).length > 0) {
-            formData.append('mapping', JSON.stringify(mapping));
+            formData.append("mapping", JSON.stringify(mapping));
         }
         return this.http.post<ParticipantImportResponse>(`${this.apiUrl}/import-mapped/${raceId}`, formData);
     }
@@ -105,7 +143,10 @@ export class ParticipantService {
      */
     previewResultsImport(file: File, delimiter?: string): Observable<ParticipantResultImportPreviewResponse> {
         const formData = buildImportFormData(file, {delimiter});
-        return this.http.post<ParticipantResultImportPreviewResponse>(`${this.apiUrl}/import-results-preview`, formData);
+        return this.http.post<ParticipantResultImportPreviewResponse>(
+            `${this.apiUrl}/import-results-preview`,
+            formData,
+        );
     }
 
     /**
@@ -118,10 +159,19 @@ export class ParticipantService {
      * when the part is omitted entirely, so a deliberately cleared mapping (every dropdown set to
      * "nicht importieren") must not be silently dropped here.
      */
-    importResultsMapped(raceId: number, file: File, timeFormat: ResultTimeFormat, delimiter: string | undefined, mapping: Record<string, string>): Observable<ParticipantResultImportResponse> {
+    importResultsMapped(
+        raceId: number,
+        file: File,
+        timeFormat: ResultTimeFormat,
+        delimiter: string | undefined,
+        mapping: Record<string, string>,
+    ): Observable<ParticipantResultImportResponse> {
         const formData = buildImportFormData(file, {timeFormat, delimiter});
-        formData.append('mapping', JSON.stringify(mapping ?? {}));
-        return this.http.post<ParticipantResultImportResponse>(`${this.apiUrl}/import-results-mapped/${raceId}`, formData);
+        formData.append("mapping", JSON.stringify(mapping ?? {}));
+        return this.http.post<ParticipantResultImportResponse>(
+            `${this.apiUrl}/import-results-mapped/${raceId}`,
+            formData,
+        );
     }
 
     /**
@@ -130,7 +180,7 @@ export class ParticipantService {
      */
     exportCsv(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/csv/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
@@ -144,7 +194,7 @@ export class ParticipantService {
      */
     exportResultsCsv(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/results-csv/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
@@ -152,47 +202,56 @@ export class ParticipantService {
         return this.http.post<ParticipantCopyResponse>(`${this.apiUrl}/copy`, request);
     }
 
+    /**
+     * Start list as CSV - same participants and order as the start list PDF, plus identity data and
+     * each participant's start group with its Zeitversatz (startGroupOffset, "m:ss"). Export only.
+     */
+    exportStartListCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/export/startlist-csv/${raceId}`, {
+            responseType: "blob",
+        });
+    }
+
     exportStartListToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/startlist/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     // PDF Exports
     exportAllToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/all/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     exportByGenderToPdf(gender: string, raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/gender/${gender}/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     exportAllAgeGroupsToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/agegroups/all/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     exportAllByCategoryToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/all/categories/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     exportByGenderByCategoryToPdf(gender: string, raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/gender/${gender}/categories/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 
     exportAllAgeGroupsByCategoryToPdf(raceId: number): Observable<Blob> {
         return this.http.get(`${this.apiUrl}/export/pdf/agegroups/all/categories/${raceId}`, {
-            responseType: 'blob'
+            responseType: "blob",
         });
     }
 }
-

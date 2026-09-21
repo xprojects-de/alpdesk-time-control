@@ -320,7 +320,8 @@ jobs:
     # to jpackage-build for x64 macOS here. Instead this downloads a prebuilt x64 JRE (never
     # executed, just unpacked - no macOS/x64 runner needed) and wraps it with the shadow JAR in
     # a plain .app bundle, giving Intel Mac users a double-clickable app without a separate
-    # Java install. It's unsigned, so Gatekeeper will require a one-time right-click > Open.
+    # Java install. It's unsigned, so Gatekeeper requires a one-time approval via System Settings
+    # > Privacy & Security - macOS 15 removed the old right-click > Open bypass.
     needs: build-shadow-jar
     runs-on: ubuntu-latest
     steps:
@@ -444,7 +445,11 @@ jobs:
 
           1. Diesen Ordner an einen beliebigen Ort entpacken.
           2. Doppelklick auf "start.command".
-             Beim ersten Start ggf. Rechtsklick > Oeffnen waehlen (Gatekeeper).
+             Beim ersten Start blockiert macOS die Datei, weil sie nicht signiert
+             ist (Gatekeeper). Freigeben ueber: Systemeinstellungen > Datenschutz
+             & Sicherheit > "Trotzdem oeffnen", danach erneut doppelklicken.
+             Alternativ im Terminal einmalig:
+               xattr -rd com.apple.quarantine <dieser Ordner>
           3. Browser oeffnet sich automatisch, sonst http://localhost:18000 aufrufen.
           EOF
 
@@ -509,7 +514,11 @@ jobs:
 
           1. Diesen Ordner an einen beliebigen Ort entpacken.
           2. Doppelklick auf "start.command".
-             Beim ersten Start ggf. Rechtsklick > Oeffnen waehlen (Gatekeeper).
+             Beim ersten Start blockiert macOS die Datei, weil sie nicht signiert
+             ist (Gatekeeper). Freigeben ueber: Systemeinstellungen > Datenschutz
+             & Sicherheit > "Trotzdem oeffnen", danach erneut doppelklicken.
+             Alternativ im Terminal einmalig:
+               xattr -rd com.apple.quarantine <dieser Ordner>
           3. Browser oeffnet sich automatisch, sonst http://localhost:18000 aufrufen.
           EOF
 
@@ -801,11 +810,23 @@ jobs:
         id: read_version
         run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
 
+      # One release per app.version, tagged v<app.version> (e.g. v1.5). main is only ever built
+      # on a release, and raising app.version is part of making one, so the version identifies
+      # the release exactly.
+      #
+      # This deliberately no longer uses github.run_number ("release-<n>"): that counter belongs
+      # to the repository, so it restarted at 1 when the project moved here, while the tags
+      # release-9 … release-24 came along from the previous repository. Run 9 would have tried to
+      # create a tag that already exists and points at a commit from August.
+      #
+      # Re-running the workflow for an unchanged app.version updates that version's existing
+      # release rather than adding a second one - which is what you want when a runner failed and
+      # the build is simply repeated. Publishing a genuinely new build means raising app.version.
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: release-${{ github.run_number }}
-          name: Release v${{ steps.read_version.outputs.version }} (Build ${{ github.run_number }})
+          tag_name: v${{ steps.read_version.outputs.version }}
+          name: Release v${{ steps.read_version.outputs.version }}
           draft: false
           prerelease: false
           files: final-assets/*

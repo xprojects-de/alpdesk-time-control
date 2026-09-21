@@ -19,5 +19,7 @@ public interface ParticipantRepository
     long countByTeamId(Long teamId);
     long countByCategoryId(Long categoryId);
     long countByRaceId(Long raceId);
+    long countByStartGroupId(Long startGroupId);
     List<Participant> findByIdIn(Iterable<Long> ids);
+    List<Participant> findByStartGroupId(Long startGroupId);
 }

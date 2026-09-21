@@ -20,6 +20,8 @@ import x.timecontrol.services.gaudi.PointsCombinationModeCalculator
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
 
 /**
  * Punkte-Mischwertung's "Alle Damen"/"Alle Herren"/"Nach Altersklassen" PDF exports must recompute
@@ -41,12 +43,21 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
+    StartGroupTemplateService startGroupTemplateService = Mock()
     TransactionOperations transactionOperations = Mock()
 
-    def calculator = new PointsCombinationModeCalculator(new RankingService(), personService, pointsScaleService, teamService, ageGroupService)
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService, raceService)
+
+    def calculator = new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService, seasonService)
 
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
-            raceService, personService, ageGroupService, [calculator], transactionOperations)
+            raceService, personService, ageGroupService, seasonService, [calculator], transactionOperations)
 
     def gaudiMode = new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Kondiwettkamp", null, 1L, false, false, false, LocalDateTime.now())
     def race = new Race(10L, "Schnelligkeit", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -64,6 +75,7 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     def setup() {
         gaudiModeRaceRepository.findByGaudiModeIdOrderBySortOrder(1L) >> [new GaudiModeRace(1L, 1L, 10L, 0, 1.0d)]
         raceService.findById(10L) >> Optional.of(race)
+        raceService.existsById(10L) >> true
         pointsScaleService.findById(1L) >> Optional.of(scale)
         pointsScaleService.parsePoints(scale) >> [100, 80, 60, 50]
         pointsScaleService.pointsForPlace(_ as List, _ as Integer) >> { List pts, Integer place -> place <= pts.size() ? pts[place - 1] : 0 }
@@ -136,10 +148,10 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
         // gender: BOTH, not null - age_group.gender is NOT NULL in the schema (default 'BOTH'),
         // this test's point is the age filter, not gender, so it deliberately matches either.
         def ageGroups = [
-                new AgeGroup(1L, "U14", 2012, 2013, Gender.BOTH),
-                new AgeGroup(2L, "U16", 2010, 2011, Gender.BOTH),
+                new AgeGroup(1L, "U14", 2026, 2012, 2013, Gender.BOTH),
+                new AgeGroup(2L, "U16", 2026, 2010, 2011, Gender.BOTH),
         ]
-        ageGroupService.findAll() >> ageGroups
+        ageGroupService.findBySeason(2026) >> ageGroups
         def persons = [
                 1L: person(1L, Gender.MALE, LocalDate.of(2012, 1, 1)),
                 2L: person(2L, Gender.MALE, LocalDate.of(2013, 1, 1)),

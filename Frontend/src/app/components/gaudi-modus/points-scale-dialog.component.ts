@@ -1,4 +1,4 @@
-import {Component, inject, ChangeDetectionStrategy} from "@angular/core";
+import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
@@ -9,22 +9,14 @@ import {PointsScale, PointsScaleRequest} from "../../models/points-scale.model";
 
 @Component({
     selector: "app-points-scale-dialog",
-    standalone: true,
-    imports: [
-        CommonModule,
-        ReactiveFormsModule,
-        MatDialogModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatButtonModule,
-    ],
+    imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
     template: `
         <h2 mat-dialog-title>{{ data ? "Punkteschema bearbeiten" : "Neues Punkteschema" }}</h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="points-scale-form">
                 <mat-form-field appearance="outline">
                     <mat-label>Name</mat-label>
-                    <input matInput formControlName="name" required/>
+                    <input matInput formControlName="name" required />
                     @if (form.get("name")?.hasError("required") && form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
                     }
@@ -32,8 +24,13 @@ import {PointsScale, PointsScaleRequest} from "../../models/points-scale.model";
 
                 <mat-form-field appearance="outline">
                     <mat-label>Punkte je Platz (kommagetrennt, Platz 1 zuerst)</mat-label>
-                    <textarea matInput formControlName="pointsCsv" rows="4" required
-                              placeholder="100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0"></textarea>
+                    <textarea
+                        matInput
+                        formControlName="pointsCsv"
+                        rows="4"
+                        required
+                        placeholder="100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0"
+                    ></textarea>
                     @if (form.get("pointsCsv")?.hasError("required") && form.get("pointsCsv")?.touched) {
                         <mat-error>Punkteliste ist erforderlich</mat-error>
                     }
@@ -51,20 +48,19 @@ import {PointsScale, PointsScaleRequest} from "../../models/points-scale.model";
             <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .points-scale-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 420px;
-            margin-top: 16px;
-          }
+            .points-scale-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 420px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field {
+                width: 100%;
+            }
         `,
     ],
 })

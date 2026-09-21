@@ -12,17 +12,22 @@ import x.timecontrol.dto.ParticipantResultImportRowError;
 import x.timecontrol.dto.PersonResponse;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.dto.ResultTimeFormat;
+import x.timecontrol.dto.StartGroupAssignmentRequest;
+import x.timecontrol.dto.StartGroupTemplateResponse;
 import x.timecontrol.dto.TeamResponse;
 import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Gender;
+import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.RaceMeasurement;
 import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.StartGroupTemplate;
 import x.timecontrol.entities.Team;
+import x.timecontrol.repositories.GaudiLosPairingRepository;
 import x.timecontrol.repositories.ParticipantRepository;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.transaction.TransactionOperations;
@@ -33,9 +38,9 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -63,24 +68,30 @@ public class ParticipantService {
 
     private final ParticipantRepository repository;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final RaceService raceService;
     private final TeamService teamService;
     private final CategoryService categoryService;
     private final PersonService personService;
     private final AutoAssignService autoAssignService;
     private final RankingService rankingService;
+    private final StartGroupTemplateService startGroupTemplateService;
     private final TransactionOperations<Connection> transactionOperations;
+    private final GaudiLosPairingRepository losPairingRepository;
 
-    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, TransactionOperations<Connection> transactionOperations) {
+    public ParticipantService(ParticipantRepository repository, AgeGroupService ageGroupService, SeasonService seasonService, RaceService raceService, TeamService teamService, CategoryService categoryService, PersonService personService, AutoAssignService autoAssignService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService, TransactionOperations<Connection> transactionOperations, GaudiLosPairingRepository losPairingRepository) {
         this.repository = repository;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.raceService = raceService;
         this.teamService = teamService;
         this.categoryService = categoryService;
         this.personService = personService;
         this.autoAssignService = autoAssignService;
         this.rankingService = rankingService;
+        this.startGroupTemplateService = startGroupTemplateService;
         this.transactionOperations = transactionOperations;
+        this.losPairingRepository = losPairingRepository;
     }
 
     /**
@@ -94,7 +105,7 @@ public class ParticipantService {
     public Participant create(Participant participant) {
         validate(participant, null);
         Participant toSave = new Participant(participant.id(), participant.raceId(), participant.personId(), participant.raceNumber(),
-                participant.teamId(), participant.categoryId(), participant.durationMs(), participant.penalty(),
+                participant.teamId(), participant.categoryId(), participant.durationMs(), zeroPenaltyToNull(participant.penalty()),
                 participant.measuredAt(), participant.comment(), resolveStatus(participant, DisqualificationStatus.NONE));
         try {
             return repository.save(toSave);
@@ -104,6 +115,10 @@ public class ParticipantService {
             }
             throw e;
         }
+    }
+
+    private static Integer zeroPenaltyToNull(Integer penalty) {
+        return penalty != null && penalty == 0 ? null : penalty;
     }
 
     public Iterable<Participant> findAll() {
@@ -123,17 +138,22 @@ public class ParticipantService {
         Optional<Participant> existing = repository.findById(id);
         if (existing.isPresent()) {
             validate(participant, id);
-            // durationMs/penalty/measuredAt/status/startSequence are omitted by most update flows
-            // (e.g. editing name/team) and must not wipe out a time (or a DSQ/DNF/DNS status, or a
-            // derived start-order position) that was already assigned; only overwrite when provided.
-            // startSequence in particular is never exposed in the participant edit form, so it must
-            // always fall through to "keep existing" or every unrelated edit would silently clear it.
+            // durationMs/penalty/measuredAt/status/startSequence/startGroupId are omitted by most
+            // update flows (e.g. editing name/team) and must not wipe out a time (or a DSQ/DNF/DNS
+            // status, a derived start-order position, or a start-group assignment) that was already
+            // assigned; only overwrite when provided. startSequence/startGroupId in particular are
+            // never exposed in the participant edit form, so they must always fall through to "keep
+            // existing" or every unrelated edit would silently clear them.
             Integer durationMs = participant.durationMs() != null ? participant.durationMs() : existing.get().durationMs();
-            Integer penalty = participant.penalty() != null ? participant.penalty() : existing.get().penalty();
+            // An explicit 0 is how the edit form says "remove the penalty" (null already means "keep
+            // existing" above) - stored as null so PDF/live views render "-" instead of "00:00,00".
+            Integer penalty = participant.penalty() == null ? existing.get().penalty()
+                    : participant.penalty() == 0 ? null : participant.penalty();
             var measuredAt = participant.measuredAt() != null ? participant.measuredAt() : existing.get().measuredAt();
             DisqualificationStatus status = resolveStatus(participant, existing.get().status());
             Integer startSequence = participant.startSequence() != null ? participant.startSequence() : existing.get().startSequence();
-            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment(), status, startSequence);
+            Long startGroupId = existing.get().startGroupId();
+            Participant updated = new Participant(id, participant.raceId(), participant.personId(), participant.raceNumber(), participant.teamId(), participant.categoryId(), durationMs, penalty, measuredAt, participant.comment(), status, startSequence, startGroupId);
             try {
                 return Optional.of(repository.update(updated));
             } catch (DataAccessException e) {
@@ -162,7 +182,7 @@ public class ParticipantService {
         }
         Participant cleared = new Participant(id, existing.get().raceId(), existing.get().personId(), existing.get().raceNumber(),
                 existing.get().teamId(), existing.get().categoryId(), null, null, null, existing.get().comment(),
-                existing.get().status(), existing.get().startSequence());
+                existing.get().status(), existing.get().startSequence(), existing.get().startGroupId());
         return Optional.of(repository.update(cleared));
     }
 
@@ -207,7 +227,7 @@ public class ParticipantService {
             toUpdate.add(new Participant(
                     existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(), raceMeasurement.durationMs(), existing.penalty(), raceMeasurement.measuredAt(),
-                    existing.comment(), existing.status(), existing.startSequence()
+                    existing.comment(), existing.status(), existing.startSequence(), existing.startGroupId()
             ));
         }
 
@@ -229,7 +249,7 @@ public class ParticipantService {
         if (participant.personId() == null) {
             throw new IllegalArgumentException("personId is required");
         }
-        if (raceService.findById(participant.raceId()).isEmpty()) {
+        if (!raceService.existsById(participant.raceId())) {
             throw new IllegalArgumentException("Race with id " + participant.raceId() + " does not exist");
         }
         if (personService.findById(participant.personId()).isEmpty()) {
@@ -268,12 +288,41 @@ public class ParticipantService {
         }
     }
 
+    /**
+     * Deleting a participant must not take their Los-Modus partner down with them: the pairing's FKs
+     * are ON DELETE CASCADE, which would silently drop the whole pair (and with it the partner, who
+     * may well have raced) from the Los ranking. The deleted participant is removed from each of
+     * their pairings first instead, leaving the partner as a single ("Einzel") pairing - which
+     * LosModeCalculator already ranks - and only a pairing with nobody left is deleted.
+     */
     public void delete(Long id) {
-        repository.deleteById(id);
+        transactionOperations.executeWrite(_ -> {
+            for (GaudiLosPairing pairing : losPairingRepository.findByParticipant1IdOrParticipant2Id(id, id)) {
+                Long partnerId = id.equals(pairing.participant1Id()) ? pairing.participant2Id() : pairing.participant1Id();
+                if (partnerId == null) {
+                    losPairingRepository.deleteById(pairing.id());
+                } else {
+                    losPairingRepository.update(new GaudiLosPairing(pairing.id(), pairing.gaudiModeId(), partnerId, null));
+                }
+            }
+            repository.deleteById(id);
+            return null;
+        });
     }
 
-    private List<AgeGroup> allAgeGroups() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+    /**
+     * The age groups that apply to one race: those configured for the season the race's date falls
+     * into (see {@link SeasonService}). Never "all age groups" - an age class rolls over every
+     * year, so several seasons' rows describe the same class with different birth years and
+     * matching a person against all of them at once would pick whichever season came first.
+     */
+    private List<AgeGroup> ageGroupsForRace(Race race) {
+        return ageGroupService.findBySeason(seasonService.seasonOf(race));
+    }
+
+    private Race requireRace(Long raceId) {
+        return raceService.findById(raceId)
+                .orElseThrow(() -> new IllegalArgumentException("Race with id " + raceId + " does not exist"));
     }
 
     private Optional<AgeGroup> findMatchingAgeGroup(Person person, List<AgeGroup> ageGroups) {
@@ -321,8 +370,8 @@ public class ParticipantService {
      * the ordering convention can't drift between the two. {@code personsById} is caller-provided
      * since both callers already need to batch-load it for other purposes too.
      */
-    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById) {
-        List<AgeGroup> ageGroups = allAgeGroups().stream()
+    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById, int seasonYear) {
+        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonYear).stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .toList();
@@ -356,18 +405,35 @@ public class ParticipantService {
         Set<Long> personIds = new HashSet<>();
         Set<Long> teamIds = new HashSet<>();
         Set<Long> categoryIds = new HashSet<>();
+        Set<Long> startGroupIds = new HashSet<>();
         for (Participant p : participants) {
             if (p.raceId() != null) raceIds.add(p.raceId());
             if (p.personId() != null) personIds.add(p.personId());
             if (p.teamId() != null) teamIds.add(p.teamId());
             if (p.categoryId() != null) categoryIds.add(p.categoryId());
+            if (p.startGroupId() != null) startGroupIds.add(p.startGroupId());
         }
 
         Map<Long, Race> racesById = raceService.findByIds(raceIds);
         Map<Long, Person> personsById = personService.findByIds(personIds);
         Map<Long, Team> teamsById = teamService.findByIds(teamIds);
         Map<Long, Category> categoriesById = categoryService.findByIds(categoryIds);
-        List<AgeGroup> ageGroups = allAgeGroups();
+        Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
+        // A batch can span races of different seasons (the roster of one race never does, but
+        // cross-race callers exist), and each race has to be categorised against its own season's
+        // age groups. Resolved once per race up front and keyed by race id, so the per-participant
+        // loop below is a plain map lookup: deriving the season per participant would re-read the
+        // settings row (SeasonService#seasonStart) once for every row in the batch.
+        Map<Integer, List<AgeGroup>> ageGroupsBySeason = new HashMap<>();
+        Map<Long, List<AgeGroup>> ageGroupsByRaceId = new HashMap<>();
+        Map<Long, Integer> seasonByRaceId = new HashMap<>();
+        MonthDay seasonStart = seasonService.seasonStart();
+        for (Race race : racesById.values()) {
+            int season = seasonService.seasonOf(race.date(), seasonStart);
+            seasonByRaceId.put(race.id(), season);
+            ageGroupsByRaceId.put(race.id(),
+                    ageGroupsBySeason.computeIfAbsent(season, ageGroupService::findBySeason));
+        }
 
         List<ParticipantResponse> result = new ArrayList<>();
         for (Participant p : participants) {
@@ -375,15 +441,23 @@ public class ParticipantService {
             Person person = p.personId() != null ? personsById.get(p.personId()) : null;
             Team team = p.teamId() != null ? teamsById.get(p.teamId()) : null;
             Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
+            // No race (deleted out from under the participant) means no season to categorise
+            // against, so no age group - the same "nothing matched" outcome the caller already
+            // handles for a person whose birth year fits no configured group.
+            List<AgeGroup> ageGroups = race != null
+                    ? ageGroupsByRaceId.getOrDefault(race.id(), List.of())
+                    : List.of();
             AgeGroup ageGroup = person != null ? findMatchingAgeGroup(person, ageGroups).orElse(null) : null;
+            StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
 
             result.add(ParticipantResponse.from(
                     p,
                     person != null ? PersonResponse.from(person) : null,
-                    race != null ? RaceResponse.from(race) : null,
+                    race != null ? RaceResponse.from(race, seasonByRaceId.get(race.id())) : null,
                     team != null ? TeamResponse.from(team) : null,
                     category != null ? CategoryResponse.from(category) : null,
-                    ageGroup != null ? AgeGroupResponse.from(ageGroup) : null
+                    ageGroup != null ? AgeGroupResponse.from(ageGroup) : null,
+                    startGroup != null ? StartGroupTemplateResponse.from(startGroup) : null
             ));
         }
         return result;
@@ -393,26 +467,42 @@ public class ParticipantService {
         return repository.findByRaceId(raceId);
     }
 
+    /**
+     * @throws IllegalStateException if auto-assign is running for this race - the same guard
+     *                               {@link #applyStartGroupAssignment} and
+     *                               {@link #copyStartGroupAssignment} apply, and for a stronger
+     *                               reason: auto-assign holds a cursor on a race number and is
+     *                               matching incoming finish times to it. Deleting the roster
+     *                               underneath it leaves that cursor pointing at a participant that
+     *                               no longer exists, and the times arriving in the meantime are
+     *                               silently dropped instead of being recorded anywhere.
+     */
     public void deleteByRaceId(Long raceId) {
+        requireAutoAssignInactive(raceId);
         repository.deleteByRaceId(raceId);
     }
 
     /**
      * Copies every participant of {@code sourceRaceId} into each of {@code targetRaceIds}, carrying
-     * over personId/teamId/categoryId but leaving durationMs/penalty/measuredAt empty (each race
-     * measures its own result). raceNumber is carried over only if {@code carryStartNumber} is true
-     * and the number isn't already taken in the target race (to avoid duplicate start numbers); it is
-     * left empty otherwise. A person already present in a target race is skipped rather than duplicated.
+     * over personId/teamId/categoryId/comment and the start-group assignment (startGroupId +
+     * startSequence) but leaving durationMs/penalty/measuredAt empty (each race measures its own
+     * result). raceNumber is carried over only if {@code carryStartNumber} is true and the number
+     * isn't already taken in the target race (to avoid duplicate start numbers); it is left empty
+     * otherwise. A startSequence already taken in the target race is dropped together with its
+     * startGroupId, the same way {@link #copyStartGroupAssignment} treats a lost position. Only a DNS
+     * status is carried over - DNF/DSQ describe what happened in the source race itself and never
+     * apply to another one. A person already present in a target race is skipped rather than
+     * duplicated.
      */
     public ParticipantCopyResponse copyParticipants(Long sourceRaceId, List<Long> targetRaceIds, boolean carryStartNumber) {
         // Now that PRAGMA foreign_keys=ON is enabled, saving a participant for a race that doesn't
         // exist would otherwise throw a raw FK-constraint exception straight out of repository.save()
         // instead of a clean, caught error.
-        if (raceService.findById(sourceRaceId).isEmpty()) {
+        if (!raceService.existsById(sourceRaceId)) {
             throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
         }
         for (Long targetRaceId : targetRaceIds) {
-            if (raceService.findById(targetRaceId).isEmpty()) {
+            if (!raceService.existsById(targetRaceId)) {
                 throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
             }
         }
@@ -436,7 +526,11 @@ public class ParticipantService {
                         .collect(Collectors.toSet());
                 Set<Integer> existingRaceNumbers = targetParticipants.stream()
                         .map(Participant::raceNumber)
-                        .filter(java.util.Objects::nonNull)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                Set<Integer> existingStartSequences = targetParticipants.stream()
+                        .map(Participant::startSequence)
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
 
                 for (Participant source : sourceParticipants) {
@@ -448,24 +542,41 @@ public class ParticipantService {
                     if (carryStartNumber && source.raceNumber() != null && !existingRaceNumbers.contains(source.raceNumber())) {
                         raceNumber = source.raceNumber();
                     }
-                    Participant copy = new Participant(null, targetRaceId, source.personId(), raceNumber,
-                            source.teamId(), source.categoryId(), null, null, null, null);
+                    Integer startSequence = source.startSequence();
+                    Long startGroupId = source.startGroupId();
+                    if (startSequence != null && existingStartSequences.contains(startSequence)) {
+                        // Losing its position also drops its group, or it would keep showing in that
+                        // group's column/start list while sorting outside the group's block.
+                        startSequence = null;
+                        startGroupId = null;
+                    }
+                    DisqualificationStatus status = source.status() == DisqualificationStatus.DNS
+                            ? DisqualificationStatus.DNS
+                            : DisqualificationStatus.NONE;
                     try {
-                        repository.save(copy);
+                        repository.save(new Participant(null, targetRaceId, source.personId(), raceNumber,
+                                source.teamId(), source.categoryId(), null, null, null, source.comment(),
+                                status, startSequence, startGroupId));
                     } catch (DataAccessException e) {
-                        // existingRaceNumbers is a snapshot taken before this loop started - it can be
-                        // stale if another request concurrently claimed this race number in the same
-                        // target race. Fall back to no start number for this participant instead of
-                        // aborting the rest of the copy over a single collision.
-                        if (raceNumber == null || !isUniqueConstraintViolation(e)) {
+                        // existingRaceNumbers/existingStartSequences are snapshots taken before this
+                        // loop started - they can be stale if another request concurrently claimed this
+                        // race number or start position in the same target race. Fall back to neither
+                        // for this participant instead of aborting the rest of the copy over a single
+                        // collision.
+                        if ((raceNumber == null && startSequence == null) || !isUniqueConstraintViolation(e)) {
                             throw e;
                         }
                         repository.save(new Participant(null, targetRaceId, source.personId(), null,
-                                source.teamId(), source.categoryId(), null, null, null, null));
+                                source.teamId(), source.categoryId(), null, null, null, source.comment(),
+                                status, null, null));
                         raceNumber = null;
+                        startSequence = null;
                     }
                     if (raceNumber != null) {
                         existingRaceNumbers.add(raceNumber);
+                    }
+                    if (startSequence != null) {
+                        existingStartSequences.add(startSequence);
                     }
                     existingPersonIds.add(source.personId());
                     copied++;
@@ -501,7 +612,8 @@ public class ParticipantService {
 
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
-        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(participants, personsById);
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
+                groupByAgeGroup(participants, personsById, seasonService.seasonOf(requireRace(raceId)));
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
@@ -575,6 +687,16 @@ public class ParticipantService {
 
         List<Participant> previousParticipants = StreamSupport.stream(repository.findByRaceId(previousRace.id()).spliterator(), false).toList();
         List<Participant> targetParticipants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        // This derives a fresh startSequence for the whole race purely from previous-race
+        // placement, with no awareness of start-group membership - running it on a race that
+        // already has a start-group assignment (see applyStartGroupAssignment) would scramble each
+        // group's block order, and the board's own next "Speichern" would then silently overwrite
+        // this method's carefully-computed order with a naive walk of the now-scrambled columns.
+        // The two features are for different race formats (individual-start reordering vs.
+        // block-start groups) and were never meant to be combined on the same race.
+        if (targetParticipants.stream().anyMatch(p -> p.startGroupId() != null)) {
+            throw new IllegalStateException("This race already has a start-group assignment. Remove it before deriving the start order from a previous race.");
+        }
         // (a, b) -> a: if the same person was somehow entered twice in the target race (shouldn't
         // happen, race_id+person_id is unique), keep the first rather than failing the whole reorder.
         Map<Long, Participant> targetByPersonId = targetParticipants.stream()
@@ -587,7 +709,12 @@ public class ParticipantService {
         // bucket last).
         Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
-        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup = groupByAgeGroup(previousParticipants, previousPersonsById);
+        // Bucketed against the *target* race's season, not the previous race's: the order computed
+        // here becomes that race's start order and has to line up with the age-group sections its
+        // own start list and rankings print. Two runs of the same event are in the same season
+        // anyway; this only matters if they were ever split across the season boundary.
+        Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
+                groupByAgeGroup(previousParticipants, previousPersonsById, seasonService.seasonOf(race));
 
         List<Participant> ordered = new ArrayList<>();
         Set<Long> matchedPersonIds = new HashSet<>();
@@ -659,6 +786,191 @@ public class ParticipantService {
     }
 
     /**
+     * Applies a start-group assignment (startGroupId + the resulting startSequence, e.g. group A's
+     * members get 1..28, group B's 29..55, ...) to a race's participants. Only participants listed
+     * in {@code assignments} are touched - anyone left out keeps their current startGroupId/
+     * startSequence untouched. Assumes the caller (the start-group board) sends the complete set of
+     * participants whose startSequence is relevant right now (assigned or still unassigned) in one
+     * call, the same assumption {@link #applyStartSequence} already makes for its own caller -
+     * touched participants are cleared to a null startSequence first (same reasoning as
+     * {@link #applyStartSequence}: dodges the {@code (race_id, start_sequence)} unique index
+     * colliding with a not-yet-updated row still holding a value about to be handed to someone
+     * else), so a partial request that leaves an untouched participant holding a
+     * soon-to-be-reused startSequence can still fail with a uniqueness conflict.
+     *
+     * @throws IllegalArgumentException if a participantId doesn't belong to {@code raceId}, or a
+     *                                    referenced start-group template doesn't exist
+     * @throws IllegalStateException    if live auto-assign mode is currently active for this race
+     */
+    public List<Participant> applyStartGroupAssignment(Long raceId, List<StartGroupAssignmentRequest.Entry> assignments) {
+        requireAutoAssignInactive(raceId);
+        Set<Long> participantIds = assignments.stream().map(StartGroupAssignmentRequest.Entry::participantId).collect(Collectors.toSet());
+        Map<Long, Participant> existingById = new HashMap<>();
+        for (Participant participant : repository.findByIdIn(participantIds)) {
+            if (!Objects.equals(participant.raceId(), raceId)) {
+                throw new IllegalArgumentException("Participant " + participant.id() + " does not belong to race " + raceId);
+            }
+            existingById.put(participant.id(), participant);
+        }
+        for (Long participantId : participantIds) {
+            if (!existingById.containsKey(participantId)) {
+                throw new IllegalArgumentException("Participant with id " + participantId + " does not exist");
+            }
+        }
+        Set<Long> startGroupIds = assignments.stream().map(StartGroupAssignmentRequest.Entry::startGroupId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, StartGroupTemplate> templatesById = startGroupTemplateService.findByIds(startGroupIds);
+        for (Long startGroupId : startGroupIds) {
+            if (!templatesById.containsKey(startGroupId)) {
+                throw new IllegalArgumentException("Start-group template with id " + startGroupId + " does not exist");
+            }
+        }
+
+        return transactionOperations.executeWrite(_ -> {
+            for (Participant participant : existingById.values()) {
+                clearStartSequenceIfSet(participant);
+            }
+            List<Participant> result = new ArrayList<>();
+            for (StartGroupAssignmentRequest.Entry entry : assignments) {
+                Participant participant = existingById.get(entry.participantId());
+                result.add(repository.update(withStartGroupAndSequence(participant, entry.startGroupId(), entry.startSequence())));
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Copies a race's start-group assignment (startGroupId + startSequence) into one or more other
+     * races, matched by personId - mirrors the "only participants entered in both races are
+     * reordered, everyone else keeps their current state" rule {@link #applyStartOrderFromPreviousRace}
+     * already uses. A target race's participant whose person isn't in the source race keeps its
+     * current assignment untouched - including when the two races have different rosters
+     * entirely (e.g. late registrations only in one of them): the unmatched majority is simply
+     * left alone, and only the actually-shared persons get the group/sequence copied over
+     * verbatim (gaps in the resulting startSequence numbering are harmless - every consumer sorts
+     * by it, never displays the raw number). The one case handled explicitly is an unmatched
+     * target participant whose own leftover startSequence happens to collide with a value being
+     * copied in for someone else - it's cleared too, or the write below would fail outright on the
+     * {@code (race_id, start_sequence)} unique index.
+     *
+     * @throws IllegalArgumentException if the source race or any target race doesn't exist
+     * @throws IllegalStateException    if live auto-assign mode is currently active for any target race
+     */
+    public List<Participant> copyStartGroupAssignment(Long sourceRaceId, List<Long> targetRaceIds) {
+        if (!raceService.existsById(sourceRaceId)) {
+            throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
+        }
+        for (Long targetRaceId : targetRaceIds) {
+            if (!raceService.existsById(targetRaceId)) {
+                throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
+            }
+            requireAutoAssignInactive(targetRaceId);
+        }
+
+        List<Participant> sourceParticipants = StreamSupport.stream(repository.findByRaceId(sourceRaceId).spliterator(), false).toList();
+        Map<Long, Participant> sourceByPersonId = sourceParticipants.stream()
+                .collect(Collectors.toMap(Participant::personId, p -> p, (a, _) -> a));
+
+        return transactionOperations.executeWrite(_ -> {
+            // Every target participant is returned (not just the ones actually copied into),
+            // matching applyStartGroupAssignment's shape - the frontend merges whatever comes back
+            // into its own participants array by id, so a target race someone happens to be
+            // viewing reflects the copy immediately instead of showing stale pre-copy data until a
+            // manual reload.
+            List<Participant> allUpdated = new ArrayList<>();
+            for (Long targetRaceId : targetRaceIds) {
+                List<Participant> targetParticipants = StreamSupport.stream(repository.findByRaceId(targetRaceId).spliterator(), false).toList();
+                // The source and target race can have different rosters (e.g. late registrations
+                // only in one of them), so a copied-in startSequence value can coincide with an
+                // untouched, unmatched target participant's own leftover value from some earlier,
+                // unrelated assignment - collect those up front so the clear-then-reassign pass
+                // below can null them out too, not just the matched participants, or the second
+                // pass's write would fail outright on the (race_id, start_sequence) unique index.
+                Set<Integer> incomingSequences = targetParticipants.stream()
+                        .map(t -> sourceByPersonId.get(t.personId()))
+                        .filter(Objects::nonNull)
+                        .map(Participant::startSequence)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                // Tracks each target's current state through the clear pass below, so a
+                // cleared-but-unmatched participant is returned with its actual (nulled)
+                // startSequence instead of the stale pre-clear value. Both passes below batch
+                // their writes via updateAll instead of one repository.update() per participant.
+                Map<Long, Participant> currentById = new HashMap<>();
+                List<Participant> toClear = new ArrayList<>();
+                for (Participant target : targetParticipants) {
+                    boolean matched = sourceByPersonId.containsKey(target.personId());
+                    boolean collidesWithIncoming = !matched && target.startSequence() != null && incomingSequences.contains(target.startSequence());
+                    if (collidesWithIncoming) {
+                        // Losing its position also drops its group, or it would keep showing in
+                        // that group's column/start list while sorting outside the group's block.
+                        toClear.add(withStartGroupAndSequence(target, null, null));
+                    } else if (matched && target.startSequence() != null) {
+                        toClear.add(withStartSequence(target, null));
+                    } else {
+                        currentById.put(target.id(), target);
+                    }
+                }
+                if (!toClear.isEmpty()) {
+                    for (Participant cleared : repository.updateAll(toClear)) {
+                        currentById.put(cleared.id(), cleared);
+                    }
+                }
+
+                List<Participant> toAssign = new ArrayList<>();
+                for (Participant target : targetParticipants) {
+                    Participant source = sourceByPersonId.get(target.personId());
+                    if (source != null) {
+                        toAssign.add(withStartGroupAndSequence(currentById.get(target.id()), source.startGroupId(), source.startSequence()));
+                    }
+                }
+                Map<Long, Participant> assignedById = new HashMap<>();
+                if (!toAssign.isEmpty()) {
+                    for (Participant assigned : repository.updateAll(toAssign)) {
+                        assignedById.put(assigned.id(), assigned);
+                    }
+                }
+                for (Participant target : targetParticipants) {
+                    Participant assigned = assignedById.get(target.id());
+                    allUpdated.add(assigned != null ? assigned : currentById.get(target.id()));
+                }
+            }
+            return allUpdated;
+        });
+    }
+
+    /**
+     * Assigns race numbers (bibs) 1..n sequentially from a race's current start order -
+     * {@code startSequence} when set (the board already writes it out as one continuous sequence
+     * across every group in their on-screen order - see {@link #applyStartGroupAssignment} - so it
+     * alone already reflects the intended group order; a group's own
+     * {@link StartGroupTemplate#position()} is only that template's *default* position for a
+     * brand-new assignment and must not be consulted here, or a group reordered on the board after
+     * its last save would silently renumber back to the template's global position), falling back
+     * to raceNumber for anyone without one. Neither startGroupId nor startSequence are touched by
+     * this - only raceNumber, via the same clear-then-reassign {@link #renumberSequentially} used
+     * by {@link #assignRaceNumbers}.
+     *
+     * @throws IllegalStateException if any participant of the race already has a result
+     *                                 (durationMs/measuredAt set) - renumbering afterwards would
+     *                                 break already-recorded measurement-to-participant matching.
+     */
+    public List<Participant> generateRaceNumbersFromStartGroups(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false).toList();
+        boolean hasResults = participants.stream().anyMatch(p -> p.durationMs() != null || p.measuredAt() != null);
+        if (hasResults) {
+            throw new IllegalStateException("This race already has results. Assigning race numbers from the start-group order would break existing measurement assignments.");
+        }
+
+        List<Participant> ordered = participants.stream()
+                .sorted(Comparator
+                        .comparing((Participant p) -> p.startSequence() != null ? p.startSequence() : Integer.MAX_VALUE)
+                        .thenComparing(Participant::raceNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        return renumberSequentially(ordered);
+    }
+
+    /**
      * Randomly assigns race numbers 1..n to all participants of a race, shuffled within each age
      * group; participants without a matching age group are appended at the end, ordered by
      * ascending age (youngest first). Clears every participant's race number first, then
@@ -696,9 +1008,7 @@ public class ParticipantService {
     private List<Participant> applyStartSequence(List<Participant> ordered, List<Participant> excluded) {
         return transactionOperations.executeWrite(_ -> {
             for (Participant participant : ordered) {
-                if (participant.startSequence() != null) {
-                    repository.update(withStartSequence(participant, null));
-                }
+                clearStartSequenceIfSet(participant);
             }
             List<Participant> result = new ArrayList<>();
             for (Participant participant : excluded) {
@@ -712,7 +1022,15 @@ public class ParticipantService {
         });
     }
 
-    private static Participant withRaceNumber(Participant participant, Integer raceNumber) {
+    /**
+     * The single place every "copy this participant with 1-2 fields changed" helper below
+     * delegates to, so the next field added to {@link Participant} (already grown from 10 to 13
+     * constructor args across this feature) only has one reconstruction site to update instead of
+     * several - see {@link #withRaceNumber}/{@link #withStartSequenceAndStatus}/
+     * {@link #withStartGroupAndSequence}.
+     */
+    private static Participant with(Participant participant, Integer raceNumber, DisqualificationStatus status,
+                                     Integer startSequence, Long startGroupId) {
         return new Participant(
                 participant.id(),
                 participant.raceId(),
@@ -724,9 +1042,14 @@ public class ParticipantService {
                 participant.penalty(),
                 participant.measuredAt(),
                 participant.comment(),
-                participant.status(),
-                participant.startSequence()
+                status,
+                startSequence,
+                startGroupId
         );
+    }
+
+    private static Participant withRaceNumber(Participant participant, Integer raceNumber) {
+        return with(participant, raceNumber, participant.status(), participant.startSequence(), participant.startGroupId());
     }
 
     private static Participant withStartSequence(Participant participant, Integer startSequence) {
@@ -734,20 +1057,31 @@ public class ParticipantService {
     }
 
     private static Participant withStartSequenceAndStatus(Participant participant, Integer startSequence, DisqualificationStatus status) {
-        return new Participant(
-                participant.id(),
-                participant.raceId(),
-                participant.personId(),
-                participant.raceNumber(),
-                participant.teamId(),
-                participant.categoryId(),
-                participant.durationMs(),
-                participant.penalty(),
-                participant.measuredAt(),
-                participant.comment(),
-                status,
-                startSequence
-        );
+        return with(participant, participant.raceNumber(), status, startSequence, participant.startGroupId());
+    }
+
+    private static Participant withStartGroupAndSequence(Participant participant, Long startGroupId, Integer startSequence) {
+        return with(participant, participant.raceNumber(), participant.status(), startSequence, startGroupId);
+    }
+
+    /**
+     * Rewriting startSequence while live auto-assign is matching measurements against it would
+     * attach the next finish-line measurements to the wrong participants.
+     */
+    private void requireAutoAssignInactive(Long raceId) {
+        if (autoAssignService.isActiveFor(raceId)) {
+            throw new IllegalStateException("Auto-assign mode is active for race " + raceId + ". Disable it before changing the start order.");
+        }
+    }
+
+    /**
+     * Shared clear-then-reassign guard used by {@link #applyStartSequence},
+     * {@link #applyStartGroupAssignment}, and {@link #copyStartGroupAssignment}: nulls out a
+     * participant's startSequence if it's currently set, so a value about to be handed to someone
+     * else can't collide with it on the {@code (race_id, start_sequence)} unique index.
+     */
+    private Participant clearStartSequenceIfSet(Participant participant) {
+        return participant.startSequence() != null ? repository.update(withStartSequence(participant, null)) : participant;
     }
 
     /**
@@ -771,6 +1105,9 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
+        // Resolved once for the whole file rather than per row: it is the same race for every row,
+        // and resolving it per row would read the settings table once per participant.
+        int seasonYear = seasonService.seasonOf(requireRace(raceId));
 
         String line;
         int lineNumber = 0;
@@ -795,7 +1132,7 @@ public class ParticipantService {
             }
 
             String externalId = parts.length > 5 ? parts[5].trim() : "";
-            importRow(raceId, lineNumber, line,
+            importRow(raceId, seasonYear, lineNumber, line,
                     new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
                             null, null, null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
@@ -825,11 +1162,12 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
+        int seasonYear = seasonService.seasonOf(requireRace(raceId));
 
         int rowNumber = 1;
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
-            importRow(raceId, rowNumber, row.toString(),
+            importRow(raceId, seasonYear, rowNumber, row.toString(),
                     new ImportRowFields(
                             valueFor(row, effectiveMapping, "lastName"),
                             valueFor(row, effectiveMapping, "firstName"),
@@ -866,7 +1204,7 @@ public class ParticipantService {
 
     private static ParticipantImportParsers.ParsedRows parseImportFile(byte[] fileBytes, ParticipantImportFormat format, Character delimiter) throws IOException {
         return switch (format) {
-            case CSV -> ParticipantImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+            case CSV -> ParticipantImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
             case DSV_XML -> ParticipantImportParsers.parseDsvXml(new ByteArrayInputStream(fileBytes));
         };
     }
@@ -876,7 +1214,7 @@ public class ParticipantService {
      * rows, for building/pre-filling the column-mapping UI. Never touches the database.
      */
     public ParticipantResultImportPreviewResponse previewResultsImport(byte[] fileBytes, Character delimiter) {
-        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> suggested = ParticipantResultImportParsers.suggestMapping(parsed.fields());
         List<Map<String, String>> sample = parsed.rows().stream().limit(5).toList();
         return new ParticipantResultImportPreviewResponse(parsed.fields(), suggested, sample);
@@ -922,11 +1260,23 @@ public class ParticipantService {
      * als gewertet") - including undoing a previously imported DNF/DNS/DSQ by clearing the cell; a
      * mapped, non-blank value that isn't NONE/DNF/DNS/DSQ (any casing) is a row error rather than
      * being silently dropped.
+     * <p>
+     * The mapped "penalty" column follows the result it belongs to: on a row that carries a numeric
+     * time/value, a blank penalty cell means "no penalty" and clears an existing one - otherwise a
+     * penalty removed at a station after an earlier import would stick on the main instance forever
+     * and skew its ranking. On a row without a time/value (a still-pending participant, or one only
+     * carrying a status keyword) and when the column isn't mapped at all, the existing penalty is
+     * kept.
+     * <p>
+     * The mapped "comment" column works the same way: on a row that states an outcome (a non-blank
+     * time/value or status cell), a blank comment means "no comment" and clears an existing one -
+     * e.g. the note of a DSQ reversed at a station after an earlier import. On a still-pending row
+     * (both blank) and when the column isn't mapped at all, the existing comment is kept.
      */
     public ParticipantResultImportResult importResultsByRaceNumber(Long raceId, byte[] fileBytes, Character delimiter,
                                                                      Map<String, String> mapping, ResultTimeFormat timeFormat,
                                                                      ResultUnit resultUnit) {
-        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(new String(fileBytes, StandardCharsets.UTF_8), delimiter);
+        ParticipantResultImportParsers.ParsedRows parsed = ParticipantResultImportParsers.parseCsv(TextFileDecoder.decode(fileBytes), delimiter);
         Map<String, String> effectiveMapping = (mapping == null)
                 ? ParticipantResultImportParsers.suggestMapping(parsed.fields())
                 : mapping;
@@ -1028,19 +1378,35 @@ public class ParticipantService {
                     errors.add(new ParticipantResultImportRowError(rowNumber, row.toString(), "penalty must not be negative"));
                     continue;
                 }
+            } else if (penaltyRaw != null && durationMs != null) {
+                // Mapped-but-blank penalty on a row that carries a result: the file states this
+                // result has no penalty (e.g. a station removed one after an earlier import), so
+                // clear it instead of keeping the stale value.
+                penalty = null;
             }
 
             String commentRaw = valueFor(row, effectiveMapping, "comment");
-            String comment = (commentRaw != null && !commentRaw.trim().isEmpty()) ? commentRaw.trim() : existing.comment();
+            String comment;
+            if (commentRaw != null && !commentRaw.trim().isEmpty()) {
+                comment = commentRaw.trim();
+            } else if (commentRaw != null && (hasText(timeRaw) || hasText(statusRaw))) {
+                // Same rule as the penalty above: a mapped-but-blank comment on a row that states an
+                // outcome (a time/value or a status) means "no comment" - e.g. the note of a DSQ that
+                // was reversed at the station after an earlier import.
+                comment = null;
+            } else {
+                comment = existing.comment();
+            }
 
             toUpdate.add(new Participant(existing.id(), existing.raceId(), existing.personId(), existing.raceNumber(),
                     existing.teamId(), existing.categoryId(),
                     durationMs != null ? durationMs : existing.durationMs(),
-                    penalty,
+                    zeroPenaltyToNull(penalty),
                     LocalDateTime.now(),
                     comment,
                     status != null ? status : existing.status(),
-                    existing.startSequence()));
+                    existing.startSequence(),
+                    existing.startGroupId()));
         }
 
         if (!toUpdate.isEmpty()) {
@@ -1129,6 +1495,10 @@ public class ParticipantService {
         int minutes = parts.length >= 2 ? Integer.parseInt(parts[parts.length - 2]) : 0;
         int hours = parts.length == 3 ? Integer.parseInt(parts[0]) : 0;
         return (int) Math.round((hours * 3600L + minutes * 60L) * 1000.0 + seconds * 1000.0);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String valueFor(Map<String, String> row, Map<String, String> mapping, String targetField) {
@@ -1237,6 +1607,60 @@ public class ParticipantService {
         return csv.toString();
     }
 
+    // Header text for exportStartListCsv. startGroup/startGroupOffset are only appended when at
+    // least one listed participant has a start group (mirroring the start list PDF's
+    // "Gruppe"/"Zeitversatz" columns). startGroupOffset is the group's Zeitversatz as "m:ss" - the
+    // value RankingService nets a TIME race's raw result by, which no other export carries
+    // (exportResultsCsv's time/value is the raw, un-netted clock time).
+    private static final List<String> START_LIST_EXPORT_HEADER =
+            List.of("raceNumber", "lastName", "firstName", "externalId", "birthYear", "gender", "ageGroup", "team", "category");
+    private static final List<String> START_LIST_EXPORT_START_GROUP_HEADER = List.of("startGroup", "startGroupOffset");
+
+    /**
+     * Exports a race's start list as CSV - the same participants in the same order as the start list
+     * PDF ({@link Participant#effectiveStartOrder()}; DSQ/DNF/DNS without a start position aren't
+     * starting and are left out), plus identity data and - only if any of them has a start group -
+     * each participant's start group with its Zeitversatz. Export only, there is no matching import.
+     * Empty cells instead of the PDF's "-".
+     */
+    public String exportStartListCsv(Long raceId) {
+        List<Participant> participants = StreamSupport.stream(repository.findByRaceId(raceId).spliterator(), false)
+                .filter(p -> p.effectiveStartOrder() != null)
+                .sorted(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())))
+                .toList();
+
+        boolean anyStartGroup = participants.stream().anyMatch(p -> p.startGroupId() != null);
+
+        List<String> header = new ArrayList<>(START_LIST_EXPORT_HEADER);
+        if (anyStartGroup) {
+            header.addAll(START_LIST_EXPORT_START_GROUP_HEADER);
+        }
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(String.valueOf(EXPORT_DELIMITER), header)).append('\n');
+        for (ParticipantResponse p : toResponses(participants)) {
+            PersonResponse person = p.person();
+            List<String> values = new ArrayList<>(List.of(
+                    p.raceNumber() != null ? p.raceNumber().toString() : "",
+                    sanitizeForExport(person != null ? person.lastName() : ""),
+                    sanitizeForExport(person != null ? person.firstName() : ""),
+                    sanitizeForExport(person != null && person.externalId() != null ? person.externalId() : ""),
+                    person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "",
+                    person != null && person.gender() != null ? person.gender().name() : "",
+                    sanitizeForExport(p.ageGroup() != null ? p.ageGroup().name() : ""),
+                    sanitizeForExport(p.team() != null ? p.team().name() : ""),
+                    sanitizeForExport(p.category() != null ? p.category().name() : "")
+            ));
+            if (anyStartGroup) {
+                StartGroupTemplateResponse startGroup = p.startGroup();
+                String offset = startGroup != null ? RankingViewService.formatStartGroupOffset(startGroup.offsetSeconds()) : null;
+                values.add(sanitizeForExport(startGroup != null ? startGroup.label() : ""));
+                values.add(offset != null ? offset : "");
+            }
+            csv.append(String.join(String.valueOf(EXPORT_DELIMITER), values)).append('\n');
+        }
+        return csv.toString();
+    }
+
     /**
      * Renders a status for {@link #exportResultsCsv} - blank for {@code NONE} (the normal, ranked
      * case) rather than the literal "NONE", so the column reads as empty-unless-flagged in Excel.
@@ -1311,7 +1735,7 @@ public class ParticipantService {
      * {@code existingNameBirthDateKeys} is grown in place so duplicate ExternalId-less rows later in
      * the same file are also caught.
      */
-    private void importRow(Long raceId, int rowNumber, String rawRowDescription, ImportRowFields fields,
+    private void importRow(Long raceId, int seasonYear, int rowNumber, String rawRowDescription, ImportRowFields fields,
                             Set<String> existingNameBirthDateKeys, List<Participant> imported, List<ParticipantImportRowError> errors) {
         String lastName = fields.lastName() != null ? fields.lastName().trim() : "";
         String firstName = fields.firstName() != null ? fields.firstName().trim() : "";
@@ -1379,9 +1803,12 @@ public class ParticipantService {
                 Long categoryId = categoryName.isEmpty() ? null : categoryService.findOrCreateByName(categoryName).id();
                 // AgeGroup isn't a participant FK - it's computed from birthDate/gender at read time
                 // (findMatchingAgeGroup) - so importing "Klasse" just needs a matching AgeGroup row to
-                // exist, not anything set on the Participant itself.
+                // exist, not anything set on the Participant itself. It has to exist in *this race's
+                // season*: scoped to the target race rather than to whatever "U14" happens to exist,
+                // an import can neither silently reuse a past season's class nor widen its birth-year
+                // range and thereby re-categorise races already run under it.
                 if (!ageGroupName.isEmpty()) {
-                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender);
+                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender, seasonYear);
                 }
 
                 Person person;
@@ -1400,7 +1827,7 @@ public class ParticipantService {
                     throw new IllegalStateException("Person is already a participant of this race");
                 }
 
-                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, participantStatus);
+                Participant participant = new Participant(null, raceId, person.id(), raceNumber, teamId, categoryId, durationMs, zeroPenaltyToNull(penalty), measuredAt, comment, participantStatus);
                 return repository.save(participant);
             });
             imported.add(saved);

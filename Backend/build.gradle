@@ -6,7 +6,20 @@ plugins {
     id("io.micronaut.aot") version "5.0.2"
 }
 
-version = "0.1"
+// Single source of truth for the version: application.properties, which is also what the running
+// app reports (app.version, VersionController) and what the frontend shows in the sidebar. Read
+// from there rather than repeated here, because the installer used to carry an unrelated number -
+// a 1.5 app shipped in a "1.0.1" .dmg, so a bundle on disk could not be matched to the app inside it.
+version = {
+    def propertiesFile = file('src/main/resources/application.properties')
+    def properties = new Properties()
+    propertiesFile.withInputStream { properties.load(it) }
+    def declared = properties.getProperty('app.version')?.trim()
+    if (!declared) {
+        throw new GradleException("app.version is missing from ${propertiesFile} - the build derives its version from it")
+    }
+    return declared
+}()
 group = "x.timecontrol"
 
 repositories {
@@ -64,7 +77,7 @@ graalvmNative {
     binaries {
         all {
             buildArgs.add("-H:+SharedArenaSupport")
-            // Optional für SQLite JNI-Support:
+            // Optional, for SQLite JNI support:
             buildArgs.add("--enable-native-access=ALL-UNNAMED")
             // Baked-in runtime property so DesktopWindowStartupListener skips the Swing status
             // window for this build - AWT/Swing should stay out of the native-image reachability
@@ -140,12 +153,14 @@ def jpackagePlatform = org.gradle.internal.os.OperatingSystem.current().with {
 def jpackageIconExtension = [macos: 'icns', windows: 'ico', linux: 'png'][jpackagePlatform]
 def jpackageIcon = file("packaging/icons/app.${jpackageIconExtension}")
 def jpackageInstallerType = [macos: 'dmg', windows: 'exe', linux: 'deb'][jpackagePlatform]
-// jpackage wants a dotted numeric version, padded to at least 3 components ("0.1" -> "0.1.0").
+// jpackage wants a dotted numeric version, padded to at least 3 components ("1.5" -> "1.5.0").
 // macOS additionally rejects a leading "0" (jpackage's mac bundler requires a positive first
-// component), so only there a leading "1." is prepended ("0.1" -> "1.0.1") rather than
-// overwriting the leading digit, to keep the original version numbers recognizable. This is
-// just the installer's package version - the app's own displayed version (app.version,
-// VersionController) is untouched.
+// component), so only there a leading "1." is prepended ("0.4" -> "1.0.4") rather than
+// overwriting the leading digit, to keep the original version number recognizable. That branch
+// only bites if app.version is ever taken below 1 again.
+//
+// The number itself comes from app.version (see `version` at the top) - the same one
+// VersionController reports - so an installer on disk names the app version it contains.
 def jpackageVersionParts = project.version.toString().tokenize('.')
 if (jpackagePlatform == 'macos' && jpackageVersionParts[0] == '0') {
     jpackageVersionParts = ['1'] + jpackageVersionParts
@@ -160,6 +175,22 @@ def jpackageExecutable = {
 
 def jpackageArgs = { String type, File destDir ->
     def argsList = [
+            // Everything in --input is copied into the bundle AND put on the launcher's classpath,
+            // not just the --main-jar: a bundle built with a second jar present gets
+            //   app.classpath=$APPDIR/time-control.jar
+            //   app.classpath=$APPDIR/<the other one>
+            // in its .cfg (verified by building an app image with both and reading the generated
+            // config). This works today only because shadowJar is the sole producer here.
+            //
+            // It stops being true the moment anyone runs `./gradlew jar` or `./gradlew build`:
+            // assemble drives both jar and shadowJar, leaving a thin time-control-<version>.jar
+            // beside the fat one - same 451 x.timecontrol classes, including Application.class.
+            // Which copy wins is then down to classpath order, and a leftover jar from an earlier
+            // version would ship inside the installer with nobody able to tell from the .dmg.
+            //
+            // So: keep build/libs holding the fat jar alone. If that ever stops being the workflow,
+            // point --input at a staging directory that is emptied and filled with exactly
+            // time-control.jar in the doFirst blocks below, rather than at the whole libs dir.
             '--input', file('build/libs').absolutePath,
             '--main-jar', 'time-control.jar',
             '--main-class', 'x.timecontrol.Application',

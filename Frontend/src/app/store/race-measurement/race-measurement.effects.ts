@@ -1,10 +1,10 @@
-import {inject, Injectable} from '@angular/core';
-import {extractErrorMessage} from '../../utils/http-error.util';
-import {Actions, createEffect, ofType} from '@ngrx/effects';
-import {of} from 'rxjs';
-import {catchError, map, mergeMap, switchMap} from 'rxjs/operators';
-import {RaceMeasurementService} from '../../services/race-measurement.service';
-import * as RaceMeasurementActions from './race-measurement.actions';
+import {inject, Injectable} from "@angular/core";
+import {extractErrorMessage} from "../../utils/http-error.util";
+import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {of} from "rxjs";
+import {catchError, map, mergeMap, switchMap} from "rxjs/operators";
+import {RaceMeasurementService} from "../../services/race-measurement.service";
+import * as RaceMeasurementActions from "./race-measurement.actions";
 
 @Injectable()
 export class RaceMeasurementEffects {
@@ -20,12 +20,16 @@ export class RaceMeasurementEffects {
             switchMap(({raceId}) =>
                 this.raceMeasurementService.getByRace(raceId).pipe(
                     map(raceMeasurements => RaceMeasurementActions.loadRaceMeasurementsSuccess({raceMeasurements})),
-                    catchError(error => of(RaceMeasurementActions.loadRaceMeasurementsFailure({
-                        error: extractErrorMessage(error, 'Renn-Messungen konnten nicht geladen werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.loadRaceMeasurementsFailure({
+                                error: extractErrorMessage(error, "Renn-Messungen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     updateRaceMeasurement$ = createEffect(() =>
@@ -34,12 +38,16 @@ export class RaceMeasurementEffects {
             mergeMap(({id, raceMeasurement}) =>
                 this.raceMeasurementService.update(id, raceMeasurement).pipe(
                     map(updated => RaceMeasurementActions.updateRaceMeasurementSuccess({raceMeasurement: updated})),
-                    catchError(error => of(RaceMeasurementActions.updateRaceMeasurementFailure({
-                        error: extractErrorMessage(error, 'Renn-Messung konnte nicht aktualisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.updateRaceMeasurementFailure({
+                                error: extractErrorMessage(error, "Renn-Messung konnte nicht aktualisiert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     deleteRaceMeasurement$ = createEffect(() =>
@@ -48,12 +56,16 @@ export class RaceMeasurementEffects {
             mergeMap(({id}) =>
                 this.raceMeasurementService.delete(id).pipe(
                     map(() => RaceMeasurementActions.deleteRaceMeasurementSuccess({id})),
-                    catchError(error => of(RaceMeasurementActions.deleteRaceMeasurementFailure({
-                        error: extractErrorMessage(error, 'Renn-Messung konnte nicht gelöscht werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.deleteRaceMeasurementFailure({
+                                error: extractErrorMessage(error, "Renn-Messung konnte nicht gelöscht werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 
     syncRaceMeasurementsToParticipants$ = createEffect(() =>
@@ -62,11 +74,18 @@ export class RaceMeasurementEffects {
             mergeMap(({raceId}) =>
                 this.raceMeasurementService.syncToParticipants(raceId).pipe(
                     map(response => RaceMeasurementActions.syncRaceMeasurementsToParticipantsSuccess({response})),
-                    catchError(error => of(RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure({
-                        error: extractErrorMessage(error, 'Renn-Messungen konnten nicht mit Teilnehmern synchronisiert werden')
-                    })))
-                )
-            )
-        )
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.syncRaceMeasurementsToParticipantsFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Renn-Messungen konnten nicht mit Teilnehmern synchronisiert werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     );
 }

@@ -8,12 +8,14 @@ import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.entities.StartGroupTemplate
 
 import java.time.LocalDate
 
 class RankingServiceSpec extends Specification {
 
-    RankingService rankingService = new RankingService()
+    StartGroupTemplateService startGroupTemplateService = Mock()
+    RankingService rankingService = new RankingService(startGroupTemplateService)
 
     @Shared
     Race raceAsc = race(SortDirection.ASC)
@@ -36,6 +38,14 @@ class RankingServiceSpec extends Specification {
 
     private static Participant participantWithStatus(Long id, Integer durationMs, DisqualificationStatus status) {
         new Participant(id, 1L, 1L, null, null, null, durationMs, null, null, null, status)
+    }
+
+    private static Participant participantWithStartGroup(Long id, Integer durationMs, Long startGroupId, Integer penalty = null) {
+        new Participant(id, 1L, 1L, null, null, null, durationMs, penalty, null, null, DisqualificationStatus.NONE, null, startGroupId)
+    }
+
+    private static StartGroupTemplate template(Long id, Integer offsetSeconds) {
+        new StartGroupTemplate(id, "Gruppe", "#92D050", 0, offsetSeconds)
     }
 
     def "adjustedValue is null when no result was measured"() {
@@ -118,6 +128,57 @@ class RankingServiceSpec extends Specification {
         raceDesc | 60000    | null    || 60000
         raceDesc | 60000    | 2000    || 58000
         raceDesc | 100      | 150     || 0 // floored: a penalty larger than the result must not go negative
+    }
+
+    def "adjustedValue nets out the participant's start-group offset before applying the penalty, for a TIME race"() {
+        given: "a group with a 5-minute (300s) block-start offset, resolved live via the participant's startGroupId"
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, 300))
+
+        expect: "300s = 300000ms subtracted from the raw 400000ms duration, leaving 100000ms, then the 1000ms penalty added"
+        rankingService.adjustedValue(raceAsc, participantWithStartGroup(1L, 400000, 9L, 1000)) == 101000
+    }
+
+    def "adjustedValue ignores the start-group offset for a POINTS race"() {
+        given: "an offset makes no sense for a points result, and must never be subtracted from one"
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, 300))
+        def racePoints = race(SortDirection.ASC, ResultUnit.POINTS)
+
+        expect:
+        rankingService.adjustedValue(racePoints, participantWithStartGroup(1L, 400000, 9L)) == 400000
+    }
+
+    def "adjustedValue applies no offset when the assigned start group has none set"() {
+        given:
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, null))
+
+        expect:
+        rankingService.adjustedValue(raceAsc, participantWithStartGroup(1L, 60000, 9L)) == 60000
+    }
+
+    def "adjustedValue applies no offset when the assigned start-group template no longer exists"() {
+        given: "the template was deleted after this participant was assigned (see StartGroupTemplateService#delete, which already clears startGroupId itself - this only guards the in-between/inconsistent-data case)"
+        startGroupTemplateService.findById(9L) >> Optional.empty()
+
+        expect:
+        rankingService.adjustedValue(raceAsc, participantWithStartGroup(1L, 60000, 9L)) == 60000
+    }
+
+    def "adjustedValue floors at 0 when the start-group offset exceeds the raw duration"() {
+        given:
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, 300))
+
+        expect:
+        rankingService.adjustedValue(raceAsc, participantWithStartGroup(1L, 5000, 9L)) == 0
+    }
+
+    def "netDurationMs nets out the start-group offset but not the penalty, so Zeit + Strafe = Gesamt"() {
+        given:
+        startGroupTemplateService.findById(9L) >> Optional.of(template(9L, 300))
+        def participant = participantWithStartGroup(1L, 400000, 9L, 1000)
+
+        expect:
+        rankingService.netDurationMs(raceAsc, participant) == 100000
+        rankingService.netDurationMs(raceAsc, participant) + 1000 == rankingService.adjustedValue(raceAsc, participant)
     }
 
     def "comparator sorts ascending for ASC races (fastest time first)"() {

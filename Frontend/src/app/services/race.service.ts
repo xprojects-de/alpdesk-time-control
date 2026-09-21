@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {Race, RaceLiveLink, RaceRequest} from '../models/race.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {Race, RaceLiveLink, RaceRequest} from "../models/race.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class RaceService {
     private http = inject(HttpClient);
@@ -37,22 +37,10 @@ export class RaceService {
 
     /**
      * Every discoverable public live-results view for this race - paths relative to the backend's
-     * own origin (RaceController#liveLinks); resolve with toAbsoluteUrl before displaying/sharing.
+     * own origin (RaceController#liveLinks); resolve with toAbsoluteUrl (utils/absolute-url.util)
+     * before displaying/sharing.
      */
     getLiveLinks(id: number): Observable<RaceLiveLink[]> {
         return this.http.get<RaceLiveLink[]>(`${this.apiUrl}/${id}/live-links`);
-    }
-
-    /**
-     * Resolves a backend-relative path (e.g. from RaceLiveLink.path) to an absolute, shareable URL
-     * using this frontend's own known origin, rather than having the backend guess its own
-     * externally-reachable address - correct even behind a reverse proxy that changes host/scheme,
-     * since this is the same origin the browser itself used to load/call this app.
-     * environment.apiUrl is already absolute in dev (http://localhost:18000); in prod it's '' since
-     * the SPA and API share one origin, so window.location.origin fills in the same host there.
-     */
-    toAbsoluteUrl(path: string): string {
-        const base = environment.apiUrl || window.location.origin;
-        return `${base}${path}`;
     }
 }

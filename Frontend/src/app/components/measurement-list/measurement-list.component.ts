@@ -1,22 +1,9 @@
-import {
-    Component,
-    AfterViewInit,
-    OnDestroy,
-    inject,
-    ChangeDetectionStrategy,
-} from "@angular/core";
+import {Component, AfterViewInit, OnDestroy, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {Store} from "@ngrx/store";
 import {Observable, combineLatest, interval, Subject, EMPTY} from "rxjs";
-import {
-    take,
-    takeUntil,
-    switchMap,
-    map,
-    filter,
-    distinctUntilChanged,
-} from "rxjs/operators";
+import {take, takeUntil, switchMap, map, filter, distinctUntilChanged, withLatestFrom} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -27,11 +14,12 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatMenuModule} from "@angular/material/menu";
-import {MatSelectModule} from "@angular/material/select";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {deviceWasResetFromMessage} from "../../utils/device-reset.util";
+import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
 import {Race} from "../../models/race.model";
 import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -59,7 +47,6 @@ interface MeasurementWithParticipant extends Measurement {
 
 @Component({
     selector: "app-measurement-list",
-    standalone: true,
     imports: [
         CommonModule,
         MatTableModule,
@@ -72,7 +59,7 @@ interface MeasurementWithParticipant extends Measurement {
         MatTooltipModule,
         MatSlideToggleModule,
         MatMenuModule,
-        MatSelectModule,
+        RaceSelectComponent,
         MatFormFieldModule,
         FormsModule,
     ],
@@ -84,24 +71,18 @@ interface MeasurementWithParticipant extends Measurement {
                         <span>Messungen</span>
                         <div class="sync-status">
                             <mat-slide-toggle
-                                    [(ngModel)]="autoRefreshEnabled"
-                                    (change)="onAutoRefreshToggle()"
-                                    color="primary"
-                                    matTooltip="Automatische Aktualisierung"
+                                [(ngModel)]="autoRefreshEnabled"
+                                (change)="onAutoRefreshToggle()"
+                                color="primary"
+                                matTooltip="Automatische Aktualisierung"
                             >
                             </mat-slide-toggle>
                             @if (loading$ | async) {
-                                <mat-icon class="sync-icon syncing" matTooltip="Aktualisiere..."
-                                >sync
-                                </mat-icon
-                                >
+                                <mat-icon class="sync-icon syncing" matTooltip="Aktualisiere...">sync </mat-icon>
                             } @else {
-                                <mat-icon
-                                        class="sync-icon"
-                                        matTooltip="Letzte Aktualisierung: {{ lastUpdate }}"
-                                >sync
-                                </mat-icon
-                                >
+                                <mat-icon class="sync-icon" matTooltip="Letzte Aktualisierung: {{ lastUpdate }}"
+                                    >sync
+                                </mat-icon>
                             }
                             <span class="last-update-text">{{ lastUpdate }}</span>
                         </div>
@@ -110,11 +91,7 @@ interface MeasurementWithParticipant extends Measurement {
             </mat-card-header>
             <mat-card-content>
                 <div class="header-actions">
-                    <button
-                            mat-raised-button
-                            color="primary"
-                            (click)="openCreateDialog()"
-                    >
+                    <button mat-raised-button color="primary" (click)="openCreateDialog()">
                         <mat-icon>add</mat-icon>
                         Neue Messung
                     </button>
@@ -124,28 +101,28 @@ interface MeasurementWithParticipant extends Measurement {
                     </button>
 
                     <button
-                            mat-raised-button
-                            color="accent"
-                            (click)="openArchiveDialog()"
-                            matTooltip="Aktuelle Messungen einem Rennen zuordnen und archivieren"
+                        mat-raised-button
+                        color="accent"
+                        (click)="openArchiveDialog()"
+                        matTooltip="Aktuelle Messungen einem Rennen zuordnen und archivieren"
                     >
                         <mat-icon>archive</mat-icon>
                         Archivieren
                     </button>
 
                     <button
-                            mat-raised-button
-                            (click)="exportMeasurementsCsv()"
-                            matTooltip="Alle Messungen als CSV-Datei herunterladen"
+                        mat-raised-button
+                        (click)="exportMeasurementsCsv()"
+                        matTooltip="Alle Messungen als CSV-Datei herunterladen"
                     >
                         <mat-icon>download</mat-icon>
                         CSV Export
                     </button>
                     <button
-                            mat-raised-button
-                            (click)="openImportDialog()"
-                            [disabled]="importLoading$ | async"
-                            matTooltip="Messungen aus CSV-Datei importieren (mit Spalten-Zuordnung)"
+                        mat-raised-button
+                        (click)="openImportDialog()"
+                        [disabled]="importLoading$ | async"
+                        matTooltip="Messungen aus CSV-Datei importieren (mit Spalten-Zuordnung)"
                     >
                         @if (importLoading$ | async) {
                             <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
@@ -156,34 +133,34 @@ interface MeasurementWithParticipant extends Measurement {
                     </button>
 
                     @if (timingProviderActive$ | async) {
-                        @if ((deviceStatus$ | async) === 'continuous') {
+                        @if ((deviceStatus$ | async) === "continuous") {
                             <button
-                                    mat-raised-button
-                                    color="accent"
-                                    class="active-mode"
-                                    (click)="toggleContinuousMode(false)"
-                                    matTooltip="Kontinuierlichen Modus deaktivieren"
+                                mat-raised-button
+                                color="accent"
+                                class="active-mode"
+                                (click)="toggleContinuousMode(false)"
+                                matTooltip="Kontinuierlichen Modus deaktivieren"
                             >
                                 <mat-icon>stop</mat-icon>
                                 Kontinuierlich AUS
                             </button>
                         } @else {
                             <button
-                                    mat-raised-button
-                                    (click)="toggleContinuousMode(true)"
-                                    matTooltip="Kontinuierlichen Modus aktivieren"
+                                mat-raised-button
+                                (click)="toggleContinuousMode(true)"
+                                matTooltip="Kontinuierlichen Modus aktivieren"
                             >
                                 <mat-icon>play_arrow</mat-icon>
                                 Kontinuierlich AN
                             </button>
                         }
 
-                        @if ((deviceStatus$ | async) === 'normal') {
+                        @if ((deviceStatus$ | async) === "normal") {
                             <button
-                                    mat-raised-button
-                                    color="warn"
-                                    (click)="discardOldestStart()"
-                                    matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
+                                mat-raised-button
+                                color="warn"
+                                (click)="discardOldestStart()"
+                                matTooltip="Ältesten Start verwerfen (bei Sturz des Läufers)"
                             >
                                 <mat-icon>person_off</mat-icon>
                                 Sturz signalisieren
@@ -193,20 +170,20 @@ interface MeasurementWithParticipant extends Measurement {
 
                     @if (scheduledImportEnabled$ | async) {
                         <button
-                                mat-raised-button
-                                color="accent"
-                                class="active-mode"
-                                (click)="toggleScheduledImport(false)"
-                                matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
+                            mat-raised-button
+                            color="accent"
+                            class="active-mode"
+                            (click)="toggleScheduledImport(false)"
+                            matTooltip="Automatischen Import deaktivieren (läuft alle 5 Sekunden)"
                         >
                             <mat-icon>cloud_sync</mat-icon>
                             Auto-Import AUS
                         </button>
                     } @else {
                         <button
-                                mat-raised-button
-                                (click)="toggleScheduledImport(true)"
-                                matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
+                            mat-raised-button
+                            (click)="toggleScheduledImport(true)"
+                            matTooltip="Automatischen Import aktivieren (läuft alle 5 Sekunden)"
                         >
                             <mat-icon>cloud_download</mat-icon>
                             Auto-Import AN
@@ -214,10 +191,10 @@ interface MeasurementWithParticipant extends Measurement {
                     }
 
                     <button
-                            mat-raised-button
-                            color="warn"
-                            [matMenuTriggerFor]="resetMenu"
-                            matTooltip="Alle Messungen zurücksetzen"
+                        mat-raised-button
+                        color="warn"
+                        [matMenuTriggerFor]="resetMenu"
+                        matTooltip="Alle Messungen zurücksetzen"
                     >
                         <mat-icon>delete_sweep</mat-icon>
                         Zurücksetzen
@@ -238,41 +215,88 @@ interface MeasurementWithParticipant extends Measurement {
                 </div>
 
                 <div class="auto-assign-row">
-                    <mat-form-field appearance="outline" class="race-select"
-                                    [matTooltip]="(scheduledImportEnabled$ | async)
-                                        ? 'Automatischen Import zuerst deaktivieren, um das Rennen zu wechseln'
-                                        : 'Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie'">
-                        <mat-label>Rennen (Automatik-Zuordnung)</mat-label>
-                        <mat-select [value]="selectedRaceId$ | async"
-                                    [disabled]="!!(scheduledImportEnabled$ | async)"
-                                    (selectionChange)="onRaceChange($event.value)">
-                            <mat-option [value]="null">— kein Rennen —</mat-option>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }} ({{ formatRaceDate(race.date) }})</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        class="race-select"
+                        label="Rennen (Automatik-Zuordnung)"
+                        emptyOptionLabel="— kein Rennen —"
+                        [matTooltip]="
+                            (scheduledImportEnabled$ | async)
+                                ? 'Automatischen Import zuerst deaktivieren, um das Rennen zu wechseln'
+                                : 'Rennen auswählen startet die automatische Zuordnung, abwählen stoppt sie'
+                        "
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceId$ | async"
+                        [disabled]="!!(scheduledImportEnabled$ | async) || !!(autoAssignBusy$ | async)"
+                        (valueChange)="onRaceChange($any($event))"
+                    />
 
                     @if (selectedRaceId$ | async; as selectedRaceId) {
                         @if (autoAssignStatus$ | async; as autoStatus) {
                             @if (autoStatus.active && autoStatus.raceId === selectedRaceId) {
                                 <button
-                                        mat-raised-button
-                                        (click)="skipAutoAssign()"
-                                        matTooltip="Aktuell erwartete Startnummer überspringen (z. B. nicht gestartet)"
+                                    mat-raised-button
+                                    (click)="skipAutoAssign()"
+                                    [disabled]="autoAssignBusy$ | async"
+                                    matTooltip="Aktuelle Startnummer überspringen (z. B. nicht gestartet)"
                                 >
                                     <mat-icon>skip_next</mat-icon>
                                     Überspringen
                                 </button>
+                                <span class="set-next-group">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        class="set-next-input"
+                                        placeholder="StNr."
+                                        aria-label="Nächste Startnummer setzen"
+                                        [(ngModel)]="nextRaceNumberInput"
+                                        [disabled]="!!(autoAssignBusy$ | async)"
+                                        (keyup.enter)="setNextRaceNumber()"
+                                    />
+                                    <button
+                                        mat-raised-button
+                                        (click)="setNextRaceNumber()"
+                                        [disabled]="!nextRaceNumberInput || !!(autoAssignBusy$ | async)"
+                                        matTooltip="Zuordnung auf diese Startnummer setzen - nach einem eingeschobenen Läufer oder um ein versehentliches Überspringen zu korrigieren"
+                                    >
+                                        <mat-icon>my_location</mat-icon>
+                                        Setzen
+                                    </button>
+                                </span>
                                 <span class="next-number-info">
-                                    Nächste erwartete Startnummer:
+                                    Nächste Startnummer:
                                     @if (autoStatus.nextRaceNumber !== null) {
                                         <strong>{{ autoStatus.nextRaceNumber }}</strong>
-                                        ({{ getParticipantNameByRaceNumber(selectedRaceId, autoStatus.nextRaceNumber, (participants$ | async) || []) }})
+                                        ({{
+                                            getParticipantNameByRaceNumber(
+                                                selectedRaceId,
+                                                autoStatus.nextRaceNumber,
+                                                (participants$ | async) || []
+                                            )
+                                        }})
                                     } @else {
                                         <em>keine weiteren Startnummern</em>
                                     }
                                 </span>
+                                @if (returnToRaceNumber !== null) {
+                                    <span class="return-hint">
+                                        <mat-icon>warning</mat-icon>
+                                        <span>
+                                            Die Zuordnung wurde von Hand versetzt und läuft von hier aus weiter - sie
+                                            kehrt <strong>nicht</strong> von selbst zurück. Vorher war
+                                            <strong>{{ returnToRaceNumber }}</strong> an der Reihe.
+                                        </span>
+                                        <button
+                                            mat-raised-button
+                                            (click)="returnToQueue()"
+                                            [disabled]="autoAssignBusy$ | async"
+                                            matTooltip="Zuordnung wieder auf die Startnummer setzen, die vor dem Versetzen erwartet wurde"
+                                        >
+                                            <mat-icon>undo</mat-icon>
+                                            Zurück zu {{ returnToRaceNumber }}
+                                        </button>
+                                    </span>
+                                }
                             }
                         }
                     } @else {
@@ -287,210 +311,251 @@ interface MeasurementWithParticipant extends Measurement {
                 }
 
                 <div class="table-container">
-                <table
+                    <table
                         mat-table
                         [dataSource]="(measurementsWithParticipants$ | async) || []"
                         [trackBy]="trackById"
                         class="measurement-table"
                         [class.loading]="loading$ | async"
-                >
-                    <!-- ID Column -->
-                    <ng-container matColumnDef="id">
-                        <th mat-header-cell *matHeaderCellDef>ID</th>
-                        <td mat-cell *matCellDef="let measurement">{{ measurement.id }}</td>
-                    </ng-container>
-
-                    <!-- Duration Column -->
-                    <ng-container matColumnDef="duration">
-                        <th mat-header-cell *matHeaderCellDef>Dauer</th>
-                        <td mat-cell *matCellDef="let measurement">
-                            {{ formatDuration(measurement.durationMs) }}
-                        </td>
-                    </ng-container>
-
-                    <!-- Participant Column -->
-                    <ng-container matColumnDef="participant">
-                        <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
-                        <td mat-cell *matCellDef="let measurement"
-                            [matTooltip]="measurement.participantId ? 'Bereits einem Rennen zugeordnet' : ''">
-                            {{ measurement.participantName || "-" }}
-                        </td>
-                    </ng-container>
-
-                    <!-- Measured At Column -->
-                    <ng-container matColumnDef="measuredAt">
-                        <th mat-header-cell *matHeaderCellDef>Gemessen am</th>
-                        <td mat-cell *matCellDef="let measurement">
-                            {{ measurement.measuredAt | date: "dd.MM.yyyy HH:mm:ss" }}
-                        </td>
-                    </ng-container>
-
-                    <!-- Actions Column -->
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                        <td mat-cell *matCellDef="let measurement">
-                            <button
-                                    mat-icon-button
-                                    (click)="openEditDialog(measurement)"
-                                    matTooltip="Bearbeiten"
+                    >
+                        <!-- Device counter Column -->
+                        <ng-container matColumnDef="deviceMeasurementId">
+                            <th mat-header-cell *matHeaderCellDef>Geräte-Nr.</th>
+                            <td
+                                mat-cell
+                                *matCellDef="let measurement"
+                                [matTooltip]="
+                                    isSyntheticDeviceMeasurementId(measurement.deviceMeasurementId)
+                                        ? 'Ohne Gerät erfasst (manuell oder CSV-Import)'
+                                        : ''
+                                "
                             >
-                                <mat-icon>edit</mat-icon>
-                            </button>
-                            <button
+                                {{ formatDeviceMeasurementId(measurement.deviceMeasurementId) }}
+                            </td>
+                        </ng-container>
+
+                        <!-- Duration Column -->
+                        <ng-container matColumnDef="duration">
+                            <th mat-header-cell *matHeaderCellDef>Dauer</th>
+                            <td mat-cell *matCellDef="let measurement">
+                                {{ formatDuration(measurement.durationMs) }}
+                            </td>
+                        </ng-container>
+
+                        <!-- Participant Column -->
+                        <ng-container matColumnDef="participant">
+                            <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
+                            <td
+                                mat-cell
+                                *matCellDef="let measurement"
+                                [matTooltip]="measurement.participantId ? 'Bereits einem Rennen zugeordnet' : ''"
+                            >
+                                {{ measurement.participantName || "-" }}
+                            </td>
+                        </ng-container>
+
+                        <!-- Measured At Column -->
+                        <ng-container matColumnDef="measuredAt">
+                            <th mat-header-cell *matHeaderCellDef>Gemessen am</th>
+                            <td mat-cell *matCellDef="let measurement">
+                                {{ measurement.measuredAt | date: "dd.MM.yyyy HH:mm:ss" }}
+                            </td>
+                        </ng-container>
+
+                        <!-- Actions Column -->
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+                            <td mat-cell *matCellDef="let measurement">
+                                <button mat-icon-button (click)="openEditDialog(measurement)" matTooltip="Bearbeiten">
+                                    <mat-icon>edit</mat-icon>
+                                </button>
+                                <button
                                     mat-icon-button
                                     color="warn"
                                     (click)="deleteMeasurement(measurement)"
                                     matTooltip="Löschen"
-                            >
-                                <mat-icon>delete</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
+                                >
+                                    <mat-icon>delete</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-                </table>
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                    </table>
                 </div>
 
-                <div class="count-info">
-                    Anzahl der Messungen: {{ ((measurements$ | async) || []).length }}
-                </div>
+                <div class="count-info">Anzahl der Messungen: {{ ((measurements$ | async) || []).length }}</div>
             </mat-card-content>
         </mat-card>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .title-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            gap: 32px;
-          }
-
-          .sync-status {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 0.875rem;
-            color: rgba(0, 0, 0, 0.6);
-          }
-
-          .sync-icon {
-            font-size: 20px;
-            width: 20px;
-            height: 20px;
-            color: rgba(0, 0, 0, 0.6);
-          }
-
-          .sync-icon.syncing {
-            animation: spin 1s linear infinite;
-            color: #3f51b5;
-          }
-
-          @keyframes spin {
-            from {
-              transform: rotate(0deg);
-            }
-            to {
-              transform: rotate(360deg);
-            }
-          }
-
-          .last-update-text {
-            font-size: 0.75rem;
-            white-space: nowrap;
-          }
-
-          .header-actions {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            position: relative;
-            flex-wrap: wrap;
-            align-items: center;
-          }
-
-          .active-mode {
-            background-color: #4caf50 !important;
-            color: white !important;
-          }
-
-          .active-mode:hover {
-            background-color: #45a049 !important;
-          }
-
-          .auto-assign-row {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            align-items: center;
-          }
-
-          .race-select {
-            min-width: 280px;
-          }
-
-          .next-number-info {
-            font-size: 0.9rem;
-            color: rgba(0, 0, 0, 0.7);
-          }
-
-          .hint {
-            color: rgba(0, 0, 0, 0.6);
-          }
-
-          .loading-overlay {
-            position: absolute;
-            top: 0;
-            right: 0;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px;
-          }
-
-          .measurement-table {
-            width: 100%;
-            transition: opacity 0.2s ease;
-          }
-
-          .measurement-table.loading {
-            opacity: 0.6;
-          }
-
-          mat-card {
-            margin: 20px;
-          }
-
-          mat-card-content {
-            position: relative;
-          }
-
-          .count-info {
-            margin-top: 16px;
-            padding: 12px 16px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            color: rgba(0, 0, 0, 0.87);
-          }
-
-          @media (max-width: 768px) {
-            mat-card {
-              margin: 8px;
-            }
-
             .title-row {
-              flex-wrap: wrap;
-              gap: 8px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                width: 100%;
+                gap: 32px;
             }
-          }
+
+            .sync-status {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: 0.875rem;
+                color: rgba(0, 0, 0, 0.6);
+            }
+
+            .sync-icon {
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+                color: rgba(0, 0, 0, 0.6);
+            }
+
+            .sync-icon.syncing {
+                animation: spin 1s linear infinite;
+                color: #3f51b5;
+            }
+
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .last-update-text {
+                font-size: 0.75rem;
+                white-space: nowrap;
+            }
+
+            .header-actions {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 10px;
+                position: relative;
+                flex-wrap: wrap;
+                align-items: center;
+            }
+
+            .active-mode {
+                background-color: #4caf50 !important;
+                color: white !important;
+            }
+
+            .active-mode:hover {
+                background-color: #45a049 !important;
+            }
+
+            .auto-assign-row {
+                margin-bottom: 20px;
+                display: flex;
+                gap: 16px;
+                flex-wrap: wrap;
+                align-items: center;
+            }
+
+            .race-select {
+                min-width: 280px;
+            }
+
+            .return-hint {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-basis: 100%;
+                margin-top: 4px;
+                padding: 8px 12px;
+                border-radius: 4px;
+                background: rgba(255, 171, 0, 0.12);
+            }
+
+            .return-hint mat-icon {
+                flex-shrink: 0;
+            }
+
+            .set-next-group {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .set-next-input {
+                width: 72px;
+                padding: 6px 8px;
+                font: inherit;
+                border: 1px solid rgba(0, 0, 0, 0.38);
+                border-radius: 4px;
+                background: transparent;
+                color: inherit;
+            }
+
+            .set-next-input:disabled {
+                opacity: 0.5;
+            }
+
+            .next-number-info {
+                font-size: 0.9rem;
+                color: rgba(0, 0, 0, 0.7);
+            }
+
+            .hint {
+                color: rgba(0, 0, 0, 0.6);
+            }
+
+            .loading-overlay {
+                position: absolute;
+                top: 0;
+                right: 0;
+                z-index: 10;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 10px;
+            }
+
+            .measurement-table {
+                width: 100%;
+                transition: opacity 0.2s ease;
+            }
+
+            .measurement-table.loading {
+                opacity: 0.6;
+            }
+
+            mat-card {
+                margin: 20px;
+            }
+
+            mat-card-content {
+                position: relative;
+            }
+
+            .count-info {
+                margin-top: 16px;
+                padding: 12px 16px;
+                background-color: #f5f5f5;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(0, 0, 0, 0.87);
+            }
+
+            @media (max-width: 768px) {
+                mat-card {
+                    margin: 8px;
+                }
+
+                .title-row {
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+            }
         `,
     ],
 })
@@ -513,6 +578,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     measurementsWithParticipants$: Observable<MeasurementWithParticipant[]>;
     selectedRaceId$: Observable<number | null>;
     autoAssignStatus$: Observable<AutoAssignStatus>;
+    autoAssignBusy$: Observable<boolean>;
     loading$: Observable<boolean>;
     scheduledImportEnabled$: Observable<boolean>;
     deviceStatus$: Observable<string | null>;
@@ -521,347 +587,424 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     // timing device is confirmed not configured (NONE).
     timingProviderActive$: Observable<boolean>;
     importLoading$: Observable<boolean>;
-    displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
+    displayedColumns = ["deviceMeasurementId", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
+    /** Bound to the bib input next to "Überspringen" - cleared once the backend accepted it. */
+    nextRaceNumberInput: number | null = null;
+    /**
+     * The bib the queue expected before it was last moved by hand, offered back as a one-click
+     * return. Setting the cursor is a JUMP, not an insertion: once the moved-to participant has
+     * their time, matching continues from THEIR position in the start order - so a mid-field jump
+     * silently steps over everyone in between. Nothing here restores that automatically on purpose;
+     * this only makes sure the way back is on screen instead of in the operator's head.
+     */
+    returnToRaceNumber: number | null = null;
+    /** Mirrored from autoAssignStatus$ so the value BEFORE a jump can be captured when it is dispatched. */
+    private currentNextRaceNumber: number | null = null;
+    /** Held between dispatch and success so a rejected bib never leaves a bogus return offer behind. */
+    private pendingReturnRaceNumber: number | null = null;
+    private pendingTargetRaceNumber: number | null = null;
+    /** Set while a confirmed re-run is in flight, so its success also refreshes the now-deleted row away. */
+    private pendingDiscard = false;
 
     constructor() {
-        this.measurements$ = this.store.select(
-            MeasurementSelectors.selectAllMeasurements,
-        );
+        this.measurements$ = this.store.select(MeasurementSelectors.selectAllMeasurements);
         this.races$ = this.store.select(RaceSelectors.selectAllRaces);
-        this.participants$ = this.store.select(
-            ParticipantSelectors.selectAllParticipants,
-        );
-        this.loading$ = this.store.select(
-            MeasurementSelectors.selectMeasurementLoading,
-        );
+        this.participants$ = this.store.select(ParticipantSelectors.selectAllParticipants);
+        this.loading$ = this.store.select(MeasurementSelectors.selectMeasurementLoading);
         this.timingProviderActive$ = this.store.select(SettingsSelectors.selectTimingProviderActive).pipe(
             filter((active): active is boolean => active !== null),
             distinctUntilChanged(),
         );
 
-        this.measurementsWithParticipants$ = combineLatest([
-            this.measurements$,
-            this.participants$,
-        ]).pipe(
+        this.measurementsWithParticipants$ = combineLatest([this.measurements$, this.participants$]).pipe(
             map(([measurements, participants]) =>
-                measurements.map((m) => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
+                // Newest first: during a race this list grows with every finish and has no
+                // pagination, so the row an operator just heard the beep for belongs at the top
+                // instead of below everything already recorded.
+                //
+                // Sorted by id (the order rows reached the database), not by the Geräte-Nr. the
+                // column shows, although the two normally grow in step. They come apart exactly
+                // where this sort has to stay right: a manually entered time carries a synthetic
+                // NEGATIVE device id (see MeasurementService#nextSyntheticDeviceMeasurementId) and
+                // would sink to the bottom of a device-number sort right after being typed in, and
+                // after a device reset that did not clear the table the device counts from 1 again
+                // while the ids keep rising, which would put the OLD rows on top.
+                [...measurements]
+                    .sort((a, b) => b.id - a.id)
+                    .map(m => ({
+                        ...m,
+                        participantName: m.participantId
+                            ? this.getParticipantName(m.participantId, participants)
+                            : undefined,
+                    })),
             ),
             distinctUntilChanged(shallowArrayEqual),
         );
-        this.scheduledImportEnabled$ = this.store.select(
-            MeasurementSelectors.selectScheduledImportEnabled,
-        );
-        this.deviceStatus$ = this.store.select(
-            MeasurementSelectors.selectDeviceStatus,
-        );
-        this.autoAssignStatus$ = this.store.select(
-            MeasurementSelectors.selectAutoAssignStatus,
-        );
+        this.scheduledImportEnabled$ = this.store.select(MeasurementSelectors.selectScheduledImportEnabled);
+        this.deviceStatus$ = this.store.select(MeasurementSelectors.selectDeviceStatus);
+        this.autoAssignStatus$ = this.store.select(MeasurementSelectors.selectAutoAssignStatus);
+        this.autoAssignStatus$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(status => (this.currentNextRaceNumber = status?.nextRaceNumber ?? null));
+        this.autoAssignBusy$ = this.store.select(MeasurementSelectors.selectAutoAssignBusy);
         // Deliberately NOT bound to the app-wide RaceSelectors.selectSelectedRaceId (used by
         // participant-list/race-measurement-list/gaudi-modus to filter by race): this select
         // doubles as the auto-assign on/off switch, so showing it pre-filled from another
         // screen's race choice risks silently auto-assigning measurements to the wrong race.
         // It must reflect only the race auto-assign is actually running for.
         this.selectedRaceId$ = this.autoAssignStatus$.pipe(
-            map((status) => (status.active ? status.raceId : null)),
+            map(status => (status.active ? status.raceId : null)),
             distinctUntilChanged(),
         );
-        this.importLoading$ = this.store.select(
-            MeasurementSelectors.selectImportLoading,
-        );
+        this.importLoading$ = this.store.select(MeasurementSelectors.selectImportLoading);
 
         // Listen for successful auto-assign changes
-        this.actions$.pipe(
-            ofType(
-                MeasurementActions.enableAutoAssignSuccess,
-                MeasurementActions.disableAutoAssignSuccess,
-                MeasurementActions.skipAutoAssignSuccess,
-            ),
-            takeUntil(this.destroy$)
-        ).subscribe((action) => {
-            const message = action.type === MeasurementActions.enableAutoAssignSuccess.type
-                ? "Automatik-Modus aktiviert"
-                : action.type === MeasurementActions.disableAutoAssignSuccess.type
-                    ? "Automatik-Modus deaktiviert"
-                    : "Startnummer übersprungen";
-            this.snackBar.open(message, "OK", {duration: 3000});
-        });
+        this.actions$
+            .pipe(
+                ofType(
+                    MeasurementActions.enableAutoAssignSuccess,
+                    MeasurementActions.disableAutoAssignSuccess,
+                    MeasurementActions.skipAutoAssignSuccess,
+                    MeasurementActions.setNextAutoAssignRaceNumberSuccess,
+                ),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(action => {
+                let message: string;
+                if (action.type === MeasurementActions.enableAutoAssignSuccess.type) {
+                    message = "Automatik-Modus aktiviert";
+                } else if (action.type === MeasurementActions.disableAutoAssignSuccess.type) {
+                    message = "Automatik-Modus deaktiviert";
+                } else if (action.type === MeasurementActions.setNextAutoAssignRaceNumberSuccess.type) {
+                    // Only cleared on success: a rejected bib stays in the field so it can be fixed.
+                    this.nextRaceNumberInput = null;
+                    if (this.pendingTargetRaceNumber === this.returnToRaceNumber) {
+                        // Back where we started - nothing left to offer.
+                        this.returnToRaceNumber = null;
+                        message = "Nächste Startnummer gesetzt";
+                    } else {
+                        // Captured only on the FIRST jump: a second one before returning must not
+                        // overwrite the way back to the real queue position.
+                        if (this.returnToRaceNumber === null) {
+                            this.returnToRaceNumber = this.pendingReturnRaceNumber;
+                        }
+                        message =
+                            this.returnToRaceNumber !== null
+                                ? `Nächste Startnummer gesetzt - vorher war ${this.returnToRaceNumber} an der Reihe`
+                                : "Nächste Startnummer gesetzt";
+                    }
+                    this.pendingReturnRaceNumber = null;
+                    this.pendingTargetRaceNumber = null;
+                    if (this.pendingDiscard) {
+                        // The backend deleted a row - without this the table keeps showing it.
+                        this.pendingDiscard = false;
+                        this.store.dispatch(MeasurementActions.loadMeasurements());
+                        message = "Zeit verworfen - Startnummer kann erneut fahren";
+                    }
+                } else {
+                    message = "Startnummer übersprungen";
+                }
+                this.snackBar.open(message, "OK", {duration: 3000});
+            });
 
         // Listen for failed auto-assign changes
-        this.actions$.pipe(
-            ofType(
-                MeasurementActions.enableAutoAssignFailure,
-                MeasurementActions.disableAutoAssignFailure,
-                MeasurementActions.skipAutoAssignFailure,
-            ),
-            takeUntil(this.destroy$)
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER: ${error}`, "OK", {
-                duration: 10000,
-                panelClass: "error-snackbar"
+        this.actions$
+            .pipe(
+                ofType(
+                    MeasurementActions.enableAutoAssignFailure,
+                    MeasurementActions.disableAutoAssignFailure,
+                    MeasurementActions.skipAutoAssignFailure,
+                    MeasurementActions.setNextAutoAssignRaceNumberFailure,
+                ),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER: ${error}`, "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
+
+        // A re-run: the bib the operator pointed at already has a time, and it has to go before a
+        // new one can be matched (one measurement per participant). Asking rather than discarding
+        // it outright - this same path also serves the "Zurück zu" button, and one mistyped digit
+        // would otherwise delete a real runner's recorded time with nothing to undo it.
+        this.actions$
+            .pipe(
+                ofType(MeasurementActions.setNextAutoAssignRaceNumberConflict),
+                withLatestFrom(this.measurements$, this.participants$, this.selectedRaceId$),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(([{raceNumber}, measurements, participants, raceId]) => {
+                this.pendingDiscard = false;
+                const participant = participants.find(p => p.race?.id === raceId && p.raceNumber === raceNumber);
+                const existing = participant ? measurements.find(m => m.participantId === participant.id) : undefined;
+                const name = participant?.person
+                    ? `${participant.person.firstName} ${participant.person.lastName}`
+                    : null;
+                const time = existing ? this.formatDuration(existing.durationMs) : null;
+                const message =
+                    `Startnummer ${raceNumber}${name ? ` (${name})` : ""} hat bereits eine Zeit` +
+                    `${time ? `: ${time}` : ""}.\n\n` +
+                    "Für einen erneuten Lauf muss diese Zeit gelöscht werden. " +
+                    "Das lässt sich nicht rückgängig machen.\n\n" +
+                    `Zeit löschen und die Zuordnung auf ${raceNumber} setzen?`;
+                this.dialog
+                    .open(ConfirmDialogComponent, {
+                        width: "450px",
+                        data: {
+                            title: "Startnummer hat bereits eine Zeit",
+                            message,
+                            confirmLabel: "Zeit löschen",
+                            confirmColor: "warn",
+                        },
+                    })
+                    .afterClosed()
+                    .pipe(takeUntil(this.destroy$))
+                    .subscribe(confirmed => {
+                        if (!confirmed) {
+                            // Nothing moved, so the remembered return position must not change either.
+                            this.pendingReturnRaceNumber = null;
+                            this.pendingTargetRaceNumber = null;
+                            return;
+                        }
+                        this.pendingDiscard = true;
+                        this.pendingReturnRaceNumber = this.currentNextRaceNumber;
+                        this.pendingTargetRaceNumber = raceNumber;
+                        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber, force: true}));
+                    });
+            });
 
         // Listen for successful/failed create, update and delete of a single measurement
-        this.actions$.pipe(
-            ofType(MeasurementActions.createMeasurementSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('Messung erfolgreich erstellt', 'OK', {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(MeasurementActions.createMeasurementFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Erstellen der Messung: ${error}`, 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.createMeasurementSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messung erfolgreich erstellt", "OK", {duration: 3000});
             });
-        });
-        this.actions$.pipe(
-            ofType(MeasurementActions.updateMeasurementSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('Messung erfolgreich aktualisiert', 'OK', {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(MeasurementActions.updateMeasurementFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Aktualisieren der Messung: ${error}`, 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.createMeasurementFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Erstellen der Messung: ${error}`, "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
-        this.actions$.pipe(
-            ofType(MeasurementActions.deleteMeasurementSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('Messung erfolgreich gelöscht', 'OK', {duration: 3000});
-        });
-        this.actions$.pipe(
-            ofType(MeasurementActions.deleteMeasurementFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Löschen der Messung: ${error}`, 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.updateMeasurementSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messung erfolgreich aktualisiert", "OK", {duration: 3000});
             });
-        });
+        this.actions$
+            .pipe(ofType(MeasurementActions.updateMeasurementFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Aktualisieren der Messung: ${error}`, "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
+            });
+        this.actions$
+            .pipe(ofType(MeasurementActions.deleteMeasurementSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messung erfolgreich gelöscht", "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(MeasurementActions.deleteMeasurementFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen der Messung: ${error}`, "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
+            });
 
         // Listen for successful reset and show success message. Read whether the device was
         // actually reset from the backend's own response message rather than echoing back what
         // was merely requested - resetAll() silently skips the device step when none is
         // configured (see MeasurementController#resetAll), so "what the user asked for" and
         // "what actually happened" can differ.
-        this.actions$.pipe(
-            ofType(MeasurementActions.resetMeasurementsSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({message}) => {
-            const deviceWasReset = deviceWasResetFromMessage(message);
-            const successMsg = deviceWasReset
-                ? 'Alle Messungen wurden gelöscht (inkl. Gerät)'
-                : 'Alle Messungen wurden gelöscht (nur Datenbank)';
-            this.snackBar.open(successMsg, 'OK', {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(MeasurementActions.resetMeasurementsSuccess), takeUntil(this.destroy$))
+            .subscribe(({message}) => {
+                const deviceWasReset = deviceWasResetFromMessage(message);
+                const successMsg = deviceWasReset
+                    ? "Alle Messungen wurden gelöscht (inkl. Gerät)"
+                    : "Alle Messungen wurden gelöscht (nur Datenbank)";
+                this.snackBar.open(successMsg, "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed reset and show error message
-        this.actions$.pipe(
-            ofType(MeasurementActions.resetMeasurementsFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Löschen der Messungen', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.resetMeasurementsFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Löschen der Messungen", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful continuous mode change
-        this.actions$.pipe(
-            ofType(MeasurementActions.setContinuousModeSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({enabled}) => {
-            const message = enabled
-                ? 'Kontinuierlicher Modus aktiviert'
-                : 'Kontinuierlicher Modus deaktiviert';
-            this.snackBar.open(message, 'OK', {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(MeasurementActions.setContinuousModeSuccess), takeUntil(this.destroy$))
+            .subscribe(({enabled}) => {
+                const message = enabled ? "Kontinuierlicher Modus aktiviert" : "Kontinuierlicher Modus deaktiviert";
+                this.snackBar.open(message, "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed continuous mode change
-        this.actions$.pipe(
-            ofType(MeasurementActions.setContinuousModeFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Ändern des kontinuierlichen Modus', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.setContinuousModeFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Ändern des kontinuierlichen Modus", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful scheduled import change
-        this.actions$.pipe(
-            ofType(MeasurementActions.setScheduledImportSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({enabled}) => {
-            const message = enabled
-                ? 'Automatischer Import aktiviert (alle 5 Sekunden)'
-                : 'Automatischer Import deaktiviert';
-            this.snackBar.open(message, 'OK', {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(MeasurementActions.setScheduledImportSuccess), takeUntil(this.destroy$))
+            .subscribe(({enabled}) => {
+                const message = enabled
+                    ? "Automatischer Import aktiviert (alle 5 Sekunden)"
+                    : "Automatischer Import deaktiviert";
+                this.snackBar.open(message, "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed scheduled import change
-        this.actions$.pipe(
-            ofType(MeasurementActions.setScheduledImportFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Ändern des automatischen Imports', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.setScheduledImportFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Ändern des automatischen Imports", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful archive and show success message. Same reasoning as the reset
         // handler above: read whether the device was actually reset from the backend's response,
         // not from what was requested - archiveMeasurements() silently skips the device step when
         // none is configured (see RaceController#archiveMeasurements).
-        this.actions$.pipe(
-            ofType(MeasurementActions.archiveMeasurementsSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({clearAfterArchive, message}) => {
-            const deviceWasReset = deviceWasResetFromMessage(message);
-            const successMsg = !clearAfterArchive
-                ? 'Messungen archiviert. Datenbank und Gerät wurden nicht verändert.'
-                : deviceWasReset
-                    ? 'Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen.'
-                    : 'Messungen archiviert. Bereit für das nächste Rennen.';
-            this.snackBar.open(successMsg, 'OK', {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(MeasurementActions.archiveMeasurementsSuccess), takeUntil(this.destroy$))
+            .subscribe(({clearAfterArchive, message}) => {
+                const deviceWasReset = deviceWasResetFromMessage(message);
+                const successMsg = !clearAfterArchive
+                    ? "Messungen archiviert. Datenbank und Gerät wurden nicht verändert."
+                    : deviceWasReset
+                      ? "Messungen archiviert und Gerät zurückgesetzt. Bereit für das nächste Rennen."
+                      : "Messungen archiviert. Bereit für das nächste Rennen.";
+                this.snackBar.open(successMsg, "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed archive and show error message
-        this.actions$.pipe(
-            ofType(MeasurementActions.archiveMeasurementsFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Archivieren der Messungen', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.archiveMeasurementsFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Archivieren der Messungen", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Load device status when device connection is successful
-        this.actions$.pipe(
-            ofType(MeasurementActions.checkDeviceConnectionSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({connected}) => {
-            if (connected) {
-                this.store.dispatch(MeasurementActions.loadDeviceStatus());
-            }
-        });
+        this.actions$
+            .pipe(ofType(MeasurementActions.checkDeviceConnectionSuccess), takeUntil(this.destroy$))
+            .subscribe(({connected}) => {
+                if (connected) {
+                    this.store.dispatch(MeasurementActions.loadDeviceStatus());
+                }
+            });
 
         // Listen for successful discard. The backend already advances the auto-assign cursor in
         // lockstep when it's active (see MeasurementController#discardOldestStart) - just refresh
         // the status here so the displayed "next expected number" updates immediately instead of
         // waiting for the next auto-refresh tick.
-        this.actions$.pipe(
-            ofType(MeasurementActions.discardOldestStartSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
-            this.snackBar.open('Ältester Start erfolgreich verworfen', 'OK', {
-                duration: 3000,
+        this.actions$
+            .pipe(ofType(MeasurementActions.discardOldestStartSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.store.dispatch(MeasurementActions.loadAutoAssignStatus());
+                this.snackBar.open("Ältester Start erfolgreich verworfen", "OK", {
+                    duration: 3000,
+                });
             });
-        });
 
         // Listen for failed discard
-        this.actions$.pipe(
-            ofType(MeasurementActions.discardOldestStartFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Verwerfen des ältesten Starts', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.discardOldestStartFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Verwerfen des ältesten Starts", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Reload device status after continuous mode change
-        this.actions$.pipe(
-            ofType(MeasurementActions.setContinuousModeSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.store.dispatch(MeasurementActions.loadDeviceStatus());
-        });
+        this.actions$
+            .pipe(ofType(MeasurementActions.setContinuousModeSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.store.dispatch(MeasurementActions.loadDeviceStatus());
+            });
 
         // Listen for successful export
-        this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsCsvSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('Messungen erfolgreich exportiert', 'OK', {duration: 3000});
-        });
+        this.actions$
+            .pipe(ofType(MeasurementActions.exportMeasurementsCsvSuccess), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("Messungen erfolgreich exportiert", "OK", {duration: 3000});
+            });
 
         // Listen for failed export
-        this.actions$.pipe(
-            ofType(MeasurementActions.exportMeasurementsCsvFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(() => {
-            this.snackBar.open('FEHLER beim Exportieren der Messungen', 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.exportMeasurementsCsvFailure), takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.snackBar.open("FEHLER beim Exportieren der Messungen", "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Listen for successful CSV import
-        this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsMappedSuccess),
-            takeUntil(this.destroy$)
-        ).subscribe(({result}) => {
-            const message = result.skippedCount > 0
-                ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
-                : `Import abgeschlossen: ${result.importedCount} importiert`;
-            this.snackBar.open(message, 'OK', {duration: result.skippedCount > 0 ? 8000 : 3000});
-            const errors = result.errors ?? [];
-            if (errors.length > 0) {
-                const details = errors
-                    .map((e) => `Zeile ${e.lineNumber}: ${e.reason}`)
-                    .join('\n');
-                this.dialog.open(ConfirmDialogComponent, {
-                    width: '500px',
-                    data: {
-                        title: 'Übersprungene Zeilen',
-                        message: details,
-                        confirmLabel: 'OK',
-                        hideCancel: true,
-                    },
-                });
-            }
-            this.loadData();
-        });
+        this.actions$
+            .pipe(ofType(MeasurementActions.importMeasurementsMappedSuccess), takeUntil(this.destroy$))
+            .subscribe(({result}) => {
+                const message =
+                    result.skippedCount > 0
+                        ? `Import abgeschlossen: ${result.importedCount} importiert, ${result.skippedCount} übersprungen`
+                        : `Import abgeschlossen: ${result.importedCount} importiert`;
+                this.snackBar.open(message, "OK", {duration: result.skippedCount > 0 ? 8000 : 3000});
+                const errors = result.errors ?? [];
+                if (errors.length > 0) {
+                    const details = errors.map(e => `Zeile ${e.lineNumber}: ${e.reason}`).join("\n");
+                    this.dialog.open(ConfirmDialogComponent, {
+                        width: "500px",
+                        data: {
+                            title: "Übersprungene Zeilen",
+                            message: details,
+                            confirmLabel: "OK",
+                            hideCancel: true,
+                        },
+                    });
+                }
+                this.loadData();
+            });
 
         // Listen for failed CSV import
-        this.actions$.pipe(
-            ofType(MeasurementActions.importMeasurementsMappedFailure),
-            takeUntil(this.destroy$)
-        ).subscribe(({error}) => {
-            this.snackBar.open(`FEHLER beim Importieren der Messungen: ${error}`, 'OK', {
-                duration: 10000,
-                panelClass: 'error-snackbar'
+        this.actions$
+            .pipe(ofType(MeasurementActions.importMeasurementsMappedFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Importieren der Messungen: ${error}`, "OK", {
+                    duration: 10000,
+                    panelClass: "error-snackbar",
+                });
             });
-        });
 
         // Loads device status once a timing provider is confirmed active. Deliberately not grouped
         // with the other one-shot dispatches in ngAfterViewInit below: this one needs to react
@@ -875,7 +1018,6 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     ngAfterViewInit(): void {
-
         this.loadData();
 
         // Loaded once (not on every auto-refresh tick like measurements/races): selectFilteredMeasurements
@@ -886,7 +1028,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         this.autoRefresh$
             .pipe(
-                switchMap((enabled) => (enabled ? interval(2000) : EMPTY)),
+                switchMap(enabled => (enabled ? interval(2000) : EMPTY)),
                 takeUntil(this.destroy$),
             )
             .subscribe(() => {
@@ -939,37 +1081,19 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.lastUpdate = now.toLocaleTimeString("de-DE");
     }
 
-    getParticipantName(
-        participantId: number,
-        participants: Participant[],
-    ): string {
-        const participant = participants.find((p) => p.id === participantId);
-        return participant?.person
-            ? `${participant.person.firstName} ${participant.person.lastName}`
-            : "-";
+    getParticipantName(participantId: number, participants: Participant[]): string {
+        const participant = participants.find(p => p.id === participantId);
+        return participant?.person ? `${participant.person.firstName} ${participant.person.lastName}` : "-";
     }
 
-    getParticipantNameByRaceNumber(
-        raceId: number,
-        raceNumber: number,
-        participants: Participant[],
-    ): string {
-        const participant = participants.find((p) => p.race?.id === raceId && p.raceNumber === raceNumber);
-        return participant?.person
-            ? `${participant.person.firstName} ${participant.person.lastName}`
-            : "unbekannt";
-    }
-
-    formatRaceDate(dateString: string): string {
-        const parts = dateString.split("-");
-        if (parts.length === 3) {
-            const [year, month, day] = parts;
-            return `${day}.${month}.${year}`;
-        }
-        return dateString;
+    getParticipantNameByRaceNumber(raceId: number, raceNumber: number, participants: Participant[]): string {
+        const participant = participants.find(p => p.race?.id === raceId && p.raceNumber === raceNumber);
+        return participant?.person ? `${participant.person.firstName} ${participant.person.lastName}` : "unbekannt";
     }
 
     onRaceChange(raceId: number | null): void {
+        // A different race (or none) makes any remembered position meaningless.
+        this.returnToRaceNumber = null;
         this.store.dispatch(RaceActions.selectRace({id: raceId}));
         // Selecting a race is the on/off switch for auto-assign - no separate start/stop button.
         if (raceId !== null) {
@@ -982,6 +1106,46 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     skipAutoAssign(): void {
         this.store.dispatch(MeasurementActions.skipAutoAssign());
     }
+
+    /**
+     * Points the auto-assign cursor at a specific bib. "Überspringen" only ever moves forward one
+     * at a time, so without this there is no way back from a mis-click, and no way to resume where
+     * the queue stood after a runner was let down out of order - re-selecting the race restarts the
+     * cursor at the first participant without a time, which also undoes every earlier skip.
+     */
+    setNextRaceNumber(): void {
+        if (this.nextRaceNumberInput === null || this.nextRaceNumberInput === undefined) {
+            return;
+        }
+        const target = Number(this.nextRaceNumberInput);
+        this.pendingReturnRaceNumber = this.currentNextRaceNumber;
+        this.pendingTargetRaceNumber = target;
+        // force stays off here on purpose: a bib that already has a time comes back as a conflict
+        // and is confirmed below, so a mistyped digit can never silently destroy a recorded time.
+        this.store.dispatch(MeasurementActions.setNextAutoAssignRaceNumber({raceNumber: target, force: false}));
+    }
+
+    /** Puts the cursor back where the queue stood before the jump - same path, so it clears the hint. */
+    returnToQueue(): void {
+        if (this.returnToRaceNumber === null) {
+            return;
+        }
+        this.nextRaceNumberInput = this.returnToRaceNumber;
+        this.setNextRaceNumber();
+    }
+
+    formatDeviceMeasurementId = formatDeviceMeasurementId;
+
+    /**
+     * Names a measurement the way the list shows it - by the device counter an operator can read off
+     * both the device and the table, not by the database id, which the table no longer prints.
+     */
+    describeMeasurement(measurement: Measurement): string {
+        return isSyntheticDeviceMeasurementId(measurement.deviceMeasurementId)
+            ? `die manuell erfasste Messung (${this.formatDuration(measurement.durationMs)})`
+            : `die Messung Geräte-Nr. ${measurement.deviceMeasurementId} (${this.formatDuration(measurement.durationMs)})`;
+    }
+    isSyntheticDeviceMeasurementId = isSyntheticDeviceMeasurementId;
 
     formatDuration(ms: number): string {
         const totalSeconds = Math.floor(ms / 1000);
@@ -1004,13 +1168,12 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             width: "500px",
         });
 
-        dialogRef.afterClosed()
+        dialogRef
+            .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
-                    this.store.dispatch(
-                        MeasurementActions.createMeasurement({measurement: result}),
-                    );
+                    this.store.dispatch(MeasurementActions.createMeasurement({measurement: result}));
                 }
             });
     }
@@ -1024,7 +1187,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         dialogRef
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((result) => {
+            .subscribe(result => {
                 if (result) {
                     this.store.dispatch(
                         MeasurementActions.updateMeasurement({
@@ -1037,38 +1200,37 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     deleteMeasurement(measurement: Measurement): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: `Möchten Sie die Messung #${measurement.id} wirklich löschen?`,
-                confirmLabel: 'Löschen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Möchten Sie ${this.describeMeasurement(measurement)} wirklich löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
-                    this.store.dispatch(
-                        MeasurementActions.deleteMeasurement({id: measurement.id}),
-                    );
+                    this.store.dispatch(MeasurementActions.deleteMeasurement({id: measurement.id}));
                 }
             });
     }
 
-
     resetMeasurements(resetDevice: boolean): void {
         const message = resetDevice
-            ? 'Möchten Sie wirklich ALLE Messungen löschen? Dies betrifft auch die Messungen auf dem Gerät!'
-            : 'Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?';
+            ? "Möchten Sie wirklich ALLE Messungen löschen? Dies betrifft auch die Messungen auf dem Gerät!"
+            : "Möchten Sie wirklich ALLE Messungen löschen (nur aus der Datenbank)?";
 
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {message, confirmLabel: 'Löschen', confirmColor: 'warn'},
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {message, confirmLabel: "Löschen", confirmColor: "warn"},
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(MeasurementActions.resetMeasurements({resetDevice}));
                 }
@@ -1077,16 +1239,17 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     toggleContinuousMode(enable: boolean): void {
         const message = enable
-            ? 'Möchten Sie den kontinuierlichen Modus wirklich aktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!'
-            : 'Möchten Sie den kontinuierlichen Modus wirklich deaktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!';
+            ? "Möchten Sie den kontinuierlichen Modus wirklich aktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!"
+            : "Möchten Sie den kontinuierlichen Modus wirklich deaktivieren? Dabei werden alle Zeiten auf dem Gerät zurückgesetzt!";
 
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {message, confirmLabel: 'Bestätigen'},
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {message, confirmLabel: "Bestätigen"},
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(MeasurementActions.setContinuousMode({enable}));
                 }
@@ -1104,7 +1267,8 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                 data: {races},
             });
 
-            dialogRef.afterClosed()
+            dialogRef
+                .afterClosed()
                 .pipe(takeUntil(this.destroy$))
                 .subscribe((result?: ArchiveMeasurementsDialogResult) => {
                     if (!result) {
@@ -1116,17 +1280,19 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     discardOldestStart(): void {
-        this.dialog.open(ConfirmDialogComponent, {
-            width: '450px',
-            data: {
-                message: 'Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.',
-                confirmLabel: 'Verwerfen',
-                confirmColor: 'warn',
-            },
-        })
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message:
+                        "Möchten Sie den ältesten Start aus der Warteschlange verwerfen? Dies sollte verwendet werden, wenn ein Läufer gestürzt ist.",
+                    confirmLabel: "Verwerfen",
+                    confirmColor: "warn",
+                },
+            })
             .afterClosed()
             .pipe(takeUntil(this.destroy$))
-            .subscribe((confirmed) => {
+            .subscribe(confirmed => {
                 if (confirmed) {
                     this.store.dispatch(MeasurementActions.discardOldestStart());
                 }
@@ -1139,7 +1305,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
     openImportDialog(): void {
         const dialogRef = this.dialog.open(MeasurementImportMappingDialogComponent, {
-            width: '900px',
+            width: "900px",
         });
 
         dialogRef
@@ -1147,12 +1313,14 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe((result: MeasurementImportMappingDialogResult | undefined) => {
                 if (result) {
-                    this.store.dispatch(MeasurementActions.importMeasurementsMapped({
-                        file: result.file,
-                        delimiter: result.delimiter,
-                        mapping: result.mapping,
-                    }));
-                    this.snackBar.open('Import gestartet...', 'OK', {duration: 2000});
+                    this.store.dispatch(
+                        MeasurementActions.importMeasurementsMapped({
+                            file: result.file,
+                            delimiter: result.delimiter,
+                            mapping: result.mapping,
+                        }),
+                    );
+                    this.snackBar.open("Import gestartet...", "OK", {duration: 2000});
                 }
             });
     }

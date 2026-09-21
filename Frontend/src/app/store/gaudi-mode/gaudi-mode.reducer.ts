@@ -1,13 +1,16 @@
-import {createReducer, on} from '@ngrx/store';
-import {GaudiLosPairing, GaudiMode, GaudiRankingEntry} from '../../models/gaudi-mode.model';
-import * as GaudiModeActions from './gaudi-mode.actions';
+import {createReducer, on} from "@ngrx/store";
+import {GaudiLosPairing, GaudiMode, GaudiNotRankedEntry, GaudiRankingEntry} from "../../models/gaudi-mode.model";
+import * as GaudiModeActions from "./gaudi-mode.actions";
 
 export interface GaudiModeState {
     gaudiModes: GaudiMode[];
     selectedGaudiModeId: number | null;
     pairing: GaudiLosPairing[];
     ranking: GaudiRankingEntry[];
+    notRanked: GaudiNotRankedEntry[];
     loading: boolean;
+    /** True while a draw/load-pairing request is in flight - see the draw button's [disabled]. */
+    pairingLoading: boolean;
     pdfExportLoading: boolean;
     error: string | null;
 }
@@ -17,9 +20,11 @@ export const initialState: GaudiModeState = {
     selectedGaudiModeId: null,
     pairing: [],
     ranking: [],
+    notRanked: [],
     loading: false,
+    pairingLoading: false,
     pdfExportLoading: false,
-    error: null
+    error: null,
 };
 
 export const gaudiModeReducer = createReducer(
@@ -28,146 +33,168 @@ export const gaudiModeReducer = createReducer(
     on(GaudiModeActions.loadGaudiModes, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.loadGaudiModesSuccess, (state, {gaudiModes}) => ({
         ...state,
         gaudiModes,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.loadGaudiModesFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.createGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.createGaudiModeSuccess, (state, {gaudiMode}) => ({
         ...state,
         gaudiModes: [...state.gaudiModes, gaudiMode],
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.createGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.updateGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.updateGaudiModeSuccess, (state, {gaudiMode}) => ({
         ...state,
-        gaudiModes: state.gaudiModes.map(g => g.id === gaudiMode.id ? gaudiMode : g),
-        loading: false
+        gaudiModes: state.gaudiModes.map(g => (g.id === gaudiMode.id ? gaudiMode : g)),
+        loading: false,
     })),
     on(GaudiModeActions.updateGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.deleteGaudiMode, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
     on(GaudiModeActions.deleteGaudiModeSuccess, (state, {id}) => ({
         ...state,
         gaudiModes: state.gaudiModes.filter(g => g.id !== id),
         selectedGaudiModeId: state.selectedGaudiModeId === id ? null : state.selectedGaudiModeId,
-        loading: false
+        loading: false,
     })),
     on(GaudiModeActions.deleteGaudiModeFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.selectGaudiMode, (state, {id}) => ({
         ...state,
         selectedGaudiModeId: id,
         pairing: [],
-        ranking: []
+        ranking: [],
+        notRanked: [],
     })),
 
+    // pairingLoading is separate from `loading`: the draw button binds to it, and a second click
+    // before the response lands would re-randomize the pairing server-side, leaving the printed
+    // list and the stored one out of sync.
     on(GaudiModeActions.drawPairing, GaudiModeActions.loadPairing, state => ({
         ...state,
         loading: true,
-        error: null
+        pairingLoading: true,
+        error: null,
     })),
     on(GaudiModeActions.pairingSuccess, (state, {pairing}) => ({
         ...state,
         pairing,
-        loading: false
+        loading: false,
+        pairingLoading: false,
     })),
     on(GaudiModeActions.pairingFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        pairingLoading: false,
+        error,
     })),
 
     on(GaudiModeActions.loadRanking, state => ({
         ...state,
         loading: true,
-        error: null
+        error: null,
     })),
-    on(GaudiModeActions.loadRankingSuccess, (state, {ranking}) => ({
+    on(GaudiModeActions.loadRankingSuccess, (state, {ranking, notRanked}) => ({
         ...state,
         ranking,
-        loading: false
+        notRanked,
+        loading: false,
     })),
     on(GaudiModeActions.loadRankingFailure, (state, {error}) => ({
         ...state,
         loading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdf, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdfByGender, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfByGenderSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfByGenderFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
+        error,
     })),
 
     on(GaudiModeActions.exportPdfAllAgeGroups, state => ({
         ...state,
-        pdfExportLoading: true
+        pdfExportLoading: true,
     })),
     on(GaudiModeActions.exportPdfAllAgeGroupsSuccess, state => ({
         ...state,
-        pdfExportLoading: false
+        pdfExportLoading: false,
     })),
     on(GaudiModeActions.exportPdfAllAgeGroupsFailure, (state, {error}) => ({
         ...state,
         pdfExportLoading: false,
-        error
-    }))
+        error,
+    })),
+
+    on(GaudiModeActions.exportCsv, state => ({
+        ...state,
+        pdfExportLoading: true,
+    })),
+    on(GaudiModeActions.exportCsvSuccess, state => ({
+        ...state,
+        pdfExportLoading: false,
+    })),
+    on(GaudiModeActions.exportCsvFailure, (state, {error}) => ({
+        ...state,
+        pdfExportLoading: false,
+        error,
+    })),
 );

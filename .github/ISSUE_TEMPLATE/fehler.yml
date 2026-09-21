@@ -1,0 +1,78 @@
+name: Fehler melden
+description: Etwas funktioniert nicht so, wie es soll
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden. Bitte **keine echten Teilnehmerdaten** einfügen — keine Namen, keine
+        Startlisten, keine Ergebnis-CSVs und keine Screenshots mit Klarnamen. Für ein Beispiel
+        reichen erfundene Namen; die Startnummer und die Zeit sind meist das, worauf es ankommt.
+
+        Für Sicherheitslücken bitte kein Issue, sondern den Weg aus
+        [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: was-passiert
+    attributes:
+      label: Was passiert?
+      description: Und was hättest du stattdessen erwartet?
+    validations:
+      required: true
+
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Wie kann man es nachstellen?
+      placeholder: |
+        1. Rennen anlegen mit …
+        2. Teilnehmer importieren …
+        3. Auf „Wertung" klicken …
+        4. Statt Platz 3 steht dort Platz 4
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Steht in der Seitenleiste der Anwendung
+    validations:
+      required: true
+
+  - type: dropdown
+    id: betriebssystem
+    attributes:
+      label: Betriebssystem
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Anderes / weiß nicht
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bereich
+    attributes:
+      label: Welcher Bereich?
+      options:
+        - Wertung / Rangliste
+        - Gaudi-Modus / Gesamtwertung
+        - PDF- oder CSV-Export
+        - Teilnehmer- und Startlistenverwaltung
+        - Zeitmessgerät / Import
+        - Stationsbetrieb (mehrere Instanzen)
+        - Live-Ansicht
+        - Installation / Start
+        - Sonstiges / weiß nicht
+    validations:
+      required: true
+
+  - type: textarea
+    id: kontext
+    attributes:
+      label: Sonstiges
+      description: |
+        Log-Ausgabe, Screenshot (ohne echte Namen), oder was sonst weiterhilft. War es ein echter
+        Wettkampf oder ein Test?

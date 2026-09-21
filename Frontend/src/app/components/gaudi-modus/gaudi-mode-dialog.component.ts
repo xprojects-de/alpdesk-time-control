@@ -1,17 +1,7 @@
-import {Component, inject, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
+import {Component, inject, ChangeDetectorRef, OnInit, OnDestroy} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from "@angular/forms";
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-    MatDialog,
-} from "@angular/material/dialog";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
@@ -25,6 +15,8 @@ import {Actions, ofType} from "@ngrx/effects";
 import {Observable, Subject} from "rxjs";
 import {take, takeUntil} from "rxjs/operators";
 import {selectAllRaces} from "../../store/race/race.selectors";
+import {RaceSelectComponent} from "../shared/race-select/race-select.component";
+import {raceLabel} from "../../utils/race-label.util";
 import * as PointsScaleActions from "../../store/points-scale/points-scale.actions";
 import * as PointsScaleSelectors from "../../store/points-scale/points-scale.selectors";
 import {Race} from "../../models/race.model";
@@ -46,7 +38,6 @@ export interface GaudiModeDialogData {
 
 @Component({
     selector: "app-gaudi-mode-dialog",
-    standalone: true,
     imports: [
         CommonModule,
         ReactiveFormsModule,
@@ -59,6 +50,7 @@ export interface GaudiModeDialogData {
         MatIconModule,
         MatTooltipModule,
         MatSnackBarModule,
+        RaceSelectComponent,
     ],
     template: `
         <h2 mat-dialog-title>{{ isEdit ? "Gaudi-Modus bearbeiten" : "Neuer Gaudi-Modus" }}</h2>
@@ -75,7 +67,7 @@ export interface GaudiModeDialogData {
 
                 <mat-form-field appearance="outline">
                     <mat-label>Name</mat-label>
-                    <input matInput formControlName="name" required/>
+                    <input matInput formControlName="name" required />
                     @if (form.get("name")?.hasError("required") && form.get("name")?.touched) {
                         <mat-error>Name ist erforderlich</mat-error>
                     }
@@ -83,28 +75,29 @@ export interface GaudiModeDialogData {
                 </mat-form-field>
 
                 @if (isCombination()) {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select [value]="selectedRaceIds" (selectionChange)="onRacesSelected($event.value)" multiple required>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                        <mat-hint>Mindestens zwei Rennen auswählen</mat-hint>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceIds"
+                        [multiple]="true"
+                        [required]="true"
+                        hint="Mindestens zwei Rennen auswählen"
+                        (valueChange)="onRacesSelected($any($event))"
+                    />
 
                     @if (form.value.type === gaudiModeType.POINTS_COMBINATION && selectedRaceIds.length > 0) {
                         <div class="weights-section">
-                            <span class="weights-label">Gewichtung je Rennen</span>
+                            <span class="weights-label"
+                                >Gewichtung je Rennen (Reihenfolge = Reihenfolge der Läufe)</span
+                            >
                             @for (raceId of selectedRaceIds; track raceId) {
                                 <div class="weight-row">
                                     <span class="weight-race-name">{{ raceName(raceId) }}</span>
                                     <input
-                                            type="number"
-                                            step="0.1"
-                                            min="0"
-                                            [value]="weights[raceId] ?? 1"
-                                            (input)="onWeightChanged(raceId, $event)"
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        [value]="weights[raceId] ?? 1"
+                                        (input)="onWeightChanged(raceId, $event)"
                                     />
                                 </div>
                             }
@@ -119,33 +112,38 @@ export interface GaudiModeDialogData {
                                     }
                                 </mat-select>
                             </mat-form-field>
-                            <button mat-icon-button type="button" (click)="openNewPointsScale()" matTooltip="Neues Punkteschema anlegen">
+                            <button
+                                mat-icon-button
+                                type="button"
+                                (click)="openNewPointsScale()"
+                                matTooltip="Neues Punkteschema anlegen"
+                            >
                                 <mat-icon>add</mat-icon>
                             </button>
                         </div>
 
                         <div class="dnf-options">
-                            <span class="weights-label">Nicht platzierte Teilnehmer trotzdem werten (0 Punkte statt Ausschluss)</span>
+                            <span class="weights-label"
+                                >Nicht platzierte Teilnehmer trotzdem werten (0 Punkte statt Ausschluss)</span
+                            >
                             <mat-checkbox formControlName="keepDnsInRanking">DNS in Wertung belassen</mat-checkbox>
                             <mat-checkbox formControlName="keepDnfInRanking">DNF in Wertung belassen</mat-checkbox>
                             <mat-checkbox formControlName="keepDsqInRanking">DSQ in Wertung belassen</mat-checkbox>
                         </div>
                     }
                 } @else {
-                    <mat-form-field appearance="outline">
-                        <mat-label>Rennen</mat-label>
-                        <mat-select [value]="selectedRaceIds[0] ?? null" (selectionChange)="onSingleRaceSelected($event.value)" required>
-                            @for (race of races$ | async; track race.id) {
-                                <mat-option [value]="race.id">{{ race.name }}</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
+                    <app-race-select
+                        [races]="(races$ | async) ?? []"
+                        [value]="selectedRaceIds[0] ?? null"
+                        [required]="true"
+                        (valueChange)="onSingleRaceSelected($any($event))"
+                    />
                 }
 
                 @if (form.value.type === gaudiModeType.TEAM) {
                     <mat-form-field appearance="outline">
                         <mat-label>Teilnehmer pro Team</mat-label>
-                        <input matInput type="number" formControlName="teamSize" required min="1"/>
+                        <input matInput type="number" formControlName="teamSize" required min="1" />
                         @if (form.get("teamSize")?.hasError("required") && form.get("teamSize")?.touched) {
                             <mat-error>Teamgröße ist erforderlich</mat-error>
                         }
@@ -155,122 +153,120 @@ export interface GaudiModeDialogData {
 
                 <h3 class="section-title">Deckblatt (optional)</h3>
                 <p class="hint">
-                    Wird jeder generierten PDF-Wertung dieses Gaudi-Modus vorangestellt - unabhängig
-                    vom Deckblatt der zugrunde liegenden Rennen.
+                    Wird jeder generierten PDF-Wertung dieses Gaudi-Modus vorangestellt - unabhängig vom Deckblatt der
+                    zugrunde liegenden Rennen.
                 </p>
                 <div class="cover-page-row">
                     @if (coverPageActive) {
                         <span class="cover-page-name">
                             <mat-icon inline="true">picture_as_pdf</mat-icon>
-                            {{ selectedFileName ?? 'Deckblatt aktiv' }}
+                            {{ selectedFileName ?? "Deckblatt aktiv" }}
                         </span>
-                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">
-                            Entfernen
-                        </button>
+                        <button mat-button color="warn" type="button" (click)="onRemoveCoverPage()">Entfernen</button>
                     } @else {
                         <span class="hint">Kein Deckblatt ausgewählt.</span>
                     }
                     <button mat-stroked-button type="button" (click)="coverPageInput.click()">
-                        {{ coverPageActive ? 'Ersetzen' : 'PDF auswählen' }}
+                        {{ coverPageActive ? "Ersetzen" : "PDF auswählen" }}
                     </button>
-                    <input #coverPageInput type="file" accept="application/pdf" hidden
-                           (change)="onCoverPageFileSelected($event)"/>
+                    <input
+                        #coverPageInput
+                        type="file"
+                        accept="application/pdf"
+                        hidden
+                        (change)="onCoverPageFileSelected($event)"
+                    />
                 </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!canSave()"
-            >
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!canSave()">
                 {{ isEdit ? "Speichern" : "Erstellen" }}
             </button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [
         `
-          .gaudi-mode-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 420px;
-            margin-top: 16px;
-          }
+            .gaudi-mode-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 420px;
+                margin-top: 16px;
+            }
 
-          mat-form-field {
-            width: 100%;
-          }
+            mat-form-field,
+            app-race-select {
+                width: 100%;
+            }
 
-          .weights-section {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: -8px;
-          }
+            .weights-section {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-top: -8px;
+            }
 
-          .weights-label {
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .weights-label {
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .dnf-options {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-top: -8px;
-          }
+            .dnf-options {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-top: -8px;
+            }
 
-          .weight-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-          }
+            .weight-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+            }
 
-          .weight-row input {
-            width: 80px;
-            padding: 6px;
-          }
+            .weight-row input {
+                width: 80px;
+                padding: 6px;
+            }
 
-          .points-scale-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
+            .points-scale-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
 
-          .points-scale-row mat-form-field {
-            flex: 1;
-          }
+            .points-scale-row mat-form-field {
+                flex: 1;
+            }
 
-          .section-title {
-            margin: 0 0 -8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .section-title {
+                margin: 0 0 -8px;
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .hint {
-            margin: 0;
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.6);
-          }
+            .hint {
+                margin: 0;
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+            }
 
-          .cover-page-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-          }
+            .cover-page-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
 
-          .cover-page-name {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-          }
+            .cover-page-name {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
         `,
     ],
 })
@@ -325,9 +321,7 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         const editing = this.data?.gaudiMode;
         if (editing) {
-            this.selectedRaceIds = [...editing.races]
-                .sort((a, b) => a.sortOrder - b.sortOrder)
-                .map(r => r.raceId);
+            this.selectedRaceIds = [...editing.races].sort((a, b) => a.sortOrder - b.sortOrder).map(r => r.raceId);
             this.weights = Object.fromEntries(editing.races.map(r => [r.raceId, r.weight]));
             this.coverPageActive = editing.hasCoverPage;
             this.form.patchValue({
@@ -348,11 +342,14 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
         // Switching from a combination type (multi-race) back to LOS/TEAM (single-race) must
         // not leave more than one race selected behind - the single-race select only ever shows
         // and replaces selectedRaceIds[0], so a stale second entry would silently be saved too.
-        this.form.get("type")!.valueChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
-            if (!this.isCombination() && this.selectedRaceIds.length > 1) {
-                this.selectedRaceIds = this.selectedRaceIds.slice(0, 1);
-            }
-        });
+        this.form
+            .get("type")!
+            .valueChanges.pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                if (!this.isCombination() && this.selectedRaceIds.length > 1) {
+                    this.selectedRaceIds = this.selectedRaceIds.slice(0, 1);
+                }
+            });
     }
 
     ngOnDestroy(): void {
@@ -361,12 +358,15 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     }
 
     isCombination(): boolean {
-        return this.form.value.type === GaudiModeType.TIME_COMBINATION
-            || this.form.value.type === GaudiModeType.POINTS_COMBINATION;
+        return (
+            this.form.value.type === GaudiModeType.TIME_COMBINATION ||
+            this.form.value.type === GaudiModeType.POINTS_COMBINATION
+        );
     }
 
     raceName(raceId: number): string {
-        return this.allRaces.find(r => r.id === raceId)?.name ?? String(raceId);
+        const race = this.allRaces.find(r => r.id === raceId);
+        return race ? raceLabel(race) : String(raceId);
     }
 
     onRacesSelected(raceIds: number[]): void {
@@ -396,7 +396,8 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     }
 
     openNewPointsScale(): void {
-        this.dialog.open(PointsScaleDialogComponent, {width: "480px"})
+        this.dialog
+            .open(PointsScaleDialogComponent, {width: "480px"})
             .afterClosed()
             .subscribe(result => {
                 if (result) {
@@ -412,7 +413,7 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     async onCoverPageFileSelected(event: Event): Promise<void> {
         const input = event.target as HTMLInputElement;
         const file = input.files?.[0];
-        input.value = '';
+        input.value = "";
         if (!file) {
             return;
         }
@@ -447,10 +448,14 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
             type: formValue.type,
             name: formValue.name,
             teamSize: formValue.type === GaudiModeType.TEAM ? Number(formValue.teamSize) : undefined,
-            pointsScaleId: formValue.type === GaudiModeType.POINTS_COMBINATION ? Number(formValue.pointsScaleId) : undefined,
-            keepDnsInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnsInRanking : undefined,
-            keepDnfInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnfInRanking : undefined,
-            keepDsqInRanking: formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDsqInRanking : undefined,
+            pointsScaleId:
+                formValue.type === GaudiModeType.POINTS_COMBINATION ? Number(formValue.pointsScaleId) : undefined,
+            keepDnsInRanking:
+                formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnsInRanking : undefined,
+            keepDnfInRanking:
+                formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDnfInRanking : undefined,
+            keepDsqInRanking:
+                formValue.type === GaudiModeType.POINTS_COMBINATION ? !!formValue.keepDsqInRanking : undefined,
             coverPagePdf: this.coverPagePdfBase64,
             removeCoverPage: this.removeCoverPage || undefined,
         };
@@ -458,30 +463,32 @@ export class GaudiModeDialogComponent implements OnInit, OnDestroy {
     }
 
     private loadPointsScales(): void {
-        this.store.select(PointsScaleSelectors.selectAllPointsScales).pipe(
-            takeUntil(this.destroy$),
-        ).subscribe(scales => {
-            this.pointsScales = scales;
-            if (!this.form.value.pointsScaleId) {
-                const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
-                if (defaultScale) {
-                    this.form.patchValue({pointsScaleId: defaultScale.id});
+        this.store
+            .select(PointsScaleSelectors.selectAllPointsScales)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(scales => {
+                this.pointsScales = scales;
+                if (!this.form.value.pointsScaleId) {
+                    const defaultScale = scales.find(s => s.name === "FIS-Schema") ?? scales[0];
+                    if (defaultScale) {
+                        this.form.patchValue({pointsScaleId: defaultScale.id});
+                    }
                 }
-            }
-            this.cdr.markForCheck();
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.createPointsScaleSuccess),
-            takeUntil(this.destroy$),
-        ).subscribe(({pointsScale}) => {
-            this.form.patchValue({pointsScaleId: pointsScale.id});
-        });
-        this.actions$.pipe(
-            ofType(PointsScaleActions.loadPointsScalesFailure, PointsScaleActions.createPointsScaleFailure),
-            takeUntil(this.destroy$),
-        ).subscribe(({error}) => {
-            this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
-        });
+                this.cdr.markForCheck();
+            });
+        this.actions$
+            .pipe(ofType(PointsScaleActions.createPointsScaleSuccess), takeUntil(this.destroy$))
+            .subscribe(({pointsScale}) => {
+                this.form.patchValue({pointsScaleId: pointsScale.id});
+            });
+        this.actions$
+            .pipe(
+                ofType(PointsScaleActions.loadPointsScalesFailure, PointsScaleActions.createPointsScaleFailure),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(({error}) => {
+                this.snackBar.open(error, "OK", {duration: 5000, panelClass: "error-snackbar"});
+            });
         this.store.dispatch(PointsScaleActions.loadPointsScales());
     }
 }

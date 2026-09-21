@@ -10,6 +10,7 @@ import x.timecontrol.dto.GaudiModeRaceEntry;
 import x.timecontrol.dto.GaudiModeRequest;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeRace;
@@ -48,6 +49,7 @@ public class GaudiModeService {
     private final RaceService raceService;
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final Map<GaudiModeType, GaudiModeCalculator> calculatorsByType;
     private final TransactionOperations<Connection> transactionOperations;
 
@@ -58,6 +60,7 @@ public class GaudiModeService {
                              RaceService raceService,
                              PersonService personService,
                              AgeGroupService ageGroupService,
+                             SeasonService seasonService,
                              List<GaudiModeCalculator> calculators,
                              TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
@@ -67,6 +70,7 @@ public class GaudiModeService {
         this.raceService = raceService;
         this.personService = personService;
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.calculatorsByType = new EnumMap<>(GaudiModeType.class);
         for (GaudiModeCalculator calculator : calculators) {
             this.calculatorsByType.put(calculator.getType(), calculator);
@@ -88,19 +92,39 @@ public class GaudiModeService {
         });
     }
 
-    public Iterable<GaudiMode> findAll() {
-        return repository.findAll();
+    /**
+     * Every instance, for the list endpoint - without the cover-page BLOBs, which that endpoint
+     * would load in full only to answer a boolean. The returned instances have
+     * {@code coverPagePdf == null} regardless; pair with {@link #findIdsWithCoverPage()}.
+     */
+    public Iterable<GaudiMode> findAllWithoutCoverPage() {
+        return repository.findAllWithoutCoverPage();
     }
 
     /**
-     * Gaudi-Modus instances that reference the given race (in any of its combined races).
+     * Gaudi-Modus instances that reference the given race (in any of its combined races). Same
+     * cover-page projection - and the same hazard - as {@link #findAllWithoutCoverPage()}.
      */
-    public Iterable<GaudiMode> findByRaceId(Long raceId) {
+    public Iterable<GaudiMode> findByRaceIdWithoutCoverPage(Long raceId) {
         Set<Long> gaudiModeIds = new LinkedHashSet<>();
         for (GaudiModeRace gmr : gaudiModeRaceRepository.findByRaceId(raceId)) {
             gaudiModeIds.add(gmr.gaudiModeId());
         }
-        return repository.findByIdIn(gaudiModeIds);
+        if (gaudiModeIds.isEmpty()) {
+            return List.of();
+        }
+        // Filtered in memory off the same projection rather than through a second native query with
+        // an IN clause: gaudi_mode holds a handful of rows per club, and without the BLOBs they are
+        // tiny. Not worth introducing a parameter-expansion pattern this codebase has nowhere else,
+        // and which a mocked repository spec could not catch if the dialect got it wrong.
+        return repository.findAllWithoutCoverPage().stream()
+                .filter(gm -> gaudiModeIds.contains(gm.id()))
+                .toList();
+    }
+
+    /** The ids of instances that have a cover page - what the two projections above leave out. */
+    public Set<Long> findIdsWithCoverPage() {
+        return new LinkedHashSet<>(repository.findIdsWithCoverPage());
     }
 
     public Optional<GaudiMode> findById(Long id) {
@@ -140,10 +164,20 @@ public class GaudiModeService {
                     existing.get().createdAt(),
                     coverPagePdf
             );
+            // A drawn Los pairing references participants of the race it was drawn for - once the
+            // instance points at a different race (or isn't LOS any more), none of those pairs can be
+            // found there and the ranking would silently come back empty while GET /pairing still
+            // showed the old race's names. Drop it so the operator re-draws for the new race.
+            List<Long> previousRaceIds = findRacesFor(id).stream().map(GaudiModeRace::raceId).toList();
+            List<Long> newRaceIds = races.stream().map(GaudiModeRaceEntry::raceId).toList();
+            boolean pairingStale = gaudiMode.type() != GaudiModeType.LOS || !previousRaceIds.equals(newRaceIds);
             GaudiMode result = transactionOperations.executeWrite(_ -> {
                 GaudiMode saved = repository.update(updated);
                 gaudiModeRaceRepository.deleteByGaudiModeId(id);
                 saveRaces(id, races);
+                if (pairingStale) {
+                    pairingRepository.deleteByGaudiModeId(id);
+                }
                 return saved;
             });
             return Optional.of(result);
@@ -204,7 +238,7 @@ public class GaudiModeService {
             // Without this check a reference to an already-deleted (or never-existing) race would
             // be silently dropped later by buildRaceParticipants() instead of being rejected here -
             // letting a Gaudi-Modus be saved with fewer legs than the operator actually configured.
-            if (raceService.findById(entry.raceId()).isEmpty()) {
+            if (!raceService.existsById(entry.raceId())) {
                 throw new IllegalArgumentException("Race with id " + entry.raceId() + " does not exist");
             }
         }
@@ -270,8 +304,23 @@ public class GaudiModeService {
         }
         Long raceId = races.getFirst().raceId();
 
+        // Anyone already marked DNS/DNF/DSQ at draw time is left out: RankingService#adjustedValue
+        // returns null for them however they finish, and LosModeCalculator drops a pair whose second
+        // member has no value - so drawing a known non-starter into a pair costs their partner their
+        // placing, however well they ride. The leftover person a filtered-out one may leave behind is
+        // already handled: an odd count pairs the last one with null and scores them as "(Einzel)".
+        //
+        // Deliberately the status alone, not effectiveStartOrder() != null (the project's usual
+        // "does this one start" test): that also reports null for a participant who simply has no
+        // race number yet, which before a Losrennen is the normal state - the draw commonly happens
+        // before numbers are handed out.
+        //
+        // A status set AFTER the draw is a different case and stays as it is: the pair average is
+        // the score, and without a partner there is none (a deliberate rules decision).
         List<Participant> participants = new ArrayList<>(
-                StreamSupport.stream(participantService.findByRaceId(raceId).spliterator(), false).toList()
+                StreamSupport.stream(participantService.findByRaceId(raceId).spliterator(), false)
+                        .filter(p -> p.status() == null || p.status() == DisqualificationStatus.NONE)
+                        .toList()
         );
         Collections.shuffle(participants);
 
@@ -340,18 +389,33 @@ public class GaudiModeService {
 
     /**
      * Persons excluded from the ranking for missing a valid result in at least one combined race -
-     * see {@link GaudiModeCalculator#computeDnsEntries}. Only meaningful for Zeit-Kombination/
-     * Punkte-Mischwertung; other types return an empty list via that method's default implementation.
-     * Deliberately not scoped by gender/age-group the way {@link #computeRankingForCategory} is: the
-     * same, unfiltered DNS list is used on every one of a Gaudi-Modus's PDF exports, regardless of
-     * which category that particular export ranks.
+     * see {@link GaudiModeCalculator#computeDnsEntries}. Meaningful for Zeit-Kombination/
+     * Punkte-Mischwertung and Los-Modus (unranked pairs); Mannschaftswertung returns an empty list via
+     * that method's default implementation.
+     * Unfiltered - for an export that ranks the whole field. An export scoped to one gender/age
+     * group must use {@link #computeDnsEntries(GaudiMode, Gender, String)} instead.
      */
     public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode) {
+        return computeDnsEntries(gaudiMode, null, null);
+    }
+
+    /**
+     * Same as {@link #computeDnsEntries(GaudiMode)}, but restricted to the persons a given
+     * gender/age-group export actually ranks - resolved through the very same
+     * {@link #resolveMatchingPersonIds} that {@link #computeRankingForCategory} uses, so the ranking
+     * and the "nicht gewertet" list underneath it always describe the same set of people. Without
+     * this, a Damen-Export lists every man who didn't finish as well. Either filter may be null to
+     * leave that dimension unrestricted.
+     */
+    public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
         GaudiModeCalculator calculator = calculatorsByType.get(gaudiMode.type());
         if (calculator == null) {
             return List.of();
         }
-        return calculator.computeDnsEntries(gaudiMode, buildRaceParticipants(gaudiMode, null));
+        Set<Long> personIdFilter = filterGender == null && filterAgeGroup == null
+                ? null
+                : resolveMatchingPersonIds(gaudiMode, filterGender, filterAgeGroup);
+        return calculator.computeDnsEntries(gaudiMode, buildRaceParticipants(gaudiMode, personIdFilter));
     }
 
     private List<GaudiModeCalculator.RaceParticipants> buildRaceParticipants(GaudiMode gaudiMode, Set<Long> personIdFilter) {
@@ -381,7 +445,14 @@ public class GaudiModeService {
 
     private Set<Long> resolveMatchingPersonIds(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
         Set<Long> personIds = new LinkedHashSet<>();
+        List<Race> races = new ArrayList<>();
         for (GaudiModeRace gmr : findRacesFor(gaudiMode.id())) {
+            // Only loaded when a class filter is actually in play - it is the sole consumer below,
+            // and this method runs once per (age group x gender) section of an export, so a race
+            // lookup per leg would otherwise repeat for every section of a gender-only export too.
+            if (filterAgeGroup != null) {
+                raceService.findById(gmr.raceId()).ifPresent(races::add);
+            }
             for (Participant p : participantService.findByRaceId(gmr.raceId())) {
                 if (p.personId() != null) {
                     personIds.add(p.personId());
@@ -389,8 +460,13 @@ public class GaudiModeService {
             }
         }
 
-        List<AgeGroup> ageGroups = filterAgeGroup != null
-                ? StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList()
+        // Only the season of these races applies - an age class means different birth years in
+        // different seasons, so filtering by the class name "U14" is only meaningful within one.
+        // A Gaudi-Modus spanning several is scored against the first race's season (SeasonService
+        // #scoringSeasonOf); one whose races have all been deleted has nothing to
+        // categorise against, and personIds is empty then anyway.
+        List<AgeGroup> ageGroups = filterAgeGroup != null && !races.isEmpty()
+                ? ageGroupService.findBySeason(seasonService.scoringSeasonOf(races))
                 : List.of();
         Map<Long, Person> personsById = personService.findByIds(personIds);
 

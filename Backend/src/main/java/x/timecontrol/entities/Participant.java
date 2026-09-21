@@ -36,8 +36,28 @@ public record Participant(
         DisqualificationStatus status,
 
         @Nullable
-        Integer startSequence
+        Integer startSequence,
+
+        // Start group this participant is assigned to in this race, if any - see
+        // StartGroupTemplate (including its offsetSeconds - resolved live via that reference by
+        // RankingService#adjustedValue for TIME races, not duplicated onto this row). Purely an
+        // organisational/display aid otherwise; its effect on start order lives in startSequence
+        // above (already consumed by AutoAssignService and the start-list PDF export), not here.
+        @Nullable
+        Long startGroupId
 ) {
+    /**
+     * Legacy 12-arg constructor predating startGroupId, kept so the many call sites that build a
+     * participant without caring about a start-group assignment don't all need touching: defaults
+     * startGroupId to null (not assigned to any group).
+     */
+    public Participant(Long id, Long raceId, Long personId, @Nullable Integer raceNumber, @Nullable Long teamId,
+                        @Nullable Long categoryId, @Nullable Integer durationMs, @Nullable Integer penalty,
+                        @Nullable LocalDateTime measuredAt, @Nullable String comment, @Nullable DisqualificationStatus status,
+                        @Nullable Integer startSequence) {
+        this(id, raceId, personId, raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, status, startSequence, null);
+    }
+
     /**
      * Legacy 11-arg constructor predating startSequence, kept so the many call sites that build a
      * participant without caring about a derived start order don't all need touching: defaults
@@ -46,7 +66,7 @@ public record Participant(
     public Participant(Long id, Long raceId, Long personId, @Nullable Integer raceNumber, @Nullable Long teamId,
                         @Nullable Long categoryId, @Nullable Integer durationMs, @Nullable Integer penalty,
                         @Nullable LocalDateTime measuredAt, @Nullable String comment, @Nullable DisqualificationStatus status) {
-        this(id, raceId, personId, raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, status, null);
+        this(id, raceId, personId, raceNumber, teamId, categoryId, durationMs, penalty, measuredAt, comment, status, null, null);
     }
 
     /**

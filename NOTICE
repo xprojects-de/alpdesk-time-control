@@ -1,0 +1,19 @@
+Alpdesk Time Control
+Copyright (c) 2026 Benjamin Hummel
+
+Dieses Produkt steht unter der MIT-Lizenz (siehe LICENSE).
+
+Es enthält Software, die von Dritten entwickelt wurde und unter eigenen Lizenzen steht -
+unter anderem der Apache License 2.0, die verlangt, dass dieser Hinweis mitgeliefert wird.
+Die vollständige Aufstellung aller mitgelieferten Bibliotheken mit ihren Lizenzen steht in
+THIRD-PARTY.md.
+
+Besonders hervorzuheben:
+
+- Micronaut Framework, Apache PDFBox, Flyway, Netty, SQLite JDBC, HikariCP und weitere
+  Komponenten stehen unter der Apache License 2.0.
+  Eine Kopie: https://www.apache.org/licenses/LICENSE-2.0
+- Logback steht unter der Eclipse Public License 2.0 bzw. wahlweise der LGPL 2.1.
+- Die mitgelieferte Schriftart Roboto steht unter der SIL Open Font License 1.1.
+  Eine Kopie: https://openfontlicense.org
+- Angular, Angular Material und NgRx stehen unter der MIT-Lizenz.

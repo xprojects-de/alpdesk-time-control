@@ -11,11 +11,14 @@ import x.timecontrol.dto.ParticipantResponse;
 import x.timecontrol.dto.ParticipantResultImportPreviewResponse;
 import x.timecontrol.dto.ParticipantResultImportResponse;
 import x.timecontrol.dto.ResultTimeFormat;
+import x.timecontrol.dto.StartGroupAssignmentRequest;
+import x.timecontrol.dto.StartGroupCopyRequest;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PdfExportService;
 import x.timecontrol.services.RaceService;
+import x.timecontrol.services.TextFileDecoder;
 import io.micronaut.data.exceptions.DataAccessException;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
@@ -36,7 +39,7 @@ import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -155,15 +158,20 @@ public class ParticipantController {
     @Delete("/race/{raceId}")
     @Operation(summary = "Delete all participants of a race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "All participants of the race deleted")
-    public HttpResponse<Void> deleteByRaceId(@PathVariable Long raceId) {
-        service.deleteByRaceId(raceId);
-        return HttpResponse.noContent();
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
+    public HttpResponse<?> deleteByRaceId(@PathVariable Long raceId) {
+        try {
+            service.deleteByRaceId(raceId);
+            return HttpResponse.noContent();
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     @Post("/copy")
-    @Operation(summary = "Copy participants into other races", description = "Copies every participant of the source race into each target race (personId/teamId/categoryId carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race). A person already present in a target race is skipped rather than duplicated.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Copy participants into other races", description = "Copies every participant of the source race into each target race (personId/teamId/categoryId/comment and startGroupId/startSequence carried over, durationMs/penalty/measuredAt left empty; raceNumber carried over only if carryStartNumber is true and not already taken in the target race; a DNS status is carried over, DNF/DSQ never). A person already present in a target race is skipped rather than duplicated.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Participants copied", content = @Content(schema = @Schema(implementation = ParticipantCopyResponse.class)))
     @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
     public HttpResponse<?> copyParticipants(@Body ParticipantCopyRequest request) {
@@ -181,7 +189,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
     public HttpResponse<?> assignRaceNumbers(@PathVariable Long raceId) {
-        if (raceService.findById(raceId).isEmpty()) {
+        if (!raceService.existsById(raceId)) {
             return HttpResponse.notFound();
         }
         try {
@@ -210,6 +218,60 @@ public class ParticipantController {
     }
 
     @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Put("/race/{raceId}/start-groups")
+    @Operation(summary = "Apply a start-group assignment to a race's participants", description = "Sets startGroupId and the resulting startSequence (e.g. group A's members get 1..28, group B's 29..55, ...) for the listed participants. Only participants listed in the request are touched; anyone left out keeps their current startGroupId/startSequence.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Start-group assignment applied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "400", description = "A participant does not belong to this race, or references a start-group template that does not exist")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
+    public HttpResponse<?> applyStartGroupAssignment(@PathVariable Long raceId, @Body StartGroupAssignmentRequest request) {
+        try {
+            List<Participant> updated = service.applyStartGroupAssignment(raceId, request.assignments());
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Post("/start-groups/copy")
+    @Operation(summary = "Copy a start-group assignment into other races", description = "Copies startGroupId and startSequence from the source race's participants into each target race, matched by person. A target-race participant whose person isn't in the source race keeps its current assignment untouched.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Start-group assignment copied", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Source or target race does not exist")
+    @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for a target race")
+    public HttpResponse<?> copyStartGroupAssignment(@Body StartGroupCopyRequest request) {
+        try {
+            List<Participant> updated = service.copyStartGroupAssignment(request.sourceRaceId(), request.targetRaceIds());
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Post("/race/{raceId}/generate-race-numbers-from-start-groups")
+    @Operation(summary = "Assign race numbers from a race's start-group order", description = "Assigns race numbers 1..n ordered by startSequence (the board's saved order within and across groups); participants without a startSequence land last. Neither startGroupId nor startSequence are touched.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Race numbers assigned", content = @Content(schema = @Schema(implementation = ParticipantResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    @ApiResponse(responseCode = "409", description = "The race already has results")
+    public HttpResponse<?> generateRaceNumbersFromStartGroups(@PathVariable Long raceId) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        try {
+            List<Participant> updated = service.generateRaceNumbersFromStartGroups(raceId);
+            return HttpResponse.ok(service.toResponses(updated));
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import/{raceId}")
     @Operation(summary = "Import participants from CSV for a race", description = "Imports participants from a CSV file with columns Lastname,Firstname,Birthdate,Team,Gender and " + "an optional 6th ExternalId column. The header row is ignored. Teams are looked up case-insensitively " + "and created (uppercased) if they don't exist yet. Rows with a missing/invalid gender (only MALE or " + "FEMALE are accepted) or an invalid birthdate (expected yyyy-MM-dd) are skipped and reported in the " + "response. ExternalId is fully optional (omit the column entirely, or leave it empty); when given, " + "it is used to find-or-create the matching Person so the same person can be re-imported for a later " + "race/season without creating a duplicate.", security = @SecurityRequirement(name = "BearerAuth"))
@@ -222,7 +284,7 @@ public class ParticipantController {
             return HttpResponse.notFound();
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(new StringReader(TextFileDecoder.decode(file.getBytes())))) {
             ParticipantService.ParticipantImportResult result = service.importFromCsv(raceId, reader);
 
             List<ParticipantResponse> imported = service.toResponses(result.imported());
@@ -406,6 +468,20 @@ public class ParticipantController {
         String csv = service.exportResultsCsv(raceId, race.get().resultUnit());
         return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
                 .header("Content-Disposition", "attachment; filename=ergebnisse_" + raceId + ".csv");
+    }
+
+    @Produces("text/csv")
+    @Get("/export/startlist-csv/{raceId}")
+    @Operation(summary = "Export a race's start list as CSV", description = "Exports the same participants in the same start order as the start list PDF, with identity data plus each participant's start group and its Zeitversatz (startGroupOffset, \"m:ss\") - the offset a TIME race's raw result is netted by for ranking, which no other export carries. Export only, no matching import.", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated successfully")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> exportStartListCsv(@PathVariable Long raceId) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        String csv = service.exportStartListCsv(raceId);
+        return HttpResponse.ok(csv.getBytes(StandardCharsets.UTF_8))
+                .header("Content-Disposition", "attachment; filename=startliste_" + raceId + ".csv");
     }
 
     @Produces("application/pdf")

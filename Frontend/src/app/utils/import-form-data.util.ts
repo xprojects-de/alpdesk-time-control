@@ -8,7 +8,7 @@
  */
 export function buildImportFormData(file: File, fields: Record<string, string | undefined> = {}): FormData {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     for (const [key, value] of Object.entries(fields)) {
         if (value) {
             formData.append(key, value);

@@ -1,39 +1,15 @@
-import {
-    Component,
-    inject,
-    ChangeDetectionStrategy,
-} from "@angular/core";
+import {Component, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
-import {
-    FormBuilder,
-    FormGroup,
-    ReactiveFormsModule,
-    Validators,
-} from "@angular/forms";
-import {
-    MatDialogRef,
-    MAT_DIALOG_DATA,
-    MatDialogModule,
-} from "@angular/material/dialog";
+import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
-import {
-    Measurement,
-    MeasurementRequest,
-} from "../../models/measurement.model";
+import {Measurement, MeasurementRequest} from "../../models/measurement.model";
 
 @Component({
     selector: "app-measurement-dialog",
-    standalone: true,
-    imports: [
-        CommonModule,
-        ReactiveFormsModule,
-        MatDialogModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatButtonModule,
-    ],
+    imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
     template: `
         <h2 mat-dialog-title>{{ data ? "Messung bearbeiten" : "Neue Messung" }}</h2>
         <mat-dialog-content>
@@ -41,9 +17,8 @@ import {
                 <div class="time-input-group">
                     <mat-form-field appearance="outline">
                         <mat-label>Minuten</mat-label>
-                        <input matInput type="number" formControlName="minutes" min="0" required/>
-                        @if (form.get("minutes")?.hasError("required") &&
-                        form.get("minutes")?.touched) {
+                        <input matInput type="number" formControlName="minutes" min="0" required />
+                        @if (form.get("minutes")?.hasError("required") && form.get("minutes")?.touched) {
                             <mat-error>Minuten erforderlich</mat-error>
                         }
                         @if (form.get("minutes")?.hasError("min")) {
@@ -53,9 +28,8 @@ import {
 
                     <mat-form-field appearance="outline">
                         <mat-label>Sekunden</mat-label>
-                        <input matInput type="number" formControlName="seconds" min="0" max="59" required/>
-                        @if (form.get("seconds")?.hasError("required") &&
-                        form.get("seconds")?.touched) {
+                        <input matInput type="number" formControlName="seconds" min="0" max="59" required />
+                        @if (form.get("seconds")?.hasError("required") && form.get("seconds")?.touched) {
                             <mat-error>Sekunden erforderlich</mat-error>
                         }
                         @if (form.get("seconds")?.hasError("min") || form.get("seconds")?.hasError("max")) {
@@ -65,9 +39,8 @@ import {
 
                     <mat-form-field appearance="outline">
                         <mat-label>Millisekunden</mat-label>
-                        <input matInput type="number" formControlName="milliseconds" min="0" max="999" required/>
-                        @if (form.get("milliseconds")?.hasError("required") &&
-                        form.get("milliseconds")?.touched) {
+                        <input matInput type="number" formControlName="milliseconds" min="0" max="999" required />
+                        @if (form.get("milliseconds")?.hasError("required") && form.get("milliseconds")?.touched) {
                             <mat-error>Millisekunden erforderlich</mat-error>
                         }
                         @if (form.get("milliseconds")?.hasError("min") || form.get("milliseconds")?.hasError("max")) {
@@ -78,15 +51,8 @@ import {
 
                 <mat-form-field appearance="outline">
                     <mat-label>Gemessen am (ISO Format)</mat-label>
-                    <input
-                            matInput
-                            type="datetime-local"
-                            formControlName="measuredAt"
-                            step="1"
-                            required
-                    />
-                    @if (form.get("measuredAt")?.hasError("required") &&
-                    form.get("measuredAt")?.touched) {
+                    <input matInput type="datetime-local" formControlName="measuredAt" step="1" required />
+                    @if (form.get("measuredAt")?.hasError("required") && form.get("measuredAt")?.touched) {
                         <mat-error>Messzeit ist erforderlich</mat-error>
                     }
                 </mat-form-field>
@@ -94,42 +60,34 @@ import {
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="onCancel()">Abbrechen</button>
-            <button
-                    mat-raised-button
-                    color="primary"
-                    (click)="onSave()"
-                    [disabled]="!form.valid"
-            >
-                Speichern
-            </button>
+            <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!form.valid">Speichern</button>
         </mat-dialog-actions>
     `,
-    changeDetection: ChangeDetectionStrategy.OnPush,
-     styles: [
-         `
-           .measurement-form {
-             display: flex;
-             flex-direction: column;
-             gap: 16px;
-             min-width: 400px;
-             margin-top: 16px;
-           }
+    styles: [
+        `
+            .measurement-form {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 400px;
+                margin-top: 16px;
+            }
 
-           .time-input-group {
-             display: flex;
-             gap: 12px;
-             width: 100%;
-           }
+            .time-input-group {
+                display: flex;
+                gap: 12px;
+                width: 100%;
+            }
 
-           .time-input-group mat-form-field {
-             flex: 1;
-           }
+            .time-input-group mat-form-field {
+                flex: 1;
+            }
 
-           mat-form-field {
-             width: 100%;
-           }
-         `,
-     ],
+            mat-form-field {
+                width: 100%;
+            }
+        `,
+    ],
 })
 export class MeasurementDialogComponent {
     private fb = inject(FormBuilder);
@@ -145,10 +103,7 @@ export class MeasurementDialogComponent {
             minutes: [timeComponents.minutes, [Validators.required, Validators.min(0)]],
             seconds: [timeComponents.seconds, [Validators.required, Validators.min(0), Validators.max(59)]],
             milliseconds: [timeComponents.milliseconds, [Validators.required, Validators.min(0), Validators.max(999)]],
-            measuredAt: [
-                this.formatDateTimeForInput(this.data?.measuredAt),
-                Validators.required,
-            ],
+            measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt), Validators.required],
         });
     }
 
@@ -162,7 +117,7 @@ export class MeasurementDialogComponent {
             const durationMs = this.convertToMilliseconds(
                 Number(formValue.minutes),
                 Number(formValue.seconds),
-                Number(formValue.milliseconds)
+                Number(formValue.milliseconds),
             );
 
             const measurement: MeasurementRequest = {
@@ -205,15 +160,15 @@ export class MeasurementDialogComponent {
     }
 
     private convertToMilliseconds(minutes: number, seconds: number, milliseconds: number): number {
-        return (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
+        return minutes * 60 * 1000 + seconds * 1000 + milliseconds;
     }
 
-    private splitMilliseconds(totalMs: number): { minutes: number; seconds: number; milliseconds: number } {
+    private splitMilliseconds(totalMs: number): {minutes: number; seconds: number; milliseconds: number} {
         const minutes = Math.floor(totalMs / (60 * 1000));
         const remainingAfterMinutes = totalMs % (60 * 1000);
         const seconds = Math.floor(remainingAfterMinutes / 1000);
         const milliseconds = remainingAfterMinutes % 1000;
 
-        return { minutes, seconds, milliseconds };
+        return {minutes, seconds, milliseconds};
     }
 }

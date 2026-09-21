@@ -125,7 +125,7 @@ class AutoAssignServiceSpec extends Specification {
         service.enable(1L, 1)
 
         when:
-        service.setNextRaceNumber(42)
+        service.setNextRaceNumber(42, false)
 
         then:
         thrown(IllegalArgumentException)
@@ -136,12 +136,47 @@ class AutoAssignServiceSpec extends Specification {
         given:
         participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
         measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> []
         service.enable(1L, 1)
 
         when:
-        def status = service.setNextRaceNumber(5)
+        def status = service.setNextRaceNumber(5, false)
 
         then:
+        status.nextRaceNumber() == 5
+    }
+
+    // Without the refusal the cursor is accepted here and then silently walked forward again by the
+    // next processNewMeasurements cycle, so the following starter is credited with this race
+    // number's finish - see setNextRaceNumber's javadoc.
+    def "setNextRaceNumber refuses a race number that already has a measurement"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
+        measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        service.enable(1L, 1)
+
+        when:
+        service.setNextRaceNumber(5, false)
+
+        then:
+        thrown(AutoAssignService.AlreadyTimedException)
+        service.getStatus().nextRaceNumber() == 1
+        0 * measurementRepository.deleteById(_)
+    }
+
+    def "setNextRaceNumber with force discards the existing measurement so the race number can run again"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
+        measurementRepository.findAll() >> []
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        service.enable(1L, 1)
+
+        when:
+        def status = service.setNextRaceNumber(5, true)
+
+        then:
+        1 * measurementRepository.deleteById(7L)
         status.nextRaceNumber() == 5
     }
 
@@ -360,5 +395,37 @@ class AutoAssignServiceSpec extends Specification {
 
         then:
         status.nextRaceNumber() == 2
+    }
+
+    /**
+     * A late entry has no startSequence and falls back to its bib for ordering - which can collide
+     * with an existing participant's startSequence, since the two are separate 1..n number spaces
+     * and only unique within themselves. Without a tie-break, the cursor can never reach the second
+     * of the two, and every measurement from there on is credited to the wrong starter.
+     */
+    def "reaches a late entry whose bib collides with another participant's start sequence"() {
+        given: "start order derived from run 1 (bibs 50/51/52 get sequences 1/2/3), then bib 2 entered late"
+        participantRepository.findByRaceId(1L) >> [
+                participant(1L, 50, 1),
+                participant(2L, 51, 2),
+                participant(3L, 2, null),   // order key 2 - collides with bib 51's start sequence
+                participant(4L, 52, 3),
+        ]
+        measurementRepository.findAll() >> [
+                measurement(100L, null, 10000),
+                measurement(101L, null, 11000),
+                measurement(102L, null, 12000),
+                measurement(103L, null, 13000),
+        ]
+        service.enable(1L, null)
+
+        when:
+        service.processNewMeasurements()
+
+        then: "every starter gets exactly one time, nobody is skipped"
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 1L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 2L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 3L })
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 4L })
     }
 }

@@ -1,5 +1,6 @@
 package x.timecontrol.services;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
 import x.timecontrol.entities.AgeGroup;
@@ -9,6 +10,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
+import x.timecontrol.entities.StartGroupTemplate;
 import x.timecontrol.entities.Team;
 
 import java.time.LocalDate;
@@ -41,17 +43,21 @@ public class RankingViewService {
     public static final Category NO_CATEGORY = new Category(NO_CATEGORY_ID, "Ohne Kategorie");
 
     private final AgeGroupService ageGroupService;
+    private final SeasonService seasonService;
     private final CategoryService categoryService;
     private final TeamService teamService;
     private final PersonService personService;
     private final RankingService rankingService;
+    private final StartGroupTemplateService startGroupTemplateService;
 
-    public RankingViewService(AgeGroupService ageGroupService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService) {
+    public RankingViewService(AgeGroupService ageGroupService, SeasonService seasonService, CategoryService categoryService, TeamService teamService, PersonService personService, RankingService rankingService, StartGroupTemplateService startGroupTemplateService) {
         this.ageGroupService = ageGroupService;
+        this.seasonService = seasonService;
         this.categoryService = categoryService;
         this.teamService = teamService;
         this.personService = personService;
         this.rankingService = rankingService;
+        this.startGroupTemplateService = startGroupTemplateService;
     }
 
     @Serdeable
@@ -62,7 +68,9 @@ public class RankingViewService {
 
     @Serdeable
     public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
-                                  String ageGroup, String team, String category, boolean hasCategory) {
+                                  String ageGroup, String team, String category, boolean hasCategory,
+                                  String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup,
+                                  String startGroupOffset) {
     }
 
     /**
@@ -107,11 +115,13 @@ public class RankingViewService {
     }
 
     /**
-     * Loads all age groups once per view so per-participant age-group lookups (potentially
-     * thousands for a large by-age-group/category view) don't each hit the database.
+     * Loads the age groups of this race's season once per view so per-participant age-group
+     * lookups (potentially thousands for a large by-age-group/category view) don't each hit the
+     * database. Scoped to the race's own season, so re-exporting a finished race still prints the
+     * classes it was run under rather than whatever is configured now.
      */
-    public List<AgeGroup> loadAgeGroups() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false).toList();
+    public List<AgeGroup> loadAgeGroups(Race race) {
+        return ageGroupService.findBySeason(seasonService.seasonOf(race));
     }
 
     public List<Category> sortedCategories() {
@@ -136,14 +146,33 @@ public class RankingViewService {
      * {@link ParticipantService#groupByAgeGroup} and the female-before-male convention used
      * throughout {@link PdfExportService} - without this, two same-year different-gender age
      * groups would print in whatever order {@code ageGroupService.findAll()} happens to return.
+     * <p>
+     * Always ends with {@link AgeGroupService#UNKNOWN_AGE_GROUP}, the bucket for anyone without a
+     * birth date or whose birth year matches no configured group - without it, such a participant
+     * would silently vanish from every by-age-group view (they're ranked, so they aren't in the
+     * "nicht gewertet" list either). Callers skip empty sections, so it only shows up when someone
+     * actually lands there; label it via {@link #ageGroupSectionLabel}.
      */
-    public List<String> uniqueAgeGroupNamesYoungestFirst() {
-        return StreamSupport.stream(ageGroupService.findAll().spliterator(), false)
+    public List<String> uniqueAgeGroupNamesYoungestFirst(Race race) {
+        List<String> names = new ArrayList<>(loadAgeGroups(race).stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .map(AgeGroup::name)
                 .distinct()
-                .toList();
+                .toList());
+        if (names.stream().noneMatch(AgeGroupService.UNKNOWN_AGE_GROUP::equalsIgnoreCase)) {
+            names.add(AgeGroupService.UNKNOWN_AGE_GROUP);
+        }
+        return names;
+    }
+
+    /**
+     * Section title text for an age group name from {@link #uniqueAgeGroupNamesYoungestFirst} -
+     * the name itself, except the catch-all {@link AgeGroupService#UNKNOWN_AGE_GROUP} bucket, which
+     * reads as "ohne Altersklasse" (e.g. "Wertung ohne Altersklasse weiblich").
+     */
+    public String ageGroupSectionLabel(String ageGroupName) {
+        return AgeGroupService.UNKNOWN_AGE_GROUP.equals(ageGroupName) ? "ohne Altersklasse" : ageGroupName;
     }
 
     public String formatName(Person person) {
@@ -151,6 +180,18 @@ public class RankingViewService {
             return "Unbekannt";
         }
         return personService.displayName(person);
+    }
+
+    /**
+     * A start group's Zeitversatz as "m:ss" - the same minutes + seconds the start-group template
+     * dialog takes it in - or null for a group without one. Shared by the start list PDF and CSV.
+     */
+    @Nullable
+    public static String formatStartGroupOffset(@Nullable Integer offsetSeconds) {
+        if (offsetSeconds == null) {
+            return null;
+        }
+        return String.format("%d:%02d", offsetSeconds / 60, offsetSeconds % 60);
     }
 
     public String genderLabel(Gender gender) {
@@ -168,17 +209,19 @@ public class RankingViewService {
      * participant excluded from the start order entirely (DSQ/DNF/DNS with no derived position)
      * isn't listed - they're not starting.
      */
-    public List<StartListEntry> createStartListEntries(Iterable<Participant> participants) {
+    public List<StartListEntry> createStartListEntries(Iterable<Participant> participants, Race race) {
         List<Participant> sorted = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> p.effectiveStartOrder() != null)
                 // requireNonNull: just filtered for this, but the comparator calls the @Nullable
                 // method again independently, so state the invariant explicitly.
                 .sorted(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())))
                 .toList();
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
         Map<Long, Person> personsById = loadPersonsByIds(sorted, Participant::personId);
         Map<Long, Team> teamsById = loadTeamsByIds(sorted, Participant::teamId);
         Map<Long, Category> categoriesById = loadCategoriesByIds(sorted, Participant::categoryId);
+        Set<Long> startGroupIds = sorted.stream().map(Participant::startGroupId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
 
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
@@ -194,8 +237,14 @@ public class RankingViewService {
             String category = p.categoryId() != null
                     ? Optional.ofNullable(categoriesById.get(p.categoryId())).map(Category::name).orElse("-")
                     : "-";
+            StartGroupTemplate startGroup = p.startGroupId() != null ? startGroupsById.get(p.startGroupId()) : null;
+            String startGroupLabel = startGroup != null ? startGroup.label() : "-";
+            String startGroupColor = startGroup != null ? startGroup.color() : null;
+            String startGroupOffset = startGroup != null ? formatStartGroupOffset(startGroup.offsetSeconds()) : null;
 
-            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null));
+            entries.add(new StartListEntry(raceNumber, name, birthYear, gender, ageGroup, team, category, p.categoryId() != null,
+                    startGroupLabel, startGroupColor, startGroup != null,
+                    startGroupOffset != null ? startGroupOffset : "-"));
         }
         return entries;
     }
@@ -206,7 +255,7 @@ public class RankingViewService {
                                                                      String filterAgeGroup,
                                                                      Long filterCategoryId,
                                                                      PersonTeamLookup lookup) {
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
 
         // Only keep participants that have a measured result, resolving each one's Person from
         // the pre-loaded lookup instead of a per-participant query
@@ -257,8 +306,8 @@ public class RankingViewService {
                     person != null ? person.externalId() : null,
                     ageGroup,
                     team,
-                    formatValue(race, p.durationMs()),
-                    formatValue(race, p.penalty()),
+                    formatValue(race, rankingService.netDurationMs(race, p)),
+                    formatPenalty(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
                     p.penalty() != null && p.penalty() != 0
@@ -269,9 +318,10 @@ public class RankingViewService {
     }
 
     /**
-     * Gender/age-group/category filter used to scope the scored ranking entries in
-     * {@link #createRankingEntriesFromParticipants}. Not used for the "nicht gewertet" (DNS) rows in
-     * {@link #createDnsRows} - that list is deliberately unfiltered, see its own doc comment.
+     * Gender/age-group/category filter used to scope both the scored ranking entries in
+     * {@link #createRankingEntriesFromParticipants} and the "nicht gewertet" (DNS) rows in
+     * {@link #createDnsRows(Iterable, Race, Gender, String, Long, PersonTeamLookup)}, so a ranking
+     * and the list of who didn't finish it can never disagree about who belongs to it.
      */
     private boolean matchesCategoryFilters(ParticipantWithPerson pwp, Gender filterGender, String filterAgeGroup,
                                             Long filterCategoryId, List<AgeGroup> ageGroups) {
@@ -305,16 +355,41 @@ public class RankingViewService {
     /**
      * The complement of {@link #createRankingEntriesFromParticipants}'s "has a measured result"
      * filter: every participant of the race without a valid result, listed as "nicht gewertet" (DNS).
-     * Deliberately not scoped by gender/age-group/category the way the ranking above it is - one DNS
-     * list per race, shown as-is regardless of which category is being viewed.
+     * This overload applies no gender/age-group/category filter and is for a document that ranks the
+     * whole field - either in one section ("Gesamtwertung") or split into sections that together
+     * cover everyone (all age groups, all categories). A document scoped to one gender/age
+     * group/category must use
+     * {@link #createDnsRows(Iterable, Race, Gender, String, Long, PersonTeamLookup)} instead, or it
+     * prints people who are not in the ranking above the list - e.g. a woman under "nicht gewertet"
+     * on a men's result sheet.
      */
     public List<DnsRow> createDnsRows(Iterable<Participant> participants, Race race, PersonTeamLookup lookup) {
-        List<AgeGroup> ageGroups = loadAgeGroups();
+        return createDnsRows(participants, race, null, null, null, lookup);
+    }
+
+    /**
+     * Same as {@link #createDnsRows(Iterable, Race, PersonTeamLookup)}, but scoped by the same
+     * gender/age-group/category filter the accompanying ranking uses (see
+     * {@link #matchesCategoryFilters}) - the parameters mirror
+     * {@link #createRankingEntriesFromParticipants} exactly, so a caller passes whatever filter its
+     * whole document is scoped to and gets the matching "nicht gewertet" list. A null filter leaves
+     * that dimension unrestricted, so a document split into per-section filters (all age groups, all
+     * categories) still passes null for the dimension it splits on and keeps one complete list.
+     */
+    public List<DnsRow> createDnsRows(Iterable<Participant> participants, Race race, Gender filterGender,
+                                       String filterAgeGroup, Long filterCategoryId, PersonTeamLookup lookup) {
+        List<AgeGroup> ageGroups = loadAgeGroups(race);
 
         List<ParticipantWithPerson> notScored = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> rankingService.adjustedValue(race, p) == null)
                 .map(p -> new ParticipantWithPerson(p, lookup.personsById().get(p.personId())))
                 .toList();
+
+        if (filterGender != null || filterAgeGroup != null || filterCategoryId != null) {
+            notScored = notScored.stream()
+                    .filter(pwp -> matchesCategoryFilters(pwp, filterGender, filterAgeGroup, filterCategoryId, ageGroups))
+                    .toList();
+        }
 
         notScored = notScored.stream()
                 .sorted(Comparator.<ParticipantWithPerson, String>comparing(pwp -> pwp.person() != null ? pwp.person().lastName() : "", String.CASE_INSENSITIVE_ORDER)
@@ -355,6 +430,14 @@ public class RankingViewService {
      * Formats a raw/adjusted result value according to the race's unit: time (mm:ss.SS) or a
      * generic decimal value with the race's unit label (e.g. "30.00 m"), stored as hundredths.
      */
+    /**
+     * Like {@link #formatValue}, but a 0 penalty (legacy rows stored before 0 was normalized to
+     * null on save) renders as "-" too - "no penalty", not a printed "00:00,00".
+     */
+    public static String formatPenalty(Race race, Integer penalty) {
+        return formatValue(race, penalty != null && penalty == 0 ? null : penalty);
+    }
+
     public static String formatValue(Race race, Integer value) {
         if (value == null) {
             return "-";

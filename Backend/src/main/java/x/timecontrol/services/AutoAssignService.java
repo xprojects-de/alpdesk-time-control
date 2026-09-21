@@ -44,7 +44,7 @@ import java.util.stream.StreamSupport;
  * order equals start order, so an overtake that breaks that assumption on the device already
  * produces a wrong duration there, not just a wrong participant match here.
  * <p>
- * State is in-memory only, the same convention {@link DataImportScheduler#isScheduledImportActive()}
+ * State is in-memory only, the same convention {@link DeviceImportGate#isScheduledImportActive()}
  * already uses for "is a live mode currently on": it has to be re-enabled after a backend restart.
  * Every read and write of that state goes through {@link MeasurementTableLock}, the same lock
  * already used for the underlying measurement table. That's needed because
@@ -141,22 +141,72 @@ public class AutoAssignService {
     }
 
     /**
-     * Manual override: honored exactly as given, no skipping - the operator is explicitly pointing
-     * the queue somewhere, e.g. to redo a specific race number.
+     * Manual override of the queue position, honored exactly as given - no skipping forward past
+     * race numbers the operator deliberately pointed at.
+     * <p>
+     * A race number that already has a measurement is refused unless {@code force} is set, and
+     * with it that measurement is deleted. Neither half is optional. Refusing is needed because
+     * {@link #processNewMeasurements()} re-validates the cursor against "already has a time" on
+     * every cycle: left alone, it would quietly walk the cursor forward off the requested number
+     * and credit the next incoming finish to the following starter instead - a wrong time on a
+     * real runner, with nothing on screen saying so. Deleting is what actually makes a re-run
+     * possible, since {@link MeasurementService} allows only one measurement per participant, so
+     * the old time has to go before the new one can be matched.
+     * <p>
+     * Deleting rather than just clearing the row's participant: an unassigned measurement stays in
+     * the table as pending work and the very next cycle hands it back out - by id, so the stale
+     * time would overtake the new one and land on someone else.
      *
      * @throws IllegalStateException if auto-assign mode is not currently active
      * @throws IllegalArgumentException if raceNumber is given but no participant in the active race
      * has that race number - see {@link #enable} for why this must be rejected up front.
+     * @throws AlreadyTimedException if that race number already has a measurement and force is not set
      */
-    public Status setNextRaceNumber(Integer raceNumber) {
+    public Status setNextRaceNumber(Integer raceNumber, boolean force) {
         return measurementTableLock.get(() -> {
             Long raceId = requireActive();
-            if (raceNumber != null && !loadRoster(raceId).byRaceNumber().containsKey(raceNumber)) {
-                throw new IllegalArgumentException("No participant in this race has race number " + raceNumber);
+            if (raceNumber != null) {
+                Participant participant = loadRoster(raceId).byRaceNumber().get(raceNumber);
+                if (participant == null) {
+                    throw new IllegalArgumentException("No participant in this race has race number " + raceNumber);
+                }
+                discardExistingMeasurements(participant, raceNumber, force);
             }
             nextRaceNumber = raceNumber;
             return currentStatus();
         });
+    }
+
+    /**
+     * Must only be called while holding measurementTableLock - it decides and deletes in one go,
+     * so nothing can slip a measurement onto this participant between the check and the delete.
+     */
+    private void discardExistingMeasurements(Participant participant, Integer raceNumber, boolean force) {
+        List<Measurement> existing = measurementRepository.findByParticipantId(participant.id());
+        if (existing.isEmpty()) {
+            return;
+        }
+        if (!force) {
+            throw new AlreadyTimedException("Race number " + raceNumber + " already has a measurement. "
+                    + "Retry with force=true to discard it and time this race number again.");
+        }
+        for (Measurement measurement : existing) {
+            measurementRepository.deleteById(measurement.id());
+        }
+        LOG.info("Discarded {} measurement(s) of race number {} in race {} for a re-run",
+                existing.size(), raceNumber, participant.raceId());
+    }
+
+    /**
+     * Its own type purely so the controller can answer it with 409 rather than the 400 the two
+     * pre-existing failures of {@link #setNextRaceNumber} map to: this one is the only one the
+     * caller can act on by retrying with force, and the frontend has to tell it apart to offer
+     * that.
+     */
+    public static class AlreadyTimedException extends RuntimeException {
+        public AlreadyTimedException(String message) {
+            super(message);
+        }
     }
 
     private Status currentStatus() {
@@ -263,7 +313,14 @@ public class AutoAssignService {
         // effectiveStartOrder() != null, but the comparator calls the method again independently -
         // the compiler/IDE can't see that invariant across the two calls, so state it explicitly
         // instead of leaving a @Nullable method reference where Comparator.comparing needs non-null.
-        starting.sort(Comparator.comparing(p -> Objects.requireNonNull(p.effectiveStartOrder())));
+        // raceNumber as a tie-break, and the same one firstAfter() compares by: startSequence and
+        // raceNumber are two separate 1..n number spaces, each unique only within itself, so two
+        // participants can share an order key (a late entry without a startSequence whose bib equals
+        // someone else's sequence). Sorting and comparing by different orders would let firstAfter()
+        // step over the second of the pair for good - it is the cursor's only way forward, so that
+        // starter never gets a time and everyone behind them is credited one measurement too early.
+        starting.sort(Comparator.comparing((Participant p) -> Objects.requireNonNull(p.effectiveStartOrder()))
+                .thenComparing(Participant::raceNumber));
         List<Integer> raceNumbersInStartOrder = starting.stream().map(Participant::raceNumber).toList();
         return new RaceRoster(raceNumbersInStartOrder, byRaceNumber);
     }
@@ -316,7 +373,11 @@ public class AutoAssignService {
         Participant currentParticipant = roster.byRaceNumber().get(current);
         int currentOrderKey = currentParticipant != null ? orderKey(currentParticipant) : current;
         for (Integer raceNumber : roster.raceNumbersInStartOrder()) {
-            if (orderKey(roster.byRaceNumber().get(raceNumber)) > currentOrderKey) {
+            int orderKey = orderKey(roster.byRaceNumber().get(raceNumber));
+            // Lexicographic (orderKey, raceNumber), matching how loadRoster sorts the queue - see
+            // the comment there for why the tie-break is not optional. Bibs are unique per race, so
+            // the pair is a total order and no entry can be stepped over.
+            if (orderKey > currentOrderKey || (orderKey == currentOrderKey && raceNumber > current)) {
                 return raceNumber;
             }
         }

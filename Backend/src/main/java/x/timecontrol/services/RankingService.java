@@ -6,6 +6,7 @@ import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
+import x.timecontrol.entities.StartGroupTemplate;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,9 +24,18 @@ import java.util.Map;
 @Singleton
 public class RankingService {
 
+    private final StartGroupTemplateService startGroupTemplateService;
+
+    public RankingService(StartGroupTemplateService startGroupTemplateService) {
+        this.startGroupTemplateService = startGroupTemplateService;
+    }
+
     /**
-     * The value that actually counts for ranking: the raw measured result adjusted by the penalty.
-     * A penalty always makes the result worse, regardless of sort direction. Null if no result was measured.
+     * The value that actually counts for ranking: the raw measured result, first netted of the
+     * participant's start-group offset (if any - see {@link StartGroupTemplate#offsetSeconds()},
+     * resolved live via {@link Participant#startGroupId()} so editing a template's offset applies
+     * to every result already recorded under it), then adjusted by the penalty. A penalty always
+     * makes the result worse, regardless of sort direction. Null if no result was measured.
      */
     public Integer adjustedValue(Race race, Participant participant) {
         // A DSQ/DNF/DNS participant may well have a measured durationMs (e.g. disqualified after
@@ -34,16 +44,46 @@ public class RankingService {
                 || (participant.status() != null && participant.status() != DisqualificationStatus.NONE)) {
             return null;
         }
+        int durationMs = netDurationMs(race, participant);
         int penalty = participant.penalty() != null ? participant.penalty() : 0;
         int adjusted = race.sortDirection() == SortDirection.DESC
-                ? participant.durationMs() - penalty
-                : participant.durationMs() + penalty;
-        // A penalty larger than the raw result on a DESC race (higher-is-better, e.g. points)
-        // would otherwise go negative here; ParticipantService only rejects a negative penalty,
-        // not one that exceeds the result, and formatTime()/formatDuration() render a negative
-        // value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly. Floor at 0
-        // to keep that impossible regardless of which direction the caller's race sorts in.
+                ? durationMs - penalty
+                : durationMs + penalty;
+        // A penalty larger than the raw result on a DESC race (higher-is-better, e.g. points), or
+        // a start-group offset larger than the raw result (e.g. a mismeasured or misconfigured
+        // offset), would otherwise go negative here; formatTime()/formatDuration() render a
+        // negative value as a garbled string (e.g. "-1:-05.-500") rather than failing loudly.
+        // Floor at 0 to keep that impossible regardless of which direction the caller's race sorts
+        // in.
         return Math.max(0, adjusted);
+    }
+
+    /**
+     * The raw measured result netted of the participant's start-group offset (TIME races only),
+     * before any penalty - what a "Zeit" column must show so that Zeit + Strafe = Gesamt holds for
+     * block-start groups too. Null if no result was measured; floored at 0.
+     */
+    public Integer netDurationMs(Race race, Participant participant) {
+        if (participant.durationMs() == null) {
+            return null;
+        }
+        Integer offsetMs = startGroupOffsetMs(race, participant);
+        return Math.max(0, participant.durationMs() - (offsetMs != null ? offsetMs : 0));
+    }
+
+    /**
+     * The head start (in ms) a staggered block-start signal gave this participant's start group
+     * against a single shared race clock - null for a points race (no notion of a start-time
+     * offset), for a participant without a start group, or for a group without an offset.
+     */
+    public Integer startGroupOffsetMs(Race race, Participant participant) {
+        if (race.resultUnit() != ResultUnit.TIME || participant.startGroupId() == null) {
+            return null;
+        }
+        return startGroupTemplateService.findById(participant.startGroupId())
+                .map(StartGroupTemplate::offsetSeconds)
+                .map(seconds -> seconds * 1000)
+                .orElse(null);
     }
 
     /**
@@ -89,6 +129,19 @@ public class RankingService {
             return rawValue;
         }
         return (int) roundToTensOfMs(rawValue);
+    }
+
+    /**
+     * Same as {@link #roundForDisplay(Race, Integer)}, but for a not-yet-integral value such as an
+     * average - rounded exactly once, straight to the printed precision (nearest 10ms for TIME
+     * races, nearest stored hundredth for POINTS races). Rounding to a whole ms first and only then
+     * to the printed precision can land a printed hundredth off: 10004.5ms would become 10005ms and
+     * then print as 0:10.01, although the value itself is closer to 0:10.00.
+     */
+    public int roundForDisplay(Race race, double rawValue) {
+        return race.resultUnit() == ResultUnit.TIME
+                ? (int) roundToTensOfMs(rawValue)
+                : (int) Math.round(rawValue);
     }
 
     /**

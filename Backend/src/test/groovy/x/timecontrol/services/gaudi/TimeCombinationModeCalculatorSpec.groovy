@@ -13,22 +13,42 @@ import x.timecontrol.entities.SortDirection
 import x.timecontrol.services.AgeGroupService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
+import x.timecontrol.services.StartGroupTemplateService
 import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import x.timecontrol.entities.AppSettings
+import x.timecontrol.entities.TimingProviderType
+import x.timecontrol.services.RaceService
+import x.timecontrol.services.SeasonService
+import x.timecontrol.services.SettingsService
 
 class TimeCombinationModeCalculatorSpec extends Specification {
 
     PersonService personService = Mock()
     TeamService teamService = Mock()
+    StartGroupTemplateService startGroupTemplateService = Mock()
     AgeGroupService ageGroupService = Mock() {
-        findAll() >> []
+        findBySeason(2026) >> []
     }
-    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(), personService, teamService, ageGroupService)
+    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
+    // the actual date -> season mapping. With the default 1 January boundary, every race date used
+    // in these specs (2026-..-..) resolves to season 2026.
+    SettingsService settingsService = Stub(SettingsService) {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+    }
+    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
+
+    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, teamService, ageGroupService, seasonService)
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+    }
+
+    private static Race raceOn(Long id, LocalDate date) {
+        new Race(id, "Rennen " + id, date, null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
     }
 
@@ -91,6 +111,41 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         then: "0.5*60000 + 2.0*10000 = 50000"
         ranking.size() == 1
         ranking[0].valueMs() == 50000
+    }
+
+    def "a weighted total is rounded once to the printed hundredth, not first to a whole millisecond"() {
+        given: "a weight that makes the weighted sum land on a half millisecond: 22010*0.45 = 9904.5, +10000"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.45d, [participant(1L, 1L, 22010)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 10000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "19904.5 rounds straight to 19900 (0:19.90) - NOT to 19905 first and then up to 19910 (0:19.91)"
+        ranking.size() == 1
+        ranking[0].valueMs() == 19900
+    }
+
+    def "two totals that print the same share a place, even when only the double rounding separated them"() {
+        given: "Anna lands on 19904.5, Bert on exactly 19900 - both print 0:19.90"
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Bert")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.45d,
+                        [participant(1L, 1L, 22010), participant(3L, 2L, 22000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participant(2L, 1L, 10000), participant(4L, 2L, 10000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "Bert: 22000*0.45 = 9900, +10000 = 19900 - same printed total, so the same place"
+        ranking.size() == 2
+        ranking.every { it.valueMs() == 19900 }
+        ranking.every { it.place() == 1 }
     }
 
     def "a person missing a result in any leg is excluded from the combined ranking"() {
@@ -186,5 +241,58 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         then:
         ranking.size() == 1
         ranking[0].valueMs() == 60000
+    }
+
+    def "the combined total is the sum of the printed leg values, so it can't tie someone who printed slower in every leg"() {
+        given: "Anna runs 10.004s in all 4 legs (prints 0:10.00 each), Berta 10.005s (prints 0:10.01 each) - raw sums 40016 vs 40020ms would both print as 0:40.02 and share a place"
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Berta")])
+        def races = (1L..4L).collect { Long raceId ->
+            new GaudiModeCalculator.RaceParticipants(raceId, race(raceId), 1.0d,
+                    [participant(raceId * 10 + 1, 1L, 10004), participant(raceId * 10 + 2, 2L, 10005)])
+        }
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "totals are 4 x 0:10.00 = 0:40.00 and 4 x 0:10.01 = 0:40.04, ranked 1 and 2"
+        ranking[0].label().contains("Anna")
+        ranking[0].valueMs() == 40000
+        ranking[0].place() == 1
+        ranking[1].valueMs() == 40040
+        ranking[1].place() == 2
+        ranking[1].diffMs() == 40
+    }
+
+    def "computeDnsEntries scores a combination spanning two seasons against the first race's season instead of failing"() {
+        given: "a December and a January race with the default 1 January boundary - one club championship, two seasons"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, raceOn(1L, LocalDate.of(2025, 12, 14)), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, raceOn(2L, LocalDate.of(2026, 1, 11)), 1.0d, []),
+        ]
+
+        when: "Anna is missing the second leg, so she lands on the \"nicht gewertet\" list"
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then: "the classes come from 2025, the first race's season - and the export is produced rather than refused"
+        1 * ageGroupService.findBySeason(2025) >> []
+        dns.size() == 1
+        dns[0].lastName() == "Test"
+    }
+
+    def "computeDnsEntries resolves no season and reads no age groups when every person completed every leg"() {
+        given: "the common case - a complete field, so the list below it is empty"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 70000)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then: "nothing to categorise means nothing to look up"
+        0 * ageGroupService.findBySeason(_)
+        dns.isEmpty()
     }
 }

@@ -1,11 +1,11 @@
-import {Injectable, inject} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {Person, PersonRequest} from '../models/person.model';
-import {environment} from '../../environments/environment';
+import {Injectable, inject} from "@angular/core";
+import {HttpClient} from "@angular/common/http";
+import {Observable} from "rxjs";
+import {Person, PersonRequest} from "../models/person.model";
+import {environment} from "../../environments/environment";
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: "root",
 })
 export class PersonService {
     private http = inject(HttpClient);
@@ -35,7 +35,7 @@ export class PersonService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 
-    deleteUnused(): Observable<{ deletedCount: number }> {
-        return this.http.delete<{ deletedCount: number }>(`${this.apiUrl}/unused`);
+    deleteUnused(): Observable<{deletedCount: number}> {
+        return this.http.delete<{deletedCount: number}>(`${this.apiUrl}/unused`);
     }
 }

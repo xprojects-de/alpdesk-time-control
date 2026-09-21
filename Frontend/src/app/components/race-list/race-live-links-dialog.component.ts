@@ -1,13 +1,19 @@
-import {Component, OnInit, inject, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from '@angular/material/dialog';
-import {MatButtonModule} from '@angular/material/button';
-import {MatIconModule} from '@angular/material/icon';
-import {MatListModule} from '@angular/material/list';
-import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
-import {Race, RaceLiveLink} from '../../models/race.model';
-import {RaceService} from '../../services/race.service';
+import {Component, inject} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
+import {Store} from "@ngrx/store";
+import {Actions, ofType} from "@ngrx/effects";
+import {filter} from "rxjs/operators";
+import {CommonModule} from "@angular/common";
+import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
+import {MatButtonModule} from "@angular/material/button";
+import {MatIconModule} from "@angular/material/icon";
+import {MatListModule} from "@angular/material/list";
+import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
+import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
+import {Race, RaceLiveLink} from "../../models/race.model";
+import * as RaceActions from "../../store/race/race.actions";
+import * as RaceSelectors from "../../store/race/race.selectors";
+import {toAbsoluteUrl} from "../../utils/absolute-url.util";
 import {MatTooltip} from "@angular/material/tooltip";
 
 export interface RaceLiveLinksDialogData {
@@ -15,11 +21,10 @@ export interface RaceLiveLinksDialogData {
 }
 
 /** Lists every public live-results view for a race (menu page, fixed top-level views, one per
- * category) as ready-to-open/copy links - fetched entirely from the backend (RaceService.getLiveLinks)
+ * category) as ready-to-open/copy links - fetched entirely from the backend (via RaceActions.loadLiveLinks)
  * so this dialog never has to know or reconstruct any part of a live-results URL itself. */
 @Component({
-    selector: 'app-race-live-links-dialog',
-    standalone: true,
+    selector: "app-race-live-links-dialog",
     imports: [
         CommonModule,
         MatDialogModule,
@@ -33,13 +38,13 @@ export interface RaceLiveLinksDialogData {
     template: `
         <h2 mat-dialog-title>Live-Ergebnisse: {{ data.race.name }}</h2>
         <mat-dialog-content>
-            @if (loading) {
+            @if (loading()) {
                 <div class="spinner-row">
                     <mat-spinner diameter="32"></mat-spinner>
                 </div>
             } @else {
                 <mat-list>
-                    @for (link of links; track link.path) {
+                    @for (link of links(); track link.path) {
                         <mat-list-item>
                             <span matListItemTitle>{{ link.label }}</span>
                             <span matListItemLine class="url">{{ absoluteUrl(link) }}</span>
@@ -60,68 +65,67 @@ export interface RaceLiveLinksDialogData {
             <button mat-button mat-dialog-close>Schließen</button>
         </mat-dialog-actions>
     `,
-    styles: [`
-        .spinner-row {
-            display: flex;
-            justify-content: center;
-            padding: 24px;
-        }
+    styles: [
+        `
+            .spinner-row {
+                display: flex;
+                justify-content: center;
+                padding: 24px;
+            }
 
-        .url {
-            color: rgba(0, 0, 0, 0.6);
-            font-size: 0.85em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+            .url {
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 0.85em;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-        mat-dialog-content {
-            min-width: 420px;
-            max-width: 80vw;
-        }
-    `],
-    changeDetection: ChangeDetectionStrategy.OnPush,
+            mat-dialog-content {
+                min-width: 420px;
+                max-width: 80vw;
+            }
+        `,
+    ],
 })
-export class RaceLiveLinksDialogComponent implements OnInit {
-    private raceService = inject(RaceService);
+export class RaceLiveLinksDialogComponent {
+    private store = inject(Store);
     private snackBar = inject(MatSnackBar);
-    private cdr = inject(ChangeDetectorRef);
     dialogRef = inject(MatDialogRef<RaceLiveLinksDialogComponent>);
     data = inject<RaceLiveLinksDialogData>(MAT_DIALOG_DATA);
 
-    loading = true;
-    links: RaceLiveLink[] = [];
+    loading = this.store.selectSignal(RaceSelectors.selectLiveLinksLoading);
+    links = this.store.selectSignal(RaceSelectors.selectLiveLinks);
 
-    ngOnInit(): void {
-        this.raceService.getLiveLinks(this.data.race.id).subscribe({
-            next: (links) => {
-                this.links = links;
-                this.loading = false;
-                this.cdr.markForCheck();
-            },
-            error: () => {
-                this.loading = false;
-                this.snackBar.open('Live-Links konnten nicht geladen werden', 'OK', {duration: 3000});
-                this.cdr.markForCheck();
-            },
-        });
+    constructor() {
+        inject(Actions)
+            .pipe(
+                ofType(RaceActions.loadLiveLinksFailure),
+                filter(({raceId}) => raceId === this.data.race.id),
+                takeUntilDestroyed(),
+            )
+            .subscribe(() => {
+                this.snackBar.open("Live-Links konnten nicht geladen werden", "OK", {duration: 3000});
+            });
+        this.store.dispatch(RaceActions.loadLiveLinks({raceId: this.data.race.id}));
     }
 
     absoluteUrl(link: RaceLiveLink): string {
-        return this.raceService.toAbsoluteUrl(link.path);
+        return toAbsoluteUrl(link.path);
     }
-
     open(link: RaceLiveLink): void {
-        window.open(this.absoluteUrl(link), '_blank');
+        window.open(this.absoluteUrl(link), "_blank");
     }
 
     async copy(link: RaceLiveLink): Promise<void> {
         try {
             await navigator.clipboard.writeText(this.absoluteUrl(link));
-            this.snackBar.open(`"${link.label}"-Link kopiert`, 'OK', {duration: 2000});
+            this.snackBar.open(`"${link.label}"-Link kopiert`, "OK", {duration: 2000});
         } catch {
             // Clipboard write can fail (permission denied, insecure context, ...) - the user
             // still needs feedback instead of a click that silently does nothing.
-            this.snackBar.open('Kopieren nicht möglich - Link steht oben zum manuellen Markieren', 'OK', {duration: 4000});
+            this.snackBar.open("Kopieren nicht möglich - Link steht oben zum manuellen Markieren", "OK", {
+                duration: 4000,
+            });
         }
     }
 }
