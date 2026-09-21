@@ -10,6 +10,7 @@ import x.timecontrol.dto.GaudiModeRaceEntry;
 import x.timecontrol.dto.GaudiModeRequest;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeRace;
@@ -303,8 +304,23 @@ public class GaudiModeService {
         }
         Long raceId = races.getFirst().raceId();
 
+        // Anyone already marked DNS/DNF/DSQ at draw time is left out: RankingService#adjustedValue
+        // returns null for them however they finish, and LosModeCalculator drops a pair whose second
+        // member has no value - so drawing a known non-starter into a pair costs their partner their
+        // placing, however well they ride. The leftover person a filtered-out one may leave behind is
+        // already handled: an odd count pairs the last one with null and scores them as "(Einzel)".
+        //
+        // Deliberately the status alone, not effectiveStartOrder() != null (the project's usual
+        // "does this one start" test): that also reports null for a participant who simply has no
+        // race number yet, which before a Losrennen is the normal state - the draw commonly happens
+        // before numbers are handed out.
+        //
+        // A status set AFTER the draw is a different case and stays as it is: the pair average is
+        // the score, and without a partner there is none (a deliberate rules decision).
         List<Participant> participants = new ArrayList<>(
-                StreamSupport.stream(participantService.findByRaceId(raceId).spliterator(), false).toList()
+                StreamSupport.stream(participantService.findByRaceId(raceId).spliterator(), false)
+                        .filter(p -> p.status() == null || p.status() == DisqualificationStatus.NONE)
+                        .toList()
         );
         Collections.shuffle(participants);
 

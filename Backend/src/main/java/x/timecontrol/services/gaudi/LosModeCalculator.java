@@ -176,7 +176,12 @@ public class LosModeCalculator implements GaudiModeCalculator {
                 .collect(Collectors.toMap(Participant::id, p -> p));
 
         List<Participant[]> excludedPairs = new ArrayList<>();
+        Set<Long> drawnIds = new HashSet<>();
         for (GaudiLosPairing pairing : pairingRepository.findByGaudiModeId(gaudiMode.id())) {
+            drawnIds.add(pairing.participant1Id());
+            if (pairing.participant2Id() != null) {
+                drawnIds.add(pairing.participant2Id());
+            }
             Participant p1 = participantsById.get(pairing.participant1Id());
             Participant p2 = pairing.participant2Id() != null ? participantsById.get(pairing.participant2Id()) : null;
             if (p1 == null) {
@@ -188,7 +193,18 @@ public class LosModeCalculator implements GaudiModeCalculator {
                 excludedPairs.add(new Participant[]{p1, p2});
             }
         }
-        if (excludedPairs.isEmpty()) {
+
+        // Entered but never drawn: GaudiModeService#drawLosPairing leaves out anyone already marked
+        // DNS/DNF/DSQ at draw time, since pairing a known non-starter costs their partner a placing.
+        // They still belong on this list - they are on the start list, and a reader who finds them
+        // nowhere in the document cannot tell whether they were left out on purpose or forgotten.
+        // Listed one by one rather than as a pair, because there is no partner they cost anything.
+        List<Participant> notDrawn = races.getFirst().participants().stream()
+                .filter(p -> !drawnIds.contains(p.id()))
+                .filter(p -> rankingService.adjustedValue(race, p) == null)
+                .toList();
+
+        if (excludedPairs.isEmpty() && notDrawn.isEmpty()) {
             return List.of();
         }
 
@@ -202,6 +218,12 @@ public class LosModeCalculator implements GaudiModeCalculator {
                         teamIds.add(p.teamId());
                     }
                 }
+            }
+        }
+        for (Participant p : notDrawn) {
+            personIds.add(p.personId());
+            if (p.teamId() != null) {
+                teamIds.add(p.teamId());
             }
         }
         Map<Long, Person> personsById = personService.findByIds(personIds);
@@ -224,6 +246,10 @@ public class LosModeCalculator implements GaudiModeCalculator {
             // lastName + firstName into the printed name) and there's no single age group to show.
             dns.add(new GaudiDnsEntryResponse(label, "", formatTeam(p1, p2, teamsById), "-", null,
                     rankingService.dnsStatusLabel(withoutResult)));
+        }
+        for (Participant p : notDrawn) {
+            dns.add(new GaudiDnsEntryResponse(formatName(p, personsById), "", formatTeam(p, null, teamsById),
+                    "-", null, rankingService.dnsStatusLabel(List.of(p))));
         }
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
         return dns;

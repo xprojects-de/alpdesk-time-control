@@ -194,6 +194,30 @@ class LosModeCalculatorSpec extends Specification {
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
 
+    def "someone left out of the draw is still listed as nicht gewertet, on their own"() {
+        given: "GaudiModeService#drawLosPairing skips anyone already marked DNS/DSQ at draw time,"
+        // so they appear in no pairing at all - without this they would vanish from the whole
+        // document: not in the ranking, and not in the list that explains who is missing and why
+        def participants = [
+                participant(1L, 60000), participant(2L, 70000),
+                new Participant(3L, 1L, 3L, null, null, null, null, null, null, null, DisqualificationStatus.DNS),
+                new Participant(4L, 1L, 4L, null, null, null, null, null, null, null, DisqualificationStatus.DSQ),
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C"), 4L: person(4L, "D")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def dns = calculator.computeDnsEntries(losMode(), races)
+
+        then: "each on their own line with their own status - there is no partner they cost anything"
+        dns*.lastName() == ["C", "D"]
+        dns*.status() == ["DNS", "DSQ"]
+
+        and: "the drawn pair is unaffected"
+        calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
+    }
+
     def "a pair average is rounded once, straight to the printed hundredth - not to a whole ms first"() {
         given: "10004 and 10005 average 10004.5ms: rounding to 10005ms first would print 0:10.01, but the value is closer to 0:10.00"
         def participants = [
