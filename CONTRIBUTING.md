@@ -119,7 +119,13 @@ schlicht die ausführlichste Beschreibung der Architektur und für Menschen gena
 
 ## Pull Requests
 
-- Branch von `dev` abzweigen, PR gegen `dev`.
+Der übliche Weg: Repository forken, im Fork einen Branch von `main` abzweigen, dort arbeiten und
+den Pull Request gegen `main` aufmachen.
+
+`dev` ist der Integrationsbranch der Leute mit Schreibzugriff aufs Repository. Als externer
+Beitragender brauchst du ihn nicht — zweig von `main` ab, dann passt dein PR auch dann noch, wenn
+sich auf `dev` gerade etwas anderes tut.
+
 - Eine Sache pro PR. Lieber zwei kleine als einer, der nebenbei noch formatiert.
 - Beschreibe, **warum** die Änderung nötig ist — bei einem Wertungsmodus gern mit dem Regelwerk oder
   einem Beispiel aus einem echten Wettkampf.

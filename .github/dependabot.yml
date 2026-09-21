@@ -1,8 +1,8 @@
 version: 2
 
-# Dependabot opens its pull requests against dev, not against the default branch. main only ever
-# receives releases here, so an update landing there directly would skip the branch everything
-# else is integrated on.
+# Dependabot opens its pull requests against main, the branch everything converges on - the same
+# target external contributions use. It is pinned explicitly rather than left to follow the
+# default branch, so updates keep landing on the trunk even if the default branch is ever changed.
 #
 # The updates are grouped rather than filed one package at a time. Angular and NgRx release their
 # packages in lockstep and only work when they move together, and a dozen separate pull requests
@@ -19,7 +19,7 @@ updates:
   # ---------------------------------------------------------------------------------------------
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "dev"
+    target-branch: "main"
     schedule:
       interval: "weekly"
     groups:
@@ -37,7 +37,7 @@ updates:
   # ---------------------------------------------------------------------------------------------
   - package-ecosystem: "gradle"
     directory: "/Backend"
-    target-branch: "dev"
+    target-branch: "main"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -56,7 +56,7 @@ updates:
   # ---------------------------------------------------------------------------------------------
   - package-ecosystem: "npm"
     directory: "/Frontend"
-    target-branch: "dev"
+    target-branch: "main"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
