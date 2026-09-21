@@ -118,4 +118,11 @@ body {
  */
 .active-races-tooltip {
   white-space: pre-line;
+
+  // Material caps the tooltip surface at 200px, which wraps a normal race name ("Abschlussrennen
+  // Gaudi-Modus") onto a second line and makes the list unreadable as one-race-per-line. The cap
+  // fits "dd.MM.yyyy - <name>" for realistic names without letting the tooltip span the window.
+  .mdc-tooltip__surface {
+    max-width: 420px;
+  }
 }
