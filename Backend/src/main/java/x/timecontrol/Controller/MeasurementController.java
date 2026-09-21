@@ -476,7 +476,7 @@ public class MeasurementController {
     @Produces("text/csv")
     @Get("/export/csv")
     @Operation(summary = "Export all measurements as CSV download",
-            description = "Exports every measurement as CSV, using our own field names (participantId, durationMs, measuredAt) as the header row, so re-importing it via import-mapped needs no manual mapping.",
+            description = "Exports every measurement as CSV, using our own field names (deviceMeasurementId, participantId, durationMs, measuredAt) as the header row, so re-importing it via import-mapped needs no manual mapping. deviceMeasurementId is empty for rows that were not recorded by a timing device (manual entry or a previous CSV import).",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements exported successfully")
     public HttpResponse<?> exportMeasurementsCsv() {
@@ -506,7 +506,7 @@ public class MeasurementController {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Post("/import-mapped")
-    @Operation(summary = "Import measurements with a custom column mapping", description = "Imports a CSV (any delimiter), using an explicit mapping from our fields (participantId, durationMs, measuredAt) onto the file's source columns. A field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-preview) is used. Existing measurements are kept; rows that fail validation are skipped and reported rather than rejecting the whole file.", security = @SecurityRequirement(name = "BearerAuth"))
+    @Operation(summary = "Import measurements with a custom column mapping", description = "Imports a CSV (any delimiter), using an explicit mapping from our fields (deviceMeasurementId, participantId, durationMs, measuredAt) onto the file's source columns. A field left out of the mapping is not imported. If mapping is omitted, the auto-suggested mapping (see /import-preview) is used. An empty, \"-\" or non-positive deviceMeasurementId is treated as \"no device\" and gets a generated id; a deviceMeasurementId that is already in use is reported as a skipped row. Existing measurements are kept; rows that fail validation are skipped and reported rather than rejecting the whole file.", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Import finished", content = @Content(schema = @Schema(implementation = MeasurementImportResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid mapping JSON or unreadable file")
     public HttpResponse<?> importMapped(@Part("file") CompletedFileUpload file,

@@ -22,6 +22,7 @@ class MeasurementServiceSpec extends Specification {
     def "create leaves an explicit deviceMeasurementId untouched"() {
         given:
         Measurement input = measurement(null, 17L)
+        repository.findByDeviceMeasurementId(17L) >> Optional.empty()
 
         when:
         service.create(input)
@@ -29,6 +30,19 @@ class MeasurementServiceSpec extends Specification {
         then:
         0 * repository.findMinDeviceMeasurementId()
         1 * repository.save({ Measurement m -> m.deviceMeasurementId() == 17L }) >> measurement(1L, 17L)
+    }
+
+    def "create rejects an explicit deviceMeasurementId that is already taken"() {
+        given:
+        Measurement input = measurement(null, 17L)
+        repository.findByDeviceMeasurementId(17L) >> Optional.of(measurement(9L, 17L))
+
+        when:
+        service.create(input)
+
+        then:
+        thrown(IllegalStateException)
+        0 * repository.save(_)
     }
 
     def "create synthesizes -1 when no deviceMeasurementId is given and the table is empty"() {
@@ -70,6 +84,7 @@ class MeasurementServiceSpec extends Specification {
     def "create rejects a participantId already assigned to another measurement"() {
         given:
         Measurement input = measurement(null, 5L, 42L)
+        repository.findByDeviceMeasurementId(5L) >> Optional.empty()
         repository.findByParticipantId(42L) >> [measurement(9L, 3L, 42L)]
 
         when:
@@ -83,6 +98,7 @@ class MeasurementServiceSpec extends Specification {
     def "create allows a participantId with no existing assignment"() {
         given:
         Measurement input = measurement(null, 5L, 42L)
+        repository.findByDeviceMeasurementId(5L) >> Optional.empty()
         repository.findByParticipantId(42L) >> []
 
         when:
@@ -115,5 +131,89 @@ class MeasurementServiceSpec extends Specification {
 
         then:
         1 * repository.update(_) >> measurement(1L, 5L, 42L)
+    }
+
+    private static byte[] csv(String content) {
+        content.getBytes("UTF-8")
+    }
+
+    def "exportCsv writes the device number, and an empty cell for a synthetic one"() {
+        given:
+        repository.findAll() >> [measurement(1L, 17L, 42L), measurement(2L, -3L, null)]
+
+        when:
+        String csv = service.exportCsv()
+
+        then:
+        csv.readLines() == [
+                "deviceMeasurementId;participantId;durationMs;measuredAt",
+                "17;42;5000;2026-01-01T10:00",
+                ";;5000;2026-01-01T10:00",
+        ]
+    }
+
+    def "importMapped restores the device number from our own export"() {
+        given:
+        byte[] file = csv("""deviceMeasurementId;participantId;durationMs;measuredAt
+17;42;5000;2026-01-01T10:00
+""")
+        repository.findByDeviceMeasurementId(17L) >> Optional.empty()
+        repository.findByParticipantId(42L) >> []
+
+        when:
+        def result = service.importMapped(file, null as Character, null)
+
+        then:
+        1 * repository.save({ Measurement m -> m.deviceMeasurementId() == 17L }) >> measurement(1L, 17L, 42L)
+        result.errors().isEmpty()
+        result.imported().size() == 1
+    }
+
+    def "importMapped generates a synthetic id for #description"() {
+        given:
+        byte[] file = csv("deviceMeasurementId;durationMs\n${rawValue};5000\n")
+        repository.findMinDeviceMeasurementId() >> null
+
+        when:
+        def result = service.importMapped(file, null as Character, null)
+
+        then:
+        1 * repository.save({ Measurement m -> m.deviceMeasurementId() == -1L }) >> measurement(1L, -1L)
+        result.errors().isEmpty()
+
+        where:
+        rawValue | description
+        ""       | "an empty device number"
+        "-"      | "the '-' the UI prints for a device-less row"
+        "-3"     | "an exported negative (synthetic) id"
+        "0"      | "a zero, which no real device counter ever is"
+    }
+
+    def "importMapped reports a row whose device number is already taken"() {
+        given:
+        byte[] file = csv("deviceMeasurementId;durationMs\n17;5000\n")
+        repository.findByDeviceMeasurementId(17L) >> Optional.of(measurement(9L, 17L))
+
+        when:
+        def result = service.importMapped(file, null as Character, null)
+
+        then:
+        0 * repository.save(_)
+        result.imported().isEmpty()
+        result.errors().size() == 1
+        result.errors().first().reason().contains("17")
+    }
+
+    def "importMapped reports a non-numeric device number"() {
+        given:
+        byte[] file = csv("deviceMeasurementId;durationMs\nabc;5000\n")
+
+        when:
+        def result = service.importMapped(file, null as Character, null)
+
+        then:
+        0 * repository.save(_)
+        result.errors().size() == 1
+        result.errors().first().reason() == "deviceMeasurementId is not a valid number"
     }
 }

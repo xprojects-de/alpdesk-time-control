@@ -39,6 +39,11 @@ export interface MeasurementImportMappingDialogResult {
                 nicht gespeichert und muss bei jedem Import neu gewählt werden. Nicht zugeordnete Felder werden einfach
                 nicht importiert.
             </p>
+            <p class="hint">
+                Die Geräte-Nr. wird mitimportiert, damit eine CSV-Sicherung die Nummerierung des Zeitmessgeräts behält.
+                Leer oder &quot;-&quot; bedeutet &quot;ohne Gerät erfasst&quot;; eine bereits vergebene Geräte-Nr. wird
+                übersprungen und im Ergebnis gemeldet.
+            </p>
 
             <div class="file-row">
                 <input #fileInput type="file" accept=".csv,.txt,text/csv" hidden (change)="onFileSelected($event)" />

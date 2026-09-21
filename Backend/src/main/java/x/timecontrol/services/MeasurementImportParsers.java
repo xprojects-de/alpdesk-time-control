@@ -19,12 +19,18 @@ public final class MeasurementImportParsers {
     private MeasurementImportParsers() {
     }
 
-    // Matches MeasurementRequest's fields exactly, so a file we exported ourselves round-trips with
-    // zero manual mapping (see MeasurementService#exportCsv) - the aliases include our own field
-    // name verbatim.
-    public static final List<String> TARGET_FIELDS = List.of("participantId", "durationMs", "measuredAt");
+    // Matches what MeasurementService#exportCsv writes, so a file we exported ourselves round-trips
+    // with zero manual mapping - the aliases include our own field name verbatim. deviceMeasurementId
+    // is part of it although MeasurementRequest (manual entry over REST) has no such field: it is
+    // what ties a row back to the line on the device's own display, and losing it on a
+    // backup/restore round-trip would both break that comparison and let the next poll of the same
+    // device measurement insert a duplicate instead of updating the restored row.
+    public static final List<String> TARGET_FIELDS = List.of("deviceMeasurementId", "participantId", "durationMs", "measuredAt");
 
     private static final Map<String, List<String>> TARGET_FIELD_ALIASES = Map.of(
+            // "gertenr"/"gertenummer" are what normalize() makes of the German UI labels
+            // "Geräte-Nr."/"Gerätenummer" (it strips anything outside a-z0-9, umlauts included).
+            "deviceMeasurementId", List.of("devicemeasurementid", "deviceid", "gertenr", "geraetenr", "gertenummer", "geraetenummer", "geraetid"),
             "participantId", List.of("participantid", "teilnehmerid", "teilnehmer"),
             "durationMs", List.of("durationms", "dauer", "zeit", "zeitms", "duration"),
             "measuredAt", List.of("measuredat", "gemessenam", "zeitstempel", "timestamp", "datum"));
