@@ -40,7 +40,7 @@ dependencies {
     testImplementation("io.micronaut:micronaut-http-client")
     // Needed for Spock's Mock() to mock concrete classes (e.g. the service classes under test),
     // not just interfaces - Spock's built-in java-proxy mocker only handles interfaces.
-    testImplementation("net.bytebuddy:byte-buddy:1.18.13")
+    testImplementation("net.bytebuddy:byte-buddy:1.18.14")
     testImplementation("org.objenesis:objenesis:3.6")
     annotationProcessor("io.micronaut.security:micronaut-security-processor")
     annotationProcessor("io.micronaut.security:micronaut-security-annotations")
