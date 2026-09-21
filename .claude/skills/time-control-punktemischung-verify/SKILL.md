@@ -1,6 +1,6 @@
 ---
-name: time-control-gaudi-verify
-description: "Independently re-derive a Gaudi-Modus Punkte-Kombination (points-mixing) result from the underlying per-race results and compare it against the app's own combined ranking, to verify the app computed it correctly. Use when the user invokes /time-control-gaudi-verify or asks to check/verify a Gaudi-Modus points combination result."
+name: time-control-punktemischung-verify
+description: "Independently re-derive a Gaudi-Modus Punkte-Kombination/Punkte-Mischwertung (POINTS_COMBINATION) result from the underlying per-race results and compare it against the app's own combined ranking, to verify the app computed it correctly. Use when the user invokes /time-control-punktemischung-verify or asks to check/verify a Gaudi-Modus points combination result. For a Los-Verfahren (LOS) result use time-control-los-verify instead - a different algorithm with different inputs."
 ---
 
 ## Purpose
@@ -13,9 +13,12 @@ keep-in-ranking flags) as well as genuine app bugs, the same way
 `e2e-tests/kondi2025-federation/run_phased_results_with_status.sh` cross-checks the app with an
 independent Python recalculation.
 
-This skill only covers `POINTS_COMBINATION` mode. If the user's Gaudi-Modus instance is
-`TIME_COMBINATION`, team, or Los-Verfahren, say so and ask whether they still want a (differently
-shaped) check — this skill's algorithm below doesn't apply to those.
+This skill only covers `POINTS_COMBINATION` mode (Punkte-Kombination / Punkte-Mischwertung).
+For a **Los-Verfahren** instance there is a separate skill, `time-control-los-verify` — point the
+user there rather than adapting this algorithm, the two have almost nothing in common (Los scores
+one race, has no scale/weights/keep-flags, and compares pair averages against the field average).
+For `TIME_COMBINATION` or Mannschaftswertung there is no skill yet: say so and ask whether they
+still want a (differently shaped) ad-hoc check.
 
 ## Inputs to collect first
 
@@ -143,15 +146,22 @@ So when the reference is category-split:
   assignment) — do not reuse places computed against the full field.
 - The unfiltered, whole-field ranking (if the app also exposes one) and each category's ranking
   are genuinely different numbers for the same person; don't cross-check one against the other.
-- **The "nicht gewertet" (DNS) list is the one exception that stays global.**
-  `GaudiModeService.computeDnsEntries` always calls `buildRaceParticipants(gaudiMode, null)` —
-  unfiltered, across the whole field — regardless of category, and the app shows that *same* list
-  on every category's PDF page. So: recompute the ranking table itself once per category (as
-  above), but recompute "nicht gewertet" only **once**, over the whole unfiltered field, and
-  expect that identical list to match every category section's DNS block in the reference — don't
-  build a separate nicht-gewertet list per category, and don't be surprised if the reasoning for
-  why someone landed there doesn't quite match a per-category read of eligibility (it's evaluated
-  against full-field places, not the category subset's).
+- **The "nicht gewertet" (DNS) list follows the export's own scope** — recompute it with the
+  same filter as the ranking it sits under. `GaudiModeService.computeDnsEntries(gaudiMode,
+  filterGender, filterAgeGroup)` resolves the eligible persons through the very same
+  `resolveMatchingPersonIds` that `computeRankingForCategory` uses, so a Damen-Export's DNS block
+  lists only women, an "U14 weiblich" export only that class.
+  - The **gender export** (`/export/pdf/gender/{gender}`) and the **age-group + gender export**
+    (`/export/pdf/agegroup/{ageGroup}/gender/{gender}`) are filtered.
+  - The **unfiltered** ones keep the complete list: the plain `/export/pdf`, the "all age groups"
+    export (`/export/pdf/agegroups/all`, whose sections together cover the whole field anyway) and
+    the JSON endpoint `/{id}/not-ranked` (it takes no filter argument).
+  - **This changed on 2026-09-21** — before that, every export shared one unfiltered list, which
+    put e.g. men under "nicht gewertet" on a women's sheet. If you are verifying a PDF that was
+    exported from an **older build**, expect the old global list instead and don't report it as a
+    mismatch. When in doubt, ask the user when the reference PDF was generated. **Re-read
+    `GaudiModeController` and `GaudiModeService.computeDnsEntries` at the start of every run** (you
+    are told to do that below anyway) — this bullet is exactly the kind of detail that goes stale.
 
 If the reference is a single flat table instead, skip all of this and run Steps 1–4 once over the
 whole field as written below.
@@ -204,11 +214,12 @@ categories apply, otherwise once over the whole field.
   is either a valid place for them **or** a bad leg whose specific status is tolerated by the
   matching flag (`DNS`→`keepDnsInRanking`, `DNF`→`keepDnfInRanking`, `DSQ`→`keepDsqInRanking`).
   A bad leg whose flag is off drops the person even if they have valid places everywhere else.
-- When categories apply, run this eligibility check twice, on two different participant sets, per
-  the "nicht gewertet" exception above: once **within each category subset** to decide who appears
-  in that category's ranking table, and once **globally, over the whole unfiltered field** to
-  produce the single "nicht gewertet" list shared by every category page. These can legitimately
-  disagree on a given person — that's expected, not a bug to chase.
+- When categories apply, run this eligibility check **once per category subset** - it decides both
+  who appears in that category's ranking table and who appears under its "nicht gewertet", since
+  both are scoped the same way (see the bullet above). Only when you are verifying an unfiltered
+  export (plain `/export/pdf`, "all age groups", or the `/{id}/not-ranked` JSON) do you run it over
+  the whole field instead. For a reference PDF from a build older than 2026-09-21, the DNS list is
+  global even on a filtered export - compute it over the whole field in that case.
 
 **Step 3 — points and total, for each included person:**
 - Per race: `pointsForPlace(place) * race.weight`, where `pointsForPlace` looks up the scale's
@@ -241,7 +252,8 @@ categories apply, otherwise once over the whole field.
    keep-flags, gender source, points scale) are that run's answers, not defaults: replace every one
    of them with what *this* run's user actually said, never carry them over unasked.
 3. Run it, producing: the final ranking table(s) (place, name, total points, per-leg points/place),
-   and the "nicht gewertet" list with each excluded person's reason — per category if applicable.
+   and the "nicht gewertet" list with each excluded person's reason — **per category if the export
+   being verified is category-scoped**, once over the whole field otherwise.
 4. Extract the app's reference output the same way — parse the reference PDF (via the `pdf` skill)
    into the same shape: place, name, total points, and its "nicht gewertet" section, per section/
    category if the PDF has them.

@@ -142,8 +142,9 @@ def compute_station_places(rows, kind, eligible_ids=None, offsets=None):
 
 
 def compute_ranking(rows_by_station, participant_ids):
-    """One full pass of Steps 1-4 restricted to participant_ids - call once per category group,
-    and once more, unfiltered, for the always-global 'nicht gewertet' list."""
+    """One full pass of Steps 1-4 restricted to participant_ids - call once per category group
+    (its result carries that group's ranking AND its 'nicht gewertet' list), or once over the whole
+    field when the export being verified is unfiltered."""
     station_places = {}
     station_bad_status = {}
     for num in FILES:
@@ -204,11 +205,16 @@ def main():
             last, first, team = names[eid]
             print(f"  {final_places[eid]:>2}  {last} {first:<15} {team:<25} {included[eid]['total']:>4}")
 
-    # The "nicht gewertet" list is always computed globally/unfiltered, even when categories
-    # apply (GaudiModeService.computeDnsEntries always passes personIdFilter=null) - do this once,
-    # not per category.
+    # "Nicht gewertet" is scoped like the export it belongs to (GaudiModeService#computeDnsEntries
+    # takes the same gender/age-group filter as computeRankingForCategory): a gender or
+    # age-group+gender export lists only that group, the plain/all-age-groups exports and the
+    # /{id}/not-ranked JSON list the whole field. The per-category pass above already produced each
+    # group's own list; this global pass is for the unfiltered exports.
+    #
+    # NOTE: this changed on 2026-09-21. A reference PDF from an older build carries the global list
+    # on EVERY export, filtered or not - use this global pass to compare against those.
     _, excluded_global, _, _ = compute_ranking(rows_by_station, all_ids)
-    print("\n### Nicht gewertet (global, unfiltered)")
+    print("\n### Nicht gewertet (ungefiltert - fuer /export/pdf, agegroups/all, /not-ranked)")
     for eid, reason in excluded_global.items():
         last, first, team = names[eid]
         print(f"  {last} {first} ({team}): {reason}")
