@@ -77,7 +77,7 @@ graalvmNative {
     binaries {
         all {
             buildArgs.add("-H:+SharedArenaSupport")
-            // Optional für SQLite JNI-Support:
+            // Optional, for SQLite JNI support:
             buildArgs.add("--enable-native-access=ALL-UNNAMED")
             // Baked-in runtime property so DesktopWindowStartupListener skips the Swing status
             // window for this build - AWT/Swing should stay out of the native-image reachability
