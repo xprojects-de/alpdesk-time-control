@@ -175,6 +175,22 @@ def jpackageExecutable = {
 
 def jpackageArgs = { String type, File destDir ->
     def argsList = [
+            // Everything in --input is copied into the bundle AND put on the launcher's classpath,
+            // not just the --main-jar: a bundle built with a second jar present gets
+            //   app.classpath=$APPDIR/time-control.jar
+            //   app.classpath=$APPDIR/<the other one>
+            // in its .cfg (verified by building an app image with both and reading the generated
+            // config). This works today only because shadowJar is the sole producer here.
+            //
+            // It stops being true the moment anyone runs `./gradlew jar` or `./gradlew build`:
+            // assemble drives both jar and shadowJar, leaving a thin time-control-<version>.jar
+            // beside the fat one - same 451 x.timecontrol classes, including Application.class.
+            // Which copy wins is then down to classpath order, and a leftover jar from an earlier
+            // version would ship inside the installer with nobody able to tell from the .dmg.
+            //
+            // So: keep build/libs holding the fat jar alone. If that ever stops being the workflow,
+            // point --input at a staging directory that is emptied and filled with exactly
+            // time-control.jar in the doFirst blocks below, rather than at the whole libs dir.
             '--input', file('build/libs').absolutePath,
             '--main-jar', 'time-control.jar',
             '--main-class', 'x.timecontrol.Application',
