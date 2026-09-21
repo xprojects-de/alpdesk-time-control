@@ -2,20 +2,27 @@
 
 ## Zuerst das Wichtigste: Warnungen beim ersten Start
 
-Time Control wird als Open-Source-Projekt ohne kommerzielle Zertifikate veröffentlicht. Konkret:
+> [!IMPORTANT]
+> **Das ist kein Virus und keine Schadsoftware.** Die Warnungen beim ersten Start haben einen rein
+> finanziellen Grund: Signaturzertifikate kosten jedes Jahr mehrere hundert Euro – Geld, das ein
+> kostenloses Open-Source-Projekt für Vereine nicht ausgibt. Der komplette Quellcode und alle
+> Build-Skripte liegen offen in diesem Repository, jeder kann ihn einsehen und die Installer selbst
+> bauen.
+
+Alpdesk Time Control wird als Open-Source-Projekt ohne kommerzielle Zertifikate veröffentlicht.
+Konkret:
 
 - **Kein Apple-Developer-Zertifikat.** macOS meldet beim ersten Start: *„Apple konnte nicht
-  überprüfen, ob … frei von Schadsoftware ist“*.
+  überprüfen, ob … frei von Schadsoftware ist“*. Gemeint ist: Apple *kann* nicht prüfen, weil die
+  App nicht bei Apple registriert ist – nicht, dass etwas gefunden wurde.
 - **Kein Windows-Code-Signing-Zertifikat.** Windows SmartScreen meldet: *„Der Computer wurde durch
-  Windows geschützt“*.
+  Windows geschützt“*. Auch das heißt nur „unbekannter Herausgeber“, nicht „gefährlich“.
 - **Virenscanner können anschlagen.** Ein frisch gebautes, unsigniertes `.exe` hat bei keinem
   Scanner der Welt eine Reputation. Manche heuristische Engine stuft es deshalb als verdächtig ein,
   obwohl nichts daran verdächtig ist. Das ist ein Fehlalarm, aber ein lästiger.
 
 Diese Warnungen sind kein Fehler der App und auch kein Hinweis auf ein Problem – sie sagen nur
-aus, dass niemand jährlich mehrere hundert Euro für ein Signaturzertifikat bezahlt hat. Der
-komplette Quellcode und alle Build-Skripte liegen offen in diesem Repository; jeder kann die
-Installer selbst bauen.
+aus, dass niemand jährlich für ein Signaturzertifikat bezahlt hat.
 
 Es gibt zwei Wege damit umzugehen:
 
@@ -55,8 +62,8 @@ Push auf `main` automatisch gebaut (siehe
 
 | Datei | Für wen | Java nötig? | Warnung beim Start |
 |---|---|---|---|
-| `Time-Control-macOS-AppleSilicon-PoorMan-v<Version>.zip` | **macOS (M1/M2/M3/M4)** – empfohlen | nein, enthalten | Gatekeeper, einmalig |
-| `Time-Control-macOS-Intel-PoorMan-v<Version>.zip` | **macOS (ältere Intel-Macs)** – empfohlen | nein, enthalten | Gatekeeper, einmalig |
+| `Time-Control-macOS-AppleSilicon-PoorMan-v<Version>.zip` | **macOS (M1/M2/M3/M4)** – empfohlen | nein, enthalten | meist keine, evtl. Gatekeeper, einmalig |
+| `Time-Control-macOS-Intel-PoorMan-v<Version>.zip` | **macOS (ältere Intel-Macs)** – empfohlen | nein, enthalten | meist keine, evtl. Gatekeeper, einmalig |
 | `Time-Control-Windows-PoorMan-v<Version>.zip` | **Windows** – empfohlen | nein, enthalten | meist keine |
 | `Time-Control-java-v<Version>.dmg` | macOS (Apple Silicon), klassischer Installer | nein, enthalten | Gatekeeper, einmalig |
 | `Time-Control-macOS-Intel-v<Version>.zip` | macOS (Intel), fertiges `TimeControl.app` | nein, enthalten | Gatekeeper, einmalig |
@@ -210,14 +217,9 @@ man plötzlich vor einer leeren Datenbank.
 
 1. Die App startet einen lokalen Webserver auf **`http://localhost:18000`** und öffnet den
    Standardbrowser automatisch. Passiert das nicht, die Adresse einfach von Hand eingeben.
-2. Anmelden mit **`time-control` / `time-control`**.
+2. Anmelden mit **`siehe Login-Daten Kontrollfenster`**.
 3. Zuerst unter **Einstellungen** den Saisonstart prüfen und – falls vorhanden – das
    Zeitmess-System auswählen.
-
-> [!WARNING]
-> Die Zugangsdaten sind fest voreingestellt und öffentlich bekannt. Sobald der Rechner in einem
-> Netzwerk erreichbar ist, an dem nicht nur das eigene Team hängt, müssen sie über die
-> Umgebungsvariablen `APP_USERNAME` und `APP_PASSWORD` geändert werden.
 
 Beispiel (macOS/Linux, Jar- oder Poor-Man-Variante):
 
