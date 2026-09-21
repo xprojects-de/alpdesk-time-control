@@ -9,6 +9,10 @@ stehen – sie entspricht ungefähr dem Ablauf eines Wettkampftags.
 > Zeit, Weite oder Punkten gemessen wird. Jedes Rennen hat seine **Einzelwertung**; mehrere davon
 > fasst der [Gaudi-Modus](#gaudi-modus) zu einer **Gesamtwertung** zusammen.
 
+> Die Abbildungen auf dieser Seite zeigen **synthetische Demodaten** aus der Testsuite des
+> Projekts. Namen, Vereine und Startnummern sind erfunden – „SV Testwang“, „RG Beispielried“ und
+> so weiter.
+
 ## Anmeldung
 
 Nach dem Start fragt Time Control nach Benutzername und Passwort (änderbar über die Umgebungsvariablen `APP_USERNAME` und
@@ -35,6 +39,8 @@ Oben ist immer sichtbar:
 
 ## Rennen
 
+![Rennenübersicht mit vier Stationen](images/rennen.png)
+
 Die Liste aller Rennen, mit Suche über Name und Datum. Die Spalte *Saison* zeigt, zu welcher
 Saison ein Rennen gehört – das ergibt sich automatisch aus dem Renndatum und dem eingestellten
 Saisonstart und entscheidet darüber, welche Altersklassen gelten.
@@ -60,6 +66,11 @@ Je Zeile gibt es außerdem:
   jeweils auch nach Kategorie getrennt, sowie ein Link je Kategorie. Jeder Link lässt sich direkt
   öffnen oder in die Zwischenablage kopieren. Diese Seiten brauchen **keine Anmeldung** und sind
   für Zuschauer gedacht.
+
+  <img src="images/live-ansicht.png" alt="Live-Ergebnisse auf dem Handy" width="380">
+
+  *So sieht eine solche Seite auf dem Handy aus. Geteilte Plätze nach der Standardregel („1224“)
+  erkennt man an den Plätzen 9, 9, 11 und 17, 17, 19.*
 - **CSV-Export** – alle Rennergebnisse inklusive Personendaten und Zeiten als Datei.
 - **Bearbeiten / Löschen.**
 
@@ -123,6 +134,8 @@ Ein Knopf räumt verwaiste Personen auf, also alle, die aktuell keinem Rennen zu
 
 ## Teilnehmer
 
+![Teilnehmerliste eines Rennens](images/teilnehmer.png)
+
 Die zentrale Arbeitsseite. Oben wählt man ein Rennen; darunter stehen alle Teilnehmer dieses
 Rennens mit Startnummer, Team, Kategorie, Altersgruppe, Ergebnis, Status, Messzeitpunkt und
 Kommentar. Die Suche findet Name, Vorname oder Startnummer, jede Spalte ist sortierbar.
@@ -184,6 +197,12 @@ Spalten, die Spalten selbst lassen sich in ihrer Reihenfolge verschieben.
   Verlassen der Seite wird nachgefragt.
 
 ## Gaudi-Modus
+
+![Punkte-Mischwertung über vier Stationen](images/gesamtwertung.png)
+
+*Je Station Ergebnis, Platz und Punkte, daraus die Gesamtplatzierung. Auf Platz 2 sieht man, wie
+eine Disqualifikation wirkt, wenn sie toleriert wird: 0 Punkte für dieses Bein, aber weiter in der
+Wertung.*
 
 Für Wertungen, die über ein einzelnes Rennen hinausgehen – die **Gesamtwertung** neben den Einzelwertungen der Stationen. Man legt eine Wertung an, wählt den Typ,
 vergibt einen Namen und wählt die beteiligten Rennen:

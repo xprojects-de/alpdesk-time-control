@@ -3,6 +3,8 @@
 **Zeitnahme, Auswertung und Live-Ergebnisse für Vereinswettkämpfe aller Art – mit Zeit, Punkten oder
 Weite, an einer Station oder an vielen. Auf einem Laptop, ohne Cloud, ohne Internet, ohne Abo.**
 
+[![PR Checks](https://github.com/xprojects-de/alpdesk-time-control/actions/workflows/pr-checks.yml/badge.svg)](https://github.com/xprojects-de/alpdesk-time-control/actions/workflows/pr-checks.yml)
+[![E2E Tests](https://github.com/xprojects-de/alpdesk-time-control/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/xprojects-de/alpdesk-time-control/actions/workflows/e2e-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Backend: Micronaut / Java 25](https://img.shields.io/badge/Backend-Micronaut%20%2F%20Java%2025-blue.svg)](Backend)
 [![Frontend: Angular 22](https://img.shields.io/badge/Frontend-Angular%2022-red.svg)](Frontend)

@@ -43,8 +43,11 @@ local-data/
 /Backend/dist/
 /Frontend/.angular/
 /Frontend/dist/
-/Frontend/node_modules/
 /Frontend/coverage/
+
+# npm-Abhaengigkeiten an jeder Stelle im Baum - ausser dem Frontend hat auch
+# docs/screenshots/ welche.
+node_modules/
 /build/
 /.gradle/
 out/
