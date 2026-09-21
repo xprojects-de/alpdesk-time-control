@@ -55,6 +55,34 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         imported.empty
     }
 
+    def "a garbled duration is skipped without costing the rest of the field"() {
+        given: "parseDouble accepts NaN, and Math.round(NaN) is 0 - which would win every ranking"
+        deviceReports("1,NaN\n2,51000\n")
+        measurementService.findAll() >> []
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "the bad line is dropped, the good one is not"
+        0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
+        1 * measurementService.upsertByDeviceMeasurementId(2L, null, 51000, _) >>
+                new Measurement(8L, 2L, null, 51000, MEASURED_AT)
+        imported.size() == 1
+    }
+
+    def "a negative device id is skipped instead of overwriting a manually entered time"() {
+        given: "MeasurementService hands manual/CSV rows synthetic NEGATIVE device ids"
+        deviceReports("-3,51000\n")
+        measurementService.findAll() >> [new Measurement(7L, -3L, 42L, 33000, MEASURED_AT)]
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "upserting on -3 would replace the time an official typed in by hand"
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        imported.empty
+    }
+
     def "a line matching the stored row is reported back but not written again"() {
         given:
         deviceReports("1,50000\n")

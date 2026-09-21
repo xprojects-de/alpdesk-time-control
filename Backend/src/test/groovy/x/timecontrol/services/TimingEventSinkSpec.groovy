@@ -100,6 +100,18 @@ class TimingEventSinkSpec extends Specification {
         1 * measurementService.create(_) >> new Measurement(3L, -1L, null, 33000, MEASURED_AT)
     }
 
+    def "a zero duration is rejected instead of stored"() {
+        given: "a false trigger at the finish, or a garbled line - never an actual finish time"
+        measurementService.findAll() >> []
+
+        when:
+        def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 0)])
+
+        then: "storing it would put that device id ahead of the entire field"
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        accepted.empty
+    }
+
     def "a negative duration is rejected instead of stored"() {
         when: "a duration that would floor to 0 in RankingService and rank that participant first"
         def accepted = sink.accept(TimingEvent.fromDevice(1L, -5))

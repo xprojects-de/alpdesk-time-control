@@ -171,7 +171,27 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
                 }
 
                 long deviceId = Long.parseLong(parts[0].trim());
+
+                // A real device counter is always positive. MeasurementService reserves the
+                // negative range for the synthetic ids it gives manually entered and CSV imported
+                // rows, so a garbled line claiming id -3 would upsert onto the manual measurement
+                // holding that synthetic id - silently replacing a time an official typed in.
+                if (deviceId <= 0) {
+                    LOG.warn("Ignoring line with an out-of-range device measurement id: {}", trimmedLine);
+                    continue;
+                }
+
                 double timeValue = Double.parseDouble(parts[1].trim());
+
+                // Checked BEFORE rounding: parseDouble accepts "NaN" and "Infinity", and
+                // Math.round(NaN) is 0 - a value that passes the range check below and then ranks
+                // ahead of the entire field. (Infinity rounds to Long.MAX_VALUE, which that check
+                // does catch, but there is no reason to depend on it.)
+                if (!Double.isFinite(timeValue)) {
+                    LOG.warn("Ignoring non-numeric duration from device for ID {}: {}", deviceId, parts[1].trim());
+                    continue;
+                }
+
                 long roundedDurationMs = Math.round(timeValue);
 
                 // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose

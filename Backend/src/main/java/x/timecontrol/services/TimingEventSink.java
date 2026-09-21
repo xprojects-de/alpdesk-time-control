@@ -236,8 +236,17 @@ public class TimingEventSink {
      * RankingService.adjustedValue() and would rank that participant first once synced.
      */
     private static boolean isPlausible(TimingEvent event) {
-        if (event.durationMs() < 0) {
-            LOG.warn("Ignoring measurement with negative duration: {}", event);
+        // Zero is rejected alongside a negative value: a device reporting 0 is a false trigger or
+        // a garbled line, never a finish - and it would rank ahead of the whole field. Checked here
+        // rather than only in the polling parser so it holds for a pushing provider too. Manually
+        // entered and CSV imported rows never pass through here; MeasurementService validates those
+        // on their own path.
+        //
+        // Deliberately no upper bound beyond what the column allows: what counts as "too long"
+        // depends on the event, and dropping a real finish time is worse than storing an odd one
+        // the operator can see and correct.
+        if (event.durationMs() <= 0) {
+            LOG.warn("Ignoring measurement with implausible duration: {}", event);
             return false;
         }
         return true;
