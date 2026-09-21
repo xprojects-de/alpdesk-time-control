@@ -158,8 +158,11 @@ public class SettingsController {
                 // (a manual "fetch from device", continuous mode, discarding a start). Read from
                 // the registry rather than from the request: for NONE there is no provider to ask,
                 // and the answer is then simply "nothing supported".
-                timingProviderRegistry.activeSupportsManualImport(),
-                List.copyOf(timingProviderRegistry.activeCapabilities())
+                // Both from the SAME settings object as type/config above: reading the selection
+                // again here would let a concurrent provider switch slip in between, and the
+                // response would describe one provider's type with another's capabilities.
+                timingProviderRegistry.activeSupportsManualImport(settings),
+                List.copyOf(timingProviderRegistry.activeCapabilities(settings))
         );
     }
 }

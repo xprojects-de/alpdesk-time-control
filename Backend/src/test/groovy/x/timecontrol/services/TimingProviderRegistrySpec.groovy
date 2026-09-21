@@ -125,11 +125,12 @@ class TimingProviderRegistrySpec extends Specification {
     def "NONE resolves to no provider, no capabilities and no manual import"() {
         given:
         def registry = registryFor(new FakePolling(), TimingProviderType.NONE)
+        def settings = settingsService.getSettings()
 
         expect:
         registry.getActiveImporter().empty
-        registry.activeCapabilities().isEmpty()
-        !registry.activeSupportsManualImport()
+        registry.activeCapabilities(settings).isEmpty()
+        !registry.activeSupportsManualImport(settings)
     }
 
     def "a device that pushes AND can be asked is not re-configured under its open connection"() {
@@ -150,7 +151,7 @@ class TimingProviderRegistrySpec extends Specification {
 
         expect: "an operator's manual import and the safety pull before a reset can still use it"
         registry.getActivePollingImporter().present
-        registry.activeSupportsManualImport()
+        registry.activeSupportsManualImport(settingsService.getSettings())
 
         and: "but the 5s background poll leaves it alone - it already delivers live"
         registry.getActiveScheduledPollImporter().empty
@@ -165,8 +166,11 @@ class TimingProviderRegistrySpec extends Specification {
     }
 
     def "capabilities come from the active provider"() {
+        given:
+        def registry = registryFor(new FakePolling(), TimingProviderType.ALPDESK_TIMECONTROL)
+
         expect:
-        registryFor(new FakePolling(), TimingProviderType.ALPDESK_TIMECONTROL).activeCapabilities() == Set.of(DeviceCapability.RESET)
+        registry.activeCapabilities(settingsService.getSettings()) == Set.of(DeviceCapability.RESET)
     }
 
     def "a selection this build has no bean for leaves the settings page usable"() {
@@ -177,8 +181,8 @@ class TimingProviderRegistrySpec extends Specification {
         def registry = new TimingProviderRegistry([], settingsService)
 
         when: "the settings endpoint builds its response"
-        def capabilities = registry.activeCapabilities()
-        def manualImport = registry.activeSupportsManualImport()
+        def capabilities = registry.activeCapabilities(settings)
+        def manualImport = registry.activeSupportsManualImport(settings)
 
         then: "no exception: a 500 here would take away the only page where the operator can"
         // switch back to NONE - i.e. the only way out of exactly this state
@@ -198,8 +202,9 @@ class TimingProviderRegistrySpec extends Specification {
         def registry = registryFor(polling, TimingProviderType.ALPDESK_TIMECONTROL)
 
         when: "the settings page is opened - a pure question about what the device can do"
-        registry.activeCapabilities()
-        registry.activeSupportsManualImport()
+        def settings = settingsService.getSettings()
+        registry.activeCapabilities(settings)
+        registry.activeSupportsManualImport(settings)
 
         then: "no side effect on the device's configuration"
         polling.configureCount == 0

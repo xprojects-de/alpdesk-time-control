@@ -45,13 +45,22 @@ public class TimingEventSink {
      * by a {@link StreamingTimingImporter} from its connection's thread.
      * <p>
      * Unasked is what makes this different from {@link #acceptBatch}: nobody in this application
-     * decided that now is a good moment for this measurement, so the operator's controls apply to
-     * it. It is dropped while a device reset/archive is clearing the table, and while the operator
-     * has automatic import switched off - that switch means "don't take device data", and a
-     * streaming device cannot be told to stop sending.
+     * decided that now is a good moment for this measurement. It is therefore dropped while the
+     * operator has automatic import switched off - that switch means "don't take device data", and
+     * a streaming device cannot be told to stop sending.
+     * <p>
+     * It is deliberately NOT dropped during a reset/archive pause, although it can land in the
+     * middle of one. That pause exists to stop a <i>poll response</i> from re-inserting the device's
+     * whole (pre-reset) list right after the table was cleared - a problem only polling has, since a
+     * polling device reports everything it holds on every poll. A push is a single event delivered
+     * once: dropping it loses a finish time for good, while writing it is harmless, because
+     * {@link MeasurementTableLock} guarantees it lands either before the archive copies the table or
+     * after it was cleared, never in between. In the first case it is archived with the race, in the
+     * second it belongs to the next one - and if the reset fails and nothing is cleared at all, it
+     * simply stays where it is instead of having been thrown away for nothing.
      *
-     * @return the stored row, or empty if the event was rejected (invalid duration, import off or
-     * paused, or the write failed) - all of which are logged here, since a streaming provider's
+     * @return the stored row, or empty if the event was rejected (invalid duration, import switched
+     * off, or the write failed) - all of which are logged here, since a streaming provider's
      * callback thread has nowhere useful to report them to
      */
     public Optional<Measurement> accept(TimingEvent event) {
@@ -114,8 +123,8 @@ public class TimingEventSink {
         // mid-import. Callers do their device I/O outside this lock, so a slow/unreachable device
         // can't block archive/reset operations.
         return measurementTableLock.get(() -> {
-            // Checked inside the lock, not before it: a reset takes this same lock to clear the
-            // table, so a flag read outside could still be acted on after the wipe began.
+            // Checked inside the lock, not before it: the switch can be flipped while this call is
+            // queued behind an archive, and the operator's last word should win.
             String refusal = unsolicited ? refusePush() : null;
             if (refusal != null) {
                 // These are real measured times, so they go into the log at WARN with their values
@@ -149,10 +158,10 @@ public class TimingEventSink {
      * @return why a pushed measurement must not be written right now, or null if it may be
      */
     private String refusePush() {
-        if (importGate.isPaused()) {
-            return "a device reset/archive is clearing the measurement table";
-        }
-        if (!importGate.isScheduledImportActive()) {
+        // The operator's own setting, not the effective flag: pauseDuring() forces that one to
+        // false while a reset/archive runs, which would silently reintroduce the very discard this
+        // method no longer does.
+        if (!importGate.isImportEnabledByOperator()) {
             return "automatic import is switched off";
         }
         return null;

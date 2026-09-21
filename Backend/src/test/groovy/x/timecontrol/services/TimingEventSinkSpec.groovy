@@ -110,14 +110,19 @@ class TimingEventSinkSpec extends Specification {
         accepted.empty
     }
 
-    def "a measurement pushed while a reset is in flight is discarded, not written after the wipe"() {
+    def "a measurement pushed while a reset is in flight is kept, not thrown away"() {
+        given: "the pause stops a POLL from re-inserting the device's pre-reset list; a push is a"
+        // single event delivered once, so discarding it would lose a finish time for good - and if
+        // the reset then fails, nothing was cleared and it was thrown away for nothing.
+        measurementService.findByDeviceMeasurementId(1L) >> Optional.empty()
+
         when: "a streaming device pushes mid-reset - nobody can stop it from delivering"
         def accepted = importGate.pauseDuring({ -> sink.accept(TimingEvent.fromDevice(1L, 50000)) })
 
-        then:
-        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
-        0 * measurementService.create(_)
-        accepted.empty
+        then: "the table lock decides where it lands: before the copy or after the wipe, never mid-way"
+        1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+        accepted.present
     }
 
     def "a pushed measurement is discarded while automatic import is switched off"() {

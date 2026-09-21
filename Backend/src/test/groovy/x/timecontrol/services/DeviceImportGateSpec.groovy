@@ -38,6 +38,19 @@ class DeviceImportGateSpec extends Specification {
         gate.isScheduledImportActive()
     }
 
+    def "the operator's own setting stays visible through a pause"() {
+        given: "pauseDuring forces the effective flag to false - TimingEventSink must see past that,"
+        // otherwise a pushed measurement is discarded mid-reset through a side effect rather than
+        // through anything the operator asked for
+        gate.setScheduledImportActive(true)
+
+        when:
+        def seen = gate.pauseDuring({ -> [gate.isScheduledImportActive(), gate.isImportEnabledByOperator()] })
+
+        then:
+        seen == [false, true]
+    }
+
     def "a toggle made during a pause is applied when the pause ends, not lost"() {
         given:
         gate.setScheduledImportActive(true)

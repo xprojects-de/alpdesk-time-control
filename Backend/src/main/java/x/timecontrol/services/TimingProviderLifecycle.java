@@ -59,9 +59,15 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
     // from request threads while a switch is in flight.
     private final ReentrantLock switchLock = new ReentrantLock();
 
-    // volatile so shutdown() can still read it to close the device when it gave up on the lock.
+    // running/runningType are volatile so shutdown() can still close the device when it gave up on
+    // the lock, and so runningProviderType() can answer without taking it at all - a caller asking
+    // "what is running?" must not be able to hang behind a provider that is stuck connecting.
     private volatile StreamingTimingImporter running;
-    private TimingProviderType runningType;
+    private volatile TimingProviderType runningType;
+    // Set while configure()/start() are in flight, so shutdown() can close a provider that has
+    // already opened its port but is not in `running` yet - which is exactly the state a switch
+    // stuck in start() leaves behind.
+    private volatile StreamingTimingImporter starting;
     private Map<String, String> runningConfig;
 
     @Inject
@@ -144,6 +150,7 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
 
         stopRunning();
 
+        starting = selected;
         try {
             selected.configure(config);
             selected.start(sink);
@@ -163,6 +170,8 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
             running = null;
             runningType = null;
             runningConfig = null;
+        } finally {
+            starting = null;
         }
     }
 
@@ -203,11 +212,22 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
             return;
         }
 
-        // A switch is still in flight and will not let go. Best effort on the volatile reference -
-        // stop() is required to tolerate being called on a provider that is already stopped.
-        LOG.warn("Timing provider switch did not finish - closing the device without the switch lock");
+        // A switch is still in flight and will not let go. Best effort on the volatile references -
+        // stop() is required to tolerate being called on a provider that is already stopped, so
+        // closing both costs nothing if one of them is already down. `starting` is the important one
+        // here: a switch stuck in start() has already cleared `running`, so without it this branch
+        // would close nothing at all while claiming otherwise.
+        StreamingTimingImporter inFlight = starting;
         StreamingTimingImporter current = running;
-        if (current != null) {
+        if (inFlight == null && current == null) {
+            LOG.warn("Timing provider switch did not finish - no device left open to close");
+            return;
+        }
+        LOG.warn("Timing provider switch did not finish - closing the device without the switch lock");
+        if (inFlight != null) {
+            stopQuietly(inFlight, runningType);
+        }
+        if (current != null && current != inFlight) {
             stopQuietly(current, runningType);
         }
     }
@@ -241,11 +261,9 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
 
     /** @return the currently running streaming provider's type, or empty if none is running */
     public Optional<TimingProviderType> runningProviderType() {
-        switchLock.lock();
-        try {
-            return Optional.ofNullable(runningType);
-        } finally {
-            switchLock.unlock();
-        }
+        // No lock: both fields it reports on are volatile, and a caller asking what is running must
+        // not be able to block behind a provider that is stuck in start() - the same reason
+        // shutdown() bounds its own wait.
+        return Optional.ofNullable(running == null ? null : runningType);
     }
 }

@@ -46,6 +46,23 @@ public class DeviceImportGate {
     }
 
     /**
+     * The state the <b>operator</b> put the switch in, with a pause looked through rather than at:
+     * {@link #pauseDuring} forces {@link #isScheduledImportActive()} to false for its duration, and
+     * a caller that must not treat that as "the operator turned imports off" asks here instead.
+     * <p>
+     * {@link TimingEventSink} is that caller. A pushed measurement arriving mid-reset must be
+     * written, not discarded - it is a single event that will never be delivered again, and the
+     * table lock already keeps it out of the middle of an archive. Reading the effective flag here
+     * would have thrown it away anyway, through the pause's side effect rather than the operator's
+     * intent.
+     */
+    public boolean isImportEnabledByOperator() {
+        synchronized (pauseLock) {
+            return pauseDepth > 0 ? pausedTargetActive : scheduledImportActive;
+        }
+    }
+
+    /**
      * Whether a device reset/archive is in flight right now. Unlike
      * {@link #isScheduledImportActive()} this also applies to a streaming provider, which nobody
      * can stop from delivering mid-reset - {@link TimingEventSink} consults it so a measurement

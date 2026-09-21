@@ -53,8 +53,8 @@ public class TimingProviderRegistry {
      * @return the optional device commands the selected provider offers; empty for NONE, so
      * callers can gate a command without special-casing "no device" separately
      */
-    public Set<DeviceCapability> activeCapabilities() {
-        return selectedImporter().map(TimingDataImporter::capabilities).orElse(Set.of());
+    public Set<DeviceCapability> activeCapabilities(AppSettings settings) {
+        return selectedImporter(settings).map(TimingDataImporter::capabilities).orElse(Set.of());
     }
 
     /**
@@ -62,8 +62,8 @@ public class TimingProviderRegistry {
      * and for one that pushes, in both of which cases the UI's "fetch from device" action has
      * nothing to do
      */
-    public boolean activeSupportsManualImport() {
-        return selectedImporter().filter(PollingTimingImporter.class::isInstance).isPresent();
+    public boolean activeSupportsManualImport(AppSettings settings) {
+        return selectedImporter(settings).filter(PollingTimingImporter.class::isInstance).isPresent();
     }
 
     /**
@@ -72,14 +72,17 @@ public class TimingProviderRegistry {
      * <ul>
      *   <li>it does not apply config - describing a device's capabilities must not have the side
      *       effect of re-configuring it, and these are read on every settings request;</li>
+     *   <li>it takes the caller's already-read {@link AppSettings} instead of reading them again,
+     *       so a response cannot end up describing one provider's type with another's capabilities
+     *       when the selection changes between the two reads;</li>
      *   <li>it answers "nothing" instead of throwing when app_settings names a provider this build
      *       has no bean for. That answer is what keeps the settings page loading in exactly the
      *       situation where the operator needs it: it is the only place they can select a different
      *       provider and get out of that state again.</li>
      * </ul>
      */
-    private Optional<TimingDataImporter> selectedImporter() {
-        return findByType(settingsService.getSettings().timingProviderType());
+    private Optional<TimingDataImporter> selectedImporter(AppSettings settings) {
+        return findByType(settings.timingProviderType());
     }
 
     /**
