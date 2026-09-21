@@ -60,6 +60,22 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # The Angular toolchain decides which TypeScript may be used: @angular/compiler-cli 22.1.7
+      # declares a peer dependency of >=6.0 <6.1, and typescript-eslint 8.69.0 allows <6.1.0.
+      # A TypeScript major beyond that cannot build here, so Dependabot would keep proposing an
+      # update that fails the lint step every single time (it already did, with 7.0.2).
+      #
+      # Minor and patch updates within the supported range still come through - only the major
+      # is held back. Drop this entry once Angular's peer dependency names the next major.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+      # Same story, declared the same way: @angular/build 22.1.8 lists vitest ^4.0.8 as an
+      # optional peer dependency, so the test builder expects vitest 4.x.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+
     groups:
       angular:
         patterns:
