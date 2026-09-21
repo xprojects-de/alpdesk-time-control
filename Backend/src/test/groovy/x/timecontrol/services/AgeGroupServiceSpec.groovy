@@ -37,18 +37,20 @@ class AgeGroupServiceSpec extends Specification {
         result == existing
     }
 
-    def "findOrCreateForImport widens a same-named group's range when nothing else covers the year"() {
-        given:
+    def "findOrCreateForImport refuses a same-named group that does not cover this birth year"() {
+        given: "'U14m' is configured for 2012 only - the season's classes are the operator's setup"
         def existing = new AgeGroup(5L, "U14M", 2026, 2012, 2012, Gender.MALE)
         repository.findBySeasonYear(2026) >> [existing]
 
-        when:
-        def result = service.findOrCreateForImport("U14m", 2013, Gender.MALE, 2026)
+        when: "a 2013-born row claims the same class"
+        service.findOrCreateForImport("U14m", 2013, Gender.MALE, 2026)
 
-        then:
-        1 * repository.update({ AgeGroup ag -> ag.id() == 5L && ag.birthYearFrom() == 2012 && ag.birthYearTo() == 2013 && ag.gender() == Gender.MALE }) >>
-                { AgeGroup ag -> ag }
-        result.birthYearTo() == 2013
+        then: "an import must not reshape a configured class - that re-categorises everyone else"
+        0 * repository.update(_)
+        0 * repository.save(_)
+        def e = thrown(IllegalStateException)
+        e.message.contains("U14M")
+        e.message.contains("2012-2012")
     }
 
     def "findOrCreateForImport reuses a differently-named existing group that already covers this year for this gender, instead of creating a duplicate by name"() {
@@ -93,6 +95,50 @@ class AgeGroupServiceSpec extends Specification {
         1 * repository.save({ AgeGroup ag -> ag.name() == "U14M" && ag.gender() == Gender.MALE }) >>
                 { AgeGroup ag -> new AgeGroup(4L, ag.name(), 2026, ag.birthYearFrom(), ag.birthYearTo(), ag.gender()) }
         result.name() == "U14M"
+    }
+
+    def "findOrCreateForImport refuses to widen a same-named group that belongs to the other gender"() {
+        given: "season 2026 has 'U14' configured for FEMALE only, 2012-2013"
+        def femaleU14 = new AgeGroup(3L, "U14", 2026, 2012, 2013, Gender.FEMALE)
+        repository.findBySeasonYear(2026) >> [femaleU14]
+
+        when: "a MALE row born 2014, also labelled 'U14', is imported"
+        service.findOrCreateForImport("U14", 2014, Gender.MALE, 2026)
+
+        then: "widening it would push every 2014-born GIRL into U14 while leaving him classless"
+        0 * repository.update(_)
+        0 * repository.save(_)
+        def e = thrown(IllegalStateException)
+        e.message.contains("U14")
+        e.message.contains("FEMALE")
+    }
+
+    def "findOrCreateForImport refuses a same-named group of the other gender even when no widening is needed"() {
+        given: "'U14' is MALE 2012-2013 - the imported year is already inside that range"
+        def maleU14 = new AgeGroup(3L, "U14", 2026, 2012, 2013, Gender.MALE)
+        repository.findBySeasonYear(2026) >> [maleU14]
+
+        when: "a FEMALE row born 2012, labelled 'U14', is imported"
+        service.findOrCreateForImport("U14", 2012, Gender.FEMALE, 2026)
+
+        then: "returning it unchanged would look harmless but leaves her matching no class at all"
+        0 * repository.update(_)
+        0 * repository.save(_)
+        thrown(IllegalStateException)
+    }
+
+    def "findOrCreateForImport refuses a same-named BOTH-gender group that does not cover this birth year"() {
+        given: "a BOTH class is the worst one to widen - it would pull in BOTH genders of that year"
+        def openClass = new AgeGroup(3L, "OFFENE KLASSE", 2026, 2012, 2013, Gender.BOTH)
+        repository.findBySeasonYear(2026) >> [openClass]
+
+        when:
+        service.findOrCreateForImport("Offene Klasse", 2014, Gender.MALE, 2026)
+
+        then:
+        0 * repository.update(_)
+        0 * repository.save(_)
+        thrown(IllegalStateException)
     }
 
     def "calculateAgeGroupName picks the group matching both the birth year AND the gender, not just the year"() {

@@ -187,25 +187,33 @@ public class AgeGroupService {
      * <p>
      * Everything here is scoped to {@code seasonYear}, the season of the race being imported into.
      * That scoping is what keeps an import out of past seasons: without it, importing a 2026 roster
-     * would find season 2025's "U14" (it covers 2012 for males, so the very first branch below
-     * returns it), never create the 2026 one - or worse, take the widening branch and stretch
-     * 2025's "U14" from 2012-2013 to 2012-2015, silently re-categorising every race already run
-     * that season.
+     * would find season 2025's "U14" (it covers 2012 for males) and never create the 2026 one.
      * <p>
-     * First choice is any <em>existing</em> AgeGroup of this season that already covers this birth
-     * year for this gender (a BOTH-gender group counts too) - regardless of its name. This mirrors
-     * exactly how {@link x.timecontrol.services.ParticipantService}'s own age-group matching
-     * resolves a person (year in range + gender matches, first one wins), so import never creates a
-     * redundant "U14M" next to an already-existing "U14" (BOTH) that already covers 2012 for males
-     * - the existing, broader group is reused as-is instead.
-     * <p>
-     * Only when nothing already covers this year/gender does it fall back to name-based
-     * find-or-create (case-insensitive), like Team/Category's findOrCreateByName: a newly created
-     * group starts as a single birth year (this row's); an existing same-named group's range is
-     * widened to include this row's birth year when it falls outside it, since one sample row never
-     * tells us a class's full range up front. That existing group's gender is left as-is -
-     * age_group.name is unique per season, so real exports already bake gender into the name (U14m
-     * vs U14w).
+     * An import never changes an age group that already exists. There are exactly two outcomes:
+     * <ol>
+     *   <li>an <em>existing</em> group of this season already covers this birth year for this gender
+     *       (a BOTH-gender group counts for either) - that one is returned, whatever it is named.
+     *       This mirrors how {@link x.timecontrol.services.ParticipantService} resolves a person's
+     *       class at read time (year in range AND gender matches, first one wins), so an import
+     *       never creates a redundant "U14M" beside an existing "U14" (BOTH) that already covers
+     *       this row;</li>
+     *   <li>nothing covers it - a new group is created from this row's label, gender and birth
+     *       year.</li>
+     * </ol>
+     * Widening an existing group's birth-year range used to be a third outcome. It is deliberately
+     * gone: a season's classes are a configuration the operator set up (or rolled over with
+     * {@link #copySeason}), and a roster file must not reshape it. Widening re-categorises everyone
+     * else of the affected birth year - including the other gender, when the widened group is a
+     * BOTH one - in a season whose races may already have been run and published.
+     *
+     * @throws IllegalStateException if a group of this name already exists in this season but does
+     *                               not cover this row (wrong birth year, wrong gender, or both).
+     *                               It cannot be reused as it is, must not be changed, and a second
+     *                               group under that name is impossible - age_group has
+     *                               UNIQUE (name, season_year) since V4. Only the operator can say
+     *                               which side is wrong, so this is reported as a row error while
+     *                               the rest of the file imports normally (see
+     *                               ParticipantService#importRow).
      */
     public AgeGroup findOrCreateForImport(String rawLabel, int birthYear, Gender gender, int seasonYear) {
         List<AgeGroup> existingGroups = repository.findBySeasonYear(seasonYear);
@@ -219,25 +227,21 @@ public class AgeGroupService {
         }
 
         String normalized = rawLabel.trim().toUpperCase();
-        Optional<AgeGroup> byName = existingGroups.stream()
+        Optional<AgeGroup> nameClash = existingGroups.stream()
                 .filter(ag -> ag.name().equalsIgnoreCase(normalized))
                 .findFirst();
-        if (byName.isEmpty()) {
-            return repository.save(new AgeGroup(null, normalized, seasonYear, birthYear, birthYear, gender));
+        if (nameClash.isPresent()) {
+            // Getting here means the loop above found nothing covering this row, so this same-named
+            // group necessarily does not apply to it - by birth year, by gender, or by both.
+            AgeGroup clash = nameClash.get();
+            throw new IllegalStateException("Age class \"" + clash.name() + "\" in season " + seasonYear
+                    + " covers birth years " + clash.birthYearFrom() + "-" + clash.birthYearTo()
+                    + " for gender " + clash.gender() + ", so it does not apply to this row (born "
+                    + birthYear + ", " + gender + ") - correct the class in the file, or adjust that"
+                    + " age class in the season's configuration");
         }
-        AgeGroup match = byName.get();
-        int widenedFrom = Math.min(match.birthYearFrom(), birthYear);
-        int widenedTo = Math.max(match.birthYearTo(), birthYear);
-        if (widenedFrom == match.birthYearFrom() && widenedTo == match.birthYearTo()) {
-            return match;
-        }
-        AgeGroup widened = new AgeGroup(match.id(), match.name(), match.seasonYear(), widenedFrom, widenedTo, match.gender());
-        // Same guard create()/update() enforce for a manually-entered range: without it, widening
-        // this group to cover the imported row's birth year could make its range overlap another
-        // existing group's, so a participant ends up matched inconsistently between call sites
-        // depending on unspecified DB iteration order (see findMatchingAgeGroup/calculateAgeGroupName).
-        assertNoOverlap(widened, match.id());
-        return repository.update(widened);
+
+        return repository.save(new AgeGroup(null, normalized, seasonYear, birthYear, birthYear, gender));
     }
 
     /**
