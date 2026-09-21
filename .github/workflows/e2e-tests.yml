@@ -133,10 +133,16 @@ jobs:
           # four-core runner none of them had answered yet when the check ran - the health output
           # above may therefore show HTTP 000 even though everything is fine and still starting.
           #
-          # So wait properly here: every instance prints "port=<n>" when it is launched, so poll
-          # each of those ports until it serves. Slow is acceptable, unclear is not.
-          ports=$(grep -oE 'port=[0-9]+' start.log | cut -d= -f2 | sort -u)
-          test -n "$ports" || { echo "::error::Keine Ports in start.log gefunden"; exit 1; }
+          # So wait properly here: poll every backend port until it serves. Slow is acceptable,
+          # unclear is not.
+          #
+          # Only backend instances, which is what "dir=" filters for. bergsprint and nachtslalom
+          # also start a fake timing device, printed as "fake_device: PID=<n> port=<n>" without a
+          # dir - and that one answers on /data, not on /, so probing it here would wait for a 200
+          # that never comes. It needs no waiting anyway: it is a small Python script rather than a
+          # JVM, and start_instances.sh already checked it on its own endpoint.
+          ports=$(sed -nE 's/.*port=([0-9]+) dir=.*/\1/p' start.log | sort -u)
+          test -n "$ports" || { echo "::error::Keine Backend-Ports in start.log gefunden"; exit 1; }
 
           for p in $ports; do
             code=000
