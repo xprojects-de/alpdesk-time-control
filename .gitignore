@@ -10,6 +10,12 @@
 # writes these under its own results/ subfolder instead of the suite dir itself
 /e2e-tests/*/results/
 
+# e2e-tests: real race data. The suites run on the synthetic fixtures they ship with; a real
+# event's exports (participant lists, results, printed rankings) hold names, birth years and clubs
+# of real - often underage - participants and must never be committed. Keep them here and point
+# the suite at them with KONDI_DATA_DIR, or keep them outside the repository entirely.
+/e2e-tests/*/local-data/
+
 # Python bytecode cache, regenerated on every e2e run
 __pycache__/
 *.pyc

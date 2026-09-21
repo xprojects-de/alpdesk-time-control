@@ -93,12 +93,10 @@ found.
    install before building/running (`/usr/libexec/java_home -V` lists installed JVMs) — and
    re-export it in every subsequent command, since exported env vars don't persist between
    separate shell invocations.
-2. For `kondi2025-federation`, check its 4 required CSVs exist first (see its
-   [README.md](../../e2e-tests/kondi2025-federation/README.md)):
-   `race1_schnelligkeit_import.csv`, `race2_gleichgewicht_import.csv`,
-   `race3_kraft_import.csv`, `race4_lauf_import.csv`. This repo ships without real participant
-   data for privacy reasons, so if any are missing, **skip this suite** with a clear note in the
-   final summary instead of failing.
+2. `kondi2025-federation` runs on the synthetic demo data under its `fixtures/` directory, which
+   is checked in — no extra setup, and never point it at real participant data (see its
+   [README.md](../../e2e-tests/kondi2025-federation/README.md)). If `fixtures/` is missing,
+   regenerate it with `python3 make_fixtures.py` rather than skipping the suite.
 3. Run the runnable suites **one at a time** (not in parallel — cleanup of one must not race
    another's ports/PIDs/work dir), each from its own directory:
    a. `./start_instances.sh <absolute-path-to-time-control.jar>` — let it create its own temp

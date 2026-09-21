@@ -57,12 +57,8 @@ echo "=== Phase 9: Gaudi-Modus age-group breakdown ==="
 python3 phase9_gaudi_agegroups.py
 
 echo ""
-echo "=== Phase 10: cross-check against real official result PDF (if present) ==="
-if [ -f sample-data/official_result.pdf ]; then
-    python3 verify_against_official.py
-else
-    echo "sample-data/official_result.pdf nicht vorhanden - Cross-Check uebersprungen (siehe README.md)."
-fi
+echo "=== Phase 10: cross-check against the frozen reference Gesamtwertung (if present) ==="
+python3 phase10_verify_reference.py
 
 echo ""
 echo "All phases complete (results backup/restore roundtrip verified)."

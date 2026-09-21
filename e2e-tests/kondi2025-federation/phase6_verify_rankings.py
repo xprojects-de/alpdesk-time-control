@@ -55,6 +55,64 @@ def compute_expected_places(participants, direction):
         prev_tie = tie
     return places, scored
 
+# The FIS-Schema seeded by Flyway migration V1 (31 places; anything beyond that scores 0).
+FIS_SCHEMA = [100, 80, 60, 50, 45, 40, 36, 32, 29, 26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11, 10,
+              9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+
+def points_for_place(place):
+    idx = place - 1
+    return FIS_SCHEMA[idx] if 0 <= idx < len(FIS_SCHEMA) else 0
+
+
+def combination_totals(person_ids, places_by_race, participants_by_race, flags):
+    """personId -> total points in a Punkte-Mischwertung, mirroring
+    PointsCombinationModeCalculator#isEligibleForRanking/isTolerated: a leg with no valid place is
+    tolerated (0 points) only if ITS OWN status's keep-flag is set, and somebody with no valid leg
+    anywhere is excluded no matter what. places_by_race/participants_by_race are {race name ->
+    {personId -> place}} / {race name -> {personId -> participant}}; flags is config.GAUDI_FLAGS.
+
+    Callers pass places computed over whatever field the ranking covers - the whole race for the
+    overall Gesamtwertung, or just one age group x gender subset for the per-class breakdown."""
+    tolerated = {"DNS": flags.get("keepDnsInRanking", False),
+                 "DNF": flags.get("keepDnfInRanking", False),
+                 "DSQ": flags.get("keepDsqInRanking", False)}
+    totals = {}
+    for pid in person_ids:
+        any_valid, eligible, total = False, True, 0
+        for race_name, places in places_by_race.items():
+            place = places.get(pid)
+            if place is not None:
+                any_valid = True
+                total += points_for_place(place)
+                continue
+            participant = participants_by_race[race_name].get(pid)
+            if participant is None:
+                eligible = False
+                continue
+            status = (participant.get("status") or "NONE")
+            # status NONE with no valid place means there is no duration at all; the backend's
+            # effectiveStatus() treats that as a plain DNS for the tolerance decision.
+            if status == "NONE":
+                status = "DNS"
+            if not tolerated.get(status, False):
+                eligible = False
+        if any_valid and eligible:
+            totals[pid] = total
+    return totals
+
+
+def places_from_totals(totals):
+    """Standard competition ranking over point totals, most points first."""
+    places, previous, place = {}, None, 0
+    for i, (pid, total) in enumerate(sorted(totals.items(), key=lambda kv: -kv[1])):
+        if previous is None or total != previous:
+            place = i + 1
+        places[pid] = place
+        previous = total
+    return places
+
+
 def parse_pdf_places(pdf_bytes, tmp_name):
     tmp_name = c.results_path(tmp_name)
     with open(tmp_name, "wb") as f:

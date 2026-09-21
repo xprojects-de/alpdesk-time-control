@@ -5,16 +5,11 @@ import sys, json, re, subprocess
 sys.path.insert(0, '.')
 import common as c
 import config
-from phase6_verify_rankings import compute_expected_places, RACE_DIRECTIONS
+from phase6_verify_rankings import (compute_expected_places, combination_totals, RACE_DIRECTIONS)
 
 token = c.login(config.MAIN)
 race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
 gaudi_id = json.load(open(c.results_path("gaudi_state.json")))["gm_id"]
-
-FIS_SCHEMA = [100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]
-def points_for_place(place):
-    idx = place - 1
-    return FIS_SCHEMA[idx] if 0 <= idx < len(FIS_SCHEMA) else 0
 
 _, age_groups = c.get(config.MAIN, token, "/age-groups")
 print("age groups:", [(a["name"], a["gender"]) for a in age_groups])
@@ -26,24 +21,19 @@ for race_name, direction in RACE_DIRECTIONS.items():
     per_race[race_name] = {"participants": participants, "direction": direction}
 
 def expected_totals_for_subset(person_ids_subset):
-    totals = {}
-    for pid in person_ids_subset:
-        complete, total = True, 0
-        for race_name, data in per_race.items():
-            subset_participants = [p for p in data["participants"] if p["person"]["id"] in person_ids_subset]
-            places, _ = compute_expected_places(subset_participants, data["direction"])
-            person_p = next((p for p in data["participants"] if p["person"]["id"] == pid), None)
-            if person_p is None:
-                complete = False
-                break
-            place = places.get(person_p["person"]["externalId"])
-            if place is None:
-                complete = False
-                break
-            total += points_for_place(place)
-        if complete:
-            totals[pid] = total
-    return totals
+    """The per-class Gesamtwertung: each leg's place is recomputed strictly within this age
+    group x gender subset (per GaudiModeService#computeRankingForCategory), then the same
+    tolerance rules as the overall ranking decide who is scored at all."""
+    places_by_race, participants_by_race = {}, {}
+    for race_name, data in per_race.items():
+        subset_participants = [p for p in data["participants"] if p["person"]["id"] in person_ids_subset]
+        places_by_ext, _ = compute_expected_places(subset_participants, data["direction"])
+        participants_by_race[race_name] = {p["person"]["id"]: p for p in subset_participants}
+        places_by_race[race_name] = {p["person"]["id"]: places_by_ext[p["person"]["externalId"]]
+                                     for p in subset_participants
+                                     if p["person"]["externalId"] in places_by_ext}
+    return combination_totals(person_ids_subset, places_by_race, participants_by_race, config.GAUDI_FLAGS)
+
 
 all_participants = next(iter(per_race.values()))["participants"]
 

@@ -66,19 +66,24 @@ def set_status(race_name, rn, status, comment):
     assert st == 200, (race_name, rn, status, st, resp)
 
 
-set_status("Kraft", x1, "DNS", "Szenario X1: DNS nur in Kraft")
-set_status("Kraft", x2, "DNF", "Szenario X2: DNF nur in Kraft")
-set_status("Kraft", x3, "DSQ", "Szenario X3: DSQ nur in Kraft")
-set_status("Kraft", x4, "DNF", "Szenario X4: DNF in Kraft")
-set_status("Lauf", x4, "DSQ", "Szenario X4: DSQ in Lauf")
+# X1-X3 each get one bad leg in the same race; X4 gets two bad legs of DIFFERENT statuses in two
+# DIFFERENT races (which of them is irrelevant - only that they are two), so phase12 can prove the
+# keep-flags are evaluated per leg rather than "any flag on tolerates everything".
+BAD_RACE, SECOND_BAD_RACE = RACE_NAMES[2], RACE_NAMES[3]
+
+set_status(BAD_RACE, x1, "DNS", f"Szenario X1: DNS nur in {BAD_RACE}")
+set_status(BAD_RACE, x2, "DNF", f"Szenario X2: DNF nur in {BAD_RACE}")
+set_status(BAD_RACE, x3, "DSQ", f"Szenario X3: DSQ nur in {BAD_RACE}")
+set_status(BAD_RACE, x4, "DNF", f"Szenario X4: DNF in {BAD_RACE}")
+set_status(SECOND_BAD_RACE, x4, "DSQ", f"Szenario X4: DSQ in {SECOND_BAD_RACE}")
 for name in RACE_NAMES:
     set_status(name, x5, "DNS", "Szenario X5: DNS in allen Rennen")
 
 scenarios = {
-    "x1_dns_only": {"raceNumber": x1, "bad_legs": {"Kraft": "DNS"}},
-    "x2_dnf_only": {"raceNumber": x2, "bad_legs": {"Kraft": "DNF"}},
-    "x3_dsq_only": {"raceNumber": x3, "bad_legs": {"Kraft": "DSQ"}},
-    "x4_dnf_and_dsq": {"raceNumber": x4, "bad_legs": {"Kraft": "DNF", "Lauf": "DSQ"}},
+    "x1_dns_only": {"raceNumber": x1, "bad_legs": {BAD_RACE: "DNS"}},
+    "x2_dnf_only": {"raceNumber": x2, "bad_legs": {BAD_RACE: "DNF"}},
+    "x3_dsq_only": {"raceNumber": x3, "bad_legs": {BAD_RACE: "DSQ"}},
+    "x4_dnf_and_dsq": {"raceNumber": x4, "bad_legs": {BAD_RACE: "DNF", SECOND_BAD_RACE: "DSQ"}},
     "x5_dns_everywhere": {"raceNumber": x5, "bad_legs": {n: "DNS" for n in RACE_NAMES}},
 }
 with open(c.results_path("status_scenarios.json"), "w") as f:

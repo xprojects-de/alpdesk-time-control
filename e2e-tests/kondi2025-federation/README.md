@@ -1,4 +1,4 @@
-# Kondi2025 5-Instanzen-Föderationstest
+# Konditionswettkampf: 5-Instanzen-Föderationstest
 
 Simuliert den "Stationsbetrieb": eine Hauptinstanz legt Rennen + Teilnehmerliste an, vier
 getrennte Stationsinstanzen (je eine pro Rennen) importieren den Teilnehmer-Export der
@@ -15,23 +15,77 @@ automatisiert gegen eine unabhängige Python-Nachrechnung der Rangfolge geprüft
 - **Nie gegen die echte Produktions-DB laufen lassen** — immer frische, isolierte
   Arbeitsverzeichnisse pro Instanz (siehe `start_instances.sh`).
 
-## Eigene Renndaten einsetzen
+## Testdaten
 
-Dieses Verzeichnis enthält **keine** echten Teilnehmerdaten. Lege 4 CSV-Dateien mit genau diesen
-Namen hier ab (Spaltennamen exakt so, Semikolon-getrennt):
+Der Test läuft auf **synthetischen Demodaten** unter `fixtures/` — erfundene Namen, Vereine und
+Ids, erzeugt von `make_fixtures.py`. Hier liegen **keine echten Teilnehmerdaten**, und es dürfen
+auch nie welche hier landen (siehe „Mit echten Renndaten laufen" weiter unten).
 
+Die Demodaten bilden die Form eines echten Konditionswettkampfs ab, weil genau diese Form den Test
+aussagekräftig macht: 83 Teilnehmer in 4 Klassen (U14/U16 × weiblich/männlich), eine Station in
+Zeit gewertet (schnellste gewinnt, mit Zeitstrafen) und drei in „größter Wert gewinnt" (Meter bzw.
+Punkte), 7 Teilnehmer die gar nicht angetreten sind (DNS in allen Stationen — müssen aus der
+Gesamtwertung fallen) sowie einzelne DNS/DNF/DSQ in nur einer Station (müssen mit 0 Punkten für
+dieses Bein **in** der Wertung bleiben). Dazu absichtlich gesetzte Gleichstände, inklusive der
+Rundungsfälle: zwei Zeiten 8 ms auseinander, die beide als `31,23 s` gedruckt werden und sich
+deshalb einen Platz teilen müssen, zwei 2 ms auseinander, die das nicht dürfen, und ein
+Gleichstand, der erst durch die Strafzeit entsteht.
+
+Nach einer Änderung an `make_fixtures.py` die Dateien neu erzeugen und den Referenzlauf
+aktualisieren (siehe nächster Abschnitt):
+
+```bash
+python3 make_fixtures.py          # schreibt fixtures/
+python3 make_fixtures.py --check  # schlägt fehl, wenn fixtures/ nicht zum Generator passt
 ```
-race1_schnelligkeit_import.csv
-race2_gleichgewicht_import.csv
-race3_kraft_import.csv
-race4_lauf_import.csv
+
+### Wie geprüft wird
+
+Zwei voneinander unabhängige Absicherungen:
+
+1. **Phasen 5–9 rechnen jede Wertungsebene in Python nach** (Gesamt, Geschlecht, Altersklassen,
+   Gaudi-Punkte-Mischung) und vergleichen das Ergebnis mit dem, was die App über API und PDF
+   ausgibt. Das prüft, ob die Rangfolge *rechnerisch richtig* ist — unabhängig vom Java-Code.
+2. **Phase 10 vergleicht gegen `fixtures/reference_gesamtwertung.pdf`**, eine von Time Control
+   selbst erzeugte und eingefrorene Gesamtwertung über genau diese Demodaten. Das ist der
+   Regressionsschutz: Er schlägt an, sobald irgendetwas in der Kette ein anderes Ergebnis liefert
+   als bisher.
+
+Ändert sich das Ergebnis absichtlich, wird die Referenz neu eingefroren — aber erst, nachdem die
+Phasen 5–9 grün sind, denn die sagen, ob das neue Ergebnis auch das richtige ist:
+
+```bash
+cp results/gaudi_agegroups_all.pdf fixtures/reference_gesamtwertung.pdf
 ```
 
-Spalten: `lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt`
-(`birthDate` akzeptiert ein bloßes Jahr, `gender` akzeptiert `weiblich`/`maennlich`/`MALE`/`FEMALE`).
+### Mit echten Renndaten laufen
 
-Passe `config.py` an, falls eure Rennen andere Namen/Einheiten/Sortierrichtungen haben, oder falls
-ihr DNS/DNF/DSQ gezielt auf bestimmten Startnummern testen wollt (`INJECTED_STATUS`).
+Für einen Abgleich gegen ein tatsächlich gelaufenes Rennen zeigt `KONDI_DATA_DIR` auf ein
+Verzeichnis mit denselben vier Dateinamen wie unter `fixtures/`. `local-data/` ist dafür
+vorgesehen und in `.gitignore` — echte Exporte enthalten Namen, Jahrgänge und Vereine von (meist
+minderjährigen) Teilnehmern und dürfen nicht ins Repository:
+
+```bash
+mkdir -p local-data/mein-rennen      # + die 4 CSVs hineinkopieren
+KONDI_DATA_DIR=local-data/mein-rennen ./run_all.sh
+```
+
+Liegt dort zusätzlich eine `reference_gesamtwertung.pdf` (die gedruckte Gesamtwertung dieses
+Rennens), vergleicht Phase 10 direkt dagegen. Dabei müssen die Gaudi-Einstellungen zu denen des
+echten Rennens passen — vor allem `config.GAUDI_FLAGS`: Sie entscheiden, ob jemand mit DNS/DNF/DSQ
+in einer einzelnen Station mit 0 Punkten in der Gesamtwertung bleibt oder herausfällt. Stehen sie
+anders als beim echten Rennen, stimmen zwar alle Punktzahlen, aber es fehlen Teilnehmer und alles
+darunter verschiebt sich um einen Platz.
+
+Spalten der CSVs (semikolongetrennt, so wie der Rennen-Export der App sie schreibt):
+`lastName;firstName;birthDate;gender;ageGroup;team;category;externalId;raceNumber;durationMs;penalty;measuredAt;comment;status`
+— `birthDate` akzeptiert auch ein bloßes Jahr, `gender` auch `weiblich`/`maennlich`, und `status`
+(`NONE`/`DNS`/`DNF`/`DSQ`) wird unverändert übernommen; eine Zeile ohne Ergebnis und ohne Status
+gilt als DNS.
+
+Stationen, Einheiten, Sortierrichtungen, Altersklassen und Renndatum stehen in `config.py` und
+sind dort anzupassen, wenn euer Wettkampf anders aufgebaut ist. `INJECTED_STATUS` überschreibt
+zusätzlich einzelne Startnummern, um einen Status zu testen, den die Daten nicht hergeben.
 
 ## Ablauf
 
@@ -114,40 +168,36 @@ Instanzen:
 pkill -f 'time-control.jar'; rm -rf /tmp/kondi-status
 ```
 
-Sowohl `run_all.sh` als auch `run_phased.sh` schließen automatisch mit einem Abgleich gegen ein
-echtes offizielles Ergebnis-PDF ab (`verify_against_official.py`, Phase 10), sofern
-`sample-data/official_result.pdf` vorhanden ist — fehlt die Datei (z.B. weil sie aus
-Datenschutzgründen entfernt wurde, siehe Hinweis unten), wird dieser Schritt übersprungen statt den
-Lauf fehlschlagen zu lassen. Findet der Abgleich unerklärte Abweichungen, bricht das Skript ab
-(`set -e`) — erklärte Abweichungen müsst ihr vorher in `KNOWN_INTENTIONAL_DEVIATIONS` in
-`verify_against_official.py` eintragen (z.B. eure bewusst injizierten DNS/DNF/DSQ-Abweichungen, aber
-auch bekannte Datenfixture-Artefakte wie unten beschrieben).
+Alle vier Lauf-Varianten schließen mit Phase 10 ab, dem Abgleich gegen
+`fixtures/reference_gesamtwertung.pdf` (siehe „Wie geprüft wird" oben). Fehlt die Datei, wird der
+Schritt übersprungen statt den Lauf fehlschlagen zu lassen; findet er unerklärte Abweichungen,
+bricht das Skript ab (`set -e`). Bewusste Abweichungen — etwa wenn ihr gegen ein echtes Rennen
+vergleicht, bei dem ihr einzelne Status absichtlich anders gesetzt habt — gehören nach
+`KNOWN_INTENTIONAL_DEVIATIONS` in `phase10_verify_reference.py`, mit der `externalId` als Schlüssel.
 
-Manuell mit einem beliebigen anderen PDF aufrufen:
+Manuell gegen eine andere Referenz aufrufen:
 
 ```bash
-python3 verify_against_official.py /pfad/zu/anderes_ergebnis.pdf
+python3 phase10_verify_reference.py /pfad/zu/anderer_gesamtwertung.pdf
 ```
 
-**Hinweis zu knappen Gleichständen (Rundung):** Das offizielle Ergebnis ist nur auf Hundertstelsekunden
-genau, während unsere `durationMs`-CSV-Fixtures Millisekunden-Präzision tragen. Zwei beim echten
-Rennen tatsächlich gleichzeitige Ergebnisse (gleiche Hundertstelsekunden) können beim Nachbauen der
-CSV 1-2ms auseinanderfallen — das bricht den Gleichstand im exakten Vergleich von `RankingService`
-und verschiebt beide um einen Platz. Das ist kein Ranking-Bug (bei echt gleichen `durationMs` weist
-`RankingService` korrekt denselben Platz zu, Standard-"1224"-Regel), sondern ein Artefakt der
-Fixture-Erstellung. Ein bestätigter Fall ist bereits in `KNOWN_INTENTIONAL_DEVIATIONS` eingetragen
-(`REDACTED`/`REDACTED`, Schnelligkeit, 36432 vs. 36430ms bei offiziell beide 36,43s). Wird eine CSV neu
-erzeugt/aktualisiert, prüft neue knappe Gleichstände (`durationMs` innerhalb weniger ms in derselben
-Kategorie) vor der Annahme, ein neuer Mismatch sei ein echter Bug.
+**Hinweis zu knappen Gleichständen (Rundung):** Ein gedrucktes Ergebnis ist nur auf
+Hundertstelsekunden genau, `durationMs` trägt aber Millisekunden. Baut ihr eine CSV aus einem
+gedruckten Ergebnis nach, können zwei tatsächlich gleichzeitige Ergebnisse 1–2 ms auseinander
+liegen; die Wertung teilt dann keinen Platz mehr und beide verschieben sich. Das ist kein
+Ranking-Bug — bei wirklich gleichen Werten vergibt `RankingService` korrekt denselben Platz, und
+Werte, die auf dieselbe Hundertstelsekunde gerundet werden, teilen sich den Platz ebenfalls
+(genau das prüfen die gesetzten Gleichstände in den Demodaten). Es ist ein Artefakt des
+Nachbauens. Prüft neue knappe Gleichstände also erst auf diese Ursache, bevor ihr einen echten
+Fehler annehmt.
 
-### ⚠️ Datenschutz-Hinweis zu `sample-data/official_result.pdf`
+### ⚠️ Datenschutz
 
-Diese Datei enthält echte Namen, Geburtsjahre und Vereine von (teils minderjährigen) Teilnehmern
-des echten Kondi2025-Rennens. Sie liegt hier nur lokal bei, ist aber **nicht** automatisch von Git
-ignoriert. Bevor ihr das committet oder in ein (insbesondere öffentliches) Repo pusht: prüft, ob
-ihr das wirklich in der Git-Historie haben wollt — sonst z.B. in die `.gitignore` aufnehmen
-(`e2e-tests/kondi2025-federation/sample-data/`) oder außerhalb des Repos ablegen und den Pfad per
-Argument übergeben.
+In diesem Verzeichnis liegen **ausschließlich synthetische Demodaten**. Echte Renndaten —
+Teilnehmerlisten, Ergebnis-Exporte, gedruckte Wertungen — enthalten Namen, Jahrgänge und Vereine
+von meist minderjährigen Teilnehmern und dürfen nicht ins Repository. Sie gehören nach
+`local-data/` (steht in `.gitignore`) oder ganz außerhalb des Repos; der Test findet sie über
+`KONDI_DATA_DIR`, siehe „Mit echten Renndaten laufen".
 
 ## Aufräumen
 
@@ -177,9 +227,12 @@ rm -rf /pfad/zum/work-dir   # das mktemp-Verzeichnis von start_instances.sh
 | `phase7_verify_gender_agegroup.py` | Dasselbe für Geschlecht/Altersklassen-Aufschlüsselung |
 | `phase8_gaudi_combo.py` | Gaudi-Punkte-Mischwertung erstellen und verifizieren |
 | `phase9_gaudi_agegroups.py` | Gaudi-Punkte-Mischwertung nach Altersklassen verifizieren |
-| `verify_against_official.py` | Phase 10 (automatisch, falls PDF vorhanden): Abgleich mit einem echten Ergebnis-PDF |
+| `phase10_verify_reference.py` | Phase 10: Abgleich gegen die eingefrorene Referenz-Gesamtwertung |
 | `phase11_prepare_status_scenarios.py` | MAIN: 5 Teilnehmer auswählen, gezielt DNS/DNF/DSQ in einzelnen Rennen setzen (X1-X5) |
 | `phase12_gaudi_status_scenarios.py` | 6 Punkte-Mischwertungen mit verschiedenen keep-in-ranking-Flag-Kombinationen anlegen und je gegen unabhängige Python-Berechnung + PDF verifizieren |
 | `phase13_status_flags_no_effect_on_other_types.py` | Guardrail: keep-in-ranking-Flags dürfen bei TIME_COMBINATION keinen Effekt haben |
 | `run_phased_results_with_status.sh` | Orchestriert phase1-10 wie `run_phased_results.sh`, dann phase11-13 |
-| `sample-data/official_result.pdf` | Das mitgelieferte echte Ergebnis-PDF (siehe Datenschutz-Hinweis oben) |
+| `make_fixtures.py` | Erzeugt die synthetischen Demodaten unter `fixtures/` (deterministisch, `--check` prüft sie) |
+| `fixtures/race*.csv` | Die vier Stations-CSVs der Demodaten |
+| `fixtures/reference_gesamtwertung.pdf` | Eingefrorene Gesamtwertung über die Demodaten - die Referenz für Phase 10 |
+| `local-data/` | Nicht eingecheckt: Platz für echte Renndaten, per `KONDI_DATA_DIR` ansteuerbar |

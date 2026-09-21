@@ -1,8 +1,9 @@
 """Phase 3 (run once per station, e.g. `python3 phase3_enter_results.py station1`):
 enters each station's race results ONE PARTICIPANT AT A TIME via PUT /participants/{id}
 (never via bulk CSV import) - simulating a timekeeper typing results in at that station.
-A raceNumber with no durationMs in the source CSV is set to DNS; config.INJECTED_STATUS can
-override specific raceNumbers to DNF/DSQ/etc. instead, to exercise that handling explicitly.
+The CSV's own "status" column (NONE/DNS/DNF/DSQ) is entered as-is; a row with no durationMs and
+no explicit status is treated as DNS. config.INJECTED_STATUS can override specific raceNumbers on
+top of that, to exercise a status the data does not happen to contain.
 """
 import sys, csv, json
 sys.path.insert(0, '.')
@@ -23,7 +24,8 @@ status, participants = c.get(BASE, token, f"/participants?raceId={race_id}")
 by_race_number = {p["raceNumber"]: p for p in participants if p["raceNumber"] is not None}
 print(f"{key}: {len(by_race_number)} participants indexed by raceNumber")
 
-updated = dns_count = injected_count = 0
+updated = injected_count = 0
+status_counts = {}
 failures = []
 with open(csv_file, newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f, delimiter=";")
@@ -58,14 +60,20 @@ with open(csv_file, newline="", encoding="utf-8") as f:
             body["status"] = status_val
             body["comment"] = comment
             injected_count += 1
-        elif not duration_raw:
-            body["status"] = "DNS"
-            dns_count += 1
         else:
-            body["durationMs"] = int(duration_raw)
+            # A status in the CSV wins; without one, a row that carries no result is a DNS.
+            csv_status = (row.get("status") or "").strip().upper()
+            if not csv_status:
+                csv_status = "NONE" if duration_raw else "DNS"
+            if duration_raw:
+                body["durationMs"] = int(duration_raw)
             if penalty_raw:
                 body["penalty"] = int(penalty_raw)
-            body["status"] = "NONE"
+            body["status"] = csv_status
+            comment = (row.get("comment") or "").strip()
+            if comment:
+                body["comment"] = comment
+            status_counts[csv_status] = status_counts.get(csv_status, 0) + 1
 
         st, resp = c.put(BASE, token, f"/participants/{p['id']}", body)
         if st != 200:
@@ -74,6 +82,6 @@ with open(csv_file, newline="", encoding="utf-8") as f:
         else:
             updated += 1
 
-print(f"{key}: updated={updated} dns_set={dns_count} injected_status={injected_count}")
+print(f"{key}: updated={updated} from_csv={status_counts} injected_status={injected_count}")
 if failures:
     sys.exit(f"{key}: {len(failures)} Ergebnisse nicht eingetragen (raceNumber): {failures}")

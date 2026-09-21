@@ -1,21 +1,18 @@
 """Phase 8: create a Gaudi-Modus (Punkte-Mischwertung / POINTS_COMBINATION) over all races with
 weight 1.0 each, WITHOUT an explicit pointsScaleId (exercises the default-FIS-Schema fallback),
 and independently verify every person's total points and place by recomputing per-race places
-and looking them up on the same FIS-Schema table the backend seeds by default."""
+and looking them up on the same FIS-Schema table the backend seeds by default. The mode is created
+with config.GAUDI_FLAGS, so somebody who is DNS/DNF/DSQ in a single station is scored exactly the
+way the real event scores them (0 points for that leg, still ranked)."""
 import sys, json
 sys.path.insert(0, '.')
 import common as c
 import config
-from phase6_verify_rankings import compute_expected_places, RACE_DIRECTIONS
+from phase6_verify_rankings import (compute_expected_places, combination_totals, places_from_totals,
+                                    points_for_place, RACE_DIRECTIONS)
 
 token = c.login(config.MAIN)
 race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
-
-# The FIS-Schema seeded by Flyway migration V1 (31 places; anything beyond that scores 0).
-FIS_SCHEMA = [100,80,60,50,45,40,36,32,29,26,24,22,20,18,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]
-def points_for_place(place):
-    idx = place - 1
-    return FIS_SCHEMA[idx] if 0 <= idx < len(FIS_SCHEMA) else 0
 
 per_race = {}
 for race_name, direction in RACE_DIRECTIONS.items():
@@ -31,23 +28,20 @@ all_person_ids = set()
 for race_name in RACE_DIRECTIONS:
     all_person_ids |= set(per_race[race_name]["participants_by_person"].keys())
 
-expected_totals = {}
-for pid in all_person_ids:
-    complete, total = True, 0
-    for race_name in RACE_DIRECTIONS:
-        place = per_race[race_name]["places_by_person"].get(pid)
-        if place is None:
-            complete = False
-            break
-        total += points_for_place(place)
-    if complete:
-        expected_totals[pid] = total
+expected_totals = combination_totals(
+    all_person_ids,
+    {n: per_race[n]["places_by_person"] for n in RACE_DIRECTIONS},
+    {n: per_race[n]["participants_by_person"] for n in RACE_DIRECTIONS},
+    config.GAUDI_FLAGS,
+)
 
-print(f"Expected: {len(expected_totals)} of {len(all_person_ids)} persons complete in all races and thus scored")
+print(f"Expected: {len(expected_totals)} of {len(all_person_ids)} persons scored "
+      f"(flags: {config.GAUDI_FLAGS})")
 
 races_body = [{"raceId": race_ids[n]} for n in RACE_DIRECTIONS]
 status, gm = c.post(config.MAIN, token, "/gaudi-modes", {
     "races": races_body, "type": "POINTS_COMBINATION", "name": "Gesamtwertung",
+    **config.GAUDI_FLAGS,
 })
 print("create gaudi-mode:", status, gm)
 assert status == 201, gm
@@ -68,13 +62,7 @@ for m in mismatches[:15]:
 print(f"missing from actual ranking: {missing}")
 print(f"extra in actual ranking: {extra}")
 
-sorted_pairs = sorted(expected_totals.items(), key=lambda kv: -kv[1])
-expected_places, prev, place = {}, None, 0
-for i, (pid, tot) in enumerate(sorted_pairs):
-    if prev is None or tot != prev:
-        place = i + 1
-    expected_places[pid] = place
-    prev = tot
+expected_places = places_from_totals(expected_totals)
 
 actual_places = {e["personId"]: e["place"] for e in ranking}
 place_mismatches = [(pid, expected_places[pid], actual_places.get(pid)) for pid in expected_places if actual_places.get(pid) != expected_places[pid]]

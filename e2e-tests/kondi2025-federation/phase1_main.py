@@ -5,31 +5,26 @@ per-race roster CSV for each station to import in phase 2.
 Prereq: MAIN instance running on config.MAIN_PORT, pointed at a throwaway/isolated database -
 never the real production database. Run from this directory so relative CSV paths resolve.
 """
-import sys, json
+import os, sys, json
 sys.path.insert(0, '.')
 import common as c
 import config
 
 token = c.login(config.MAIN)
 
-# Pre-create BOTH-gender age groups so the CSV import's findOrCreateForImport() reuses these
-# instead of auto-creating one gender-split group per (ageGroup label) x gender combination.
-# Adjust birth-year ranges/names to match your own event, or delete this block entirely to let
-# the import auto-create age groups from the CSV's own "ageGroup" column instead.
-# seasonYear has to match the season the races below fall into (date 2025-09-15, default
-# 1 January boundary -> season 2025): age groups are configured per season, and the import
-# resolves the "Klasse" column against the target race's own season only.
-for ag in [
-    {"name": "U16", "seasonYear": 2025, "birthYearFrom": 2010, "birthYearTo": 2011, "gender": "BOTH"},
-    {"name": "U14", "seasonYear": 2025, "birthYearFrom": 2012, "birthYearTo": 2013, "gender": "BOTH"},
-]:
+# Pre-create the age groups (config.AGE_GROUPS) before the roster import, so the import's
+# findOrCreateForImport() reuses these instead of auto-creating one gender-split group per
+# (class label x gender) combination found in the CSV. They are created for the season the race
+# date falls into - age groups are per season, and the import resolves a participant's class
+# against the target race's own season only.
+for ag in config.AGE_GROUPS:
     status, resp = c.post(config.MAIN, token, "/age-groups", ag)
     print(f"age-group {ag['name']}:", status, resp)
     assert status == 201, resp
 
 race_ids = {}
 for name, unit, label, direction, _, _ in config.RACES:
-    body = {"name": name, "date": "2025-09-15", "resultUnit": unit, "sortDirection": direction}
+    body = {"name": name, "date": config.RACE_DATE, "resultUnit": unit, "sortDirection": direction}
     if label:
         body["resultUnitLabel"] = label
     status, resp = c.post(config.MAIN, token, "/races", body)
@@ -52,7 +47,7 @@ with open(first_csv, "rb") as f:
 status, resp = c.post_multipart(
     config.MAIN, token, f"/participants/import-mapped/{race_ids[first_race_name]}",
     {"format": "CSV", "mapping": ROSTER_MAPPING},
-    {"file": (first_csv, content, "text/csv")},
+    {"file": (os.path.basename(first_csv), content, "text/csv")},
 )
 print(f"import into {first_race_name}:", status, "imported:", len(resp.get("imported", [])), "errors:", resp.get("errors"))
 assert status == 200
