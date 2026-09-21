@@ -11,6 +11,7 @@ import {Observable, map, startWith, combineLatest} from "rxjs";
 import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {RaceMeasurement, RaceMeasurementRequest} from "../../models/race-measurement.model";
 import {Participant} from "../../models/participant.model";
+import {formatParticipantMeta} from "../../utils/participant-meta.util";
 import * as ParticipantSelectors from "../../store/participant/participant.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import {take} from "rxjs/operators";
@@ -50,6 +51,9 @@ import {take} from "rxjs/operators";
                                 {{ participant.person?.firstName }} {{ participant.person?.lastName }} ({{
                                     participant.raceNumber
                                 }})
+                                @if (participantMeta(participant); as meta) {
+                                    <span class="participant-meta">· {{ meta }}</span>
+                                }
                             </mat-option>
                         }
                     </mat-autocomplete>
@@ -126,6 +130,18 @@ import {take} from "rxjs/operators";
 
             mat-form-field {
                 width: 100%;
+            }
+
+            /*
+             * Age group and team behind the name, so two runners with the same name are told apart
+             * without opening the participant list. Deliberately on the option's own line rather
+             * than a second one: a mat-option's height is fixed by Material, and the panel is
+             * meant to be scanned quickly.
+             */
+            .participant-meta {
+                margin-left: 4px;
+                color: var(--mat-sys-on-surface-variant);
+                font-size: 0.9em;
             }
         `,
     ],
@@ -219,6 +235,14 @@ export class RaceMeasurementDialogComponent implements AfterViewInit {
         this.form.patchValue({
             participantId: participant ? participant.id : null,
         });
+    }
+
+    /**
+     * Age group and team of an autocomplete option. The start number is left out because the
+     * option's main line already carries it.
+     */
+    participantMeta(participant: Participant): string {
+        return formatParticipantMeta(participant, {includeRaceNumber: false});
     }
 
     displayParticipant(participant: Participant | null): string {

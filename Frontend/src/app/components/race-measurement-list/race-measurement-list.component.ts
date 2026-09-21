@@ -16,6 +16,7 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceMeasurement} from "../../models/race-measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
+import {formatParticipantMeta} from "../../utils/participant-meta.util";
 import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as RaceMeasurementActions from "../../store/race-measurement/race-measurement.actions";
@@ -30,6 +31,8 @@ import {Actions, ofType} from "@ngrx/effects";
 
 interface RaceMeasurementWithParticipant extends RaceMeasurement {
     participantName?: string;
+    /** Start number, age group and team of the assigned participant - see formatParticipantMeta. */
+    participantMeta?: string;
 }
 
 @Component({
@@ -110,7 +113,18 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
 
                             <ng-container matColumnDef="participant">
                                 <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
-                                <td mat-cell *matCellDef="let m">{{ m.participantName || "-" }}</td>
+                                <td mat-cell *matCellDef="let m">
+                                    @if (m.participantName) {
+                                        <div class="participant-cell">
+                                            <span>{{ m.participantName }}</span>
+                                            @if (m.participantMeta) {
+                                                <span class="participant-meta">{{ m.participantMeta }}</span>
+                                            }
+                                        </div>
+                                    } @else {
+                                        -
+                                    }
+                                </td>
                             </ng-container>
 
                             <ng-container matColumnDef="duration">
@@ -199,6 +213,23 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                 opacity: 0.6;
             }
 
+            /*
+             * Start number, age group and team below the name: what tells two runners of the same
+             * name apart, and what an operator checks a manual assignment against. Kept visually
+             * secondary so the name is still what the eye scans the column for.
+             */
+            .participant-cell {
+                display: flex;
+                flex-direction: column;
+                line-height: 1.3;
+                padding: 4px 0;
+            }
+
+            .participant-meta {
+                font-size: 11px;
+                color: var(--mat-sys-on-surface-variant);
+            }
+
             mat-card {
                 margin: 20px;
             }
@@ -267,12 +298,16 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
 
         this.raceMeasurementsWithParticipants$ = combineLatest([this.raceMeasurements$, this.participants$]).pipe(
             map(([raceMeasurements, participants]) =>
-                raceMeasurements.map(m => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
+                raceMeasurements.map(m => {
+                    const participant = m.participantId ? participants.find(p => p.id === m.participantId) : undefined;
+                    return {
+                        ...m,
+                        participantName: participant?.person
+                            ? `${participant.person.firstName} ${participant.person.lastName}`
+                            : undefined,
+                        participantMeta: formatParticipantMeta(participant),
+                    };
+                }),
             ),
             distinctUntilChanged(shallowArrayEqual),
         );
@@ -363,11 +398,6 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     manualRefresh(raceId: number): void {
         this.store.dispatch(RaceMeasurementActions.loadRaceMeasurements({raceId}));
         this.snackBar.open("Daten wurden aktualisiert", "OK", {duration: 2000});
-    }
-
-    getParticipantName(participantId: number, participants: Participant[]): string {
-        const participant = participants.find(p => p.id === participantId);
-        return participant?.person ? `${participant.person.firstName} ${participant.person.lastName}` : "-";
     }
 
     formatDeviceMeasurementId = formatDeviceMeasurementId;
