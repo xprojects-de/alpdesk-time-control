@@ -84,11 +84,11 @@ public class TimingEventSink {
      * Accepts everything one poll of a device returned, in one go - the pull entry point, used by a
      * {@link PollingTimingImporter} after it asked the device.
      * <p>
-     * Deliberately NOT subject to the pause or to the automatic-import switch, unlike
-     * {@link #accept}: somebody in this application asked for this data on purpose, and every one
-     * of those callers has a reason that outranks both flags. {@link DataImportScheduler} checks
-     * the switch itself before it polls; the manual import endpoint is an operator pressing a
-     * button; and the safety pull in {@code MeasurementController#resetAll} /
+     * Deliberately NOT subject to the automatic-import switch, unlike {@link #accept}: somebody in
+     * this application asked for this data on purpose, and every one of those callers has a reason
+     * that outranks the switch. {@link DataImportScheduler} checks it itself before it polls; the
+     * manual import endpoint is an operator pressing a button; and the safety pull in
+     * {@code MeasurementController#resetAll} /
      * {@code RaceController#archiveMeasurements} runs <i>inside</i> the pause on purpose - it
      * exists to rescue what the device recorded since the last poll, moments before that device is
      * wiped. Dropping those would lose a racer's finish time at exactly the point where it can

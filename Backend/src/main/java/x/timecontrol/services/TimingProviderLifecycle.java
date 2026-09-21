@@ -59,11 +59,16 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
     // from request threads while a switch is in flight.
     private final ReentrantLock switchLock = new ReentrantLock();
 
-    // running/runningType are volatile so shutdown() can still close the device when it gave up on
-    // the lock, and so runningProviderType() can answer without taking it at all - a caller asking
-    // "what is running?" must not be able to hang behind a provider that is stuck connecting.
-    private volatile StreamingTimingImporter running;
-    private volatile TimingProviderType runningType;
+    /** The provider and the type it was selected as - one value, so both are always read together. */
+    private record Running(StreamingTimingImporter importer, TimingProviderType type) {
+    }
+
+    // volatile so shutdown() can still close the device when it gave up on the lock, and so
+    // runningProviderType() can answer without taking it at all - a caller asking "what is running?"
+    // must not be able to hang behind a provider that is stuck connecting. A single field rather
+    // than two: reading provider and type separately can catch the moment between the two writes
+    // and report "nothing running" for a device that just connected.
+    private volatile Running running;
     // Set while configure()/start() are in flight, so shutdown() can close a provider that has
     // already opened its port but is not in `running` yet - which is exactly the state a switch
     // stuck in start() leaves behind.
@@ -143,7 +148,9 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
             return;
         }
 
-        if (selected == running && type == runningType && config.equals(runningConfig)) {
+        Running current = running;
+        if (current != null && selected == current.importer() && type == current.type()
+                && config.equals(runningConfig)) {
             LOG.debug("Timing provider {} already running with unchanged config", type);
             return;
         }
@@ -154,8 +161,7 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         try {
             selected.configure(config);
             selected.start(sink);
-            running = selected;
-            runningType = type;
+            running = new Running(selected, type);
             runningConfig = Map.copyOf(config);
             LOG.info("Started streaming timing provider {}", type);
         } catch (Exception e) {
@@ -168,7 +174,6 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
             // Left as not-running on purpose: the next syncWithSettings() (another settings change,
             // or a restart) retries from a known state instead of from a half-started provider.
             running = null;
-            runningType = null;
             runningConfig = null;
         } finally {
             starting = null;
@@ -218,29 +223,29 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         // here: a switch stuck in start() has already cleared `running`, so without it this branch
         // would close nothing at all while claiming otherwise.
         StreamingTimingImporter inFlight = starting;
-        StreamingTimingImporter current = running;
+        Running current = running;
         if (inFlight == null && current == null) {
             LOG.warn("Timing provider switch did not finish - no device left open to close");
             return;
         }
         LOG.warn("Timing provider switch did not finish - closing the device without the switch lock");
         if (inFlight != null) {
-            stopQuietly(inFlight, runningType);
+            stopQuietly(inFlight, current != null ? current.type() : null);
         }
-        if (current != null && current != inFlight) {
-            stopQuietly(current, runningType);
+        if (current != null && current.importer() != inFlight) {
+            stopQuietly(current.importer(), current.type());
         }
     }
 
     private void stopRunning() {
-        if (running == null) {
+        Running current = running;
+        if (current == null) {
             return;
         }
         try {
-            stopQuietly(running, runningType);
+            stopQuietly(current.importer(), current.type());
         } finally {
             running = null;
-            runningType = null;
             runningConfig = null;
         }
     }
@@ -261,9 +266,10 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
 
     /** @return the currently running streaming provider's type, or empty if none is running */
     public Optional<TimingProviderType> runningProviderType() {
-        // No lock: both fields it reports on are volatile, and a caller asking what is running must
-        // not be able to block behind a provider that is stuck in start() - the same reason
-        // shutdown() bounds its own wait.
-        return Optional.ofNullable(running == null ? null : runningType);
+        // No lock: one volatile read of one field, so provider and type can never disagree, and a
+        // caller asking what is running cannot block behind a provider stuck in start() - the same
+        // reason shutdown() bounds its own wait.
+        Running current = running;
+        return Optional.ofNullable(current == null ? null : current.type());
     }
 }

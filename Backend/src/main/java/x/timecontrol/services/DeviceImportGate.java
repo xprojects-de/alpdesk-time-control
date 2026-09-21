@@ -63,18 +63,6 @@ public class DeviceImportGate {
     }
 
     /**
-     * Whether a device reset/archive is in flight right now. Unlike
-     * {@link #isScheduledImportActive()} this also applies to a streaming provider, which nobody
-     * can stop from delivering mid-reset - {@link TimingEventSink} consults it so a measurement
-     * arriving in that window is not written back into a table that is being cleared.
-     */
-    public boolean isPaused() {
-        synchronized (pauseLock) {
-            return pauseDepth > 0;
-        }
-    }
-
-    /**
      * Runs {@code action} with device import paused for its duration, restoring whatever state it
      * was in before. Pausing closes most of the window where a scheduled fetch, already in flight
      * when a device reset happens, would otherwise write stale pre-reset data into the measurement

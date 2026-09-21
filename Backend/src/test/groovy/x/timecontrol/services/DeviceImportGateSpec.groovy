@@ -15,26 +15,25 @@ class DeviceImportGateSpec extends Specification {
         gate.setScheduledImportActive(true)
 
         when:
-        def duringPause = gate.pauseDuring({ -> [gate.isScheduledImportActive(), gate.isPaused()] })
+        def duringPause = gate.pauseDuring({ -> gate.isScheduledImportActive() })
 
         then:
-        duringPause == [false, true]
+        !duringPause
         gate.isScheduledImportActive()
-        !gate.isPaused()
     }
 
     def "an inner pause finishing does not resume import while the outer one is still running"() {
         given: "two nearly-simultaneous resets"
         gate.setScheduledImportActive(true)
 
-        when:
-        def stillPaused = gate.pauseDuring({ ->
+        when: "the inner pause ends while the outer one is still running"
+        def resumedTooEarly = gate.pauseDuring({ ->
             gate.pauseDuring({ -> null })
-            gate.isPaused()
+            gate.isScheduledImportActive()
         })
 
-        then:
-        stillPaused
+        then: "import stays off until the LAST pause finishes"
+        !resumedTooEarly
         gate.isScheduledImportActive()
     }
 
@@ -63,11 +62,14 @@ class DeviceImportGateSpec extends Specification {
     }
 
     def "the pause is lifted even if the action throws"() {
-        when:
+        given:
+        gate.setScheduledImportActive(true)
+
+        when: "a reset fails halfway through"
         gate.pauseDuring({ -> throw new IllegalStateException("reset failed") })
 
-        then:
+        then: "import is not left switched off for the rest of the race"
         thrown(IllegalStateException)
-        !gate.isPaused()
+        gate.isScheduledImportActive()
     }
 }

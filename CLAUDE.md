@@ -142,12 +142,16 @@ dedupes against stored rows, decides upsert-vs-insert by whether the device id i
 or a *participant*, and rejects invalid durations — providers never touch `MeasurementService`
 themselves. Its two entry points are not interchangeable:
 
-- `accept(TimingEvent)` — a measurement that arrived **unasked** (push). Subject to the operator's
-  controls: dropped while a reset/archive is clearing the table and while automatic import is
-  switched off, since a streaming device cannot be told to stop sending. Matches its stored row by
-  an indexed lookup, not by reading the table.
-- `acceptBatch(List)` — the answer to a poll somebody **asked for**, and therefore subject to
-  neither flag. The scheduler checks the switch before polling; a manual import is an operator
+- `accept(TimingEvent)` — a measurement that arrived **unasked** (push). Dropped only while the
+  operator has automatic import switched off, since a streaming device cannot be told to stop
+  sending; it reads that switch through `isImportEnabledByOperator()`, not the effective flag,
+  because `pauseDuring()` forces the latter to false. Deliberately **not** dropped during a
+  reset/archive pause: a push is a single event delivered once, so discarding it loses a finish
+  time for good, while the table lock already guarantees it lands either before the archive copies
+  the table or after it was cleared. Matches its stored row by an indexed lookup, not by reading
+  the table.
+- `acceptBatch(List)` — the answer to a poll somebody **asked for**, and therefore not subject to
+  the switch either. The scheduler checks it before polling; a manual import is an operator
   pressing a button; and the safety pull before a device reset/archive runs *inside* the pause on
   purpose — dropping it would lose a finish time at the one moment it is unrecoverable.
 
@@ -162,9 +166,12 @@ doesn't have.
 device is configured or what its transport is — auto-assign matches unassigned measurements
 (device-imported, JSON-imported, or manually entered) to participants purely by querying the
 measurement table, independent of polling, so pushed measurements are picked up by it too.
-Device-reset/archive operations pause import for their duration via `DeviceImportGate.pauseDuring()`
-to avoid writing stale pre-reset data back in — which applies to pushed measurements, not to the
-requested pull that runs inside that same pause (see above).
+Device-reset/archive operations pause import for their duration via `DeviceImportGate.pauseDuring()`.
+What that pause is for is the **polling** path: a polling device reports its whole list on every
+poll, so a scheduled fetch still in flight when the table is cleared would re-insert the device's
+entire pre-reset state. It therefore stops the scheduler's own ticks — not the deliberate pull that
+runs inside the pause, and not pushed measurements, which are single events that would simply be
+lost (see the two sink entry points above).
 
 **Gaudi-Modus** (`services/gaudi/`, `GaudiModeService`): a separate scoring mode that combines
 results across multiple races per `GaudiModeType` (points combination, time combination, team,
