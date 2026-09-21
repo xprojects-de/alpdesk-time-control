@@ -93,11 +93,6 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                             class="race-measurement-table"
                             [class.loading]="loading$ | async"
                         >
-                            <ng-container matColumnDef="id">
-                                <th mat-header-cell *matHeaderCellDef>ID</th>
-                                <td mat-cell *matCellDef="let m">{{ m.id }}</td>
-                            </ng-container>
-
                             <ng-container matColumnDef="deviceMeasurementId">
                                 <th mat-header-cell *matHeaderCellDef>Geräte-Nr.</th>
                                 <td
@@ -261,7 +256,7 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     selectedRaceId$: Observable<number | null>;
     raceMeasurementsWithParticipants$: Observable<RaceMeasurementWithParticipant[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "deviceMeasurementId", "participant", "duration", "measuredAt", "actions"];
+    displayedColumns = ["deviceMeasurementId", "participant", "duration", "measuredAt", "actions"];
 
     constructor() {
         this.raceMeasurements$ = this.store.select(RaceMeasurementSelectors.selectAllRaceMeasurements);
@@ -376,6 +371,16 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
     }
 
     formatDeviceMeasurementId = formatDeviceMeasurementId;
+
+    /**
+     * Names an archived measurement the way the table shows it - by the device counter, not by the
+     * database id the table no longer prints.
+     */
+    describeRaceMeasurement(raceMeasurement: RaceMeasurement): string {
+        return isSyntheticDeviceMeasurementId(raceMeasurement.deviceMeasurementId)
+            ? `die manuell erfasste archivierte Messung (${this.formatDuration(raceMeasurement.durationMs)})`
+            : `die archivierte Messung Geräte-Nr. ${raceMeasurement.deviceMeasurementId} (${this.formatDuration(raceMeasurement.durationMs)})`;
+    }
     isSyntheticDeviceMeasurementId = isSyntheticDeviceMeasurementId;
 
     formatDuration(ms: number): string {
@@ -420,7 +425,7 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
             .open(ConfirmDialogComponent, {
                 width: "450px",
                 data: {
-                    message: `Möchten Sie die archivierte Messung #${raceMeasurement.id} wirklich löschen?`,
+                    message: `Möchten Sie ${this.describeRaceMeasurement(raceMeasurement)} wirklich löschen?`,
                     confirmLabel: "Löschen",
                     confirmColor: "warn",
                 },

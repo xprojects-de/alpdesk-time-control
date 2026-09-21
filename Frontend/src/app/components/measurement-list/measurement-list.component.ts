@@ -620,12 +620,25 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
 
         this.measurementsWithParticipants$ = combineLatest([this.measurements$, this.participants$]).pipe(
             map(([measurements, participants]) =>
-                measurements.map(m => ({
-                    ...m,
-                    participantName: m.participantId
-                        ? this.getParticipantName(m.participantId, participants)
-                        : undefined,
-                })),
+                // Newest first: during a race this list grows with every finish and has no
+                // pagination, so the row an operator just heard the beep for belongs at the top
+                // instead of below everything already recorded.
+                //
+                // Sorted by id (the order rows reached the database), not by the Geräte-Nr. the
+                // column shows, although the two normally grow in step. They come apart exactly
+                // where this sort has to stay right: a manually entered time carries a synthetic
+                // NEGATIVE device id (see MeasurementService#nextSyntheticDeviceMeasurementId) and
+                // would sink to the bottom of a device-number sort right after being typed in, and
+                // after a device reset that did not clear the table the device counts from 1 again
+                // while the ids keep rising, which would put the OLD rows on top.
+                [...measurements]
+                    .sort((a, b) => b.id - a.id)
+                    .map(m => ({
+                        ...m,
+                        participantName: m.participantId
+                            ? this.getParticipantName(m.participantId, participants)
+                            : undefined,
+                    })),
             ),
             distinctUntilChanged(shallowArrayEqual),
         );
