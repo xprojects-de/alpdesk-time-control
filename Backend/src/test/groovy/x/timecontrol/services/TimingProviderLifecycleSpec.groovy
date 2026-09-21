@@ -220,6 +220,10 @@ class TimingProviderLifecycleSpec extends Specification {
         then: "it gives up on the lock instead of waiting for the hung switch forever"
         elapsedSec < 4
 
+        and: "and still closes the device that is stuck with its port already open - it is not in"
+        // `running` at that point, so only the `starting` reference can reach it
+        stuck.stopCount == 1
+
         cleanup:
         released.countDown()
         executor.shutdownNow()

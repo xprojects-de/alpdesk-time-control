@@ -71,8 +71,9 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
     private volatile Running running;
     // Set while configure()/start() are in flight, so shutdown() can close a provider that has
     // already opened its port but is not in `running` yet - which is exactly the state a switch
-    // stuck in start() leaves behind.
-    private volatile StreamingTimingImporter starting;
+    // stuck in start() leaves behind. Carries its type for the same reason `running` does: this is
+    // the one case where the fallback below has nothing else to name the device by.
+    private volatile Running starting;
     private Map<String, String> runningConfig;
 
     @Inject
@@ -157,7 +158,7 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
 
         stopRunning();
 
-        starting = selected;
+        starting = new Running(selected, type);
         try {
             selected.configure(config);
             selected.start(sink);
@@ -222,7 +223,7 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         // closing both costs nothing if one of them is already down. `starting` is the important one
         // here: a switch stuck in start() has already cleared `running`, so without it this branch
         // would close nothing at all while claiming otherwise.
-        StreamingTimingImporter inFlight = starting;
+        Running inFlight = starting;
         Running current = running;
         if (inFlight == null && current == null) {
             LOG.warn("Timing provider switch did not finish - no device left open to close");
@@ -230,9 +231,9 @@ public class TimingProviderLifecycle implements ApplicationEventListener<ServerS
         }
         LOG.warn("Timing provider switch did not finish - closing the device without the switch lock");
         if (inFlight != null) {
-            stopQuietly(inFlight, current != null ? current.type() : null);
+            stopQuietly(inFlight.importer(), inFlight.type());
         }
-        if (current != null && current.importer() != inFlight) {
+        if (current != null && (inFlight == null || current.importer() != inFlight.importer())) {
             stopQuietly(current.importer(), current.type());
         }
     }
