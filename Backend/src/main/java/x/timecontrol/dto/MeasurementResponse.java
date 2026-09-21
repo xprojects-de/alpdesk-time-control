@@ -13,6 +13,13 @@ public record MeasurementResponse(
         @Schema(description = "Unique identifier of the measurement", example = "1")
         Long id,
 
+        @Schema(description = "The timing device's own measurement counter for this row - what the "
+                + "device's display shows, as opposed to this table's own id. Negative for a row "
+                + "that has no real device counter (manual entry, CSV import): see "
+                + "Measurement#deviceMeasurementId.", example = "17", nullable = true)
+        @Nullable
+        Long deviceMeasurementId,
+
         @Schema(description = "ID of the participant", example = "1", nullable = true)
         @Nullable
         Long participantId,
@@ -26,6 +33,7 @@ public record MeasurementResponse(
     public static MeasurementResponse from(Measurement measurement) {
         return new MeasurementResponse(
                 measurement.id(),
+                measurement.deviceMeasurementId(),
                 measurement.participantId(),
                 measurement.durationMs(),
                 measurement.measuredAt()

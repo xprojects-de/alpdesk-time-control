@@ -5,6 +5,7 @@ import {initialState, measurementReducer} from "./measurement.reducer";
 
 const messung = (id: number): Measurement => ({
     id,
+    deviceMeasurementId: id,
     participantId: null,
     durationMs: 60000 + id,
     measuredAt: "2026-09-20T09:00:00",

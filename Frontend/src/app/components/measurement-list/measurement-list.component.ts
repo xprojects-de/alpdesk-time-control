@@ -19,6 +19,7 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {AutoAssignStatus, Measurement} from "../../models/measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {deviceWasResetFromMessage} from "../../utils/device-reset.util";
+import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
 import {Race} from "../../models/race.model";
 import {Participant} from "../../models/participant.model";
 import * as MeasurementActions from "../../store/measurement/measurement.actions";
@@ -317,10 +318,20 @@ interface MeasurementWithParticipant extends Measurement {
                         class="measurement-table"
                         [class.loading]="loading$ | async"
                     >
-                        <!-- ID Column -->
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef>ID</th>
-                            <td mat-cell *matCellDef="let measurement">{{ measurement.id }}</td>
+                        <!-- Device counter Column -->
+                        <ng-container matColumnDef="deviceMeasurementId">
+                            <th mat-header-cell *matHeaderCellDef>Geräte-Nr.</th>
+                            <td
+                                mat-cell
+                                *matCellDef="let measurement"
+                                [matTooltip]="
+                                    isSyntheticDeviceMeasurementId(measurement.deviceMeasurementId)
+                                        ? 'Ohne Gerät erfasst (manuell oder CSV-Import)'
+                                        : ''
+                                "
+                            >
+                                {{ formatDeviceMeasurementId(measurement.deviceMeasurementId) }}
+                            </td>
                         </ng-container>
 
                         <!-- Duration Column -->
@@ -576,7 +587,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     // timing device is confirmed not configured (NONE).
     timingProviderActive$: Observable<boolean>;
     importLoading$: Observable<boolean>;
-    displayedColumns = ["id", "duration", "measuredAt", "participant", "actions"];
+    displayedColumns = ["deviceMeasurementId", "duration", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
     /** Bound to the bib input next to "Überspringen" - cleared once the backend accepted it. */
@@ -1110,6 +1121,19 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
         this.setNextRaceNumber();
     }
 
+    formatDeviceMeasurementId = formatDeviceMeasurementId;
+
+    /**
+     * Names a measurement the way the list shows it - by the device counter an operator can read off
+     * both the device and the table, not by the database id, which the table no longer prints.
+     */
+    describeMeasurement(measurement: Measurement): string {
+        return isSyntheticDeviceMeasurementId(measurement.deviceMeasurementId)
+            ? `die manuell erfasste Messung (${this.formatDuration(measurement.durationMs)})`
+            : `die Messung Geräte-Nr. ${measurement.deviceMeasurementId} (${this.formatDuration(measurement.durationMs)})`;
+    }
+    isSyntheticDeviceMeasurementId = isSyntheticDeviceMeasurementId;
+
     formatDuration(ms: number): string {
         const totalSeconds = Math.floor(ms / 1000);
         const hours = Math.floor(totalSeconds / 3600);
@@ -1167,7 +1191,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
             .open(ConfirmDialogComponent, {
                 width: "450px",
                 data: {
-                    message: `Möchten Sie die Messung #${measurement.id} wirklich löschen?`,
+                    message: `Möchten Sie ${this.describeMeasurement(measurement)} wirklich löschen?`,
                     confirmLabel: "Löschen",
                     confirmColor: "warn",
                 },

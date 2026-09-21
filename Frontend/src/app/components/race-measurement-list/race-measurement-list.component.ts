@@ -15,6 +15,7 @@ import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {RaceMeasurement} from "../../models/race-measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
+import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
 import {Participant} from "../../models/participant.model";
 import {Race} from "../../models/race.model";
 import * as RaceMeasurementActions from "../../store/race-measurement/race-measurement.actions";
@@ -98,8 +99,18 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                             </ng-container>
 
                             <ng-container matColumnDef="deviceMeasurementId">
-                                <th mat-header-cell *matHeaderCellDef>Geräte-ID</th>
-                                <td mat-cell *matCellDef="let m">{{ m.deviceMeasurementId }}</td>
+                                <th mat-header-cell *matHeaderCellDef>Geräte-Nr.</th>
+                                <td
+                                    mat-cell
+                                    *matCellDef="let m"
+                                    [matTooltip]="
+                                        isSyntheticDeviceMeasurementId(m.deviceMeasurementId)
+                                            ? 'Ohne Gerät erfasst (manuell oder CSV-Import)'
+                                            : ''
+                                    "
+                                >
+                                    {{ formatDeviceMeasurementId(m.deviceMeasurementId) }}
+                                </td>
                             </ng-container>
 
                             <ng-container matColumnDef="participant">
@@ -363,6 +374,9 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
         const participant = participants.find(p => p.id === participantId);
         return participant?.person ? `${participant.person.firstName} ${participant.person.lastName}` : "-";
     }
+
+    formatDeviceMeasurementId = formatDeviceMeasurementId;
+    isSyntheticDeviceMeasurementId = isSyntheticDeviceMeasurementId;
 
     formatDuration(ms: number): string {
         const totalSeconds = Math.floor(ms / 1000);
