@@ -550,12 +550,14 @@ public class PdfExportService {
         return columns;
     }
 
-    private record PointsCombinationLegRow(String raceName, String wert, String strafe, String platz, String pkt) {
+    private record PointsCombinationLegRow(String raceName, String wert, String strafe, String gesamt, String platz,
+                                            String pkt) {
     }
 
     /**
-     * Drops the "Strafe" column when none of the legs across any entry actually carry a penalty,
-     * mirroring how {@link #rankingColumns} hides it for the normal ranking table.
+     * Drops the "Strafe" and "Gesamt" columns when none of the legs across any entry actually carry
+     * a penalty, mirroring how {@link #rankingColumns} hides the same pair for the normal ranking
+     * table: without a penalty "Gesamt" would repeat "Wert" verbatim for every row.
      */
     private static List<PdfColumn<PointsCombinationLegRow>> pointsCombinationDetailColumns(boolean showStrafe) {
         List<PdfColumn<PointsCombinationLegRow>> columns = new ArrayList<>();
@@ -563,6 +565,7 @@ public class PdfExportService {
         columns.add(new PdfColumn<>("Wert", 1.0f, PointsCombinationLegRow::wert));
         if (showStrafe) {
             columns.add(new PdfColumn<>("Strafe", 0.8f, PointsCombinationLegRow::strafe));
+            columns.add(new PdfColumn<>("Gesamt", 1.0f, PointsCombinationLegRow::gesamt));
         }
         columns.add(new PdfColumn<>("Platz", 0.7f, PointsCombinationLegRow::platz));
         columns.add(new PdfColumn<>("Pkt.", 0.7f, PointsCombinationLegRow::pkt));
@@ -608,9 +611,14 @@ public class PdfExportService {
             String wert = legStatus != null ? legStatus
                     : RankingViewService.formatValue(legRace, legValue(entry, i, PdfExportService::netLegValue));
             String strafe = RankingViewService.formatPenalty(legRace, legValue(entry, i, GaudiRankingLegResponse::penalty));
+            // The leg's adjustedValue is what RankingService#adjustedValue produced for that single
+            // race, formatted through the very same formatValue() the single-race ranking uses for
+            // its own "Gesamt" column - so the number printed here is identical (rounding included)
+            // to the one in that race's own evaluation, rather than re-derived from Wert + Strafe.
+            String gesamt = RankingViewService.formatValue(legRace, legValue(entry, i, GaudiRankingLegResponse::adjustedValue));
             String platz = legValueString(entry, i, GaudiRankingLegResponse::place);
             String pkt = legValueString(entry, i, GaudiRankingLegResponse::points);
-            rows.add(new PointsCombinationLegRow(raceLabel, wert, strafe, platz, pkt));
+            rows.add(new PointsCombinationLegRow(raceLabel, wert, strafe, gesamt, platz, pkt));
         }
         return rows;
     }
@@ -1000,12 +1008,23 @@ public class PdfExportService {
     private static final float DETAIL_BOX_TOP_INSET = 7;
     private static final float DETAIL_BOX_BOTTOM_INSET = 3;
     private static final float DETAIL_TABLE_GROUP_GAP = 10;
-    private static final float DETAIL_BOX_WIDTH_FRACTION = 0.65f;
+    /**
+     * Width (pt) one unit of {@link PdfColumn#weight()} gets in a detail sub-table, so a column
+     * keeps the same width no matter how many optional columns ("Strafe"/"Gesamt") are shown next
+     * to it - unlike the main tables, which always spread their columns across the full page width.
+     * The value is the one the previously fixed 65%-of-usable-width box produced for the
+     * Punkte-Mischwertung breakdown, so its layout is unchanged by the addition of "Gesamt".
+     */
+    private static final float DETAIL_COLUMN_WIDTH_UNIT = 84.4f;
     private static final Color DETAIL_TABLE_BOX_COLOR = new Color(0.93f, 0.93f, 0.93f);
 
     private <T, D> void drawRowsWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, float[] colX, List<T> entries,
                                                  List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
-        float detailWidth = (ctx.page.getMediaBox().getWidth() - MARGIN * 2 - DETAIL_INDENT) * DETAIL_BOX_WIDTH_FRACTION;
+        float availableWidth = ctx.page.getMediaBox().getWidth() - MARGIN * 2 - DETAIL_INDENT;
+        float totalWeight = (float) detailColumns.stream().mapToDouble(PdfColumn::weight).sum();
+        // Capped at the available width so an unusually wide set of detail columns still stays
+        // inside the page instead of running off its right edge.
+        float detailWidth = Math.min(availableWidth, totalWeight * DETAIL_COLUMN_WIDTH_UNIT);
         float[] detailColX = computeColumnX(detailColumns, MARGIN + DETAIL_INDENT, detailWidth);
 
         for (T entry : entries) {
