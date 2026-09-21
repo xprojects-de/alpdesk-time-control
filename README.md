@@ -215,6 +215,30 @@ Fertige Downloads für macOS, Windows und Linux liegen bei jedem
 
 ---
 
+## Betrieb: wofür das gebaut ist
+
+Time Control läuft auf **einem Laptop im Zielbereich, in einem Netz, das ihr selbst kontrolliert**.
+Diese Annahme steckt tief im Entwurf, und sie ist der Grund, warum die Bedienung so unkompliziert
+ist: kein Konto anlegen, keine Serverkonfiguration, keine Zertifikate. Was daraus folgt, solltet
+ihr trotzdem wissen:
+
+- Es gibt **kein HTTPS** und **ein einziges Operator-Konto** – wer sich anmelden kann, kann alles.
+- Die **Live-Ansicht für Zuschauer ist absichtlich ohne Anmeldung** erreichbar. Wer im selben Netz
+  ist, sieht Namen, Vereine und Ergebnisse – so wie beim Aushang am Hang, nur bequemer.
+- Es gibt **keine Härtung gegen Angriffe von außen**, weil es dafür nicht gedacht ist.
+
+> [!CAUTION]
+> **Stellt Time Control nicht ins Internet.** Keine Portfreigabe, kein Reverse-Proxy nach außen,
+> kein Tunneldienst. Im WLAN am Hang oder in der Turnhalle ist alles gut – öffentlich erreichbar
+> gemacht, ist es weder sicher noch datenschutzkonform.
+
+Weil die Anwendung Daten von – meist minderjährigen – Teilnehmern verarbeitet, gibt es dazu ein
+eigenes Dokument: [docs/datenschutz.md](docs/datenschutz.md) sagt, welche Daten wo liegen, wer
+dafür verantwortlich ist (ihr als Verein, nicht der Autor) und was beim Löschen und Archivieren zu
+beachten ist. Sicherheitslücken meldet ihr über [SECURITY.md](SECURITY.md).
+
+---
+
 ## Dokumentation
 
 | Dokument | Inhalt |
@@ -222,6 +246,9 @@ Fertige Downloads für macOS, Windows und Linux liegen bei jedem
 | [docs/README.md](docs/README.md) | Übersicht und Einstieg |
 | [docs/installation.md](docs/installation.md) | Installation auf macOS, Windows und Linux, Zertifikats-Warnungen, Datenverzeichnis, Backup |
 | [docs/menuepunkte.md](docs/menuepunkte.md) | Alle Menüpunkte der Oberfläche kurz erklärt |
+| [docs/datenschutz.md](docs/datenschutz.md) | Welche Personendaten entstehen, wo sie liegen, wer verantwortlich ist, Löschen und Archivieren |
+| [SECURITY.md](SECURITY.md) | Betriebsmodell und wie ihr Sicherheitslücken meldet |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Bauen, Testen, Konventionen – für alle, die mitentwickeln wollen |
 
 ---
 
@@ -248,19 +275,34 @@ npm start            # Dev-Server auf http://localhost:4200
 
 Für einen Produktionsbuild zuerst `npm run deploy` im Frontend, dann `./gradlew shadowJar` im
 Backend – der Gradle-Task `copyFrontend` übernimmt das gebaute Frontend automatisch.
-Details zu Architektur, Konventionen und Build-Varianten stehen in [CLAUDE.md](CLAUDE.md).
+
+Das **gebaute Frontend liegt mit im Repository** (`Backend/src/main/resources/public`), obwohl es
+Build-Ergebnis ist. Das ist Absicht: So kommt man mit einem reinen Java-Setup ohne npm zu einem
+lauffähigen Jar. Der Preis ist, dass nach einem Frontend-Build die neu gehashten Bundles im Diff
+auftauchen – wer nur am Backend arbeitet, lässt sie aus dem Commit heraus.
+
+Details zu Architektur, Konventionen und Build-Varianten stehen in [CONTRIBUTING.md](CONTRIBUTING.md)
+und [CLAUDE.md](CLAUDE.md).
 
 ---
 
 ## Mitmachen
 
 Issues und Pull Requests sind willkommen – besonders Rückmeldungen aus echten Wettkämpfen: andere
-Disziplinen und Wertungsformen, andere Zeitmessgeräte, andere Verbands-Dateiformate. Vor einem PR
-bitte `./gradlew test` (Backend) und `npm run lint` (Frontend) laufen lassen.
+Disziplinen und Wertungsformen, andere Zeitmessgeräte, andere Verbands-Dateiformate.
+[CONTRIBUTING.md](CONTRIBUTING.md) erklärt Voraussetzungen (Java 25, Node 24), Konventionen und
+den Weg zum PR; es gilt der [Verhaltenskodex](CODE_OF_CONDUCT.md).
+
+Eine Bitte vorweg: **Keine echten Teilnehmerdaten** in Issues, PRs oder Tests – keine Namen,
+Startlisten, Ergebnis-CSVs oder Screenshots mit Klarnamen. Erfundene Namen tun es genauso, und was
+einmal in der Git-Historie steht, bleibt dort.
 
 ## Lizenz
 
 [MIT](LICENSE) – © Benjamin Hummel
+
+Die mitgelieferten Bibliotheken stehen unter eigenen Lizenzen; die vollständige Aufstellung steht
+in [THIRD-PARTY.md](THIRD-PARTY.md), die erforderlichen Hinweise in [NOTICE](NOTICE).
 
 ---
 

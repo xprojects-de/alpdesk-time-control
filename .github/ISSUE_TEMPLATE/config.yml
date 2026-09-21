@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Sicherheitslücke melden
+    url: https://github.com/xprojects-de/ski-timing-app/security/advisories/new
+    about: Bitte nicht als öffentliches Issue — hier geht es vertraulich an den Maintainer.
+  - name: Frage zur Bedienung
+    url: https://github.com/xprojects-de/ski-timing-app/blob/main/docs/menuepunkte.md
+    about: Die Oberfläche ist Menüpunkt für Menüpunkt beschrieben. Wenn die Antwort dort fehlt, mach gern trotzdem ein Issue auf.
