@@ -5,13 +5,13 @@ einen Wettkampf aufsetzt, arbeitet die Punkte am besten in der Reihenfolge ab, i
 stehen – sie entspricht ungefähr dem Ablauf eines Wettkampftags.
 
 > Ein **„Rennen“** ist in Time Control jede eigenständig gewertete Einheit: ein Skirennen, ein
-> Durchgang – oder eine einzelne Station eines Konditionswettkampfs. Mehrere davon fasst der
-> [Gaudi-Modus](#gaudi-modus) zu einer Gesamtwertung zusammen.
+> Durchgang, eine Station eines Mehrkampfs (etwa eines Konditionswettkampfs) – was auch immer in
+> Zeit, Weite oder Punkten gemessen wird. Jedes Rennen hat seine **Einzelwertung**; mehrere davon
+> fasst der [Gaudi-Modus](#gaudi-modus) zu einer **Gesamtwertung** zusammen.
 
 ## Anmeldung
 
-Nach dem Start fragt Time Control nach Benutzername und Passwort. Voreingestellt ist
-`time-control` / `time-control` (änderbar über die Umgebungsvariablen `APP_USERNAME` und
+Nach dem Start fragt Time Control nach Benutzername und Passwort (änderbar über die Umgebungsvariablen `APP_USERNAME` und
 `APP_PASSWORD`, siehe [Installation](installation.md#der-erste-start)). Die Anmeldung gilt
 24 Stunden; danach – oder nach *Abmelden* – meldet man sich neu an.
 
@@ -22,7 +22,7 @@ Oben ist immer sichtbar:
 - **Menü-Knopf** – klappt die Navigation links ein und aus (praktisch auf kleinen Bildschirmen).
   Der Zustand wird gemerkt.
 - **Verbindungssymbol** – zeigt an, ob das Zeitmess-Gerät erreichbar ist (grün = verbunden,
-  rot = nicht verbunden). Das Symbol erscheint nur, wenn überhaupt ein Gerät konfiguriert ist.
+  rot = nicht verbunden). Das Symbol erscheint nur, wenn überhaupt ein Gerät konfiguriert ist (Einstellungen).
 - **Benutzermenü** – zeigt den angemeldeten Benutzer und enthält *Abmelden*.
 - **Versionsnummer** – ganz unten in der Navigation.
 - **Rotes Banner „Backend nicht erreichbar“** – erscheint, sobald die Oberfläche den Server nicht
@@ -132,7 +132,8 @@ setzen:
 
 - Person, Startnummer, Team und Kategorie,
 - das Ergebnis als Minuten/Sekunden/Millisekunden (bzw. als Wert bei Punkterennen),
-- **Strafe** in Sekunden, die auf die Zeit addiert wird,
+- **Strafe** – verschlechtert das Ergebnis immer: Bei Zeitwertung wird sie aufgeschlagen, bei
+  „größter Wert gewinnt“ abgezogen. Rangliste, PDF, CSV und Live-Ansicht rechnen damit,
 - **Status** – `DNS` (nicht gestartet), `DNF` (nicht beendet) oder `DSQ` (disqualifiziert). Ein
   gesetzter Status schließt den Teilnehmer aus jeder Rangliste aus, auch wenn eine Zeit gemessen wurde,
 - ein freier Kommentar.
@@ -146,7 +147,9 @@ Das große Aktionsmenü bündelt alles, was für ein ganzes Rennen gilt:
   zweiten Laufs; die Startnummern bleiben dabei unverändert.
 - **Startliste (PDF)** und **Startliste (CSV)** – letztere inklusive Startgruppe und Zeitversatz.
 
-**Import und Export**
+**Import und Export (CSV)**
+
+Die CSV-Funktionen sind der Weg, Daten zwischen Excel, mehreren Laptops und Time Control zu bewegen.
 - **Teilnehmer importieren** – liest eine CSV-Datei (beliebiges Trennzeichen) oder eine
   DSV-Wettkampfdatei im XML-Format ein. In einem Zwischenschritt ordnet man die Spalten der Datei
   den eigenen Feldern zu; die naheliegende Zuordnung schlägt Time Control selbst vor.
@@ -182,7 +185,7 @@ Spalten, die Spalten selbst lassen sich in ihrer Reihenfolge verschieben.
 
 ## Gaudi-Modus
 
-Für Wertungen, die über ein einzelnes Rennen hinausgehen. Man legt eine Wertung an, wählt den Typ,
+Für Wertungen, die über ein einzelnes Rennen hinausgehen – die **Gesamtwertung** neben den Einzelwertungen der Stationen. Man legt eine Wertung an, wählt den Typ,
 vergibt einen Namen und wählt die beteiligten Rennen:
 
 - **Punkte-Mischwertung** – je Rennen wird der Platz über ein **Punkteschema** (Platz → Punkte) in
@@ -201,13 +204,17 @@ vergibt einen Namen und wählt die beteiligten Rennen:
 **Punkteschemata** (Platz → Punkte) verwaltet man direkt im Dialog; sie lassen sich für spätere
 Wertungen wiederverwenden. Auch eine Gaudi-Wertung kann ein eigenes Deckblatt bekommen.
 
+Gewichtung: Jedem Rennen einer Punkte-Mischwertung lässt sich ein eigenes Gewicht geben. Ein
+Gewicht von 2 verdoppelt die Punkte dieser Station, 0.5 halbiert sie, 0 lässt die Station außen vor –
+so zählt z. B. der Ausdauerlauf mehr als eine Geschicklichkeitsstation.
+
 Die Detailansicht zeigt die fertige Rangliste samt der Läufer, die nicht gewertet werden konnten,
 und bietet PDF- und CSV-Exporte für Gesamtwertung, Damen, Herren und nach Altersklassen aufgeteilt
 (letztere als ZIP-Archiv beim CSV-Export).
 
 ---
 
-# Zeitnahme
+# Zeitnahme (optional)
 
 ## Messungen
 
