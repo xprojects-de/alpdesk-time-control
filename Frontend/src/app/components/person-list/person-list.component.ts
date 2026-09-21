@@ -20,6 +20,7 @@ import * as PersonActions from "../../store/person/person.actions";
 import * as PersonSelectors from "../../store/person/person.selectors";
 import * as ParticipantActions from "../../store/participant/participant.actions";
 import {PersonWithActiveRaces} from "../../store/person/person.selectors";
+import {Race} from "../../models/race.model";
 import {PersonDialogComponent} from "./person-dialog.component";
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {map, take, takeUntil} from "rxjs/operators";
@@ -133,9 +134,12 @@ import {Actions, ofType} from "@ngrx/effects";
                             <td mat-cell *matCellDef="let person">
                                 @if (person.activeRaces.length) {
                                     <mat-chip-set>
-                                        @for (race of person.activeRaces; track race.id) {
-                                            <mat-chip>{{ race.name }}</mat-chip>
-                                        }
+                                        <mat-chip
+                                            [matTooltip]="activeRacesTooltip(person.activeRaces)"
+                                            matTooltipClass="active-races-tooltip"
+                                        >
+                                            {{ person.activeRaces.length }} Rennen
+                                        </mat-chip>
                                     </mat-chip-set>
                                 } @else {
                                     <span class="no-races">-</span>
@@ -219,8 +223,9 @@ import {Actions, ofType} from "@ngrx/effects";
                 color: rgba(0, 0, 0, 0.4);
             }
 
-            mat-chip-set {
-                max-width: 320px;
+            /* The cell only ever holds the count chip, which must stay on one line. */
+            mat-chip {
+                white-space: nowrap;
             }
         `,
     ],
@@ -431,6 +436,18 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
             return "—";
         }
         return GenderLabels[gender] || gender;
+    }
+
+    /**
+     * Tooltip behind the "n Rennen" chip: one "dd.MM.yyyy - Name" line per race, newest first.
+     * The cell only ever shows the count, because activeRaces spans every season the person has
+     * ever taken part in and therefore grows without bound - see selectPersonsWithActiveRaces.
+     */
+    activeRacesTooltip(races: Race[]): string {
+        return [...races]
+            .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.name.localeCompare(b.name))
+            .map(race => (race.date ? `${this.formatRaceDate(race.date)} - ${race.name}` : race.name))
+            .join("\n");
     }
 
     formatRaceDate(dateString: string): string {

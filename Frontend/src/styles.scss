@@ -110,3 +110,12 @@ body {
   // keeps a long race name from stretching the panel across the whole window.
   max-width: 480px;
 }
+
+/*
+ * Tooltip behind the "n Rennen" chip in the person list. It carries one race per line, so the
+ * newlines have to survive - Material's default tooltip collapses whitespace. Global rather than
+ * a component style because the tooltip renders in an overlay outside the component's DOM.
+ */
+.active-races-tooltip {
+  white-space: pre-line;
+}
