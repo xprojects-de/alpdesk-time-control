@@ -11,14 +11,14 @@ import org.slf4j.LoggerFactory;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.TimingProviderType;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Singleton
-public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
+public class AlpdeskTimeControlDataImportService implements PollingTimingImporter {
 
     private static final Logger LOG = LoggerFactory.getLogger(AlpdeskTimeControlDataImportService.class);
 
@@ -37,10 +37,7 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
     HttpClient httpClient;
 
     @Inject
-    MeasurementService measurementService;
-
-    @Inject
-    MeasurementTableLock measurementTableLock;
+    TimingEventSink timingEventSink;
 
     // A plain instance field here would be a shared-mutable-state race: TimingProviderRegistry
     // calls configure() then immediately hands the (single, singleton) importer back to the caller
@@ -55,6 +52,13 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
     @Override
     public TimingProviderType type() {
         return TimingProviderType.ALPDESK_TIMECONTROL;
+    }
+
+    @Override
+    public Set<DeviceCapability> capabilities() {
+        // This controller offers all of them - it holds the measurements itself, can be switched
+        // between continuous and manual triggering, and keeps a start queue.
+        return EnumSet.allOf(DeviceCapability.class);
     }
 
     @Override
@@ -99,7 +103,6 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
 
     @Override
     public List<Measurement> importDataFromDevice() {
-        List<Measurement> createdMeasurements = new ArrayList<>();
         String dataUrl = dataUrl();
 
         LOG.info("Fetching data from {}", dataUrl);
@@ -120,94 +123,67 @@ public class AlpdeskTimeControlDataImportService implements TimingDataImporter {
 
         if (response.trim().isEmpty()) {
             LOG.debug("No data received from device");
-            return createdMeasurements;
+            return List.of();
         }
 
-        String[] lines = response.split("\\r?\\n");
-        LocalDateTime now = LocalDateTime.now();
+        List<TimingEvent> events = parseEvents(response);
 
-        // Locked so a concurrent archive/reset can't observe or clear the measurement table
-        // mid-import; the device HTTP call above stays outside the lock so a slow/unreachable
-        // device can't block archive/reset operations.
-        measurementTableLock.run(() -> {
-            // The device reports its WHOLE list on every poll, not just what is new, so most lines
-            // of a 5s tick describe a row that is already stored unchanged. One read up front,
-            // keyed by the device's own id, replaces the per-line lookup that used to run for each
-            // of them.
-            Map<Long, Measurement> storedByDeviceId = new HashMap<>();
-            for (Measurement stored : measurementService.findAll()) {
-                if (stored.deviceMeasurementId() != null) {
-                    storedByDeviceId.put(stored.deviceMeasurementId(), stored);
-                }
+        // Everything about what this does to the measurement table - dedup against what is stored,
+        // skipping rows that did not change, the pause window around a device reset - lives in the
+        // sink, shared with every other provider. This service only speaks the device's protocol.
+        List<Measurement> imported = timingEventSink.acceptBatch(events);
+
+        LOG.info("Successfully imported {} measurements", imported.size());
+        return imported;
+    }
+
+    /**
+     * Parses the device's response body - one {@code <deviceId>,<durationMs>} line per measurement,
+     * the device's whole list on every poll, not just what is new. A line that cannot be read is
+     * skipped with a warning rather than failing the poll: one garbled line (serial noise, firmware
+     * glitch) must not cost the rest of the field's times.
+     */
+    private List<TimingEvent> parseEvents(String response) {
+        List<TimingEvent> events = new ArrayList<>();
+
+        for (String line : response.split("\\r?\\n")) {
+
+            String trimmedLine = line.trim();
+            if (trimmedLine.isEmpty()) {
+                continue;
             }
 
-            for (String line : lines) {
+            try {
 
-                String trimmedLine = line.trim();
-                if (trimmedLine.isEmpty()) {
+                String[] parts = trimmedLine.split(",");
+                if (parts.length != 2) {
+                    LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
                     continue;
                 }
 
-                try {
+                long deviceId = Long.parseLong(parts[0].trim());
+                double timeValue = Double.parseDouble(parts[1].trim());
+                long roundedDurationMs = Math.round(timeValue);
 
-                    String[] parts = trimmedLine.split(",");
-                    if (parts.length != 2) {
-                        LOG.warn("Invalid line format (expected ID,time): {}", trimmedLine);
-                        continue;
-                    }
-
-                    long deviceId = Long.parseLong(parts[0].trim());
-                    double timeValue = Double.parseDouble(parts[1].trim());
-                    long roundedDurationMs = Math.round(timeValue);
-
-                    // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose
-                    // value parses as a huge double: narrowing straight to int would silently wrap
-                    // around, possibly landing on a small, plausible-looking positive number that
-                    // the durationMs < 0 check below would never catch.
-                    if (roundedDurationMs < 0 || roundedDurationMs > Integer.MAX_VALUE) {
-                        LOG.warn("Ignoring out-of-range duration from device for ID {}: {} ms", deviceId, roundedDurationMs);
-                        continue;
-                    }
-                    int durationMs = (int) roundedDurationMs;
-
-                    // Keyed by the device's own id, kept in a column separate from this table's
-                    // own `id` PK - see Measurement#deviceMeasurementId.
-                    Measurement existing = storedByDeviceId.get(deviceId);
-
-                    // participantId and measuredAt are carried over from the stored row, so the
-                    // duration is the only thing an upsert could actually change. When it matches,
-                    // the write would rewrite the row to what it already is - skipped, because on a
-                    // WAL database that is a real commit per row, every 5 seconds, for every finish
-                    // recorded so far. The row is still reported back: MeasurementController's
-                    // manual device import returns this list to the UI, which must keep listing
-                    // everything the device holds, not only what happened to need writing.
-                    // duration_ms is NOT NULL (V1__create_participant.sql), so unboxing the
-                    // stored value for this comparison cannot NPE.
-                    if (existing != null && existing.durationMs() == durationMs) {
-                        createdMeasurements.add(existing);
-                        continue;
-                    }
-
-                    Long existingParticipantId = existing != null ? existing.participantId() : null;
-                    LocalDateTime timestamp = existing != null ? existing.measuredAt() : now;
-
-                    Measurement saved = measurementService.upsertByDeviceMeasurementId(deviceId, existingParticipantId, durationMs, timestamp);
-                    createdMeasurements.add(saved);
-                    // Keeps a second line for the same device id in this same response comparing
-                    // against what was just written, exactly as the old per-line lookup did.
-                    storedByDeviceId.put(deviceId, saved);
-                    LOG.debug("Upserted measurement, device ID {}: {} ms", deviceId, durationMs);
-
-                } catch (NumberFormatException e) {
-                    LOG.warn("Could not parse line: {}", trimmedLine);
-                } catch (Exception e) {
-                    LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+                // Guards against a garbled/corrupted line (serial noise, firmware glitch) whose
+                // value parses as a huge double: narrowing straight to int would silently wrap
+                // around, possibly landing on a small, plausible-looking positive number that the
+                // sink's negative-duration check would never catch.
+                if (roundedDurationMs < 0 || roundedDurationMs > Integer.MAX_VALUE) {
+                    LOG.warn("Ignoring out-of-range duration from device for ID {}: {} ms", deviceId, roundedDurationMs);
+                    continue;
                 }
-            }
-        });
 
-        LOG.info("Successfully imported {} measurements", createdMeasurements.size());
-        return createdMeasurements;
+                events.add(TimingEvent.fromDevice(deviceId, (int) roundedDurationMs));
+
+            } catch (NumberFormatException e) {
+                LOG.warn("Could not parse line: {}", trimmedLine);
+            } catch (Exception e) {
+                LOG.warn("Error processing line '{}': {}", trimmedLine, e.getMessage());
+            }
+        }
+
+        return events;
     }
 
     @Override

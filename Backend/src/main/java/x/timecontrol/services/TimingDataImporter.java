@@ -1,16 +1,20 @@
 package x.timecontrol.services;
 
-import x.timecontrol.entities.Measurement;
 import x.timecontrol.entities.TimingProviderType;
 
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * One implementation per supported timing device/provider. {@link TimingProviderRegistry} picks
  * the active one based on the persisted app_settings selection and delegates every call to it, so
  * {@link DataImportScheduler} and the measurement/race controllers never depend on a concrete
  * provider directly.
+ * <p>
+ * This interface only covers what every provider has: identity, config, and the optional device
+ * commands. How measurements actually arrive is the one sub-interface a provider must also
+ * implement: {@link PollingTimingImporter} (this backend asks) or {@link StreamingTimingImporter}
+ * (the device pushes).
  */
 public interface TimingDataImporter {
 
@@ -20,12 +24,45 @@ public interface TimingDataImporter {
      */
     String NOT_CONFIGURED_MESSAGE = "Keine Zeitmessung konfiguriert";
 
+    /**
+     * Counterpart of {@link #NOT_CONFIGURED_MESSAGE} for a device that IS configured but does not
+     * offer the requested command (see {@link DeviceCapability}).
+     * <p>
+     * English, per the backend language rule in CLAUDE.md - as are all 42 other ErrorResponse texts
+     * in this backend. {@link #NOT_CONFIGURED_MESSAGE} above is the one historical exception and is
+     * deliberately left alone: the frontend renders these verbatim (see extractErrorMessage), so
+     * changing it would change what the operator reads in a dialog they already know.
+     */
+    String NOT_SUPPORTED_MESSAGE = "The configured timing device does not support this action";
+
     TimingProviderType type();
 
     /**
+     * Which optional device commands below this provider actually implements. Anything not listed
+     * here is treated by the controllers as "not applicable to this device" rather than as a
+     * device error, and the frontend hides the corresponding control.
+     */
+    default Set<DeviceCapability> capabilities() {
+        return Set.of();
+    }
+
+    /**
      * Applies the provider-specific config saved for this provider in app_settings (device
-     * URL/COM-port/baud rate/...), overlaid on top of this importer's built-in defaults. Called
-     * before every use, so a config change takes effect on the next poll/action without a restart.
+     * URL/COM-port/baud rate/...), overlaid on top of this importer's built-in defaults.
+     * <p>
+     * When it is called differs by transport, and a provider may rely on that:
+     * <ul>
+     *   <li>{@link PollingTimingImporter}: before every use, so a config change takes effect on the
+     *       next poll/action without a restart (see {@link TimingProviderRegistry#getActiveImporter()}).
+     *       Since two callers can interleave their configure()+action pairs on different threads, a
+     *       polling provider must not keep the configured value in a plain instance field - see
+     *       {@link AlpdeskTimeControlDataImportService}.</li>
+     *   <li>{@link StreamingTimingImporter}: once, by {@link TimingProviderLifecycle}, immediately
+     *       before {@link StreamingTimingImporter#start}, and never while the connection is up - a
+     *       changed config is applied by stopping and restarting the provider instead. A plain
+     *       field is therefore fine (and a ThreadLocal would be wrong: the value would not be
+     *       visible on the provider's own reader/callback thread).</li>
+     * </ul>
      *
      * @param config provider-specific key/value overrides; never null, empty if none are set
      */
@@ -34,29 +71,50 @@ public interface TimingDataImporter {
     }
 
     /**
-     * Pulls new measurements from the device and persists them, returning whatever was
-     * created/updated by this call.
-     * <p>
-     * Persist via {@link MeasurementService#upsertByDeviceMeasurementId} only when the id you have
-     * identifies a single physical measurement event and stays stable if that event is re-polled
-     * (e.g. the device's own line-local counter - see {@link AlpdeskTimeControlDataImportService}).
-     * If a provider instead reports something that identifies a participant rather than an event -
-     * e.g. a chip-timing system delivering the athlete's start number/bib per crossing - that value
-     * must NOT be used as the device measurement id: the same participant can cross multiple times,
-     * and upserting on it would silently overwrite an earlier crossing instead of recording a new
-     * one. Such a provider should call {@link MeasurementService#create} instead, resolving
-     * participantId itself (e.g. by looking up the start number against the active race) and
-     * passing a null deviceMeasurementId so a safe synthetic one is generated.
+     * Human-readable device state for the operator's UI. Providers are free to define their own
+     * vocabulary (the Alpdesk controller answers "continuous"/"normal"); null means the device
+     * could not be reached.
      */
-    List<Measurement> importDataFromDevice();
-
-    boolean resetDevice();
-
-    boolean continuousMode(boolean enableContinuousMode);
-
     String getDeviceStatus();
 
-    boolean discardOldestStart();
-
     boolean isDeviceConnected();
+
+    /**
+     * Clears the device's own measurement memory. Only called when this provider declares
+     * {@link DeviceCapability#RESET}; the default exists so providers without that capability
+     * don't have to stub it.
+     *
+     * @return false if the device was asked and refused/could not be reached
+     * @throws UnsupportedOperationException if this provider declares the capability but forgot to
+     *                                       implement the command - see {@link #unsupported}
+     */
+    default boolean resetDevice() {
+        throw unsupported(DeviceCapability.RESET, "resetDevice()");
+    }
+
+    /** @see DeviceCapability#CONTINUOUS_MODE */
+    default boolean continuousMode(boolean enableContinuousMode) {
+        throw unsupported(DeviceCapability.CONTINUOUS_MODE, "continuousMode(boolean)");
+    }
+
+    /** @see DeviceCapability#DISCARD_OLDEST_START */
+    default boolean discardOldestStart() {
+        throw unsupported(DeviceCapability.DISCARD_OLDEST_START, "discardOldestStart()");
+    }
+
+    /**
+     * Reaching one of the defaults above means a provider declared a capability in
+     * {@link #capabilities()} without implementing it - controllers check the capability first, so
+     * a provider that doesn't declare it never gets here.
+     * <p>
+     * Deliberately louder than returning {@code false}: false is this interface's word for "the
+     * device was asked and said no", which would surface to the operator as "Failed to reset
+     * device. Database was not modified." for a device that was never asked at all - a wrong
+     * message they can do nothing about, in the middle of a race. An exception names the bug and
+     * the provider instead.
+     */
+    private UnsupportedOperationException unsupported(DeviceCapability capability, String method) {
+        return new UnsupportedOperationException(
+                type() + " declares " + capability + " but does not implement " + method);
+    }
 }
