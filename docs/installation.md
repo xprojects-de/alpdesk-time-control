@@ -89,18 +89,24 @@ Zum Beenden das Fenster schließen bzw. den Beenden-Knopf im kleinen Kontrollfen
 
 Betrifft **alle** macOS-Varianten (Poor-Man-Bundle, `.dmg`, Intel-`.app`), da keine davon signiert ist.
 
-Bei aktuellem macOS (Sonoma/Sequoia) bietet *Rechtsklick → Öffnen* teilweise keinen Bypass mehr an
-(es erscheint nur noch „In den Papierkorb legen“/„Abbrechen“). Dann hilft **eine** der beiden
-Varianten:
+Ab **macOS 15 (Sequoia)** hat Apple den früher üblichen Bypass per *Rechtsklick → Öffnen*
+entfernt – dort erscheint nur noch „In den Papierkorb legen“/„Abbrechen“, egal wie oft man es
+versucht. Die Freigabe läuft seitdem über die Systemeinstellungen. Es führt **eine** der beiden
+Varianten zum Ziel:
 
-- **Ohne Terminal:** Die Datei per **Rechtsklick → Öffnen** starten (nicht per Doppelklick) und im
-  Dialog nochmals **Öffnen** bestätigen. Wird sie trotzdem blockiert:
-  **Systemeinstellungen → Datenschutz & Sicherheit** öffnen, nach unten scrollen bis zur Meldung
-  *„'Time Control' wurde blockiert…“*, dort **Trotzdem öffnen** wählen (Passwort/Touch ID nötig)
-  und die App danach erneut starten. Im zweiten Dialog gibt es dann einen echten
-  „Trotzdem öffnen“-Knopf.
-- **Mit Terminal:** Die Quarantäne-Markierung einmalig entfernen. Pfad an die eigene Variante
-  anpassen:
+- **Ohne Terminal (macOS 15 und neuer):**
+  1. Die Datei ganz normal per **Doppelklick** starten. Die Blockier-Meldung mit **Fertig** bzw.
+     **Abbrechen** schließen – keinesfalls „In den Papierkorb legen“ wählen.
+  2. **Systemeinstellungen → Datenschutz & Sicherheit** öffnen und nach unten scrollen bis zur
+     Meldung *„'Time Control' wurde blockiert…“*. Dort **Trotzdem öffnen** wählen
+     (Passwort/Touch ID nötig).
+  3. Die Datei erneut per Doppelklick starten und im letzten Dialog **Öffnen** bestätigen.
+
+  Auf **macOS 14 (Sonoma) und älter** genügt stattdessen meist **Rechtsklick → Öffnen** und im
+  Dialog nochmals **Öffnen**. Führt das nicht zum Ziel, funktioniert dort ebenfalls der Weg über
+  die Systemeinstellungen.
+- **Mit Terminal (alle Versionen, schnellster Weg):** Die Quarantäne-Markierung einmalig
+  entfernen. Pfad an die eigene Variante anpassen:
 
   ```bash
   xattr -rd com.apple.quarantine ~/Time-Control-macOS-AppleSilicon-PoorMan
