@@ -164,6 +164,50 @@ class TimingEventSinkSpec extends Specification {
         rescued.size() == 1
     }
 
+    def "a poll answer that a reset/archive overtook is discarded"() {
+        given: "the poll was sent, then the operator archived while its answer was still in flight"
+        measurementService.findAll() >> []
+        def requestedAtEpoch = importGate.currentImportEpoch()
+        importGate.pauseDuring({ -> null })
+
+        when: "the stale answer finally arrives - a polling device reports its WHOLE list"
+        def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 50000)], requestedAtEpoch)
+
+        then: "writing it would reinstate the archived race in the table that was just cleared,"
+        // where auto-assign would hand it to the next race's starters
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        accepted.empty
+    }
+
+    def "a poll answer is written when no reset happened while it was in flight"() {
+        given: "the normal case: poll, answer, nothing archived in between"
+        measurementService.findAll() >> []
+        def requestedAtEpoch = importGate.currentImportEpoch()
+
+        when:
+        def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 50000)], requestedAtEpoch)
+
+        then: "the epoch check must not cost a finish time in ordinary operation"
+        1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+        accepted.size() == 1
+    }
+
+    def "the safety pull keeps its times even though it runs inside the pause"() {
+        given: "resetAll/archiveMeasurements pull the device dry inside pauseDuring(), then wipe"
+        measurementService.findAll() >> []
+
+        when: "the pull reads the epoch at its own call time, which is already the new one"
+        def rescued = importGate.pauseDuring({ ->
+            sink.acceptBatch([TimingEvent.fromDevice(1L, 50000)], importGate.currentImportEpoch())
+        })
+
+        then: "these are the times the pull exists to rescue - the epoch must not discard them"
+        1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+        rescued.size() == 1
+    }
+
     def "one failing event does not cost the rest of the batch"() {
         given:
         measurementService.findAll() >> []

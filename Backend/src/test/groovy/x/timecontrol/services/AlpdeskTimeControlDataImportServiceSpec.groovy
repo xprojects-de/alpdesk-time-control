@@ -19,6 +19,8 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
     BlockingHttpClient blockingHttpClient = Mock()
     HttpClient httpClient = Mock()
 
+    DeviceImportGate importGate = new DeviceImportGate()
+
     AlpdeskTimeControlDataImportService service = new AlpdeskTimeControlDataImportService()
 
     static final LocalDateTime MEASURED_AT = LocalDateTime.of(2026, 1, 2, 10, 0, 0)
@@ -27,13 +29,30 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         // The real sink, with a mocked MeasurementService behind it: what this spec is about is
         // which writes a device response causes, and those are decided in the sink now - wiring a
         // mocked sink here would assert against a stub instead of against that behaviour.
-        service.timingEventSink = new TimingEventSink(measurementService, new MeasurementTableLock(), new DeviceImportGate())
+        service.timingEventSink = new TimingEventSink(measurementService, new MeasurementTableLock(), importGate)
+        service.importGate = importGate
         service.httpClient = httpClient
         httpClient.toBlocking() >> blockingHttpClient
     }
 
     private void deviceReports(String body) {
         blockingHttpClient.retrieve(_) >> body
+    }
+
+    def "an archive that starts while the poll is in flight discards its answer"() {
+        given: "the device answers only after the operator has archived and the table was cleared"
+        measurementService.findAll() >> []
+        blockingHttpClient.retrieve(_) >> {
+            importGate.pauseDuring({ -> null })
+            "1,50000\n"
+        }
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "this list describes the race that was just archived - writing it would bring it back"
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        imported.empty
     }
 
     def "a line matching the stored row is reported back but not written again"() {

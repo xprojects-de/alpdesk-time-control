@@ -39,6 +39,9 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
     @Inject
     TimingEventSink timingEventSink;
 
+    @Inject
+    DeviceImportGate importGate;
+
     // A plain instance field here would be a shared-mutable-state race: TimingProviderRegistry
     // calls configure() then immediately hands the (single, singleton) importer back to the caller
     // for one action call, all on the caller's own thread - but two callers (e.g. the scheduler tick
@@ -105,6 +108,12 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
     public List<Measurement> importDataFromDevice() {
         String dataUrl = dataUrl();
 
+        // Read BEFORE the device is asked, not after the answer arrives: if a reset/archive starts
+        // while this request is in flight, everything below describes the race that was just
+        // archived. Handing the epoch to the sink is what lets it tell that apart from a poll
+        // issued after the reset - see DeviceImportGate#currentImportEpoch().
+        long requestedAtEpoch = importGate.currentImportEpoch();
+
         LOG.info("Fetching data from {}", dataUrl);
 
         // Deliberately NOT swallowed (unlike the per-line parsing below): a caller doing a
@@ -131,7 +140,7 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         // Everything about what this does to the measurement table - dedup against what is stored,
         // skipping rows that did not change, the pause window around a device reset - lives in the
         // sink, shared with every other provider. This service only speaks the device's protocol.
-        List<Measurement> imported = timingEventSink.acceptBatch(events);
+        List<Measurement> imported = timingEventSink.acceptBatch(events, requestedAtEpoch);
 
         LOG.info("Successfully imported {} measurements", imported.size());
         return imported;

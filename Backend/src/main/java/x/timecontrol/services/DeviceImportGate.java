@@ -27,9 +27,32 @@ public class DeviceImportGate {
     // reset finishing early can never re-enable scheduled import while another is still in flight.
     private int pauseDepth = 0;
     private boolean pausedTargetActive = false;
+    // Guarded by pauseLock. Bumped once per outermost pauseDuring(), so a poll response can be told
+    // apart by whether it was requested before or after a device reset/archive - see
+    // currentImportEpoch(). Only the outermost pause bumps it: two overlapping archives must not
+    // invalidate each other's safety pull, which runs inside the pause and would otherwise be
+    // discarded, losing a finish time at the one moment it cannot be recovered.
+    private long importEpoch = 0;
 
     public boolean isScheduledImportActive() {
         return scheduledImportActive;
+    }
+
+    /**
+     * A token identifying the current generation of device data. A {@link PollingTimingImporter}
+     * captures it <b>before</b> asking the device for its list and hands it back to
+     * {@link TimingEventSink}'s batch entry point together with the answer.
+     * <p>
+     * It changes whenever {@link #pauseDuring} runs - which is exactly when the device and the
+     * measurement table are about to be wiped - so a batch carrying an older token is the answer to
+     * a poll that describes a race which has since been archived. Setting the operator's switch does
+     * NOT change it: that is not a generation change, and a poll in flight across it still describes
+     * the current race.
+     */
+    public long currentImportEpoch() {
+        synchronized (pauseLock) {
+            return importEpoch;
+        }
     }
 
     public void setScheduledImportActive(boolean active) {
@@ -76,6 +99,7 @@ public class DeviceImportGate {
             if (pauseDepth == 0) {
                 pausedTargetActive = scheduledImportActive;
                 scheduledImportActive = false;
+                importEpoch++;
             }
             pauseDepth++;
         }

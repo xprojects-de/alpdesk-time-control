@@ -69,7 +69,7 @@ public class TimingEventSink {
         // measurement, so reading every stored row here would turn a race into one full scan per
         // finish - under the measurement table lock, on a WAL database. The batch path below reads
         // everything precisely because it has a whole poll response to match at once.
-        List<Measurement> accepted = accept(List.of(event), true, () -> {
+        List<Measurement> accepted = accept(List.of(event), true, null, () -> {
             Map<Long, Measurement> stored = new HashMap<>(2);
             if (deviceId != null) {
                 measurementService.findByDeviceMeasurementId(deviceId)
@@ -94,14 +94,38 @@ public class TimingEventSink {
      * wiped. Dropping those would lose a racer's finish time at exactly the point where it can
      * never be recovered.
      *
+     * What it IS subject to is {@link DeviceImportGate#currentImportEpoch()}: a poll answer that
+     * arrives after the reset/archive it was issued before describes a race that has already been
+     * archived, and a polling device reports its whole list, so writing it would reinstate that
+     * entire race as "new" measurements. This overload uses the epoch as it is now, which is right
+     * for every caller that asks and writes without device I/O in between; a poller that goes to
+     * the device first captures the epoch before doing so and uses
+     * {@link #acceptBatch(List, long)}.
+     *
      * @return the stored row per accepted event, including rows that already matched and were
      * therefore not written again; rejected events are left out
      */
     public List<Measurement> acceptBatch(List<TimingEvent> events) {
+        return acceptBatch(events, importGate.currentImportEpoch());
+    }
+
+    /**
+     * {@link #acceptBatch(List)} for a caller that asked a device and waited for its answer: it
+     * passes the {@link DeviceImportGate#currentImportEpoch()} it read <b>before</b> sending the
+     * request, and the batch is discarded if a device reset/archive has happened since.
+     * <p>
+     * {@link MeasurementTableLock} cannot cover this on its own - it only decides that the batch
+     * lands entirely before or entirely after the archive, and "after" is the damaging case: the
+     * pre-reset list lands in the table that was just cleared, where auto-assign then hands it to
+     * the next race's starters.
+     *
+     * @param requestedAtEpoch the epoch read before the device was asked
+     */
+    public List<Measurement> acceptBatch(List<TimingEvent> events, long requestedAtEpoch) {
         if (events == null || events.isEmpty()) {
             return List.of();
         }
-        return accept(events, false, () -> loadStoredByDeviceId(events));
+        return accept(events, false, requestedAtEpoch, () -> loadStoredByDeviceId(events));
     }
 
     /**
@@ -110,6 +134,7 @@ public class TimingEventSink {
      * between accepting one pushed measurement and accepting a whole poll response.
      */
     private List<Measurement> accept(List<TimingEvent> events, boolean unsolicited,
+                                     Long requestedAtEpoch,
                                      Supplier<Map<Long, Measurement>> storedLoader) {
         // Sorted out before the lock is taken and before anything is read: an implausible value is
         // a property of the event alone, so checking it here keeps a garbled message from costing a
@@ -125,11 +150,12 @@ public class TimingEventSink {
         return measurementTableLock.get(() -> {
             // Checked inside the lock, not before it: the switch can be flipped while this call is
             // queued behind an archive, and the operator's last word should win.
-            String refusal = unsolicited ? refusePush() : null;
+            String refusal = unsolicited ? refusePush() : refusePull(requestedAtEpoch);
             if (refusal != null) {
                 // These are real measured times, so they go into the log at WARN with their values
                 // rather than vanishing silently - an operator can still read them off there.
-                LOG.warn("Discarding {} pushed measurement(s) - {}: {}", valid.size(), refusal, valid);
+                LOG.warn("Discarding {} {} measurement(s) - {}: {}",
+                        valid.size(), unsolicited ? "pushed" : "polled", refusal, valid);
                 return List.of();
             }
 
@@ -163,6 +189,22 @@ public class TimingEventSink {
         // method no longer does.
         if (!importGate.isImportEnabledByOperator()) {
             return "automatic import is switched off";
+        }
+        return null;
+    }
+
+    /**
+     * @return why a poll response must not be written any more, or null if it may be
+     */
+    private String refusePull(Long requestedAtEpoch) {
+        // Checked here, inside the lock, for the same reason refusePush() is: this call may have
+        // been queued behind the very archive that makes it stale, so the epoch has to be compared
+        // against the state as it is now, not as it was when the batch was handed over.
+        //
+        // null means the caller did not ask a device and wait for it (a push, or a batch built
+        // without device I/O in between), so there is no window in which it could have gone stale.
+        if (requestedAtEpoch != null && importGate.currentImportEpoch() != requestedAtEpoch) {
+            return "a device reset/archive ran while this poll was in flight";
         }
         return null;
     }
