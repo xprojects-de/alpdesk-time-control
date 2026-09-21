@@ -44,7 +44,7 @@ import java.util.stream.StreamSupport;
  * order equals start order, so an overtake that breaks that assumption on the device already
  * produces a wrong duration there, not just a wrong participant match here.
  * <p>
- * State is in-memory only, the same convention {@link DataImportScheduler#isScheduledImportActive()}
+ * State is in-memory only, the same convention {@link DeviceImportGate#isScheduledImportActive()}
  * already uses for "is a live mode currently on": it has to be re-enabled after a backend restart.
  * Every read and write of that state goes through {@link MeasurementTableLock}, the same lock
  * already used for the underlying measurement table. That's needed because

@@ -22,7 +22,9 @@ import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Race;
 import x.timecontrol.services.CategoryService;
-import x.timecontrol.services.DataImportScheduler;
+import x.timecontrol.services.DeviceCapability;
+import x.timecontrol.services.DeviceImportGate;
+import x.timecontrol.services.PollingTimingImporter;
 import x.timecontrol.services.RaceLiveService;
 import x.timecontrol.services.RaceMeasurementService;
 import x.timecontrol.services.RaceService;
@@ -51,7 +53,7 @@ public class RaceController {
     TimingProviderRegistry timingProviderRegistry;
 
     @Inject
-    DataImportScheduler dataImportScheduler;
+    DeviceImportGate importGate;
 
     @Inject
     RaceLiveService raceLiveService;
@@ -217,7 +219,7 @@ public class RaceController {
             }
         }
 
-        return dataImportScheduler.pauseDuring(() -> {
+        return importGate.pauseDuring(() -> {
             try {
                 // If device reset is requested AND a timing device is actually configured, pull in
                 // anything the device recorded since the last scheduled poll before wiping it -
@@ -227,10 +229,17 @@ public class RaceController {
                 // archiving must keep working in evaluation-only (NONE) mode.
                 boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    // A device that has no reset command is treated like no device at all - see
+                    // MeasurementController#resetAll.
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter()
+                            .filter(i -> i.capabilities().contains(DeviceCapability.RESET));
                     if (importerOpt.isPresent()) {
                         TimingDataImporter importer = importerOpt.get();
-                        importer.importDataFromDevice();
+                        // Nothing to pull for a streaming provider: it has already pushed whatever
+                        // the device recorded.
+                        if (importer instanceof PollingTimingImporter polling) {
+                            polling.importDataFromDevice();
+                        }
                         boolean deviceReset = importer.resetDevice();
                         if (!deviceReset) {
                             return HttpResponse.serverError()

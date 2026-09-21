@@ -24,8 +24,10 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
     static final LocalDateTime MEASURED_AT = LocalDateTime.of(2026, 1, 2, 10, 0, 0)
 
     def setup() {
-        service.measurementService = measurementService
-        service.measurementTableLock = new MeasurementTableLock()
+        // The real sink, with a mocked MeasurementService behind it: what this spec is about is
+        // which writes a device response causes, and those are decided in the sink now - wiring a
+        // mocked sink here would assert against a stub instead of against that behaviour.
+        service.timingEventSink = new TimingEventSink(measurementService, new MeasurementTableLock(), new DeviceImportGate())
         service.httpClient = httpClient
         httpClient.toBlocking() >> blockingHttpClient
     }

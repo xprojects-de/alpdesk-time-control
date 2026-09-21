@@ -9,9 +9,11 @@ import x.timecontrol.dto.MeasurementRequest;
 import x.timecontrol.dto.MeasurementResponse;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.AutoAssignService;
-import x.timecontrol.services.DataImportScheduler;
+import x.timecontrol.services.DeviceCapability;
+import x.timecontrol.services.DeviceImportGate;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
+import x.timecontrol.services.PollingTimingImporter;
 import x.timecontrol.services.RaceService;
 import x.timecontrol.services.TimingDataImporter;
 import x.timecontrol.services.TimingProviderRegistry;
@@ -60,7 +62,7 @@ public class MeasurementController {
     TimingProviderRegistry timingProviderRegistry;
 
     @Inject
-    DataImportScheduler dataImportScheduler;
+    DeviceImportGate importGate;
 
     @Inject
     ParticipantService participantService;
@@ -209,6 +211,16 @@ public class MeasurementController {
                 .body(new ErrorResponse(TimingDataImporter.NOT_CONFIGURED_MESSAGE));
     }
 
+    /**
+     * For a device that is configured but does not offer this command at all (see
+     * {@link DeviceCapability}) - a different 409 from "no device configured", so the operator can
+     * tell "I have not set up a timing device" apart from "this timing device cannot do that".
+     */
+    private static HttpResponse<ErrorResponse> notSupportedByDevice() {
+        return HttpResponse.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(TimingDataImporter.NOT_SUPPORTED_MESSAGE));
+    }
+
     @Delete("/{id}")
     @Operation(summary = "Delete a measurement", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Measurement deleted")
@@ -229,7 +241,7 @@ public class MeasurementController {
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
     public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
-        return dataImportScheduler.pauseDuring(() -> {
+        return importGate.pauseDuring(() -> {
             try {
                 // If device reset is requested AND a timing device is actually configured, do it
                 // first before deleting the database. No configured device just means there's
@@ -237,14 +249,21 @@ public class MeasurementController {
                 // keep working in evaluation-only (NONE) mode, so this is not an error condition.
                 boolean deviceResetPerformed = false;
                 if (resetDevice) {
-                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter()
+                            // A device without a reset command (an ALGE clock on a serial line has
+                            // none) is treated exactly like no device: there is nothing to reset, so
+                            // the local wipe below proceeds instead of failing with a device error.
+                            .filter(i -> i.capabilities().contains(DeviceCapability.RESET));
                     if (importerOpt.isPresent()) {
+                        TimingDataImporter importer = importerOpt.get();
                         // Same reasoning as RaceController#archiveMeasurements: pull in anything the
                         // device recorded since the last scheduled poll before wiping it, or that data
                         // is silently lost - resetDevice() only sends the reset command, it never reads
-                        // data itself.
-                        TimingDataImporter importer = importerOpt.get();
-                        importer.importDataFromDevice();
+                        // data itself. Nothing to pull for a streaming provider: whatever the device
+                        // recorded has already been pushed and written.
+                        if (importer instanceof PollingTimingImporter polling) {
+                            polling.importDataFromDevice();
+                        }
                         boolean deviceReset = importer.resetDevice();
                         if (!deviceReset) {
                             return HttpResponse.serverError()
@@ -279,12 +298,16 @@ public class MeasurementController {
             description = "Enables or disables continuous mode on the SKitiming Controller device. When enabled, the device will continuously measure. When disabled, manual triggering is required.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Continuous mode set successfully")
+    @ApiResponse(responseCode = "409", description = "No timing device configured, or the configured one has no continuous mode")
     @ApiResponse(responseCode = "500", description = "Failed to set continuous mode")
     public HttpResponse<?> setContinuousMode(@QueryValue(defaultValue = "true") boolean enable) {
         try {
             Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
             if (importerOpt.isEmpty()) {
                 return noTimingProviderConfigured();
+            }
+            if (!importerOpt.get().capabilities().contains(DeviceCapability.CONTINUOUS_MODE)) {
+                return notSupportedByDevice();
             }
             boolean success = importerOpt.get().continuousMode(enable);
             if (!success) {
@@ -359,12 +382,16 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Oldest start discarded successfully")
     @ApiResponse(responseCode = "400", description = "Queue empty or not applicable in continuous mode")
+    @ApiResponse(responseCode = "409", description = "No timing device configured, or the configured one has no start queue")
     @ApiResponse(responseCode = "500", description = "Failed to discard oldest start")
     public HttpResponse<?> discardOldestStart() {
         try {
             Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
             if (importerOpt.isEmpty()) {
                 return noTimingProviderConfigured();
+            }
+            if (!importerOpt.get().capabilities().contains(DeviceCapability.DISCARD_OLDEST_START)) {
+                return notSupportedByDevice();
             }
             boolean success = importerOpt.get().discardOldestStart();
             if (!success) {
@@ -394,12 +421,18 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "201", description = "Measurements imported successfully",
             content = @Content(schema = @Schema(implementation = MeasurementResponse.class)))
+    @ApiResponse(responseCode = "409", description = "No timing device configured, or the configured one pushes its data instead of being polled")
     @ApiResponse(responseCode = "500", description = "Import failed")
     public HttpResponse<?> importFromDevice() {
         try {
-            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
-            if (importerOpt.isEmpty()) {
+            if (timingProviderRegistry.getActiveImporter().isEmpty()) {
                 return noTimingProviderConfigured();
+            }
+            // Only a polling device can be asked. A streaming one has already delivered everything
+            // it has over its own connection, so there is nothing this endpoint could fetch.
+            Optional<PollingTimingImporter> importerOpt = timingProviderRegistry.getActivePollingImporter();
+            if (importerOpt.isEmpty()) {
+                return notSupportedByDevice();
             }
             List<Measurement> imported = importerOpt.get().importDataFromDevice();
             List<MeasurementResponse> response = imported.stream()
@@ -418,7 +451,7 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Scheduled import status set successfully")
     public HttpResponse<String> setScheduledImport(@QueryValue(defaultValue = "true") boolean enable) {
-        dataImportScheduler.setScheduledImportActive(enable);
+        importGate.setScheduledImportActive(enable);
 
         if (enable) {
             return HttpResponse.ok("Scheduled data import enabled successfully");
@@ -433,7 +466,7 @@ public class MeasurementController {
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Scheduled import status")
     public HttpResponse<Boolean> getScheduledImportStatus() {
-        return HttpResponse.ok(dataImportScheduler.isScheduledImportActive());
+        return HttpResponse.ok(importGate.isScheduledImportActive());
     }
 
 

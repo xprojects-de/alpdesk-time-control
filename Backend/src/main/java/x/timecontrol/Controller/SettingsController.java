@@ -22,9 +22,11 @@ import x.timecontrol.dto.TimingProviderSettingsResponse;
 import x.timecontrol.entities.AppSettings;
 import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.SettingsService;
+import x.timecontrol.services.TimingProviderLifecycle;
 import x.timecontrol.services.TimingProviderRegistry;
 
 import java.time.MonthDay;
+import java.util.List;
 import java.util.Map;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -45,6 +47,9 @@ public class SettingsController {
 
     @Inject
     TimingProviderRegistry timingProviderRegistry;
+
+    @Inject
+    TimingProviderLifecycle timingProviderLifecycle;
 
     @Inject
     SeasonService seasonService;
@@ -133,6 +138,11 @@ public class SettingsController {
         }
         try {
             AppSettings updated = settingsService.updateTimingProvider(request.type(), config);
+            // A streaming provider's connection is opened/closed/reconnected here, not on the next
+            // poll: this is the only moment the selection or its config can change. Never throws,
+            // so a device that refuses to connect still leaves the setting saved (the operator
+            // fixes the hostname and saves again) - see TimingProviderLifecycle#syncWithSettings.
+            timingProviderLifecycle.syncWithSettings();
             return HttpResponse.ok(toResponse(updated));
         } catch (IllegalStateException e) {
             return HttpResponse.serverError(new ErrorResponse(e.getMessage()));
@@ -143,7 +153,13 @@ public class SettingsController {
         return new TimingProviderSettingsResponse(
                 settings.timingProviderType(),
                 settingsService.getProviderConfig(settings),
-                timingProviderRegistry.availableTypes()
+                timingProviderRegistry.availableTypes(),
+                // Of the ACTIVE provider, so the UI can hide controls its device does not have
+                // (a manual "fetch from device", continuous mode, discarding a start). Read from
+                // the registry rather than from the request: for NONE there is no provider to ask,
+                // and the answer is then simply "nothing supported".
+                timingProviderRegistry.activeSupportsManualImport(),
+                List.copyOf(timingProviderRegistry.activeCapabilities())
         );
     }
 }

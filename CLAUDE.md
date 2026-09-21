@@ -113,15 +113,58 @@ single place that turns a participant's raw duration + penalty into the value th
 counts for ranking, and assigns standard-competition ("1224") places — reused by both PDF export
 and Gaudi-Modus scoring, so ranking bugs are usually fixed there, not in each caller.
 
-**Timing device import** (`services/TimingDataImporter`, `TimingProviderRegistry`,
-`DataImportScheduler`): timing hardware is abstracted behind the `TimingDataImporter` interface;
-`TimingProviderRegistry` resolves the currently-configured provider from `AppSettings` and
-re-applies its config on every call so a settings change takes effect immediately.
-`DataImportScheduler` polls the active provider every 5s and always runs `AutoAssignService`
-afterwards regardless of whether a device is configured — auto-assign matches unassigned
-measurements (device-imported, JSON-imported, or manually entered) to participants purely by
-querying the measurement table, independent of polling. Device-reset/archive operations pause the
-scheduler for their duration via `pauseDuring()` to avoid writing stale pre-reset data back in.
+**Timing device import** (`services/TimingDataImporter` + `PollingTimingImporter` /
+`StreamingTimingImporter`, `TimingEventSink`, `TimingProviderRegistry`, `TimingProviderLifecycle`,
+`DeviceImportGate`, `DataImportScheduler`): timing hardware is abstracted behind
+`TimingDataImporter`, which every provider implements through exactly one of two transport
+sub-interfaces — which one it is, is the answer to "who drives the transfer", and there is no
+separate enum for it, `instanceof` is the check:
+
+- `PollingTimingImporter` — this backend asks the device (`ALPDESK_TIMECONTROL`, HTTP `/data`).
+  `DataImportScheduler` calls it every 5s; `TimingProviderRegistry` re-applies the saved config on
+  every call so a settings change takes effect immediately (which is why a polling provider must
+  keep configured values in a `ThreadLocal`, not a plain field — concurrent callers interleave).
+- `StreamingTimingImporter` — the device delivers on its own, over whatever the provider holds
+  open: a WebSocket, a serial reader thread, or a vendor library's callback subscribed in `start()`
+  and dropped in `stop()`. All three are the same case here; only who drives the transfer matters.
+  `TimingProviderLifecycle` configures and starts it at startup / on a provider or config change and
+  stops it on shutdown — on its own single thread, so a device that hangs while connecting cannot
+  hang the settings request. The registry deliberately does *not* re-configure it per call. No such
+  provider ships yet — the seam exists so one can be added without touching the scheduler or the
+  controllers.
+- **Both at once is allowed**: a device that pushes live *and* can be asked for its whole list (the
+  usual way to catch up after a connection drop) implements both. It is then configured/started like
+  a stream, stays reachable for a deliberate pull (manual import, safety pull before a reset), and is
+  skipped by the 5s background poll — see `TimingProviderRegistry#getActiveScheduledPollImporter()`.
+
+Both write through `TimingEventSink` (`TimingEvent` in, `Measurement` out), the single place that
+dedupes against stored rows, decides upsert-vs-insert by whether the device id identifies an *event*
+or a *participant*, and rejects invalid durations — providers never touch `MeasurementService`
+themselves. Its two entry points are not interchangeable:
+
+- `accept(TimingEvent)` — a measurement that arrived **unasked** (push). Subject to the operator's
+  controls: dropped while a reset/archive is clearing the table and while automatic import is
+  switched off, since a streaming device cannot be told to stop sending. Matches its stored row by
+  an indexed lookup, not by reading the table.
+- `acceptBatch(List)` — the answer to a poll somebody **asked for**, and therefore subject to
+  neither flag. The scheduler checks the switch before polling; a manual import is an operator
+  pressing a button; and the safety pull before a device reset/archive runs *inside* the pause on
+  purpose — dropping it would lose a finish time at the one moment it is unrecoverable.
+
+Optional device commands (reset, continuous mode, discarding the oldest start) are declared per
+provider via `capabilities()` (`DeviceCapability`); controllers check the capability and answer
+409 for a device that simply doesn't have that command, instead of reporting a device failure. The
+active provider's capabilities (plus `supportsManualImport`) are exposed on
+`GET/PUT /settings/timing-provider` so the frontend can hide controls the configured device
+doesn't have.
+
+`DataImportScheduler` always runs `AutoAssignService` after its poll, regardless of whether a
+device is configured or what its transport is — auto-assign matches unassigned measurements
+(device-imported, JSON-imported, or manually entered) to participants purely by querying the
+measurement table, independent of polling, so pushed measurements are picked up by it too.
+Device-reset/archive operations pause import for their duration via `DeviceImportGate.pauseDuring()`
+to avoid writing stale pre-reset data back in — which applies to pushed measurements, not to the
+requested pull that runs inside that same pause (see above).
 
 **Gaudi-Modus** (`services/gaudi/`, `GaudiModeService`): a separate scoring mode that combines
 results across multiple races per `GaudiModeType` (points combination, time combination, team,
