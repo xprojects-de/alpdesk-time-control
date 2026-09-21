@@ -129,25 +129,38 @@ def same_draw(pairs_a, pairs_b):
 # Step 0 - does the draw cover everyone exactly once?
 # ----------------------------------------------------------------------------------------------
 def check_draw(results, pairs):
+    """Problems, plus the participants legitimately left out of the draw.
+
+    GaudiModeService#drawLosPairing filters everyone already marked DSQ/DNF/DNS at draw time out
+    BEFORE the shuffle, so "in keinem Paar gezogen" is only a finding for someone whose status is
+    NONE - and the expected pair count follows the number of drawn participants, not the size of
+    the field. A status set after the draw leaves the pairing untouched, which is why someone with
+    a status can legitimately appear either in a pair or in none.
+    """
     drawn = [k for pair in pairs for k in pair if k is not None]
     counts = Counter(drawn)
-    problems = []
+    problems, not_drawn = [], []
     for key, n in counts.items():
         if n > 1:
             problems.append(f"{results[key]['name']} ist in {n} Paaren gezogen")
-    for key in results:
-        if key not in counts:
-            problems.append(f"{results[key]['name']} ist in keinem Paar gezogen")
-    expected_pairs = len(results) // 2 + (len(results) % 2)
+    for key, r in results.items():
+        if key in counts:
+            continue
+        not_drawn.append(key)
+        if not r["status"] or r["status"] == "NONE":
+            problems.append(f"{r['name']} ist in keinem Paar gezogen, hat aber keinen Status "
+                            f"(DSQ/DNF/DNS) - der Auslosung fehlt ein Starter")
+    expected_pairs = len(drawn) // 2 + (len(drawn) % 2)
     if len(pairs) != expected_pairs:
-        problems.append(f"{len(pairs)} Paare, erwartet {expected_pairs} bei {len(results)} Teilnehmern")
-    return problems
+        problems.append(f"{len(pairs)} Paare, erwartet {expected_pairs} bei {len(drawn)} gezogenen "
+                        f"Teilnehmern ({len(results)} im Rennen)")
+    return problems, not_drawn
 
 
 # ----------------------------------------------------------------------------------------------
 # Steps 2-5 - field average, pair averages, deviation, places, nicht gewertet
 # ----------------------------------------------------------------------------------------------
-def compute(results, pairs):
+def compute(results, pairs, not_drawn=()):
     # Step 2: the mean is built from EVERY scored participant of the race, not only from those
     # sitting in a scorable pair.
     all_values = [r["adjusted"] for r in results.values() if r["adjusted"] is not None]
@@ -188,6 +201,18 @@ def compute(results, pairs):
         e["place"] = place
         prev = e["diff"]
 
+    # Step 5: entered but never drawn (the DSQ/DNF/DNS-at-draw-time group) - listed individually,
+    # not as a pair, since there is no partner they cost anything. Only those without a valid
+    # result; LosModeCalculator#computeDnsEntries applies the same filter.
+    for key in not_drawn:
+        r = results[key]
+        if r["adjusted"] is not None:
+            continue
+        not_ranked.append({"label": r["name"], "status": r["status"] or "DNS",
+                           "reason": f"{r['name']}: nicht ausgelost"})
+
+    # One list, sorted by label - dropped pairs and never-drawn singles interleaved, as the PDF has
+    # them.
     not_ranked.sort(key=lambda e: e["label"].lower())
     return overall_display, ranked, not_ranked
 
@@ -212,13 +237,13 @@ def main():
                 return 2
 
     print(f"Teilnehmer im Rennen: {len(results)}, Paare: {len(pairs)}")
-    draw_problems = check_draw(results, pairs)
+    draw_problems, not_drawn = check_draw(results, pairs)
     print("Auslosung: " + ("jeder Teilnehmer genau einmal gezogen"
                            if not draw_problems else f"{len(draw_problems)} Probleme"))
     for p in draw_problems:
         print("   ", p)
 
-    overall, ranked, not_ranked = compute(results, pairs)
+    overall, ranked, not_ranked = compute(results, pairs, not_drawn)
     if overall is None:
         print("Keine gueltigen Ergebnisse - keine Wertung.")
         return 1

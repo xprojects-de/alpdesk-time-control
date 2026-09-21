@@ -104,13 +104,21 @@ If what you read differs from the steps below, **the code wins** — follow it a
 discrepancy to the user, since it means this skill needs a follow-up edit.
 
 **Step 0 — sanity-check the draw (cheap, and it catches real breakage):**
-- Every participant of the race appears in **exactly one** pair, and no participant appears twice
-  (`drawLosPairing` shuffles the full participant list, pairs first half against second half, and
-  leaves the last one unpaired when the count is odd).
-- Pair count is `floor(n/2)`, plus one single when `n` is odd.
-- **Participants with DSQ/DNF/DNS are drawn too** — the draw runs over every participant of the
-  race regardless of status. They just can't be scored later, which is Step 3's business, not a
-  flaw in the draw.
+- `drawLosPairing` shuffles the participant list, pairs the first half against the second half, and
+  saves the leftover as a pairing with `participant2Id = null` when the count is odd.
+- **Participants already marked `DSQ`/`DNF`/`DNS` at draw time are NOT drawn** — `drawLosPairing`
+  filters them out *before* the shuffle, since pairing a known non-starter would cost their partner
+  their placing however well they ride. So a participant missing from every pair is only a finding
+  when their status is `NONE`; one carrying a status may legitimately appear in no pair at all.
+  (The filter is on the status alone, deliberately not on `effectiveStartOrder() != null` — before a
+  Losrennen, having no race number yet is the normal state.)
+- A status set **after** the draw changes nothing about the pairing: the pair stays, and simply
+  drops out of the ranking in Step 3 — taking a partner with a perfectly good time with it. That is
+  a deliberate rules decision (the pair average is the score, and without a partner there is none),
+  not a bug to report.
+- Everyone else appears in **exactly one** pair, nobody twice.
+- Pair count is `floor(d/2)`, plus one single when `d` is odd — where `d` is the number of *drawn*
+  participants, not the size of the whole field (see the filter above).
 
 **Step 1 — each participant's value that counts (`RankingService.adjustedValue`):**
 - No measured value, or a status other than `NONE` (`DNF`/`DNS`/`DSQ`) → **no value**, excluded
@@ -150,7 +158,31 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
 - Its status is the first explicitly recorded `DSQ`/`DNF`/`DNS` among the members that have no
   result; a member merely missing a time with no status recorded falls back to `DNS`
   (`RankingService.dnsStatusLabel`).
-- Sorted by the pair label, case-insensitively.
+- **Plus one entry per participant who was entered but never drawn** and has no valid result —
+  listed on their own rather than as a pair, because there is no partner they cost anything. That
+  is exactly the DSQ/DNF/DNS-at-draw-time group from Step 0: they are on the start list, and a
+  reader who finds them nowhere in the document cannot tell whether they were left out on purpose
+  or forgotten. Don't mistake such a single-name row for a malformed pair label.
+- Sorted by the entry label, case-insensitively — dropped pairs and never-drawn singles interleaved
+  in one list, not in two blocks.
+
+## Two rounding traps that produce a wrong-but-plausible diff
+
+Both bite when you write the script from the prose above instead of copying
+[`reference_script.py`](reference_script.py), which already handles them. Neither fails loudly:
+they hit a subset of rows and leave every place intact, which reads exactly like a targeted app bug.
+
+- **Java's `Math.round` is half-up; Python's `round()` is half-to-even.** They disagree on precisely
+  the `.5` ties that rounding to a hundredth of a second produces constantly: `1457865 ms / 10 =
+  145786.5` → Java `145787` = `24:17.87`, Python `145786` = `24:17.86`. Use
+  `int(math.floor(x / 10.0 + 0.5)) * 10` — never `round()` — everywhere the app rounds: the field
+  average, every pair average, and the printed individual values.
+- **The printed `Wert 1`/`Wert 2` are rounded, not truncated.** `RankingViewService.formatTime`
+  rounds the raw ms to the nearest 10 ms *before* splitting into minutes/seconds/hundredths (a carry
+  like `0:00.996` → `0:01.00` falls out of that correctly), so `2081758 ms` prints `34:41.76`, not
+  `34:41.75`. Formatting `(ms % 1000) // 10` straight off the raw value diverges on roughly half of
+  all rows — and *only* on the individual values, since the averages already went through
+  `roundForDisplay`, which makes the pattern look like a deliberate app-side difference.
 
 ## How to run the check
 
@@ -161,11 +193,16 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
    It was verified on 2026-09-21 against a live instance (30 participants, 15 drawn pairs,
    1 DNF + 1 DSQ + 1 missing result): place, Ø-Wert Paar, Abweichung, Ø-Wert Gesamt, both
    individual values and the "nicht gewertet" list incl. status matched the app exactly, via the
-   pairing JSON **and** via pairs read out of the PDF. That was a **TIME** race without start
-   groups — its POINTS branch and its start-group netting are written to the spec but have not
-   been exercised, so read those two paths against the Java code rather than trusting them.
+   pairing JSON **and** via pairs read out of the PDF. Confirmed again the same day on the
+   Bergsprint export (37 participants, 18 pairs + 1 Einzel), once with a clean field and once with
+   a DNF set *after* the draw — there the pair dropped out whole, the field average fell from 37 to
+   36 values, and the shifted average reordered two otherwise unchanged pairs; all of it matched.
+   Both runs were **TIME** races without start groups — the POINTS branch and the start-group
+   netting are written to the spec but have not been exercised, so read those two paths against the
+   Java code rather than trusting them.
    Keep it a plain script you can inspect and rerun; this is arithmetic over dozens of pairs,
-   easy to slip on by hand.
+   easy to slip on by hand. **Copy the reference script rather than re-deriving it from the prose**
+   — the two rounding traps above cost a full extra diff cycle on exactly that mistake.
 2. Before trusting the run: if both the pairing JSON and the reference PDF are available, confirm
    their pair lists match (see input #2). Then run the script, producing: the ranked table (Platz,
    Paarung, Wert 1, Wert 2, Ø-Paar, Abweichung), the field average, and the "Nicht gewertet" list
