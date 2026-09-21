@@ -32,7 +32,7 @@ jobs:
       - name: Build Angular
         working-directory: Frontend
         run: |
-          npm ci --legacy-peer-deps
+          npm ci
           npm run deploy
 
       - name: Upload Frontend Artifact

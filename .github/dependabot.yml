@@ -1,0 +1,81 @@
+version: 2
+
+# Dependabot opens its pull requests against dev, not against the default branch. main only ever
+# receives releases here, so an update landing there directly would skip the branch everything
+# else is integrated on.
+#
+# The updates are grouped rather than filed one package at a time. Angular and NgRx release their
+# packages in lockstep and only work when they move together, and a dozen separate pull requests
+# for one Angular release is noise nobody reads. Grouping keeps a week's worth of updates to a
+# handful of reviewable pull requests.
+#
+# These pull requests run .github/workflows/pr-checks.yml like any other, so an update that breaks
+# the Spock suite, the lint rules or the Angular build shows up as a failed check rather than as a
+# surprise after merging.
+
+updates:
+  # ---------------------------------------------------------------------------------------------
+  # GitHub Actions used by the workflows
+  # ---------------------------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # ---------------------------------------------------------------------------------------------
+  # Backend (Gradle)
+  #
+  # Most versions come from the Micronaut platform BOM, so Dependabot only sees the handful that
+  # build.gradle pins explicitly - the Micronaut modules, PDFBox, Byte Buddy, Objenesis - plus the
+  # plugin versions. A Micronaut major release usually wants the BOM raised as a whole, which is a
+  # manual step; the group below at least keeps its parts in one pull request.
+  # ---------------------------------------------------------------------------------------------
+  - package-ecosystem: "gradle"
+    directory: "/Backend"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      micronaut:
+        patterns:
+          - "io.micronaut*"
+
+  # ---------------------------------------------------------------------------------------------
+  # Frontend (npm)
+  #
+  # A major Angular release normally needs `ng update`, which migrates code as well as versions -
+  # Dependabot cannot do that. Treat a grouped Angular major as a reminder to run `ng update`
+  # yourself, not as a pull request to merge as-is. Minor and patch updates are fine to merge once
+  # the checks pass.
+  # ---------------------------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/Frontend"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+      ngrx:
+        patterns:
+          - "@ngrx/*"
+      # Linting, formatting and the test runner - they break the build, never the app.
+      tooling:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "angular-eslint"
+          - "typescript-eslint"
+          - "prettier"
+          - "vitest"
+          - "jsdom"
