@@ -1,0 +1,85 @@
+name: PR Checks
+
+# Runs on every pull request against dev and main. Deliberately separate from
+# build-installers.yml: that one exists to produce downloadable installers and spends a long time
+# on macOS and Windows runners, which is far too heavy to gate a pull request on. This one only
+# answers "does it still compile, pass its tests and lint" on Linux, so it finishes in minutes and
+# can be made a required status check.
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+
+# Nothing here writes to the repository; it only reads the code it was handed.
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the run still going for the previous one - there is
+# no point finishing a check on code that has already been replaced.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          cache-dependency-path: Backend/build.gradle
+
+      # The Spock suite. failOnNoDiscoveredTests is enabled in build.gradle, so a test source set
+      # that stops being picked up fails here instead of passing silently with nothing to run.
+      - name: Run Spock Tests
+        working-directory: Backend
+        run: ./gradlew test --no-daemon
+
+      # Keeps the failing spec readable in the pull request instead of only in the raw log.
+      - name: Upload Test Report on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: Backend/build/reports/tests/test
+          retention-days: 7
+
+  frontend:
+    name: Frontend Lint and Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: Frontend
+        run: npm ci --legacy-peer-deps
+
+      # ng lint covers formatting too: Prettier runs through eslint-plugin-prettier, so this is the
+      # single gate for both.
+      - name: Lint
+        working-directory: Frontend
+        run: npm run lint
+
+      # The build is not redundant next to the lint step. An eslint --fix can apply rule fixes that
+      # compile-break the project - no-wrapper-object-types rewriting `displayFormat: Object` to
+      # `object` (TS2367) is the case this repository already hit - and lint alone would not notice.
+      - name: Build
+        working-directory: Frontend
+        run: npm run build

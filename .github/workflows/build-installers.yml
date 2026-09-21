@@ -1,13 +1,16 @@
 name: Build Native Installers (Mac & Windows)
 
+# Started by hand (Actions -> this workflow -> Run workflow), never automatically.
+#
+# It used to run on every push to main, which was safe while main received nothing but releases.
+# Contributions now arrive as pull requests against main, so that trigger would publish on every
+# merge - and because the release is tagged v<app.version>, a merge without a version bump would
+# rewrite the existing release of that version, replacing the installers people download with a
+# build nobody decided to ship.
+#
+# Publishing is therefore a deliberate act: raise app.version, merge what belongs in the release,
+# then start this workflow. Pull requests are still checked automatically by pr-checks.yml.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'Backend/**'
-      - 'Frontend/**'
-      - '.github/workflows/build-installers.yml'
   workflow_dispatch:
 
 permissions:
@@ -32,7 +35,7 @@ jobs:
       - name: Build Angular
         working-directory: Frontend
         run: |
-          npm ci --legacy-peer-deps
+          npm ci
           npm run deploy
 
       - name: Upload Frontend Artifact
