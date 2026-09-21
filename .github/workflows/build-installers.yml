@@ -810,11 +810,23 @@ jobs:
         id: read_version
         run: echo "version=$(grep -oP '(?<=^app.version=).*' Backend/src/main/resources/application.properties)" >> "$GITHUB_OUTPUT"
 
+      # One release per app.version, tagged v<app.version> (e.g. v1.5). main is only ever built
+      # on a release, and raising app.version is part of making one, so the version identifies
+      # the release exactly.
+      #
+      # This deliberately no longer uses github.run_number ("release-<n>"): that counter belongs
+      # to the repository, so it restarted at 1 when the project moved here, while the tags
+      # release-9 … release-24 came along from the previous repository. Run 9 would have tried to
+      # create a tag that already exists and points at a commit from August.
+      #
+      # Re-running the workflow for an unchanged app.version updates that version's existing
+      # release rather than adding a second one - which is what you want when a runner failed and
+      # the build is simply repeated. Publishing a genuinely new build means raising app.version.
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: release-${{ github.run_number }}
-          name: Release v${{ steps.read_version.outputs.version }} (Build ${{ github.run_number }})
+          tag_name: v${{ steps.read_version.outputs.version }}
+          name: Release v${{ steps.read_version.outputs.version }}
           draft: false
           prerelease: false
           files: final-assets/*
