@@ -236,3 +236,20 @@ run against. **Real race data never goes into the repo** — it holds names, bir
 mostly underage participants. Each suite reads its data from a directory the caller can override
 (`KONDI_DATA_DIR` for the federation suite), and `e2e-tests/*/local-data/` is gitignored for
 exactly that purpose.
+
+These suites also run in CI, on every pull request, through
+[`.github/workflows/e2e-tests.yml`](.github/workflows/e2e-tests.yml) — separate from `pr-checks.yml`,
+which only covers the Spock suite and the frontend build. **Nothing discovers suites
+automatically.** A new suite, or a new `run_*.sh` variant of an existing one, is covered locally by
+`/time-control-e2e` but stays invisible to CI until it is added to that workflow's matrix:
+
+```yaml
+          - name: <displayed as the check name>
+            suite: <directory under e2e-tests/>
+            script: run_all.sh
+```
+
+Adding it there is enough — the aggregate job `E2E Suites` is what the branch ruleset requires, so
+a new entry is covered without touching any repository settings. A suite whose `run_all.sh` needs
+an argument (only `saison-upgrade` so far, which takes the instance's database path) additionally
+needs `needs_db_path: true` and a matching branch in the *Run Suite* step.
