@@ -20,4 +20,8 @@
 __pycache__/
 *.pyc
 
+# JetBrains per-user IDE state: local file paths, open editors, run configurations.
+# The shared project files (misc.xml, modules.xml, vcs.xml, *.iml) stay tracked.
+/.idea/workspace.xml
+
 .DS_Store
