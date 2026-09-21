@@ -103,12 +103,6 @@ import {Actions, ofType} from "@ngrx/effects";
                         class="race-table"
                         [class.hidden]="loading$ | async"
                     >
-                        <!-- ID Column -->
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                            <td mat-cell *matCellDef="let race">{{ race.id }}</td>
-                        </ng-container>
-
                         <!-- Name Column -->
                         <ng-container matColumnDef="name">
                             <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
@@ -227,7 +221,7 @@ export class RaceListComponent implements AfterViewInit, OnDestroy {
 
     races$: Observable<Race[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "name", "date", "seasonYear", "actions"];
+    displayedColumns = ["name", "date", "seasonYear", "actions"];
     dataSource = new MatTableDataSource<Race>([]);
     trackById = (_index: number, race: Race) => race.id;
 

@@ -67,11 +67,6 @@ import {Actions, ofType} from "@ngrx/effects";
                         class="category-table"
                         [class.hidden]="loading$ | async"
                     >
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                            <td mat-cell *matCellDef="let category">{{ category.id }}</td>
-                        </ng-container>
-
                         <ng-container matColumnDef="name">
                             <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
                             <td mat-cell *matCellDef="let category">
@@ -146,7 +141,7 @@ export class CategoryListComponent implements AfterViewInit, OnDestroy {
 
     categories$: Observable<Category[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "name", "actions"];
+    displayedColumns = ["name", "actions"];
     dataSource = new MatTableDataSource<Category>([]);
     trackById = (_index: number, category: Category) => category.id;
 

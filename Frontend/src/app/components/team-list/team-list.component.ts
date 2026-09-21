@@ -89,11 +89,6 @@ import {Actions, ofType} from "@ngrx/effects";
                         class="team-table"
                         [class.hidden]="loading$ | async"
                     >
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                            <td mat-cell *matCellDef="let team">{{ team.id }}</td>
-                        </ng-container>
-
                         <ng-container matColumnDef="name">
                             <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
                             <td mat-cell *matCellDef="let team">
@@ -174,7 +169,7 @@ export class TeamListComponent implements AfterViewInit, OnDestroy {
 
     teams$: Observable<Team[]>;
     loading$: Observable<boolean>;
-    displayedColumns = ["id", "name", "actions"];
+    displayedColumns = ["name", "actions"];
     dataSource = new MatTableDataSource<Team>([]);
     trackById = (_index: number, team: Team) => team.id;
 

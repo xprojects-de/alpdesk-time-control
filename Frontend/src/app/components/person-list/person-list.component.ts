@@ -103,11 +103,6 @@ import {Actions, ofType} from "@ngrx/effects";
                         class="person-table"
                         [class.hidden]="loading$ | async"
                     >
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                            <td mat-cell *matCellDef="let person">{{ person.id }}</td>
-                        </ng-container>
-
                         <ng-container matColumnDef="lastName">
                             <th mat-header-cell *matHeaderCellDef mat-sort-header>Nachname</th>
                             <td mat-cell *matCellDef="let person">{{ person.lastName }}</td>
@@ -240,7 +235,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     persons$: Observable<PersonWithActiveRaces[]>;
     loading$: Observable<boolean>;
     unusedPersonCount$: Observable<number>;
-    displayedColumns = ["id", "lastName", "firstName", "birthDate", "gender", "externalId", "activeRaces", "actions"];
+    displayedColumns = ["lastName", "firstName", "birthDate", "gender", "externalId", "activeRaces", "actions"];
     dataSource = new MatTableDataSource<PersonWithActiveRaces>([]);
     trackById = (_index: number, person: PersonWithActiveRaces) => person.id;
 

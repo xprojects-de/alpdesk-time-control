@@ -130,12 +130,6 @@ import {Actions, ofType} from "@ngrx/effects";
                         class="age-group-table"
                         [class.hidden]="loading$ | async"
                     >
-                        <!-- ID Column -->
-                        <ng-container matColumnDef="id">
-                            <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                            <td mat-cell *matCellDef="let ageGroup">{{ ageGroup.id }}</td>
-                        </ng-container>
-
                         <!-- Name Column -->
                         <ng-container matColumnDef="name">
                             <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
@@ -278,7 +272,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     seasonOptions = signal<number[]>([]);
     private selectedSeason: number | null = null;
     private currentSeason: number | null = null;
-    displayedColumns = ["id", "name", "gender", "birthYearFrom", "birthYearTo", "actions"];
+    displayedColumns = ["name", "gender", "birthYearFrom", "birthYearTo", "actions"];
     dataSource = new MatTableDataSource<AgeGroup>([]);
     trackById = (_index: number, ageGroup: AgeGroup) => ageGroup.id;
 

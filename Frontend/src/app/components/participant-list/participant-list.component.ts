@@ -338,12 +338,6 @@ import {
                             class="participant-table"
                             [class.hidden]="loading$ | async"
                         >
-                            <!-- ID Column -->
-                            <ng-container matColumnDef="id">
-                                <th mat-header-cell *matHeaderCellDef mat-sort-header>ID</th>
-                                <td mat-cell *matCellDef="let participant">{{ participant.id }}</td>
-                            </ng-container>
-
                             <!-- First Name Column -->
                             <ng-container matColumnDef="firstName">
                                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Vorname</th>
@@ -377,6 +371,14 @@ import {
                                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Geschlecht</th>
                                 <td mat-cell *matCellDef="let participant">
                                     {{ getGenderLabel(participant.person?.gender) }}
+                                </td>
+                            </ng-container>
+
+                            <!-- External ID (association/license code carried on the person) Column -->
+                            <ng-container matColumnDef="externalId">
+                                <th mat-header-cell *matHeaderCellDef mat-sort-header>Externe ID</th>
+                                <td mat-cell *matCellDef="let participant">
+                                    {{ participant.person?.externalId || "—" }}
                                 </td>
                             </ng-container>
 
@@ -700,11 +702,11 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
     /** Combines every loading flag behind the consolidated "Weitere Aktionen" menu into one spinner. */
     anyActionLoading$: Observable<boolean>;
     displayedColumns = [
-        "id",
         "firstName",
         "lastName",
         "birthDate",
         "gender",
+        "externalId",
         "raceNumber",
         "startSequence",
         "team",
@@ -757,6 +759,8 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     return participant.person?.birthDate ?? "";
                 case "gender":
                     return participant.person?.gender ?? "";
+                case "externalId":
+                    return participant.person?.externalId ?? "";
                 case "team":
                     return participant.team?.name ?? "";
                 case "category":
