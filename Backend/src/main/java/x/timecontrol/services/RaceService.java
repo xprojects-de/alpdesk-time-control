@@ -95,6 +95,17 @@ public class RaceService {
         return repository.findDistinctRaceDates();
     }
 
+    /**
+     * Whether a race with this id exists - the answer every "does this race exist?" guard actually
+     * needs. {@link #findById} selects the row's cover_page_pdf along with it (up to several MB, see
+     * {@link RaceRepository#findAllWithoutCoverPage()}) only for such a caller to throw the whole
+     * row away; this never materialises a Race at all, so it also cannot hand one on with its cover
+     * page missing.
+     */
+    public boolean existsById(Long id) {
+        return repository.existsById(id);
+    }
+
     public Optional<Race> findById(Long id) {
         return repository.findById(id);
     }

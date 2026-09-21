@@ -249,7 +249,7 @@ public class ParticipantService {
         if (participant.personId() == null) {
             throw new IllegalArgumentException("personId is required");
         }
-        if (raceService.findById(participant.raceId()).isEmpty()) {
+        if (!raceService.existsById(participant.raceId())) {
             throw new IllegalArgumentException("Race with id " + participant.raceId() + " does not exist");
         }
         if (personService.findById(participant.personId()).isEmpty()) {
@@ -498,11 +498,11 @@ public class ParticipantService {
         // Now that PRAGMA foreign_keys=ON is enabled, saving a participant for a race that doesn't
         // exist would otherwise throw a raw FK-constraint exception straight out of repository.save()
         // instead of a clean, caught error.
-        if (raceService.findById(sourceRaceId).isEmpty()) {
+        if (!raceService.existsById(sourceRaceId)) {
             throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
         }
         for (Long targetRaceId : targetRaceIds) {
-            if (raceService.findById(targetRaceId).isEmpty()) {
+            if (!raceService.existsById(targetRaceId)) {
                 throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
             }
         }
@@ -856,11 +856,11 @@ public class ParticipantService {
      * @throws IllegalStateException    if live auto-assign mode is currently active for any target race
      */
     public List<Participant> copyStartGroupAssignment(Long sourceRaceId, List<Long> targetRaceIds) {
-        if (raceService.findById(sourceRaceId).isEmpty()) {
+        if (!raceService.existsById(sourceRaceId)) {
             throw new IllegalArgumentException("Race with id " + sourceRaceId + " does not exist");
         }
         for (Long targetRaceId : targetRaceIds) {
-            if (raceService.findById(targetRaceId).isEmpty()) {
+            if (!raceService.existsById(targetRaceId)) {
                 throw new IllegalArgumentException("Race with id " + targetRaceId + " does not exist");
             }
             requireAutoAssignInactive(targetRaceId);

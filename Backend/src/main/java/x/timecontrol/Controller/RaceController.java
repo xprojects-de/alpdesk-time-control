@@ -202,7 +202,7 @@ public class RaceController {
     public HttpResponse<?> archiveMeasurements(@PathVariable Long raceId,
                                                       @QueryValue(defaultValue = "true") boolean resetDevice,
                                                       @QueryValue(defaultValue = "true") boolean clearAfterArchive) {
-        if (service.findById(raceId).isEmpty()) {
+        if (!service.existsById(raceId)) {
             return HttpResponse.notFound();
         }
 

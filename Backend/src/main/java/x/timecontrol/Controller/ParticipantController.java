@@ -189,7 +189,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "409", description = "Auto-assign mode is currently active for this race")
     public HttpResponse<?> assignRaceNumbers(@PathVariable Long raceId) {
-        if (raceService.findById(raceId).isEmpty()) {
+        if (!raceService.existsById(raceId)) {
             return HttpResponse.notFound();
         }
         try {
@@ -260,7 +260,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "404", description = "Race not found")
     @ApiResponse(responseCode = "409", description = "The race already has results")
     public HttpResponse<?> generateRaceNumbersFromStartGroups(@PathVariable Long raceId) {
-        if (raceService.findById(raceId).isEmpty()) {
+        if (!raceService.existsById(raceId)) {
             return HttpResponse.notFound();
         }
         try {
@@ -476,7 +476,7 @@ public class ParticipantController {
     @ApiResponse(responseCode = "200", description = "CSV generated successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
     public HttpResponse<?> exportStartListCsv(@PathVariable Long raceId) {
-        if (raceService.findById(raceId).isEmpty()) {
+        if (!raceService.existsById(raceId)) {
             return HttpResponse.notFound();
         }
         String csv = service.exportStartListCsv(raceId);

@@ -75,6 +75,7 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     def setup() {
         gaudiModeRaceRepository.findByGaudiModeIdOrderBySortOrder(1L) >> [new GaudiModeRace(1L, 1L, 10L, 0, 1.0d)]
         raceService.findById(10L) >> Optional.of(race)
+        raceService.existsById(10L) >> true
         pointsScaleService.findById(1L) >> Optional.of(scale)
         pointsScaleService.parsePoints(scale) >> [100, 80, 60, 50]
         pointsScaleService.pointsForPlace(_ as List, _ as Integer) >> { List pts, Integer place -> place <= pts.size() ? pts[place - 1] : 0 }

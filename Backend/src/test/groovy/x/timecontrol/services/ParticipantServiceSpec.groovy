@@ -113,6 +113,7 @@ class ParticipantServiceSpec extends Specification {
     def "create rejects a participant referencing a non-existent race"() {
         given:
         raceService.findById(1L) >> Optional.empty()
+        raceService.existsById(1L) >> false
         def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
 
         when:
@@ -126,6 +127,7 @@ class ParticipantServiceSpec extends Specification {
     def "create rejects a participant referencing a non-existent person"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.empty()
         def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
 
@@ -140,6 +142,7 @@ class ParticipantServiceSpec extends Specification {
     def "create rejects a race number that is already assigned in the same race"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.of(new Participant(99L, 1L, 2L, 5, null, null, null, null, null, null))
         def participant = new Participant(null, 1L, 1L, 5, null, null, null, null, null, null)
@@ -155,6 +158,7 @@ class ParticipantServiceSpec extends Specification {
     def "create rejects a person who is already a participant of the same race"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.of(new Participant(99L, 1L, 1L, null, null, null, null, null, null, null))
         def participant = new Participant(null, 1L, 1L, null, null, null, null, null, null, null)
@@ -170,6 +174,7 @@ class ParticipantServiceSpec extends Specification {
     def "create succeeds and saves the participant when everything is valid"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.empty()
         repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.empty()
@@ -187,6 +192,7 @@ class ParticipantServiceSpec extends Specification {
     def "update allows keeping the same race number on the participant being edited"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         def existing = new Participant(10L, 1L, 1L, 5, null, null, null, null, null, null)
         repository.findById(10L) >> Optional.of(existing)
@@ -206,6 +212,7 @@ class ParticipantServiceSpec extends Specification {
     def "update with an explicit 0 penalty removes an existing penalty (stored as null, not 0)"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         def existing = new Participant(10L, 1L, 1L, 5, null, null, 60000, 5000, null, null)
         repository.findById(10L) >> Optional.of(existing)
@@ -224,6 +231,7 @@ class ParticipantServiceSpec extends Specification {
     def "update without a penalty keeps the existing penalty"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         def existing = new Participant(10L, 1L, 1L, 5, null, null, 60000, 5000, null, null)
         repository.findById(10L) >> Optional.of(existing)
@@ -241,6 +249,7 @@ class ParticipantServiceSpec extends Specification {
     def "create stores a 0 penalty as no penalty"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         personService.findById(1L) >> Optional.of(person())
         repository.findByRaceIdAndRaceNumber(1L, 5) >> Optional.empty()
         repository.findByRaceIdAndPersonId(1L, 1L) >> Optional.empty()
@@ -315,6 +324,7 @@ class ParticipantServiceSpec extends Specification {
     def "assignRaceNumbers re-shuffling an already-numbered race does not collide with the unique constraint"() {
         given: "3 participants already hold numbers 2,3,1; the new assignment (by birthdate, youngest first) is 1,2,3 - a naive single-pass update would collide immediately"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         def p1 = new Participant(1L, 5L, 1L, 2, null, null, null, null, null, null)
         def p2 = new Participant(2L, 5L, 2L, 3, null, null, null, null, null, null)
         def p3 = new Participant(3L, 5L, 3L, 1, null, null, null, null, null, null)
@@ -351,6 +361,7 @@ class ParticipantServiceSpec extends Specification {
     def "assignRaceNumbers refuses to run while live auto-assign is active for this race"() {
         given: "reshuffling numbers underneath an in-flight auto-assign cursor could mismatch a finish to the wrong participant"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         autoAssignActiveForRace = true
 
         when:
@@ -368,7 +379,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
         // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
@@ -407,7 +420,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
 
         def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null) // U21
         def personB = new Person(2L, "B", "B", LocalDate.of(2006, 1, 1), Gender.MALE, null) // U21
@@ -445,7 +460,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
 
         def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null)
         def personB = new Person(2L, "B", "B", LocalDate.of(2006, 1, 1), Gender.MALE, null)
@@ -481,7 +498,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
         // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
@@ -516,7 +535,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
         // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
@@ -570,7 +591,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
 
         def personA = new Person(1L, "A", "A", LocalDate.of(2005, 1, 1), Gender.MALE, null)
         def personB = new Person(2L, "B", "B", LocalDate.of(1970, 1, 1), Gender.MALE, null)
@@ -600,7 +623,9 @@ class ParticipantServiceSpec extends Specification {
         def race4 = new Race(4L, "Lauf 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
+        raceService.existsById(4L) >> true
         // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
@@ -628,6 +653,7 @@ class ParticipantServiceSpec extends Specification {
     def "applyStartOrderFromPreviousRace rejects a race with no linked previous race"() {
         given:
         raceService.findById(5L) >> Optional.of(race())
+        raceService.existsById(5L) >> true
 
         when:
         service.applyStartOrderFromPreviousRace(5L, true)
@@ -641,6 +667,7 @@ class ParticipantServiceSpec extends Specification {
         def race5 = new Race(5L, "Lauf 2", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, 4L, null, 15)
         raceService.findById(5L) >> Optional.of(race5)
+        raceService.existsById(5L) >> true
         autoAssignActiveForRace = true
 
         when:
@@ -733,7 +760,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyStartGroupAssignment copies group and sequence matched by person, leaving an unmatched target participant untouched"() {
         given:
         raceService.findById(5L) >> Optional.of(race())
+        raceService.existsById(5L) >> true
         raceService.findById(6L) >> Optional.of(race())
+        raceService.existsById(6L) >> true
         def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
         repository.findByRaceId(5L) >> [source1]
         def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
@@ -754,7 +783,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyStartGroupAssignment clears an unmatched target participant's own startSequence when it collides with a value being copied in, instead of failing on the unique index"() {
         given: "the target race already has an unrelated participant (person 200, not in the source race) sitting on startSequence 1 - the exact value about to be copied in for the matched person 100"
         raceService.findById(5L) >> Optional.of(race())
+        raceService.existsById(5L) >> true
         raceService.findById(6L) >> Optional.of(race())
+        raceService.existsById(6L) >> true
         def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
         repository.findByRaceId(5L) >> [source1]
         def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
@@ -776,7 +807,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyStartGroupAssignment also drops a colliding unmatched participant's start group, not just its startSequence"() {
         given: "the colliding participant (person 200) sits in group 9 on startSequence 1"
         raceService.findById(5L) >> Optional.of(race())
+        raceService.existsById(5L) >> true
         raceService.findById(6L) >> Optional.of(race())
+        raceService.existsById(6L) >> true
         def source1 = new Participant(1L, 5L, 100L, null, null, null, null, null, null, null, null, 1, 7L)
         repository.findByRaceId(5L) >> [source1]
         def target1 = new Participant(2L, 6L, 100L, null, null, null, null, null, null, null, null, null, null)
@@ -837,7 +870,9 @@ class ParticipantServiceSpec extends Specification {
         given:
         autoAssignActiveForRace = true
         raceService.findById(5L) >> Optional.of(race())
+        raceService.existsById(5L) >> true
         raceService.findById(6L) >> Optional.of(race())
+        raceService.existsById(6L) >> true
 
         when:
         service.copyStartGroupAssignment(5L, [6L])
@@ -850,6 +885,7 @@ class ParticipantServiceSpec extends Specification {
     def "CSV import reports a row-level error instead of aborting the whole import"() {
         given: "the second row's participant save fails (e.g. a transient DB error)"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         teamService.findOrCreateByName("Team A") >> new Team(1L, "TEAM A")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
@@ -877,6 +913,7 @@ class ParticipantServiceSpec extends Specification {
     def "CSV import does not duplicate a person who is matched via ExternalId and already a participant of this race"() {
         given:
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         def existingPerson = new Person(1L, "John", "Doe", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
         personService.findByExternalId("EXT-1") >> Optional.of(existingPerson)
@@ -900,7 +937,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants carries over the race number when requested and not already taken"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -917,7 +956,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants leaves the race number empty when carryStartNumber is false"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -932,7 +973,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants skips the race number when it's already taken in the target race"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         def alreadyInTarget = new Participant(2L, 2L, 20L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
@@ -948,7 +991,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants falls back to no race number when a concurrent write already claimed it"() {
         given: "the in-memory pre-check saw the number as free, but the DB save loses a race to a concurrent write"
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -969,7 +1014,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants does not swallow a non-uniqueness persistence failure"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, null, null, null, null, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -985,7 +1032,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants carries over comment and start-group assignment"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, 7, 3L, 4L, 60000, 500, LocalDateTime.now(), "Vorläufer",
                 DisqualificationStatus.NONE, 5, 9L)
         repository.findByRaceId(1L) >> [source]
@@ -1006,7 +1055,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants drops start sequence and group when the sequence is already taken in the target race"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, null, DisqualificationStatus.NONE, 5, 9L)
         def alreadyInTarget = new Participant(2L, 2L, 20L, null, null, null, null, null, null, null, DisqualificationStatus.NONE, 5, 8L)
         repository.findByRaceId(1L) >> [source]
@@ -1022,7 +1073,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants falls back to no start sequence when a concurrent write already claimed it"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, "c", DisqualificationStatus.DNS, 5, 9L)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -1043,7 +1096,9 @@ class ParticipantServiceSpec extends Specification {
     def "copyParticipants carries over only a DNS status"() {
         given:
         raceService.findById(1L) >> Optional.of(race())
+        raceService.existsById(1L) >> true
         raceService.findById(2L) >> Optional.of(race())
+        raceService.existsById(2L) >> true
         def source = new Participant(1L, 1L, 10L, null, null, null, null, null, null, null, sourceStatus, null, null)
         repository.findByRaceId(1L) >> [source]
         repository.findByRaceId(2L) >> []
@@ -1065,6 +1120,7 @@ class ParticipantServiceSpec extends Specification {
     def "CSV import rejects a duplicate name+birthdate row when no ExternalId is given"() {
         given: "Jane Doe is already a participant of this race, previously imported without an ExternalId"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         def existingPerson = new Person(2L, "Jane", "Doe", LocalDate.of(1990, 1, 1), Gender.FEMALE, null)
         repository.findByRaceId(5L) >> [new Participant(50L, 5L, 2L, null, null, null, null, null, null, null)]
         personService.findByIds([2L] as Set) >> [2L: existingPerson]
@@ -1087,6 +1143,7 @@ class ParticipantServiceSpec extends Specification {
     def "mapped import resolves the ageGroup column via AgeGroupService instead of Category, independently of an actual category column"() {
         given: "a semicolon CSV whose Klasse column is mapped to ageGroup and whose separate Kategorie column is mapped to category"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         teamService.findOrCreateByName("SC Oberstdorf") >> new Team(1L, "SC OBERSTDORF")
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
@@ -1111,6 +1168,7 @@ class ParticipantServiceSpec extends Specification {
     def "mapped import parses a status column into the participant's DisqualificationStatus"() {
         given: "a CSV with a Status column marking the row as disqualified"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1133,6 +1191,7 @@ class ParticipantServiceSpec extends Specification {
     def "mapped import defaults a blank/unrecognized status column to NONE instead of failing the row"() {
         given:
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1172,6 +1231,7 @@ class ParticipantServiceSpec extends Specification {
     def "mapped import carries over durationMs/penalty/measuredAt when the file provides them (full race export round-trip)"() {
         given: "a CSV using exactly the header exportCsv would produce"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1195,6 +1255,7 @@ class ParticipantServiceSpec extends Specification {
     def "mapped import rejects a negative durationMs or penalty instead of silently ranking the row first"() {
         given: "importRow bypasses ParticipantService.validate() entirely, so this must be re-checked inline"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         repository.findByRaceId(5L) >> []
         personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
         repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
@@ -1314,6 +1375,7 @@ class ParticipantServiceSpec extends Specification {
     def "exportResultsCsv writes result fields plus informational identity fields (including the computed ageGroup), sorted ascending by raceNumber"() {
         given: "one participant with a full result and a matching AgeGroup, plus one with no result, no raceNumber and no matching AgeGroup"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         def withResult = new Participant(10L, 5L, 1L, 42, 2L, 3L, 125000, 5000, LocalDateTime.of(2026, 8, 18, 10, 30, 0), "Ski gebrochen", DisqualificationStatus.NONE)
         def withoutResult = new Participant(11L, 5L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE)
         def person1 = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, "EXT-1")
@@ -1394,6 +1456,7 @@ class ParticipantServiceSpec extends Specification {
     def "exportResultsCsv writes plain decimals for a POINTS race and does not NPE on a participant with a null status"() {
         given: "status is @Nullable on the entity - a legacy row predating the status column could have one"
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         def noStatus = new Participant(10L, 5L, 1L, 42, null, null, 8550, null, null, null, null)
         def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
         repository.findByRaceId(5L) >> [noStatus]
@@ -1409,6 +1472,7 @@ class ParticipantServiceSpec extends Specification {
     def "exportResultsCsv writes DNF/DNS/DSQ as the literal word, not blank"() {
         given:
         raceService.findById(5L) >> Optional.of(raceWithId(5L))
+        raceService.existsById(5L) >> true
         def dsq = new Participant(10L, 5L, 1L, 42, null, null, null, null, null, null, DisqualificationStatus.DSQ)
         def person = new Person(1L, "Max", "Mustermann", LocalDate.of(1990, 1, 1), Gender.MALE, null)
         repository.findByRaceId(5L) >> [dsq]

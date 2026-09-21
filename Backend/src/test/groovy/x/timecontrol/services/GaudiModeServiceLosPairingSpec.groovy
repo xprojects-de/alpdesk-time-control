@@ -55,6 +55,7 @@ class GaudiModeServiceLosPairingSpec extends Specification {
         repository.findById(1L) >> Optional.of(mode(GaudiModeType.LOS))
         repository.update(_) >> { GaudiMode m -> m }
         raceService.findById(_) >> { Long id -> Optional.of(race(id)) }
+        raceService.existsById(_) >> true
         gaudiModeRaceRepository.findByGaudiModeIdOrderBySortOrder(1L) >> [new GaudiModeRace(1L, 1L, 10L, 0, 1.0d)]
         transactionOperations.executeWrite(_) >> { args -> args[0].call(null) }
     }
