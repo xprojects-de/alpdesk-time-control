@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -39,7 +39,7 @@ jobs:
           npm run deploy
 
       - name: Upload Frontend Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: Frontend/dist/
@@ -73,10 +73,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Frontend Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: Frontend/dist
@@ -179,7 +179,7 @@ jobs:
         run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}-installer
           path: Backend/dist/*
@@ -196,10 +196,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Frontend Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: Frontend/dist
@@ -228,7 +228,7 @@ jobs:
           cp build/libs/time-control.jar "dist/Time-Control-java-v${version}.jar"
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shadow-jar
           path: Backend/dist/Time-Control-java-v*.jar
@@ -256,10 +256,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Frontend Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: Frontend/dist
@@ -306,7 +306,7 @@ jobs:
           done
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}-jpackage-installer
           path: |
@@ -329,10 +329,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -393,7 +393,7 @@ jobs:
           zip -r -X -y "dist/Time-Control-macOS-Intel-v${{ steps.read_version.outputs.version }}.zip" TimeControl.app
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-intel-bundle
           path: dist/Time-Control-macOS-Intel-v*.zip
@@ -409,10 +409,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -462,7 +462,7 @@ jobs:
           zip -r -X -y "dist/Time-Control-macOS-Intel-PoorMan-v${{ steps.read_version.outputs.version }}.zip" Time-Control-macOS-Intel-PoorMan
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-intel-poorman-bundle
           path: dist/Time-Control-macOS-Intel-PoorMan-v*.zip
@@ -478,10 +478,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -531,7 +531,7 @@ jobs:
           zip -r -X -y "dist/Time-Control-macOS-AppleSilicon-PoorMan-v${{ steps.read_version.outputs.version }}.zip" Time-Control-macOS-AppleSilicon-PoorMan
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-applesilicon-poorman-bundle
           path: dist/Time-Control-macOS-AppleSilicon-PoorMan-v*.zip
@@ -548,10 +548,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -598,7 +598,7 @@ jobs:
           (cd bundle && zip -r -X -y "../dist/Time-Control-Windows-PoorMan-v${{ steps.read_version.outputs.version }}.zip" .)
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-poorman-bundle
           path: dist/Time-Control-Windows-PoorMan-v*.zip
@@ -615,10 +615,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -688,7 +688,7 @@ jobs:
           tar czf "dist/Time-Control-Linux-x64-Server-v${{ steps.read_version.outputs.version }}.tar.gz" Time-Control-Linux-x64-Server
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-x64-server-bundle
           path: dist/Time-Control-Linux-x64-Server-v*.tar.gz
@@ -703,10 +703,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Shadow JAR Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shadow-jar
           path: shadow-jar
@@ -776,7 +776,7 @@ jobs:
           tar czf "dist/Time-Control-Linux-AArch64-Server-v${{ steps.read_version.outputs.version }}.tar.gz" Time-Control-Linux-AArch64-Server
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-aarch64-server-bundle
           path: dist/Time-Control-Linux-AArch64-Server-v*.tar.gz
@@ -790,10 +790,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download all Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-assets
 
@@ -826,7 +826,7 @@ jobs:
       # release rather than adding a second one - which is what you want when a runner failed and
       # the build is simply repeated. Publishing a genuinely new build means raising app.version.
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.read_version.outputs.version }}
           name: Release v${{ steps.read_version.outputs.version }}
