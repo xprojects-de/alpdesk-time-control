@@ -35,7 +35,7 @@ import config
 
 # externalId -> why this person is allowed to differ from the reference.
 KNOWN_INTENTIONAL_DEVIATIONS = {
-    # "REDACTED": "DSQ injected by us in Schnelligkeit (reference has a normal result)",
+    # "60379": "DSQ injected by us in Schnelligkeit (reference has a normal result)",
 }
 
 STATIONS = [race[0] for race in config.RACES]
