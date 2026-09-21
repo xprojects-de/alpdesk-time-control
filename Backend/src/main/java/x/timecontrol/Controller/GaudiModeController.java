@@ -264,10 +264,12 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfByGender(@PathVariable Long id, @PathVariable String gender) {
         return exportFile(id, POINTS_COMBINATION_ONLY, "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
+                    Gender filterGender = Gender.valueOf(gender.toUpperCase());
                     List<GaudiRankingEntryResponse> ranking =
-                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), null);
+                            service.computeRankingForCategory(gaudiMode, filterGender, null);
                     return pdfExportService.generatePointsCombinationGenderRanking(
-                            gaudiMode, ranking, races, races.getFirst(), gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), gender,
+                            service.computeDnsEntries(gaudiMode, filterGender, null));
                 });
     }
 
@@ -283,10 +285,12 @@ public class GaudiModeController {
     public HttpResponse<?> exportPdfByAgeGroupAndGender(@PathVariable Long id, @PathVariable String ageGroup, @PathVariable String gender) {
         return exportFile(id, POINTS_COMBINATION_ONLY, "_" + ageGroup.toLowerCase() + "_" + gender.toLowerCase() + ".pdf", "PDF",
                 (gaudiMode, races) -> {
+                    Gender filterGender = Gender.valueOf(gender.toUpperCase());
                     List<GaudiRankingEntryResponse> ranking =
-                            service.computeRankingForCategory(gaudiMode, Gender.valueOf(gender.toUpperCase()), ageGroup);
+                            service.computeRankingForCategory(gaudiMode, filterGender, ageGroup);
                     return pdfExportService.generatePointsCombinationAgeGroupGenderRanking(
-                            gaudiMode, ranking, races, races.getFirst(), ageGroup, gender, service.computeDnsEntries(gaudiMode));
+                            gaudiMode, ranking, races, races.getFirst(), ageGroup, gender,
+                            service.computeDnsEntries(gaudiMode, filterGender, ageGroup));
                 });
     }
 

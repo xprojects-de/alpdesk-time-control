@@ -318,9 +318,10 @@ public class RankingViewService {
     }
 
     /**
-     * Gender/age-group/category filter used to scope the scored ranking entries in
-     * {@link #createRankingEntriesFromParticipants}. Not used for the "nicht gewertet" (DNS) rows in
-     * {@link #createDnsRows} - that list is deliberately unfiltered, see its own doc comment.
+     * Gender/age-group/category filter used to scope both the scored ranking entries in
+     * {@link #createRankingEntriesFromParticipants} and the "nicht gewertet" (DNS) rows in
+     * {@link #createDnsRows(Iterable, Race, Gender, String, Long, PersonTeamLookup)}, so a ranking
+     * and the list of who didn't finish it can never disagree about who belongs to it.
      */
     private boolean matchesCategoryFilters(ParticipantWithPerson pwp, Gender filterGender, String filterAgeGroup,
                                             Long filterCategoryId, List<AgeGroup> ageGroups) {
@@ -354,16 +355,41 @@ public class RankingViewService {
     /**
      * The complement of {@link #createRankingEntriesFromParticipants}'s "has a measured result"
      * filter: every participant of the race without a valid result, listed as "nicht gewertet" (DNS).
-     * Deliberately not scoped by gender/age-group/category the way the ranking above it is - one DNS
-     * list per race, shown as-is regardless of which category is being viewed.
+     * This overload applies no gender/age-group/category filter and is for a document that ranks the
+     * whole field - either in one section ("Gesamtwertung") or split into sections that together
+     * cover everyone (all age groups, all categories). A document scoped to one gender/age
+     * group/category must use
+     * {@link #createDnsRows(Iterable, Race, Gender, String, Long, PersonTeamLookup)} instead, or it
+     * prints people who are not in the ranking above the list - e.g. a woman under "nicht gewertet"
+     * on a men's result sheet.
      */
     public List<DnsRow> createDnsRows(Iterable<Participant> participants, Race race, PersonTeamLookup lookup) {
+        return createDnsRows(participants, race, null, null, null, lookup);
+    }
+
+    /**
+     * Same as {@link #createDnsRows(Iterable, Race, PersonTeamLookup)}, but scoped by the same
+     * gender/age-group/category filter the accompanying ranking uses (see
+     * {@link #matchesCategoryFilters}) - the parameters mirror
+     * {@link #createRankingEntriesFromParticipants} exactly, so a caller passes whatever filter its
+     * whole document is scoped to and gets the matching "nicht gewertet" list. A null filter leaves
+     * that dimension unrestricted, so a document split into per-section filters (all age groups, all
+     * categories) still passes null for the dimension it splits on and keeps one complete list.
+     */
+    public List<DnsRow> createDnsRows(Iterable<Participant> participants, Race race, Gender filterGender,
+                                       String filterAgeGroup, Long filterCategoryId, PersonTeamLookup lookup) {
         List<AgeGroup> ageGroups = loadAgeGroups(race);
 
         List<ParticipantWithPerson> notScored = StreamSupport.stream(participants.spliterator(), false)
                 .filter(p -> rankingService.adjustedValue(race, p) == null)
                 .map(p -> new ParticipantWithPerson(p, lookup.personsById().get(p.personId())))
                 .toList();
+
+        if (filterGender != null || filterAgeGroup != null || filterCategoryId != null) {
+            notScored = notScored.stream()
+                    .filter(pwp -> matchesCategoryFilters(pwp, filterGender, filterAgeGroup, filterCategoryId, ageGroups))
+                    .toList();
+        }
 
         notScored = notScored.stream()
                 .sorted(Comparator.<ParticipantWithPerson, String>comparing(pwp -> pwp.person() != null ? pwp.person().lastName() : "", String.CASE_INSENSITIVE_ORDER)

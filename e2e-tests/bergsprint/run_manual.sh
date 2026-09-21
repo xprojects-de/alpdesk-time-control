@@ -25,4 +25,8 @@ echo "=== 5: Gaudi-Modus Los ==="
 python3 manual_verify_los.py
 
 echo ""
+echo "=== 6: 'Nicht gewertet' muss zur jeweiligen Wertung passen (PDF + Live) ==="
+python3 manual_verify_dns_scope.py
+
+echo ""
 echo "Fertig."

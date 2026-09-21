@@ -121,7 +121,13 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                         p != null ? rankingService.startGroupOffsetMs(race.race(), p) : null
                 ));
             }
-            int total = (int) Math.round(weightedTotal);
+            // Rounded ONCE, straight to the precision this total is printed and ranked at
+            // (RankingService#roundForDisplay(Race, double)) - rounding to a whole ms here and then
+            // again to the hundredth below (for the place tie value, the printed total and the
+            // Rueckstand) is the double rounding that method's javadoc warns about: with a
+            // non-integer race weight, 9904.5ms would become 9905ms and print as 0:09.91, although
+            // the value itself is closer to 0:09.90.
+            int total = rankingService.roundForDisplay(races.getFirst().race(), weightedTotal);
 
             Optional<Person> person = Optional.ofNullable(personsById.get(personId));
             String label = person.map(personService::displayName).orElse("Unbekannt");

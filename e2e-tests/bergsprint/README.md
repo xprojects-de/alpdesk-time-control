@@ -34,6 +34,13 @@ Derselbe Bergsprint, aber genau in dem Ablauf, der ohne Live-Zuordnung gefahren 
 4. DNF/DSQ werden **vor** dem Sync eingetragen und duerfen vom Sync nicht ueberschrieben werden.
 5. Wertung Damen/Herren je Kategorie (Bio-Bike/E-Bike) und Gaudi-Modus Los, beide unabhaengig
    nachgerechnet und gegen das PDF geprueft.
+6. Die "nicht gewertet"-Liste muss zur jeweiligen Wertung passen: ein nach Geschlecht/Altersklasse/
+   Kategorie gefiltertes Dokument darf dort niemanden auffuehren, den die Wertung darueber gar nicht
+   betrachtet (frueher stand eine Dame unter "Nicht gewertet" auf dem Herren-Blatt), waehrend ein
+   Dokument ueber das ganze Feld die vollstaendige Liste behaelt. Geprueft fuer **alle 13
+   PDF-Varianten und die Live-Ergebnisse in beiden Formen** - als JSON (`/results`) und als die
+   HTML-Seite, die die Zuschauer tatsaechlich oeffnen (`/results-html`) -, jeweils gegen eine aus
+   dem Szenario berechnete Erwartung.
 
 Die Zeiten in `manual_config.py` enthalten bewusst Rundungs-Grenzfaelle (zwei Paare, die erst durch
 die Hundertstel-Rundung gleichziehen und sich einen Platz teilen muessen; `.xx5`-Werte, die half-up
@@ -98,4 +105,5 @@ rm -rf /pfad/zum/work-dir
 | `manual_assign_and_sync.py` | Variante: Sicherung, Archivieren, manuelle Zuordnung, Ausfälle, Sync |
 | `manual_verify_evaluations.py` | Variante: Wertung je Kategorie/Geschlecht gegen das PDF prüfen |
 | `manual_verify_los.py` | Variante: Los-Modus nachrechnen (API + PDF) |
+| `manual_verify_dns_scope.py` | Variante: "nicht gewertet" je Export/Live-Ansicht gegen die Erwartung prüfen |
 | `run_manual.sh` | Variante: alle Schritte der manuellen Zuordnung am Stück |

@@ -356,16 +356,30 @@ public class GaudiModeService {
      * see {@link GaudiModeCalculator#computeDnsEntries}. Meaningful for Zeit-Kombination/
      * Punkte-Mischwertung and Los-Modus (unranked pairs); Mannschaftswertung returns an empty list via
      * that method's default implementation.
-     * Deliberately not scoped by gender/age-group the way {@link #computeRankingForCategory} is: the
-     * same, unfiltered DNS list is used on every one of a Gaudi-Modus's PDF exports, regardless of
-     * which category that particular export ranks.
+     * Unfiltered - for an export that ranks the whole field. An export scoped to one gender/age
+     * group must use {@link #computeDnsEntries(GaudiMode, Gender, String)} instead.
      */
     public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode) {
+        return computeDnsEntries(gaudiMode, null, null);
+    }
+
+    /**
+     * Same as {@link #computeDnsEntries(GaudiMode)}, but restricted to the persons a given
+     * gender/age-group export actually ranks - resolved through the very same
+     * {@link #resolveMatchingPersonIds} that {@link #computeRankingForCategory} uses, so the ranking
+     * and the "nicht gewertet" list underneath it always describe the same set of people. Without
+     * this, a Damen-Export lists every man who didn't finish as well. Either filter may be null to
+     * leave that dimension unrestricted.
+     */
+    public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, Gender filterGender, String filterAgeGroup) {
         GaudiModeCalculator calculator = calculatorsByType.get(gaudiMode.type());
         if (calculator == null) {
             return List.of();
         }
-        return calculator.computeDnsEntries(gaudiMode, buildRaceParticipants(gaudiMode, null));
+        Set<Long> personIdFilter = filterGender == null && filterAgeGroup == null
+                ? null
+                : resolveMatchingPersonIds(gaudiMode, filterGender, filterAgeGroup);
+        return calculator.computeDnsEntries(gaudiMode, buildRaceParticipants(gaudiMode, personIdFilter));
     }
 
     private List<GaudiModeCalculator.RaceParticipants> buildRaceParticipants(GaudiMode gaudiMode, Set<Long> personIdFilter) {

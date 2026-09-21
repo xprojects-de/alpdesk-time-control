@@ -13,6 +13,9 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   get archived onto the race, are assigned to participants by hand via
   `PUT /race-measurements/{id}` (incl. the duplicate-assignment 409 and a corrected mix-up),
   DNF/DSQ are recorded before the sync, and its times carry deliberate rounding edge cases.
+  Its last step (`manual_verify_dns_scope.py`) checks that the "nicht gewertet" list is scoped
+  like the ranking above it across all 13 PDF variants and the live results in both forms (the
+  `/results` JSON and the `/results-html` page spectators open).
 - `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations),
   with four runnable variants, each needing its own fresh set of 5 instances (they all create
   races with the same names, so none can run against instances another variant already used):

@@ -113,6 +113,41 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 50000
     }
 
+    def "a weighted total is rounded once to the printed hundredth, not first to a whole millisecond"() {
+        given: "a weight that makes the weighted sum land on a half millisecond: 22010*0.45 = 9904.5, +10000"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.45d, [participant(1L, 1L, 22010)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [participant(2L, 1L, 10000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "19904.5 rounds straight to 19900 (0:19.90) - NOT to 19905 first and then up to 19910 (0:19.91)"
+        ranking.size() == 1
+        ranking[0].valueMs() == 19900
+    }
+
+    def "two totals that print the same share a place, even when only the double rounding separated them"() {
+        given: "Anna lands on 19904.5, Bert on exactly 19900 - both print 0:19.90"
+        knownPersons.putAll([1L: person(1L, "Anna"), 2L: person(2L, "Bert")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.45d,
+                        [participant(1L, 1L, 22010), participant(3L, 2L, 22000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participant(2L, 1L, 10000), participant(4L, 2L, 10000)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "Bert: 22000*0.45 = 9900, +10000 = 19900 - same printed total, so the same place"
+        ranking.size() == 2
+        ranking.every { it.valueMs() == 19900 }
+        ranking.every { it.place() == 1 }
+    }
+
     def "a person missing a result in any leg is excluded from the combined ranking"() {
         given:
         knownPersons.putAll([1L: person(1L, "Anna")])

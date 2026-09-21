@@ -243,7 +243,7 @@ public class PdfExportService {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, null, null, lookup);
-        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
+        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, gender, null, null, lookup);
         String title = "Wertung " + rankingViewService.genderLabel(gender);
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
@@ -256,7 +256,7 @@ public class PdfExportService {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null, lookup);
-        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
+        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, gender, ageGroup, null, lookup);
         String title = "Wertung " + ageGroup + " " + rankingViewService.genderLabel(gender);
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
@@ -289,7 +289,7 @@ public class PdfExportService {
                 .orElse("Unbekannt");
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, null, null, categoryId, lookup);
-        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
+        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, null, null, categoryId, lookup);
         String title = "Wertung " + categoryName;
         return renderDocument(race, true, ctx -> {
             drawSection(ctx, rankingColumns(entries), title, entries, true);
@@ -318,7 +318,9 @@ public class PdfExportService {
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
-        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
+        // Scoped to this gender but split across every category, so only the gender dimension is
+        // filtered here - the category dimension stays open, the sections below cover them all.
+        List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, gender, null, null, lookup);
 
         return renderDocument(race, true, ctx -> {
             for (Category category : categories) {
