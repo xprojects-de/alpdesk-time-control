@@ -1,6 +1,6 @@
 ---
 name: time-control-e2e
-description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi2025 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, the Saison season-scoped age-class test, and the Saison-Upgrade migration test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
+description: "Run all Time Control end-to-end test suites under e2e-tests/ (currently the Bergsprint single-race import test, the Kondi 5-instance federation test with its run_all/run_phased/run_phased_results/run_phased_results_with_status variants, the Nachtslalom auto-assign/measurement-editing test, the Rundung rounding-consistency regression test, the Saison season-scoped age-class test, and the Saison-Upgrade migration test) against throwaway, isolated backend instances. Use when the user invokes /time-control-e2e or asks to run the project's end-to-end tests."
 ---
 
 ## What this runs
@@ -16,7 +16,7 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
   Its last step (`manual_verify_dns_scope.py`) checks that the "nicht gewertet" list is scoped
   like the ranking above it across all 13 PDF variants and the live results in both forms (the
   `/results` JSON and the `/results-html` page spectators open).
-- `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations),
+- `e2e-tests/kondi-federation/` — 5-instance station federation test (1 main + 4 stations),
   with four runnable variants, each needing its own fresh set of 5 instances (they all create
   races with the same names, so none can run against instances another variant already used):
   - `run_all.sh` — the baseline scenario: stations enter results, export, MAIN imports them back,
@@ -34,7 +34,7 @@ Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
     `keepDsqInRanking` flag combination and verify each against an independent Python
     recalculation (JSON ranking + PDF "nicht gewertet" list), then a guardrail check that these
     flags have no effect on `TIME_COMBINATION` mode.
-  See its [README.md](../../e2e-tests/kondi2025-federation/README.md) for full detail on each
+  See its [README.md](../../e2e-tests/kondi-federation/README.md) for full detail on each
   variant — treat it as authoritative if a new variant script appears there that isn't listed here.
 - `e2e-tests/nachtslalom/` — two-run race exercising every `AutoAssignService` combination/error
   case (enable/skip/set-next/disable, default-by-raceNumber vs. default-by-startSequence, a
@@ -93,9 +93,9 @@ found.
    install before building/running (`/usr/libexec/java_home -V` lists installed JVMs) — and
    re-export it in every subsequent command, since exported env vars don't persist between
    separate shell invocations.
-2. `kondi2025-federation` runs on the synthetic demo data under its `fixtures/` directory, which
+2. `kondi-federation` runs on the synthetic demo data under its `fixtures/` directory, which
    is checked in — no extra setup, and never point it at real participant data (see its
-   [README.md](../../e2e-tests/kondi2025-federation/README.md)). If `fixtures/` is missing,
+   [README.md](../../e2e-tests/kondi-federation/README.md)). If `fixtures/` is missing,
    regenerate it with `python3 make_fixtures.py` rather than skipping the suite.
 3. Run the runnable suites **one at a time** (not in parallel — cleanup of one must not race
    another's ports/PIDs/work dir), each from its own directory:
@@ -109,14 +109,14 @@ found.
       without it that suite skips its SQLite-level checks and says so.
    d. Clean up regardless of outcome: `pkill -f 'time-control.jar'` (plus
       `pkill -f 'fake_device.py'` for bergsprint/nachtslalom), then `rm -rf` that suite's temp work dir.
-   e. For `kondi2025-federation` only, if step 2 didn't skip it: repeat a-d three more times, once
+   e. For `kondi-federation` only, if step 2 didn't skip it: repeat a-d three more times, once
       each with `./run_phased.sh`, `./run_phased_results.sh`, and
       `./run_phased_results_with_status.sh` instead of `./run_all.sh` — fresh instances/work dir
       each time, same CSVs, same cleanup.
 4. Report a final summary with three parts:
    a. A short recap of what was actually done — whether the jar was (re)built or reused, which
       suites ran, which were skipped and why (e.g. missing CSVs), and which of the four
-      `kondi2025-federation` variants ran.
+      `kondi-federation` variants ran.
    b. A summary table: suite → ran/skipped, pass/fail, and for any failure point at
       `backend.log` inside that suite's (now-deleted, so quote it before cleanup) work dir and
       the failing script's output.

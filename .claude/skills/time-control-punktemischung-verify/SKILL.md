@@ -10,7 +10,7 @@ ranking from scratch, independently of the app's own Java code, from the raw per
 the points-scale/weighting configuration — then diff that against the app's actual output (its PDF,
 or a JSON export). This catches configuration mistakes (wrong scale, wrong weight, wrong
 keep-in-ranking flags) as well as genuine app bugs, the same way
-`e2e-tests/kondi2025-federation/run_phased_results_with_status.sh` cross-checks the app with an
+`e2e-tests/kondi-federation/run_phased_results_with_status.sh` cross-checks the app with an
 independent Python recalculation.
 
 This skill only covers `POINTS_COMBINATION` mode (Punkte-Kombination / Punkte-Mischwertung).

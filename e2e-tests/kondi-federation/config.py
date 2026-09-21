@@ -1,4 +1,4 @@
-"""Central port/URL config for the Kondi2025 5-instance federation E2E test.
+"""Central port/URL config for the Konditionswettkampf 5-instance federation E2E test.
 Override any of these via environment variables if the defaults clash with something
 else already running on your machine.
 """

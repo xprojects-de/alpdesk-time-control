@@ -96,4 +96,4 @@ Ergebnis-Exporte, gedruckte Wertungen — gehören **nie** in ein Git-Repository
 privates: Sie bleiben in der Historie, selbst wenn die Datei später gelöscht wird. Legt sie unter
 `e2e-tests/*/local-data/` ab (per `.gitignore` ausgenommen) oder ganz außerhalb des Repos und zeigt
 mit `KONDI_DATA_DIR` darauf. Siehe
-[e2e-tests/kondi2025-federation/README.md](../e2e-tests/kondi2025-federation/README.md).
+[e2e-tests/kondi-federation/README.md](../e2e-tests/kondi-federation/README.md).

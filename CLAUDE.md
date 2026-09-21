@@ -227,9 +227,9 @@ suite under `Backend/src/test/groovy`, which mocks/unit-tests individual service
 `/time-control-e2e` instead of running the scripts under `e2e-tests/` by hand. It builds the jar,
 starts each suite's isolated instance(s), runs its `run_all.sh`, and tears everything down
 afterward; see each suite's own `README.md` (`e2e-tests/bergsprint/`,
-`e2e-tests/kondi2025-federation/`) for what it covers and its prerequisites.
+`e2e-tests/kondi-federation/`) for what it covers and its prerequisites.
 
-Every suite runs on synthetic data only. `kondi2025-federation` ships its demo field under
+Every suite runs on synthetic data only. `kondi-federation` ships its demo field under
 `fixtures/` (regenerate with `make_fixtures.py`) plus `fixtures/reference_gesamtwertung.pdf`, a
 Gesamtwertung that Time Control itself exported from that data and which its phase 10 diffs every
 run against. **Real race data never goes into the repo** — it holds names, birth years and clubs of
