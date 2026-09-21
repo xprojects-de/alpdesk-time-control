@@ -1,0 +1,196 @@
+name: E2E Tests
+
+# The end-to-end suites under e2e-tests/, each against its own throwaway backend instances.
+#
+# Separate from pr-checks.yml because it answers a different question. That one asks whether the
+# code still compiles, passes its unit tests and lints. This one drives whole race days through a
+# running application: Flyway migrations against real SQLite, the five-instance station
+# federation, PDF and CSV exports, the frozen reference Gesamtwertung. It is the part that catches
+# a Micronaut, Flyway or SQLite-driver update breaking something no unit test touches.
+#
+# The suites are plain bash and Python with nothing but the standard library, so a runner can do
+# exactly what a laptop does - build the jar, start instances, run the scripts, clean up.
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Built once and handed to every suite. Rebuilding it in each of the ten jobs would cost more
+  # than the tests themselves.
+  build-jar:
+    name: Build Jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          cache-dependency-path: Backend/build.gradle
+
+      - name: Build Shadow JAR
+        working-directory: Backend
+        run: ./gradlew shadowJar --no-daemon
+
+      - name: Upload Jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-jar
+          path: Backend/build/libs/time-control.jar
+          retention-days: 1
+
+  e2e:
+    name: ${{ matrix.name }}
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    strategy:
+      # One failing suite must not cancel the others - the whole point is to see which of them
+      # break and which hold.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Bergsprint
+            suite: bergsprint
+            script: run_all.sh
+          - name: Bergsprint (manuelle Zuordnung)
+            suite: bergsprint
+            script: run_manual.sh
+          - name: Kondi Federation
+            suite: kondi-federation
+            script: run_all.sh
+          - name: Kondi Federation (Teilimporte)
+            suite: kondi-federation
+            script: run_phased.sh
+          - name: Kondi Federation (Ergebnis-Restore)
+            suite: kondi-federation
+            script: run_phased_results.sh
+          - name: Kondi Federation (Status-Szenarien)
+            suite: kondi-federation
+            script: run_phased_results_with_status.sh
+          - name: Nachtslalom
+            suite: nachtslalom
+            script: run_all.sh
+          - name: Rundung
+            suite: rundung
+            script: run_all.sh
+          - name: Saison
+            suite: saison
+            script: run_all.sh
+          # The only suite that does not start on an empty database: its start_instances.sh
+          # assembles a pre-V4 fixture and prints the path of the resulting database, which
+          # run_all.sh needs as an argument - without it the SQLite-level checks are skipped.
+          - name: Saison-Upgrade
+            suite: saison-upgrade
+            script: run_all.sh
+            needs_db_path: true
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup GraalVM Java 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The suites read the generated PDFs back with pdftotext and compare them against an
+      # independent recalculation, so this is a hard requirement, not a convenience.
+      - name: Install pdftotext
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Download Jar
+        uses: actions/download-artifact@v8
+        with:
+          name: e2e-jar
+          path: jar
+
+      - name: Start Instances
+        working-directory: e2e-tests/${{ matrix.suite }}
+        run: |
+          ./start_instances.sh "$GITHUB_WORKSPACE/jar/time-control.jar" \
+                               "$GITHUB_WORKSPACE/e2e-work" | tee start.log
+          # A suite whose instances never came up would otherwise fail later with a confusing
+          # connection error instead of naming the actual cause.
+          grep -qE "HTTP (200|302)" start.log \
+            || { echo "::error::Keine Instanz antwortet - siehe start.log und backend.log"; exit 1; }
+
+      - name: Run Suite
+        working-directory: e2e-tests/${{ matrix.suite }}
+        run: |
+          if [ "${{ matrix.needs_db_path }}" = "true" ]; then
+            db=$(grep -oE "DB \(for the verification step\): .*" start.log | sed 's/.*: //')
+            test -n "$db" || { echo "::error::DB-Pfad nicht aus start_instances.sh gelesen"; exit 1; }
+            ./${{ matrix.script }} "$db"
+          else
+            ./${{ matrix.script }}
+          fi
+
+      # Whatever the suite wrote before it failed: the instances' logs say what the application
+      # did, results/ holds the PDFs and CSVs it compared against.
+      - name: Collect Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-logs-${{ matrix.suite }}-${{ matrix.script }}
+          path: |
+            e2e-work/**/backend.log
+            e2e-tests/${{ matrix.suite }}/start.log
+            e2e-tests/${{ matrix.suite }}/results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # The runner is thrown away anyway, but stopping the instances keeps a hanging process from
+      # holding the job open until the step timeout.
+      - name: Stop Instances
+        if: always()
+        run: |
+          pkill -f 'time-control.jar' || true
+          pkill -f 'fake_device.py' || true
+
+  # One check to require in the ruleset instead of eleven. The matrix produces a separate status
+  # per suite, which is what you want when reading a pull request but tedious to list as required
+  # checks - and every new suite would have to be added there by hand.
+  #
+  # needs.<job>.result is the aggregate over the whole matrix: "success" only if every entry
+  # succeeded, otherwise "failure", "cancelled" or "skipped".
+  #
+  # if: always() is what makes this usable as a required check. Without it the job would be
+  # skipped whenever something upstream failed, a required check that never reports would never
+  # turn red either, and the pull request would sit blocked with no way to resolve it.
+  e2e-result:
+    name: E2E Suites
+    needs: [build-jar, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verdict
+        run: |
+          echo "Jar-Build: ${{ needs.build-jar.result }}"
+          echo "Suiten:    ${{ needs.e2e.result }}"
+          if [ "${{ needs.build-jar.result }}" != "success" ]; then
+            echo "::error::Der Jar-Build ist fehlgeschlagen - die Suiten konnten gar nicht erst laufen."
+            exit 1
+          fi
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "::error::Mindestens eine e2e-Suite ist fehlgeschlagen. Welche, steht in der Job-Liste; die Logs hängen als Artefakt am fehlgeschlagenen Job."
+            exit 1
+          fi
+          echo "Alle e2e-Suiten erfolgreich."
