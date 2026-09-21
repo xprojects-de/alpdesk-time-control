@@ -127,10 +127,39 @@ jobs:
         run: |
           ./start_instances.sh "$GITHUB_WORKSPACE/jar/time-control.jar" \
                                "$GITHUB_WORKSPACE/e2e-work" | tee start.log
-          # A suite whose instances never came up would otherwise fail later with a confusing
-          # connection error instead of naming the actual cause.
-          grep -qE "HTTP (200|302)" start.log \
-            || { echo "::error::Keine Instanz antwortet - siehe start.log und backend.log"; exit 1; }
+
+          # The scripts wait a fixed few seconds and then check once. That is enough for a single
+          # instance on a developer machine, but kondi-federation starts five at a time and on a
+          # four-core runner none of them had answered yet when the check ran - the health output
+          # above may therefore show HTTP 000 even though everything is fine and still starting.
+          #
+          # So wait properly here: every instance prints "port=<n>" when it is launched, so poll
+          # each of those ports until it serves. Slow is acceptable, unclear is not.
+          ports=$(grep -oE 'port=[0-9]+' start.log | cut -d= -f2 | sort -u)
+          test -n "$ports" || { echo "::error::Keine Ports in start.log gefunden"; exit 1; }
+
+          for p in $ports; do
+            code=000
+            for i in $(seq 1 90); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$p/" 2>/dev/null || echo 000)
+              case "$code" in 200|302) break ;; esac
+              sleep 2
+            done
+            case "$code" in
+              200|302)
+                echo "  port $p bereit nach ca. $((i * 2))s"
+                ;;
+              *)
+                echo "::error::Port $p antwortet auch nach 180s nicht (zuletzt HTTP $code)"
+                for log in "$GITHUB_WORKSPACE/e2e-work"/*/backend.log; do
+                  [ -f "$log" ] || continue
+                  echo "----- $log (letzte 40 Zeilen) -----"
+                  tail -n 40 "$log"
+                done
+                exit 1
+                ;;
+            esac
+          done
 
       - name: Run Suite
         working-directory: e2e-tests/${{ matrix.suite }}
