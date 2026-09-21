@@ -91,19 +91,39 @@ public class GaudiModeService {
         });
     }
 
-    public Iterable<GaudiMode> findAll() {
-        return repository.findAll();
+    /**
+     * Every instance, for the list endpoint - without the cover-page BLOBs, which that endpoint
+     * would load in full only to answer a boolean. The returned instances have
+     * {@code coverPagePdf == null} regardless; pair with {@link #findIdsWithCoverPage()}.
+     */
+    public Iterable<GaudiMode> findAllWithoutCoverPage() {
+        return repository.findAllWithoutCoverPage();
     }
 
     /**
-     * Gaudi-Modus instances that reference the given race (in any of its combined races).
+     * Gaudi-Modus instances that reference the given race (in any of its combined races). Same
+     * cover-page projection - and the same hazard - as {@link #findAllWithoutCoverPage()}.
      */
-    public Iterable<GaudiMode> findByRaceId(Long raceId) {
+    public Iterable<GaudiMode> findByRaceIdWithoutCoverPage(Long raceId) {
         Set<Long> gaudiModeIds = new LinkedHashSet<>();
         for (GaudiModeRace gmr : gaudiModeRaceRepository.findByRaceId(raceId)) {
             gaudiModeIds.add(gmr.gaudiModeId());
         }
-        return repository.findByIdIn(gaudiModeIds);
+        if (gaudiModeIds.isEmpty()) {
+            return List.of();
+        }
+        // Filtered in memory off the same projection rather than through a second native query with
+        // an IN clause: gaudi_mode holds a handful of rows per club, and without the BLOBs they are
+        // tiny. Not worth introducing a parameter-expansion pattern this codebase has nowhere else,
+        // and which a mocked repository spec could not catch if the dialect got it wrong.
+        return repository.findAllWithoutCoverPage().stream()
+                .filter(gm -> gaudiModeIds.contains(gm.id()))
+                .toList();
+    }
+
+    /** The ids of instances that have a cover page - what the two projections above leave out. */
+    public Set<Long> findIdsWithCoverPage() {
+        return new LinkedHashSet<>(repository.findIdsWithCoverPage());
     }
 
     public Optional<GaudiMode> findById(Long id) {
@@ -217,7 +237,7 @@ public class GaudiModeService {
             // Without this check a reference to an already-deleted (or never-existing) race would
             // be silently dropped later by buildRaceParticipants() instead of being rejected here -
             // letting a Gaudi-Modus be saved with fewer legs than the operator actually configured.
-            if (raceService.findById(entry.raceId()).isEmpty()) {
+            if (!raceService.existsById(entry.raceId())) {
                 throw new IllegalArgumentException("Race with id " + entry.raceId() + " does not exist");
             }
         }

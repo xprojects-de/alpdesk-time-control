@@ -72,9 +72,15 @@ public class GaudiModeController {
     @Operation(summary = "List Gaudi-Modus instances, optionally filtered by race", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "List of Gaudi-Modus instances", content = @Content(schema = @Schema(implementation = GaudiModeResponse.class)))
     public HttpResponse<List<GaudiModeResponse>> list(@QueryValue Optional<Long> raceId) {
-        Iterable<GaudiMode> gaudiModes = raceId.isPresent() ? service.findByRaceId(raceId.get()) : service.findAll();
+        // Both projections leave the cover-page BLOB out - this endpoint only reports whether one
+        // is set, and loading several MB per instance to answer a boolean is what it used to do.
+        Iterable<GaudiMode> gaudiModes = raceId.isPresent()
+                ? service.findByRaceIdWithoutCoverPage(raceId.get())
+                : service.findAllWithoutCoverPage();
+        Set<Long> idsWithCoverPage = service.findIdsWithCoverPage();
         List<GaudiModeResponse> response = StreamSupport.stream(gaudiModes.spliterator(), false)
-                .map(gm -> GaudiModeResponse.from(gm, buildRaceResponses(gm.id())))
+                .map(gm -> GaudiModeResponse.from(gm, buildRaceResponses(gm.id()),
+                        idsWithCoverPage.contains(gm.id())))
                 .toList();
         return HttpResponse.ok(response);
     }
