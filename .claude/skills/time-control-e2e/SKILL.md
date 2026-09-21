@@ -8,6 +8,11 @@ description: "Run all Time Control end-to-end test suites under e2e-tests/ (curr
 Every subdirectory of `e2e-tests/` that has its own `run_all.sh` is one suite:
 
 - `e2e-tests/bergsprint/` — single race, real device-import path, category + Los-Modus scoring.
+  Has a second runnable variant, `run_manual.sh` (own fresh instance needed, same reason as
+  kondi's variants): the same race without live auto-assign — measurements poll in unassigned,
+  get archived onto the race, are assigned to participants by hand via
+  `PUT /race-measurements/{id}` (incl. the duplicate-assignment 409 and a corrected mix-up),
+  DNF/DSQ are recorded before the sync, and its times carry deliberate rounding edge cases.
 - `e2e-tests/kondi2025-federation/` — 5-instance station federation test (1 main + 4 stations),
   with four runnable variants, each needing its own fresh set of 5 instances (they all create
   races with the same names, so none can run against instances another variant already used):
