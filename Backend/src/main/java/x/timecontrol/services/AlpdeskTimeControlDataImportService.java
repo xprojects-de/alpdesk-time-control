@@ -123,9 +123,16 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         // nothing new". DataImportScheduler's periodic poll already wraps this whole call in its
         // own try/catch, so propagating here doesn't change its "retry every 5s" behavior, just
         // what it logs.
+        // exchange(), not retrieve(): retrieve(String) turns a 200 with an EMPTY body into an
+        // "Empty body" HttpClientResponseException instead of returning "". The device answers
+        // exactly that when it holds no measurements - the normal state before a race and right
+        // after a reset - and the safety pull inside reset/archive then failed the whole operation
+        // with "Could not connect to device", making it impossible to reset an empty device.
+        // exchange() hands back the response and leaves the body an empty Optional.
         String response;
         try {
-            response = httpClient.toBlocking().retrieve(HttpRequest.GET(dataUrl));
+            response = httpClient.toBlocking().exchange(HttpRequest.GET(dataUrl), String.class)
+                    .getBody().orElse("");
         } catch (HttpClientException e) {
             throw new IllegalStateException("Could not connect to device at " + dataUrl + ": " + e.getMessage(), e);
         }
@@ -223,7 +230,9 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         try {
 
             LOG.info("Resetting device at {}", resetUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(resetUrl));
+            // exchange() without a body type - see importDataFromDevice(): this command's answer is
+            // its status code, and retrieve() would fail it outright on an empty body.
+            httpClient.toBlocking().exchange(HttpRequest.GET(resetUrl));
             LOG.info("Successfully reset device");
 
             return true;
@@ -280,7 +289,8 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         try {
 
             LOG.info("Getting device status from {}", statusUrl);
-            String response = httpClient.toBlocking().retrieve(HttpRequest.GET(statusUrl));
+            String response = httpClient.toBlocking().exchange(HttpRequest.GET(statusUrl), String.class)
+                    .getBody().orElse("");
             LOG.info("Device status: {}", response);
 
             return response.trim();
@@ -306,7 +316,7 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         try {
 
             LOG.info("Discarding oldest start at {}", discardUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(discardUrl));
+            httpClient.toBlocking().exchange(HttpRequest.GET(discardUrl));
             LOG.info("Successfully discarded oldest start");
 
             return true;
@@ -332,7 +342,7 @@ public class AlpdeskTimeControlDataImportService implements PollingTimingImporte
         try {
 
             LOG.debug("Checking device connection at {}", pingUrl);
-            httpClient.toBlocking().retrieve(HttpRequest.GET(pingUrl));
+            httpClient.toBlocking().exchange(HttpRequest.GET(pingUrl));
             LOG.debug("Device is connected");
 
             return true;

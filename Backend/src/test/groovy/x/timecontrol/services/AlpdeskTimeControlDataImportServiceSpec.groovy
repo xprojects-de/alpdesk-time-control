@@ -1,5 +1,6 @@
 package x.timecontrol.services
 
+import io.micronaut.http.HttpResponse
 import io.micronaut.http.client.BlockingHttpClient
 import io.micronaut.http.client.HttpClient
 import spock.lang.Specification
@@ -36,15 +37,17 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
     }
 
     private void deviceReports(String body) {
-        blockingHttpClient.retrieve(_) >> body
+        // exchange(), not retrieve(): the service moved off retrieve() because it turns a 200 with
+        // an empty body into an "Empty body" exception, which made resetting an empty device fail.
+        blockingHttpClient.exchange(_, String) >> HttpResponse.ok(body)
     }
 
     def "an archive that starts while the poll is in flight discards its answer"() {
         given: "the device answers only after the operator has archived and the table was cleared"
         measurementService.findAll() >> []
-        blockingHttpClient.retrieve(_) >> {
+        blockingHttpClient.exchange(_, String) >> {
             importGate.pauseDuring({ -> null })
-            "1,50000\n"
+            HttpResponse.ok("1,50000\n")
         }
 
         when:
@@ -81,6 +84,23 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         then: "upserting on -3 would replace the time an official typed in by hand"
         0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
         imported.empty
+    }
+
+    def "a device holding no measurements is not treated as a device failure"() {
+        given: "an empty device answers 200 with an EMPTY body - the state before a race and right"
+        // after a reset. retrieve(String) used to turn that into an "Empty body" exception, which
+        // surfaced to the operator as "Could not connect to device" and made the safety pull inside
+        // reset/archive fail the whole operation - so an empty device could not be reset at all.
+        measurementService.findAll() >> []
+        blockingHttpClient.exchange(_, String) >> HttpResponse.ok(null)
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "no measurements, no exception"
+        noExceptionThrown()
+        imported.empty
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
     }
 
     def "a line matching the stored row is reported back but not written again"() {
