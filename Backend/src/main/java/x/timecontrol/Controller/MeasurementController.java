@@ -425,16 +425,19 @@ public class MeasurementController {
     @ApiResponse(responseCode = "500", description = "Import failed")
     public HttpResponse<?> importFromDevice() {
         try {
-            if (timingProviderRegistry.getActiveImporter().isEmpty()) {
+            Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter();
+            if (importerOpt.isEmpty()) {
                 return noTimingProviderConfigured();
             }
             // Only a polling device can be asked. A streaming one has already delivered everything
-            // it has over its own connection, so there is nothing this endpoint could fetch.
-            Optional<PollingTimingImporter> importerOpt = timingProviderRegistry.getActivePollingImporter();
-            if (importerOpt.isEmpty()) {
+            // it has over its own connection, so there is nothing this endpoint could fetch. Checked
+            // on the already-resolved provider rather than by resolving it a second time through
+            // getActivePollingImporter(), which would re-read the settings and re-apply the device
+            // config for a question this object can answer itself.
+            if (!(importerOpt.get() instanceof PollingTimingImporter polling)) {
                 return notSupportedByDevice();
             }
-            List<Measurement> imported = importerOpt.get().importDataFromDevice();
+            List<Measurement> imported = polling.importDataFromDevice();
             List<MeasurementResponse> response = imported.stream()
                     .map(MeasurementResponse::from)
                     .toList();

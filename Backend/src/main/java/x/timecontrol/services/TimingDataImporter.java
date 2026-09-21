@@ -26,10 +26,14 @@ public interface TimingDataImporter {
 
     /**
      * Counterpart of {@link #NOT_CONFIGURED_MESSAGE} for a device that IS configured but does not
-     * offer the requested command (see {@link DeviceCapability}). German like its sibling: both
-     * are rendered verbatim in the same operator-facing dialogs.
+     * offer the requested command (see {@link DeviceCapability}).
+     * <p>
+     * English, per the backend language rule in CLAUDE.md - as are all 42 other ErrorResponse texts
+     * in this backend. {@link #NOT_CONFIGURED_MESSAGE} above is the one historical exception and is
+     * deliberately left alone: the frontend renders these verbatim (see extractErrorMessage), so
+     * changing it would change what the operator reads in a dialog they already know.
      */
-    String NOT_SUPPORTED_MESSAGE = "Aktion wird von der konfigurierten Zeitmessung nicht unterstützt";
+    String NOT_SUPPORTED_MESSAGE = "The configured timing device does not support this action";
 
     TimingProviderType type();
 
