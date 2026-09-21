@@ -1487,10 +1487,19 @@ export class ParticipantListComponent implements AfterViewInit, OnDestroy {
                     .afterClosed()
                     .pipe(takeUntil(this.destroy$))
                     .subscribe(includeUnranked => {
+                        // Both buttons of this dialog are real actions, so ConfirmDialogComponent's
+                        // cancel slot is taken: true = append, false = mark DNS. That leaves
+                        // undefined (Escape, backdrop click) as the only way to say "get me out of
+                        // here" - and it must not collapse onto false, which marks every
+                        // unranked participant DNS and clears their start sequence for good.
+                        if (includeUnranked === undefined) {
+                            return;
+                        }
+
                         this.store.dispatch(
                             ParticipantActions.applyStartOrderFromPreviousRace({
                                 raceId,
-                                includeUnranked: !!includeUnranked,
+                                includeUnranked,
                             }),
                         );
                         this.snackBar.open("Startreihenfolge wird übernommen...", "OK", {
