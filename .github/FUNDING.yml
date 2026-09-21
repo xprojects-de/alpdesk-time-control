@@ -1,0 +1,9 @@
+# Blendet den "Sponsor"-Knopf oben im Repository ein.
+#
+# Zwei Dinge gehören dazu, sonst passiert nichts: Diese Datei muss auf dem Default-Branch liegen
+# (GitHub liest sie nur von dort), und unter Settings -> General -> Features müssen die
+# "Sponsorships" aktiviert sein.
+#
+# custom nimmt bis zu vier freie Adressen. Für GitHub Sponsors, Ko-fi, Liberapay und andere gibt
+# es eigene Schlüssel - die verlangen aber jeweils ein Konto bei dem Dienst.
+custom: ["https://paypal.me/BenjaminHummel560"]

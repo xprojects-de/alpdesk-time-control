@@ -299,6 +299,15 @@ Eine Bitte vorweg: **Keine echten Teilnehmerdaten** in Issues, PRs oder Tests �
 Startlisten, Ergebnis-CSVs oder Screenshots mit Klarnamen. Erfundene Namen tun es genauso, und was
 einmal in der Git-Historie steht, bleibt dort.
 
+## Unterstützen
+
+Time Control ist kostenlos und bleibt es. Es entsteht in Feierabenden zwischen zwei Rennwochenenden,
+und die schönste Unterstützung ist ohnehin eine Rückmeldung aus einem echten Wettkampf – was
+funktioniert hat, was gefehlt hat, welches Dateiformat euer Verband verlangt.
+
+Wenn euch die Software einen Renntag gerettet hat und ihr etwas zurückgeben möchtet, freue ich mich
+über [einen Kaffee](https://paypal.me/BenjaminHummel560). Nötig ist es nicht.
+
 ## Lizenz
 
 [MIT](LICENSE) – © Benjamin Hummel
