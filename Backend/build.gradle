@@ -66,7 +66,7 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
         // GraalVM native-image build is currently disabled (see build-installers.yml) - any
-        // JDK 25 works for the jpackage/shadowJar builds. Re-enable to pin the toolchain to
+        // JDK 25 works for the jpackage/optimizedJitJarAll builds. Re-enable to pin the toolchain to
         // GraalVM again (needed for the `nativeCompile` task).
         // vendor = JvmVendorSpec.GRAAL_VM
     }
@@ -120,8 +120,19 @@ tasks.withType(AbstractTestTask).configureEach {
     failOnNoDiscoveredTests = true
 }
 
-shadowJar {
+// The shipped jar is the Micronaut AOT-optimized fat jar (optimizedJitJarAll), not shadowJar: the
+// aot {} settings above only feed the optimized* tasks, so a plain shadowJar carries none of them.
+// It takes over the name time-control.jar, so the e2e suites, the poor-man/server bundles and
+// jpackage keep working unchanged. AOT runs on the JVM - it does not need or use GraalVM.
+// matching() instead of named(): the AOT plugin registers this task only after the build script
+// has been evaluated.
+tasks.matching { it.name == 'optimizedJitJarAll' }.configureEach {
     archiveFileName = 'time-control.jar'
+}
+
+// Unoptimized fat jar, kept for comparison/debugging only (e.g. to rule out an AOT issue).
+shadowJar {
+    archiveFileName = 'time-control-no-aot.jar'
     manifest {
         attributes 'Main-Class': 'x.timecontrol.Application'
     }
@@ -144,7 +155,7 @@ tasks.register('copyFrontend', Copy) {
     }
 }
 
-// jpackage: bundles the shadowJar with a jlinked Java 25 runtime into a self-contained,
+// jpackage: bundles the AOT-optimized jar with a jlinked Java 25 runtime into a self-contained,
 // platform-native installer/app-image - a parallel, non-native-image alternative to
 // `nativeCompile` that trades a larger download for not needing GraalVM reachability config.
 def jpackagePlatform = org.gradle.internal.os.OperatingSystem.current().with {
@@ -173,6 +184,17 @@ def jpackageExecutable = {
     new File(javaBin.parentFile, jpackagePlatform == 'windows' ? 'jpackage.exe' : 'jpackage').absolutePath
 }
 
+// jpackage's --input: a staging directory holding exactly time-control.jar - see jpackageArgs.
+def jpackageInputDir = layout.buildDirectory.dir('jpackage-input').get().asFile
+def stageJpackageInput = {
+    delete jpackageInputDir
+    jpackageInputDir.mkdirs()
+    copy {
+        from file('build/libs/time-control.jar')
+        into jpackageInputDir
+    }
+}
+
 def jpackageArgs = { String type, File destDir ->
     def argsList = [
             // Everything in --input is copied into the bundle AND put on the launcher's classpath,
@@ -180,18 +202,15 @@ def jpackageArgs = { String type, File destDir ->
             //   app.classpath=$APPDIR/time-control.jar
             //   app.classpath=$APPDIR/<the other one>
             // in its .cfg (verified by building an app image with both and reading the generated
-            // config). This works today only because shadowJar is the sole producer here.
+            // config). build/libs never holds the fat jar alone any more: the AOT build leaves
+            // time-control-<version>.jar and time-control-<version>-jit.jar next to it (same
+            // x.timecontrol classes, including Application.class), and shadowJar/assemble add
+            // more. Which copy would win is down to classpath order, and a leftover jar from an
+            // earlier version would ship inside the installer with nobody able to tell from the .dmg.
             //
-            // It stops being true the moment anyone runs `./gradlew jar` or `./gradlew build`:
-            // assemble drives both jar and shadowJar, leaving a thin time-control-<version>.jar
-            // beside the fat one - same 451 x.timecontrol classes, including Application.class.
-            // Which copy wins is then down to classpath order, and a leftover jar from an earlier
-            // version would ship inside the installer with nobody able to tell from the .dmg.
-            //
-            // So: keep build/libs holding the fat jar alone. If that ever stops being the workflow,
-            // point --input at a staging directory that is emptied and filled with exactly
-            // time-control.jar in the doFirst blocks below, rather than at the whole libs dir.
-            '--input', file('build/libs').absolutePath,
+            // So --input is a staging directory that stageJpackageInput empties and fills with
+            // exactly time-control.jar in the doFirst blocks below, never the whole libs dir.
+            '--input', jpackageInputDir.absolutePath,
             '--main-jar', 'time-control.jar',
             '--main-class', 'x.timecontrol.Application',
             // Cosmetic (installer/app display name + vendor) - independent of Application.APP_ID,
@@ -222,11 +241,12 @@ def jpackageArgs = { String type, File destDir ->
 tasks.register('jpackageAppImage', Exec) {
     group = 'distribution'
     description = 'Builds a self-contained app image (bundled Java 25 runtime, no installer wrapper) via jpackage.'
-    dependsOn tasks.named('shadowJar')
+    dependsOn 'optimizedJitJarAll'
     def destDir = file('dist')
     doFirst {
         delete file('dist/Time Control.app'), file('dist/Time Control')
         destDir.mkdirs()
+        stageJpackageInput()
     }
     executable jpackageExecutable()
     args jpackageArgs('app-image', destDir)
@@ -237,10 +257,11 @@ tasks.register('jpackageAppImage', Exec) {
 tasks.register('jpackageInstaller', Exec) {
     group = 'distribution'
     description = "Builds a native installer (.${jpackageInstallerType} on this OS) with a bundled Java 25 runtime via jpackage."
-    dependsOn tasks.named('shadowJar')
+    dependsOn 'optimizedJitJarAll'
     def destDir = file('dist')
     doFirst {
         destDir.mkdirs()
+        stageJpackageInput()
     }
     executable jpackageExecutable()
     args jpackageArgs(jpackageInstallerType, destDir)

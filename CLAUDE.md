@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Time Control (a.k.a. "Alpdesk Time-Control") is a self-contained race-timing application for ski
 club events: a Micronaut/Java backend serving a REST API plus the built Angular frontend as static
 resources, backed by a local SQLite database. It's designed to run as a single packaged desktop app
-(jpackage installer / native-image binary / shadow jar) on a laptop at the race venue, with no
+(jpackage installer / native-image binary / AOT-optimized fat jar) on a laptop at the race venue, with no
 external services required. See [docs/installation.md](docs/installation.md) for end-user installation/packaging details
 and where the SQLite DB and JWT secret live for each distribution type (`app.packaged` /
 `APP_DATA_DIR` in [Application.java](Backend/src/main/java/x/timecontrol/Application.java)).
@@ -28,10 +28,17 @@ The repo has two independent projects:
 ./gradlew test                       # run the full Spock/Groovy test suite
 ./gradlew test --tests "x.timecontrol.services.RankingServiceSpec"          # single spec class
 ./gradlew test --tests "x.timecontrol.services.RankingServiceSpec.<test name>"  # single test
-./gradlew shadowJar                  # build the runnable fat jar (build/libs/time-control.jar)
+./gradlew optimizedJitJarAll         # the shipped fat jar, Micronaut AOT-optimized (build/libs/time-control.jar)
+./gradlew shadowJar                  # unoptimized fat jar for comparison only (build/libs/time-control-no-aot.jar)
 ./gradlew jpackageAppImage           # local self-contained app image (no installer wrapper)
 ./gradlew jpackageInstaller          # platform installer (.dmg/.exe/.deb)
 ```
+
+The released jar, the e2e jar, the Docker image and the jpackage installers are all built from
+`optimizedJitJarAll`: Micronaut AOT (the `aot {}` block in `build.gradle`) runs on the plain JVM
+and only takes effect in the `optimized*` tasks - a plain `shadowJar` carries none of it. jpackage
+reads a staging dir (`build/jpackage-input`) holding exactly `time-control.jar`, because the AOT
+build leaves further jars in `build/libs`.
 
 Tests are Spock specs under `Backend/src/test/groovy/x/timecontrol/...`, mirroring the
 `src/main/java/x/timecontrol/...` package layout (mostly `services/`). `failOnNoDiscoveredTests` is

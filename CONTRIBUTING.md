@@ -31,7 +31,7 @@ erzeugt `Frontend/dist/time-control/browser`, und die Gradle-Aufgabe `copyFronte
 `Backend/src/main/resources/public`, von wo aus das Jar es ausliefert.
 
 > **Warum das gebaute Frontend im Repository liegt:** `Backend/src/main/resources/public` ist
-> eingecheckt, obwohl es Build-Ergebnis ist. Das ist Absicht — so lässt sich `./gradlew shadowJar`
+> eingecheckt, obwohl es Build-Ergebnis ist. Das ist Absicht — so lässt sich `./gradlew optimizedJitJarAll`
 > ohne vorherigen npm-Build ausführen und man kommt mit einem reinen Java-Setup zu einem lauffähigen
 > Jar. Der Preis: Nach einem Frontend-Build tauchen die neu gehashten Bundles im Diff auf. Wenn du
 > nur am Backend arbeitest, lass diese Dateien aus deinem Commit heraus.

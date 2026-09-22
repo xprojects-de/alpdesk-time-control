@@ -57,7 +57,7 @@ Migration.
 
 - Java 25+ (`JAVA_HOME` setzen, falls `java` auf dem PATH älter ist)
 - Python 3 (nur Standardbibliothek)
-- ein gebautes `time-control.jar` (`cd Backend && ./gradlew shadowJar`)
+- ein gebautes `time-control.jar` (`cd Backend && ./gradlew optimizedJitJarAll`)
 
 ## Ausführen
 

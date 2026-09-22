@@ -9,7 +9,7 @@ automatisiert gegen eine unabhängige Python-Nachrechnung der Rangfolge geprüft
 
 ## Voraussetzungen
 
-- Gebauter `time-control.jar` (`./gradlew shadowJar` im `Backend/`-Verzeichnis).
+- Gebauter `time-control.jar` (`./gradlew optimizedJitJarAll` im `Backend/`-Verzeichnis).
 - Python 3 (nur Standardbibliothek, kein `pip install` nötig).
 - `pdftotext` (Teil von `poppler`, z.B. `brew install poppler`).
 - **Nie gegen die echte Produktions-DB laufen lassen** — immer frische, isolierte

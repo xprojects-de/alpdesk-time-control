@@ -43,9 +43,10 @@ jobs:
           cache: 'gradle'
           cache-dependency-path: Backend/build.gradle
 
-      - name: Build Shadow JAR
+      # The same AOT-optimized jar the release ships, so the suites test what users actually run.
+      - name: Build AOT-Optimized JAR
         working-directory: Backend
-        run: ./gradlew shadowJar --no-daemon
+        run: ./gradlew optimizedJitJarAll --no-daemon
 
       - name: Upload Jar
         uses: actions/upload-artifact@v7

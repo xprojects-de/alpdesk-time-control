@@ -11,7 +11,7 @@ WORKDIR /home/app
 
 COPY . .
 
-RUN ./gradlew clean shadowJar -x test
+RUN ./gradlew clean optimizedJitJarAll -x test
 
 RUN ls -lsa /home/app/build/libs/
 
