@@ -1,5 +1,5 @@
--- Whether the race result PDFs (every ranking/results export of a single race, not the start list
--- and not the Gaudi-Modus exports) print each participant's race number ("StNr.") and birth year
+-- Whether the race result PDFs (every ranking/results export of a single race, the start list
+-- and the Gaudi-Modus exports and also the live mode) print each participant's race number ("StNr.") and birth year
 -- ("Jg."). Two independent switches, since a club may well want one without the other. Both on by
 -- default, so existing installations get the new columns without having to find the switches
 -- first; an operator who prefers the old, narrower layout turns them off under Settings. Stored as
