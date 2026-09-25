@@ -11,6 +11,7 @@ import x.timecontrol.entities.Person
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.entities.Team
 import x.timecontrol.repositories.GaudiLosPairingRepository
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
@@ -236,5 +237,37 @@ class LosModeCalculatorSpec extends Specification {
         ranking[0].valueMs() == 10000
         ranking[0].referenceMs() == 10000
         ranking[0].diffMs() == 0
+    }
+
+    def "each pair carries its members one by one - own value, team, race number and birth year - for the PDF's one-line-per-person layout"() {
+        given:
+        def participants = [
+                new Participant(1L, 1L, 1L, 17, 1L, null, 60000, null, null, null),
+                new Participant(2L, 1L, 2L, 23, 2L, null, 120000, null, null, null),
+                new Participant(3L, 1L, 3L, null, null, null, 90000, null, null, null),
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [
+                new GaudiLosPairing(1L, 1L, 1L, 2L),
+                new GaudiLosPairing(2L, 1L, 3L, null),
+        ]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C")])
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+        def pair = ranking.find { it.members().size() == 2 }
+        def single = ranking.find { it.members().size() == 1 }
+
+        then:
+        pair.members()*.label() == ["A", "B"]
+        pair.members()*.valueMs() == [60000, 120000]
+        pair.members()*.team() == ["Team A", "Team B"]
+        pair.members()*.raceNumber() == [17, 23]
+        pair.members()*.birthYear() == [1990, 1990]
+
+        and: "a self-paired leftover has just the one member, without a race number if none was given"
+        single.members()*.label() == ["C"]
+        single.members()[0].raceNumber() == null
     }
 }

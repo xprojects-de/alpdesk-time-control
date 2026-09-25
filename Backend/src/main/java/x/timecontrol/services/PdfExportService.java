@@ -80,12 +80,10 @@ public class PdfExportService {
 
     /**
      * Which of the optional per-person columns "StNr." (race number) and "Jg." (birth year) a
-     * document prints - the operator's two switches in {@code AppSettings}, or {@link #NONE} for
-     * the Gaudi-Modus exports, whose rows combine several races, where one race number would be
-     * misleading.
+     * document prints - the operator's two switches in {@code AppSettings}, applied alike to a
+     * single race's results and to every Gaudi-Modus export.
      */
     private record PersonColumns(boolean raceNumber, boolean birthYear) {
-        static final PersonColumns NONE = new PersonColumns(false, false);
 
         <T> List<PdfColumn<T>> apply(List<PdfColumn<T>> columns) {
             return columns.stream()
@@ -403,51 +401,75 @@ public class PdfExportService {
         });
     }
 
+    /**
+     * Los-Modus: one line per person rather than one "A & B" line per pair, so each member's own
+     * race number, birth year, team and value can stand next to their name. The pair's shared
+     * values (Platz, Ø-Wert Paar, Ø-Wert Gesamt, Abweichung) are printed on its first line only,
+     * and a pair is never split across a page break - see {@link #drawPairedSection}.
+     */
     public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race,
                                          List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
-        List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
-                new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Paarung", 2.2f, e -> truncate(e.label(), 40)),
-                new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
-                new PdfColumn<>("Wert 1", 1f, e -> RankingViewService.formatValue(race, e.time1Ms())),
-                new PdfColumn<>("Wert 2", 1f, e -> RankingViewService.formatValue(race, e.time2Ms())),
-                new PdfColumn<>("Ø-Wert Paar", 1f, e -> RankingViewService.formatValue(race, e.valueMs())),
-                new PdfColumn<>("Ø-Wert Gesamt", 1f, e -> RankingViewService.formatValue(race, e.referenceMs())),
-                new PdfColumn<>("Abweichung", 1f, e -> RankingViewService.formatValue(race, e.diffMs()))
-        );
+        PersonColumns personColumns = personColumns();
+        List<PdfColumn<LosPdfRow>> columns = personColumns.apply(List.of(
+                new PdfColumn<>("Platz", 0.6f, r -> r.first() ? String.valueOf(r.pair().place()) : ""),
+                new PdfColumn<>("StNr.", 0.5f, r -> orDash(r.member().raceNumber())),
+                new PdfColumn<>("Name Vorname", 2.0f, r -> truncate(r.member().label(), 30)),
+                new PdfColumn<>("Jg.", 0.5f, r -> orDash(r.member().birthYear())),
+                new PdfColumn<>("Team", 1.5f, r -> truncate(r.member().team(), 20)),
+                new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.member().valueMs())),
+                new PdfColumn<>("Ø-Wert Paar", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().valueMs()) : ""),
+                new PdfColumn<>("Ø-Wert Gesamt", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().referenceMs()) : ""),
+                new PdfColumn<>("Abweichung", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().diffMs()) : "")
+        ));
+        List<List<LosPdfRow>> pairs = entries.stream().map(PdfExportService::losPdfRows).toList();
         return renderDocument(race, gaudiMode, true, ctx -> {
-            drawSection(ctx, columns, gaudiMode.name(), entries, true);
+            drawPairedSection(ctx, columns, gaudiMode.name(), pairs);
             drawDnsSection(ctx, toDnsRows(dnsEntries), LOS_DNS_COLUMNS);
         });
     }
 
     /**
+     * One printed line of a Los-Modus pair: the {@code member} it is about, plus the {@code pair}
+     * entry whose shared values only its {@code first} line shows.
+     */
+    private record LosPdfRow(GaudiRankingEntryResponse pair, GaudiTeamMemberResponse member, boolean first) {
+    }
+
+    private static List<LosPdfRow> losPdfRows(GaudiRankingEntryResponse pair) {
+        List<GaudiTeamMemberResponse> members = pair.members() != null ? pair.members() : List.of();
+        List<LosPdfRow> rows = new ArrayList<>();
+        for (int i = 0; i < members.size(); i++) {
+            rows.add(new LosPdfRow(pair, members.get(i), i == 0));
+        }
+        return rows;
+    }
+
+    /**
      * Mannschaftswertung: a fixed summary row (Platz, Mannschaft, Gesamtwert) per team, with each
-     * team's individual members and their adjusted times drawn as wrapped detail line(s) below it -
-     * only the counted teamSize best members of each qualifying team, never an excluded extra
-     * member or a DSQ/DNF/DNS teammate (see {@link x.timecontrol.services.gaudi.TeamModeCalculator}).
+     * team's individual members drawn as a small sub-table below it, like the Punkte-Mischwertung's
+     * per-race breakdown - one line per member with their race number, birth year (as configured,
+     * see {@link #personColumns()}) and adjusted value. Only the counted teamSize best members of
+     * each qualifying team, never an excluded extra member or a DSQ/DNF/DNS teammate (see
+     * {@link x.timecontrol.services.gaudi.TeamModeCalculator}).
      */
     public byte[] generateTeamModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race) throws IOException {
+        PersonColumns personColumns = personColumns();
         List<PdfColumn<GaudiRankingEntryResponse>> columns = List.of(
                 new PdfColumn<>("Platz", 0.6f, e -> String.valueOf(e.place())),
                 new PdfColumn<>("Mannschaft", 2.5f, e -> truncate(e.label(), 40)),
                 new PdfColumn<>("Gesamtwert", 1f, e -> RankingViewService.formatValue(race, e.valueMs()))
         );
+        List<PdfColumn<GaudiTeamMemberResponse>> memberColumns = personColumns.apply(List.of(
+                new PdfColumn<>("Name Vorname", 2.4f, m -> truncate(m.label(), 35)),
+                // Labelled in the cell itself: like the Punkte-Mischwertung breakdown, this
+                // sub-table has no header row, and two bare numbers next to a name say nothing.
+                new PdfColumn<>("StNr.", 0.7f, m -> "StNr. " + orDash(m.raceNumber())),
+                new PdfColumn<>("Jg.", 0.7f, m -> "Jg. " + orDash(m.birthYear())),
+                new PdfColumn<>("Wert", 1.0f, m -> RankingViewService.formatValue(race, m.valueMs()))
+        ));
         return renderDocument(race, gaudiMode, false,
-                ctx -> drawSectionWithDetails(ctx, columns, gaudiMode.name(), entries, true,
-                        e -> teamMemberDetailBlocks(e, race)));
-    }
-
-    private List<String> teamMemberDetailBlocks(GaudiRankingEntryResponse entry, Race race) {
-        if (entry.members() == null) {
-            return List.of();
-        }
-        List<String> blocks = new ArrayList<>();
-        for (GaudiTeamMemberResponse member : entry.members()) {
-            String value = RankingViewService.formatValue(race, member.valueMs());
-            blocks.add(truncate(member.label(), 25) + ": " + value);
-        }
-        return blocks;
+                ctx -> drawSectionWithDetailTable(ctx, columns, gaudiMode.name(), entries, true,
+                        memberColumns, e -> e.members() != null ? e.members() : List.of()));
     }
 
     /**
@@ -461,9 +483,12 @@ public class PdfExportService {
     public byte[] generateTimeCombinationRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                   List<Race> legRaces, Race headerRace,
                                                   List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        PersonColumns personColumns = personColumns();
         List<PdfColumn<GaudiRankingEntryResponse>> summaryColumns = new ArrayList<>(List.of(
                 new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.label(), 32))
+                new PdfColumn<>("StNr.", 0.5f, e -> orDash(e.raceNumber())),
+                new PdfColumn<>("Name Vorname", 2.3f, e -> truncate(e.label(), 32)),
+                new PdfColumn<>("Jg.", 0.5f, e -> orDash(e.birthYear()))
         ));
         if (anyHasExternalId(entries)) {
             summaryColumns.add(new PdfColumn<>("ID", 1.0f, e -> externalIdOrDash(e.externalId())));
@@ -477,8 +502,9 @@ public class PdfExportService {
         ));
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetails(ctx, summaryColumns, gaudiMode.name(), entries, true, e -> timeCombinationDetailBlocks(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries));
+            drawSectionWithDetails(ctx, personColumns.apply(summaryColumns), gaudiMode.name(), entries, true,
+                    e -> timeCombinationDetailBlocks(e, legRaces));
+            drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
 
@@ -502,11 +528,12 @@ public class PdfExportService {
     public byte[] generatePointsCombinationRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                     List<Race> legRaces, Race headerRace,
                                                     List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        PersonColumns personColumns = personColumns();
         boolean showStrafe = anyLegHasPenalty(entries);
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), gaudiMode.name(), entries, true,
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), gaudiMode.name(), entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries));
+            drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
 
@@ -520,14 +547,15 @@ public class PdfExportService {
     public byte[] generatePointsCombinationGenderRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries,
                                                           List<Race> legRaces, Race headerRace, String genderStr,
                                                           List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        PersonColumns personColumns = personColumns();
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         String fullTitle = "Wertung " + rankingViewService.genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries));
+            drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
 
@@ -541,14 +569,15 @@ public class PdfExportService {
                                                                   List<Race> legRaces, Race headerRace,
                                                                   String ageGroup, String genderStr,
                                                                   List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        PersonColumns personColumns = personColumns();
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         String fullTitle = "Wertung " + ageGroup + " " + rankingViewService.genderLabel(gender);
         boolean showStrafe = anyLegHasPenalty(entries);
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), fullTitle, entries, true,
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), fullTitle, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
-            drawDnsSection(ctx, toDnsRows(dnsEntries));
+            drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
 
@@ -563,6 +592,7 @@ public class PdfExportService {
             GaudiMode gaudiMode, List<Race> legRaces, Race headerRace,
             BiFunction<Gender, String, List<GaudiRankingEntryResponse>> categoryFetcher,
             List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        PersonColumns personColumns = personColumns();
         List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(headerRace);
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
@@ -571,30 +601,38 @@ public class PdfExportService {
                     List<GaudiRankingEntryResponse> entries = categoryFetcher.apply(gender, ageGroupName);
                     if (!entries.isEmpty()) {
                         String sectionTitle = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender);
-                        drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries)), sectionTitle, entries, false,
+                        drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), sectionTitle, entries, false,
                                 pointsCombinationDetailColumns(anyLegHasPenalty(entries)), e -> pointsCombinationDetailRows(e, legRaces));
                     }
                 }
             }
-            drawDnsSection(ctx, toDnsRows(dnsEntries));
+            drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
 
     /**
      * Drops the "ID" column when no entry in this section's ranking has a Person externalId
-     * set, mirroring how {@link #pointsCombinationDetailColumns} hides "Strafe".
+     * set, mirroring how {@link #pointsCombinationDetailColumns} hides "Strafe", and "StNr."/"Jg."
+     * as the operator configured them (see {@link #personColumns()}).
      */
-    private static List<PdfColumn<GaudiRankingEntryResponse>> pointsCombinationColumns(boolean showExternalId) {
+    private static List<PdfColumn<GaudiRankingEntryResponse>> pointsCombinationColumns(boolean showExternalId,
+                                                                                      PersonColumns personColumns) {
         List<PdfColumn<GaudiRankingEntryResponse>> columns = new ArrayList<>(List.of(
                 new PdfColumn<>("Platz", 0.5f, e -> String.valueOf(e.place())),
-                new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35))
+                new PdfColumn<>("StNr.", 0.5f, e -> orDash(e.raceNumber())),
+                new PdfColumn<>("Name Vorname", 2.5f, e -> truncate(e.label(), 35)),
+                new PdfColumn<>("Jg.", 0.5f, e -> orDash(e.birthYear()))
         ));
         if (showExternalId) {
             columns.add(new PdfColumn<>("ID", 1.0f, e -> externalIdOrDash(e.externalId())));
         }
         columns.add(new PdfColumn<>("Team", 1.8f, e -> truncate(e.team(), 22)));
         columns.add(new PdfColumn<>("Gesamt", 1.0f, e -> e.totalPoints() != null ? String.valueOf(e.totalPoints()) : "-"));
-        return columns;
+        return personColumns.apply(columns);
+    }
+
+    private static String orDash(Integer value) {
+        return value != null ? String.valueOf(value) : "-";
     }
 
     private record PointsCombinationLegRow(String raceName, String wert, String strafe, String gesamt, String platz,
@@ -645,7 +683,7 @@ public class PdfExportService {
             GaudiDnsEntryResponse e = entries.get(i);
             String name = (e.lastName() + " " + e.firstName()).trim();
             rows.add(new RankingViewService.DnsRow(i + 1, name, e.externalId(), e.ageGroup(), e.team() != null ? e.team() : "-", e.status(),
-                    null, null));
+                    orDash(e.raceNumber()), orDash(e.birthYear())));
         }
         return rows;
     }
@@ -900,14 +938,7 @@ public class PdfExportService {
      * to list, so a PDF with no non-starters doesn't grow an empty section. Always drawn as a
      * document-level closing section (one list per race/Gaudi-Modus, not per ranking sub-section -
      * see createDnsRows, so unlike {@link #drawSection} it has only one title size.
-     * <p>
-     * This overload is the Gaudi-Modus variant: never with "StNr."/"Jg.", whose rows carry neither
-     * - see {@link #toDnsRows}.
      */
-    private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows) throws IOException {
-        drawDnsSection(ctx, rows, PersonColumns.NONE);
-    }
-
     private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,
                                 PersonColumns personColumns) throws IOException {
         drawDnsSection(ctx, rows, dnsColumns(rows, personColumns));
@@ -977,6 +1008,35 @@ public class PdfExportService {
             ctx.y -= 12;
         }
     }
+
+    /**
+     * Like {@link #drawSection}, but for rows that belong together in groups (a Los-Modus pair):
+     * a group is always kept on one page, and a little space separates it from the next one, so a
+     * reader can tell where one pair ends without the pair label that used to hold it together.
+     */
+    private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, String title,
+                                       List<List<T>> groups) throws IOException {
+        ctx.ensureSpace(90);
+
+        ctx.y -= 10;
+        ctx.text(FONT_BOLD, 14, MARGIN, ctx.y, title);
+        ctx.y -= 30;
+
+        float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
+        drawTableHeader(ctx, columns, colX);
+        for (List<T> group : groups) {
+            if (ctx.y - group.size() * 12 < PAGE_BREAK_THRESHOLD) {
+                ctx.newPage();
+                drawTableHeader(ctx, columns, colX);
+            }
+            drawRows(ctx, columns, colX, group);
+            ctx.y -= PAIR_GAP;
+        }
+
+        ctx.y -= 10;
+    }
+
+    private static final float PAIR_GAP = 4;
 
     /**
      * Like {@link #drawSection}, but for tables where entries additionally carry a variable-length

@@ -3,6 +3,7 @@ package x.timecontrol.services.gaudi;
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
+import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
@@ -93,7 +94,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
         // printed hundredth from the difference of the two already-rounded printed values.
         int overallAverageDisplay = rankingService.roundForDisplay(race, overallAverage);
 
-        record PairResult(String label, Integer value1, Integer value2, int pairAverageDisplay, int diffDisplay, String team) {
+        record PairResult(String label, Integer value1, Integer value2, int pairAverageDisplay, int diffDisplay, String team,
+                          List<GaudiTeamMemberResponse> members) {
         }
 
         List<PairResult> results = new ArrayList<>();
@@ -128,7 +130,10 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     value2,
                     pairAverageDisplay,
                     diffDisplay,
-                    formatTeam(p1, p2, teamsById)
+                    formatTeam(p1, p2, teamsById),
+                    value2 != null
+                            ? List.of(member(p1, value1, personsById, teamsById), member(p2, value2, personsById, teamsById))
+                            : List.of(member(p1, value1, personsById, teamsById))
             ));
         }
 
@@ -150,6 +155,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     null,
                     null,
                     r.team(),
+                    r.members(),
+                    null,
                     null,
                     null,
                     null
@@ -245,14 +252,23 @@ public class LosModeCalculator implements GaudiModeCalculator {
             // Pairs aren't persons, so lastName carries the whole pair label (PdfExportService joins
             // lastName + firstName into the printed name) and there's no single age group to show.
             dns.add(new GaudiDnsEntryResponse(label, "", formatTeam(p1, p2, teamsById), "-", null,
-                    rankingService.dnsStatusLabel(withoutResult)));
+                    rankingService.dnsStatusLabel(withoutResult), null, null));
         }
         for (Participant p : notDrawn) {
             dns.add(new GaudiDnsEntryResponse(formatName(p, personsById), "", formatTeam(p, null, teamsById),
-                    "-", null, rankingService.dnsStatusLabel(List.of(p))));
+                    "-", null, rankingService.dnsStatusLabel(List.of(p)), null, null));
         }
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
         return dns;
+    }
+
+    /**
+     * One pair member on their own - own team, race number and birth year - so the PDF can print
+     * the pair as one line per person rather than as a single "A & B" label.
+     */
+    private GaudiTeamMemberResponse member(Participant p, Integer value, Map<Long, Person> personsById, Map<Long, Team> teamsById) {
+        return new GaudiTeamMemberResponse(formatName(p, personsById), value, teamNameOf(p, teamsById), p.raceNumber(),
+                GaudiModeCalculator.birthYearOf(personsById.get(p.personId())));
     }
 
     private String formatName(Participant p, Map<Long, Person> personsById) {

@@ -25,8 +25,8 @@ import * as SettingsSelectors from "../../store/settings/settings.selectors";
             </mat-card-header>
             <mat-card-content>
                 <p class="pdf-export-hint">
-                    Gilt für alle Ergebnis-PDFs eines Rennens. Die Startliste enthält Startnummer und Jahrgang immer,
-                    die Gaudi-Modus-Auswertungen nie.
+                    Gilt für alle Ergebnis-PDFs eines Rennens und alle Gaudi-Modus-Auswertungen. Die Startliste enthält
+                    Startnummer und Jahrgang immer.
                 </p>
                 @if (pdfExport$ | async; as pdfExport) {
                     <div class="toggles">

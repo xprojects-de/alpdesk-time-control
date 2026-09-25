@@ -113,7 +113,7 @@ public class SettingsController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Put("/pdf-export")
     @Operation(summary = "Change the result PDF layout settings",
-            description = "Switches the race number and birth year columns of a single race's result PDFs on or off, each on its own. The start list and the Gaudi-Modus exports are not affected.",
+            description = "Switches the race number and birth year columns of the result PDFs - a single race's and the Gaudi-Modus ones - on or off, each on its own. The start list is not affected.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF export settings updated", content = @Content(schema = @Schema(implementation = PdfExportSettingsResponse.class)))
     @ApiResponse(responseCode = "400", description = "showRaceNumber or showBirthYear missing")

@@ -44,7 +44,7 @@ class GaudiCsvExportServiceSpec extends Specification {
     }
 
     private static GaudiRankingEntryResponse entry(int place, Long personId, String team, Integer valueMs, Integer points, String externalId) {
-        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId)
+        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId, null, null)
     }
 
     private static List<String> lines(byte[] bytes) {

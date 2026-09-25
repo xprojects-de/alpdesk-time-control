@@ -49,7 +49,7 @@ public record GaudiRankingEntryResponse(
         String team,
 
         @Nullable
-        @Schema(description = "Individual member breakdown (Mannschaftswertung only)", nullable = true)
+        @Schema(description = "Individual member breakdown: the counted members of a team (Mannschaftswertung), or the one or two members of a pair (Los-Modus)", nullable = true)
         java.util.List<GaudiTeamMemberResponse> members,
 
         @Nullable
@@ -58,6 +58,14 @@ public record GaudiRankingEntryResponse(
 
         @Nullable
         @Schema(description = "External ID of the person this entry represents, if set (Zeit-Kombination / Punkte-Mischwertung only)", example = "12345", nullable = true)
-        String externalId
+        String externalId,
+
+        @Nullable
+        @Schema(description = "Race number of the person this entry represents - from the first combined race in which they have one (Zeit-Kombination / Punkte-Mischwertung only)", example = "17", nullable = true)
+        Integer raceNumber,
+
+        @Nullable
+        @Schema(description = "Birth year of the person this entry represents (Zeit-Kombination / Punkte-Mischwertung only)", example = "2012", nullable = true)
+        Integer birthYear
 ) {
 }

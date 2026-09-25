@@ -295,4 +295,21 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         0 * ageGroupService.findBySeason(_)
         dns.isEmpty()
     }
+
+    def "a person's race number is taken from the first combined race in which they have one"() {
+        given:
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [new Participant(1L, 1L, 1L, null, null, null, 60000, null, null, null)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d, [new Participant(2L, 2L, 1L, 17, null, null, 70000, null, null, null)]),
+                new GaudiModeCalculator.RaceParticipants(3L, race(3L), 1.0d, [new Participant(3L, 3L, 1L, 99, null, null, 80000, null, null, null)]),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then:
+        ranking[0].raceNumber() == 17
+        ranking[0].birthYear() == 1990
+    }
 }

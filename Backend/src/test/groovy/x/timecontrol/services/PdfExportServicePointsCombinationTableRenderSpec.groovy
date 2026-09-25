@@ -5,6 +5,7 @@ import org.apache.pdfbox.text.PDFTextStripper
 import spock.lang.Specification
 import x.timecontrol.dto.GaudiRankingEntryResponse
 import x.timecontrol.dto.GaudiRankingLegResponse
+import x.timecontrol.entities.AppSettings
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.Participant
@@ -12,6 +13,7 @@ import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.StartGroupTemplate
+import x.timecontrol.entities.TimingProviderType
 
 import java.time.LocalDate
 
@@ -24,7 +26,10 @@ import java.time.LocalDate
  */
 class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
 
-    def service = new PdfExportService(null, null, null)
+    SettingsService settingsService = Stub() {
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
+    }
+    def service = new PdfExportService(null, null, settingsService)
 
     private static Race race(Long id, String name, ResultUnit unit, String unitLabel) {
         new Race(id, name, LocalDate.of(2026, 9, 12), null, null, null, null, null, null,
@@ -37,7 +42,7 @@ class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
 
     private static GaudiRankingEntryResponse entry(int place, String label, String team, int totalPoints,
                                                      List<GaudiRankingLegResponse> legs) {
-        new GaudiRankingEntryResponse(place, label, null, null, null, null, null, totalPoints, legs, team, null, null, null)
+        new GaudiRankingEntryResponse(place, label, null, null, null, null, null, totalPoints, legs, team, null, null, null, null, null)
     }
 
     def "renders a Punkte-Mischwertung PDF with a per-race breakdown sub-table per participant"() {

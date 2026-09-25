@@ -4,6 +4,7 @@ import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.services.RankingService;
@@ -71,5 +72,24 @@ public interface GaudiModeCalculator {
             }
         }
         return byPersonAndRace;
+    }
+
+    /**
+     * A person's race number in a multi-race Gaudi-Modus: race numbers are per race, so this takes
+     * the first race (in the given order) where the person has one - the same rule as their team
+     * (see the calculators' teamOf), rather than requiring it to be identical on every leg.
+     */
+    static Integer raceNumberOf(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+        for (RaceParticipants race : races) {
+            Participant p = byRace.get(race.raceId());
+            if (p != null && p.raceNumber() != null) {
+                return p.raceNumber();
+            }
+        }
+        return null;
+    }
+
+    static Integer birthYearOf(Person person) {
+        return person != null && person.birthDate() != null ? person.birthDate().getYear() : null;
     }
 }

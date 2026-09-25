@@ -24,9 +24,9 @@ public record AppSettings(
         Integer seasonStartMonth,
         Integer seasonStartDay,
 
-        // Whether a single race's result PDFs print each participant's race number / birth year
-        // (see PdfExportService#rankingColumns). The start list always has both and the
-        // Gaudi-Modus exports never do, so neither is affected by these switches.
+        // Whether the result PDFs - a single race's and the Gaudi-Modus ones - print each
+        // participant's race number / birth year (see PdfExportService#personColumns). The start
+        // list always has both and is not affected by these switches.
         boolean pdfShowRaceNumber,
         boolean pdfShowBirthYear
 ) {
