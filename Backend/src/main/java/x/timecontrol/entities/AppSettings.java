@@ -26,7 +26,7 @@ public record AppSettings(
 
         // Whether the result PDFs - a single race's and the Gaudi-Modus ones - print each
         // participant's race number / birth year (see PdfExportService#personColumns). The start
-        // list always has both and is not affected by these switches.
+        // list follows only the birth year switch - it always prints the race number.
         boolean pdfShowRaceNumber,
         boolean pdfShowBirthYear
 ) {

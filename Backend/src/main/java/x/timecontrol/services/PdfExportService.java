@@ -81,7 +81,8 @@ public class PdfExportService {
     /**
      * Which of the optional per-person columns "StNr." (race number) and "Jg." (birth year) a
      * document prints - the operator's two switches in {@code AppSettings}, applied alike to a
-     * single race's results and to every Gaudi-Modus export.
+     * single race's results and to every Gaudi-Modus export. The start list only follows the birth
+     * year switch (see {@link #startListColumns}).
      */
     private record PersonColumns(boolean raceNumber, boolean birthYear) {
 
@@ -177,18 +178,25 @@ public class PdfExportService {
         Function<RankingViewService.StartListEntry, Color> rowColorFn = anyStartGroup
                 ? e -> e.startGroupColor() != null ? parseHexColor(e.startGroupColor()) : null
                 : null;
+        boolean showBirthYear = personColumns().birthYear();
         return renderDocument(race, race.name(), null, false,
-                ctx -> drawSection(ctx, startListColumns(entries), "Startliste", entries, true, rowColorFn));
+                ctx -> drawSection(ctx, startListColumns(entries, showBirthYear), "Startliste", entries, true, rowColorFn));
     }
 
     /**
      * Drops the "Kategorie" column when none of the entries have an assigned category, and the
      * "Gruppe"/"Zeitversatz" pair when none have a start group, instead of always reserving space
      * for columns that would otherwise show "-" for every row. With start groups, "Zeitversatz" is
-     * always shown alongside "Gruppe" ("-" for a group without one).
+     * always shown alongside "Gruppe" ("-" for a group without one). "Jg." follows the operator's
+     * birth year switch (see {@link #personColumns()}); the race number switch does not apply here -
+     * a start list is ordered and read by race number, so "StNr." always stays.
      */
-    private List<PdfColumn<RankingViewService.StartListEntry>> startListColumns(List<RankingViewService.StartListEntry> entries) {
+    private List<PdfColumn<RankingViewService.StartListEntry>> startListColumns(List<RankingViewService.StartListEntry> entries,
+                                                                               boolean showBirthYear) {
         List<PdfColumn<RankingViewService.StartListEntry>> columns = START_LIST_COLUMNS;
+        if (!showBirthYear) {
+            columns = columns.stream().filter(c -> !c.header().equals("Jg.")).toList();
+        }
         if (entries.stream().noneMatch(RankingViewService.StartListEntry::hasCategory)) {
             columns = columns.stream().filter(c -> !c.header().equals("Kategorie")).toList();
         }

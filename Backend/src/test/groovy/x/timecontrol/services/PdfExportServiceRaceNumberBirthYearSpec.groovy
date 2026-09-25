@@ -71,4 +71,27 @@ class PdfExportServiceRaceNumberBirthYearSpec extends Specification {
         false      | true
         false      | false
     }
+
+    @Unroll
+    def "start list: Jg. follows the birth year switch (#birthYear), StNr. stays even with the race number switch off"() {
+        given:
+        settingsService.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, false, birthYear)
+        rankingViewService.createStartListEntries(*_) >> [
+                new RankingViewService.StartListEntry("417", "Meier Paul", "2013", "männlich", "U14", "SV", "-", false,
+                        "-", null, false, "-"),
+        ]
+
+        when:
+        String text = Loader.loadPDF(service.generateStartList([] as List<Participant>, race))
+                .withCloseable { new PDFTextStripper().getText(it) }
+
+        then:
+        text.contains("StNr.")
+        text.contains("417")
+        text.contains("Jg.") == birthYear
+        text.contains("2013") == birthYear
+
+        where:
+        birthYear << [true, false]
+    }
 }
