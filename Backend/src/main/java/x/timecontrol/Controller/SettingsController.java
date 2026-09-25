@@ -106,23 +106,27 @@ public class SettingsController {
     @Operation(summary = "Get the result PDF layout settings", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF export settings", content = @Content(schema = @Schema(implementation = PdfExportSettingsResponse.class)))
     public HttpResponse<PdfExportSettingsResponse> getPdfExport() {
-        return HttpResponse.ok(new PdfExportSettingsResponse(settingsService.getSettings().pdfShowRaceNumberAndBirthYear()));
+        return HttpResponse.ok(toPdfExportResponse(settingsService.getSettings()));
     }
 
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     @Put("/pdf-export")
     @Operation(summary = "Change the result PDF layout settings",
-            description = "Switches the race number and birth year columns of a single race's result PDFs on or off. The start list and the Gaudi-Modus exports are not affected.",
+            description = "Switches the race number and birth year columns of a single race's result PDFs on or off, each on its own. The start list and the Gaudi-Modus exports are not affected.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "PDF export settings updated", content = @Content(schema = @Schema(implementation = PdfExportSettingsResponse.class)))
-    @ApiResponse(responseCode = "400", description = "showRaceNumberAndBirthYear missing")
+    @ApiResponse(responseCode = "400", description = "showRaceNumber or showBirthYear missing")
     public HttpResponse<?> updatePdfExport(@Body PdfExportSettingsRequest request) {
-        if (request.showRaceNumberAndBirthYear() == null) {
-            return HttpResponse.badRequest(new ErrorResponse("showRaceNumberAndBirthYear is required"));
+        if (request.showRaceNumber() == null || request.showBirthYear() == null) {
+            return HttpResponse.badRequest(new ErrorResponse("showRaceNumber and showBirthYear are required"));
         }
-        AppSettings updated = settingsService.updatePdfShowRaceNumberAndBirthYear(request.showRaceNumberAndBirthYear());
-        return HttpResponse.ok(new PdfExportSettingsResponse(updated.pdfShowRaceNumberAndBirthYear()));
+        AppSettings updated = settingsService.updatePdfExport(request.showRaceNumber(), request.showBirthYear());
+        return HttpResponse.ok(toPdfExportResponse(updated));
+    }
+
+    private static PdfExportSettingsResponse toPdfExportResponse(AppSettings settings) {
+        return new PdfExportSettingsResponse(settings.pdfShowRaceNumber(), settings.pdfShowBirthYear());
     }
 
     @Produces(MediaType.APPLICATION_JSON)

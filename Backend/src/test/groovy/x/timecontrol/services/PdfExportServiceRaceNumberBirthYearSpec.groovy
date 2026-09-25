@@ -3,6 +3,7 @@ package x.timecontrol.services
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
 import spock.lang.Specification
+import spock.lang.Unroll
 import x.timecontrol.entities.AppSettings
 import x.timecontrol.entities.Participant
 import x.timecontrol.entities.Race
@@ -13,8 +14,8 @@ import x.timecontrol.entities.TimingProviderType
 import java.time.LocalDate
 
 /**
- * The "StNr."/"Jg." columns of a single race's result PDFs: printed by default, both for the
- * ranking and the "nicht gewertet" list, and gone from both once the operator switches them off.
+ * The "StNr."/"Jg." columns of a single race's result PDFs: each printed or left out on its own
+ * switch, in the ranking and the "nicht gewertet" list alike.
  */
 class PdfExportServiceRaceNumberBirthYearSpec extends Specification {
 
@@ -41,41 +42,33 @@ class PdfExportServiceRaceNumberBirthYearSpec extends Specification {
         Loader.loadPDF(pdf).withCloseable { new PDFTextStripper().getText(it) }
     }
 
-    private static AppSettings settings(boolean show) {
-        new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, show)
-    }
-
-    def "prints race number and birth year in ranking and DNS list when switched on"() {
+    @Unroll
+    def "race number #raceNumber / birth year #birthYear"() {
         given:
-        settingsService.getSettings() >> settings(true)
+        settingsService.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, raceNumber, birthYear)
 
         when:
         String text = render()
 
-        then:
-        text.contains("StNr.")
-        text.contains("Jg.")
-        text.contains("417")
-        text.contains("2013")
-        text.contains("388")
-        text.contains("2015")
-    }
+        then: "ranking and DNS list both follow the race number switch"
+        text.contains("StNr.") == raceNumber
+        text.contains("417") == raceNumber
+        text.contains("388") == raceNumber
 
-    def "leaves both columns out when switched off"() {
-        given:
-        settingsService.getSettings() >> settings(false)
+        and: "and, independently, the birth year switch"
+        text.contains("Jg.") == birthYear
+        text.contains("2013") == birthYear
+        text.contains("2015") == birthYear
 
-        when:
-        String text = render()
-
-        then:
-        !text.contains("StNr.")
-        !text.contains("Jg.")
-        !text.contains("417")
-        !text.contains("2013")
-        !text.contains("388")
-        !text.contains("2015")
+        and:
         text.contains("Meier Paul")
         text.contains("Huber Elias")
+
+        where:
+        raceNumber | birthYear
+        true       | true
+        true       | false
+        false      | true
+        false      | false
     }
 }
