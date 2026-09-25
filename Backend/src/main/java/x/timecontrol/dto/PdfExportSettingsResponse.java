@@ -4,7 +4,8 @@ import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Applies to the result PDFs of a single race and of every Gaudi-Modus; the start list follows
+ * Applies to the result PDFs of a single race and of every Gaudi-Modus, and to the public live
+ * view; the start list follows
  * the birth year switch only and always shows the race number.
  */
 @Serdeable

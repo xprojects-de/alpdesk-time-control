@@ -4,6 +4,7 @@ import jakarta.inject.Singleton;
 import x.timecontrol.dto.RaceLiveRankingSection;
 import x.timecontrol.dto.RaceLiveResponse;
 import x.timecontrol.dto.RaceLiveViewType;
+import x.timecontrol.entities.AppSettings;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Gender;
 import x.timecontrol.entities.Participant;
@@ -27,12 +28,15 @@ public class RaceLiveService {
     private final ParticipantService participantService;
     private final CategoryService categoryService;
     private final RankingViewService rankingViewService;
+    private final SettingsService settingsService;
 
     public RaceLiveService(ParticipantService participantService,
-                            CategoryService categoryService, RankingViewService rankingViewService) {
+                            CategoryService categoryService, RankingViewService rankingViewService,
+                            SettingsService settingsService) {
         this.participantService = participantService;
         this.categoryService = categoryService;
         this.rankingViewService = rankingViewService;
+        this.settingsService = settingsService;
     }
 
     /**
@@ -145,6 +149,21 @@ public class RaceLiveService {
             }
             default -> throw new IllegalArgumentException("Unsupported view: " + view);
         }
+
+        // The operator's race number / birth year switches (AppSettings#pdfShowRaceNumber/
+        // pdfShowBirthYear) apply here exactly as to the printed results: switched off, the value is
+        // dropped from the response itself, so neither the JSON nor the HTML page of this anonymous
+        // endpoint carries it - hiding only an HTML column would still hand it to anyone reading the
+        // JSON. The start list keeps its race number either way, like the printed one.
+        AppSettings settings = settingsService.getSettings();
+        boolean showRaceNumber = settings.pdfShowRaceNumber();
+        boolean showBirthYear = settings.pdfShowBirthYear();
+        sections = sections.stream()
+                .map(section -> new RaceLiveRankingSection(section.title(), section.entries().stream()
+                        .map(e -> e.withPersonColumns(showRaceNumber, showBirthYear)).toList()))
+                .toList();
+        notRanked = notRanked.stream().map(r -> r.withPersonColumns(showRaceNumber, showBirthYear)).toList();
+        startList = startList.stream().map(e -> e.withBirthYear(showBirthYear)).toList();
 
         return new RaceLiveResponse(race.id(), race.name(),
                 race.date() != null ? race.date().toString() : null, race.resultUnitLabel(),
@@ -265,16 +284,25 @@ public class RaceLiveService {
         }
         boolean showId = entries.stream().anyMatch(e -> e.externalId() != null && !e.externalId().isBlank());
         boolean showPenalty = entries.stream().anyMatch(RankingViewService.RankingEntry::hasPenalty);
+        // Null only when buildResponse dropped them per the operator's switches.
+        boolean showRaceNumber = entries.stream().anyMatch(e -> e.raceNumber() != null);
+        boolean showBirthYear = entries.stream().anyMatch(e -> e.birthYear() != null);
 
         StringBuilder html = new StringBuilder("<table><thead><tr>");
-        html.append("<th>Platz</th><th>Name Vorname</th>");
+        html.append("<th>Platz</th>");
+        if (showRaceNumber) html.append("<th>StNr.</th>");
+        html.append("<th>Name Vorname</th>");
+        if (showBirthYear) html.append("<th>Jg.</th>");
         if (showId) html.append("<th>ID</th>");
         html.append("<th>Alterskl.</th><th>Team</th><th>Wert</th>");
         if (showPenalty) html.append("<th>Strafe</th><th>Gesamt</th>");
         html.append("<th>Diff</th></tr></thead><tbody>");
 
         for (RankingViewService.RankingEntry e : entries) {
-            html.append("<tr><td>").append(e.place()).append("</td><td>").append(escapeHtml(e.name())).append("</td>");
+            html.append("<tr><td>").append(e.place()).append("</td>");
+            if (showRaceNumber) html.append("<td>").append(escapeHtml(e.raceNumber())).append("</td>");
+            html.append("<td>").append(escapeHtml(e.name())).append("</td>");
+            if (showBirthYear) html.append("<td>").append(escapeHtml(e.birthYear())).append("</td>");
             if (showId) html.append("<td>").append(escapeHtml(dashIfBlank(e.externalId()))).append("</td>");
             html.append("<td>").append(escapeHtml(e.ageGroup())).append("</td>");
             html.append("<td>").append(escapeHtml(e.team())).append("</td>");
@@ -291,14 +319,22 @@ public class RaceLiveService {
 
     private String renderDnsTable(List<RankingViewService.DnsRow> rows) {
         boolean showId = rows.stream().anyMatch(r -> r.externalId() != null && !r.externalId().isBlank());
+        boolean showRaceNumber = rows.stream().anyMatch(r -> r.raceNumber() != null);
+        boolean showBirthYear = rows.stream().anyMatch(r -> r.birthYear() != null);
 
         StringBuilder html = new StringBuilder("<table><thead><tr>");
-        html.append("<th>Position</th><th>Name Vorname</th>");
+        html.append("<th>Position</th>");
+        if (showRaceNumber) html.append("<th>StNr.</th>");
+        html.append("<th>Name Vorname</th>");
+        if (showBirthYear) html.append("<th>Jg.</th>");
         if (showId) html.append("<th>ID</th>");
         html.append("<th>Alterskl.</th><th>Team</th><th>Status</th></tr></thead><tbody>");
 
         for (RankingViewService.DnsRow r : rows) {
-            html.append("<tr><td>").append(r.position()).append("</td><td>").append(escapeHtml(r.name())).append("</td>");
+            html.append("<tr><td>").append(r.position()).append("</td>");
+            if (showRaceNumber) html.append("<td>").append(escapeHtml(r.raceNumber())).append("</td>");
+            html.append("<td>").append(escapeHtml(r.name())).append("</td>");
+            if (showBirthYear) html.append("<td>").append(escapeHtml(r.birthYear())).append("</td>");
             if (showId) html.append("<td>").append(escapeHtml(dashIfBlank(r.externalId()))).append("</td>");
             html.append("<td>").append(escapeHtml(r.ageGroup())).append("</td>");
             html.append("<td>").append(escapeHtml(r.team())).append("</td>");
@@ -313,16 +349,20 @@ public class RaceLiveService {
             return "<p class=\"empty\">Keine Startliste.</p>";
         }
         boolean showCategory = entries.stream().anyMatch(RankingViewService.StartListEntry::hasCategory);
+        // Null only when buildResponse dropped it per the operator's switch; no birth date shows "-".
+        boolean showBirthYear = entries.stream().anyMatch(e -> e.birthYear() != null);
 
         StringBuilder html = new StringBuilder("<table><thead><tr>");
-        html.append("<th>StNr.</th><th>Name Vorname</th><th>Jg.</th><th>Geschl.</th><th>Alterskl.</th><th>Team</th>");
+        html.append("<th>StNr.</th><th>Name Vorname</th>");
+        if (showBirthYear) html.append("<th>Jg.</th>");
+        html.append("<th>Geschl.</th><th>Alterskl.</th><th>Team</th>");
         if (showCategory) html.append("<th>Kategorie</th>");
         html.append("</tr></thead><tbody>");
 
         for (RankingViewService.StartListEntry e : entries) {
             html.append("<tr><td>").append(escapeHtml(e.raceNumber())).append("</td>");
             html.append("<td>").append(escapeHtml(e.name())).append("</td>");
-            html.append("<td>").append(escapeHtml(e.birthYear())).append("</td>");
+            if (showBirthYear) html.append("<td>").append(escapeHtml(e.birthYear())).append("</td>");
             html.append("<td>").append(escapeHtml(e.gender())).append("</td>");
             html.append("<td>").append(escapeHtml(e.ageGroup())).append("</td>");
             html.append("<td>").append(escapeHtml(e.team())).append("</td>");

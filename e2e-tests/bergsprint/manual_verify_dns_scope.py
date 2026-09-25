@@ -114,9 +114,10 @@ def live_html_not_ranked(query, label):
     if "Nicht gewertet" not in html:
         return []
     section = html.split("Nicht gewertet", 1)[1]
-    # renderDnsTable: <tr><td>pos</td><td>Name Vorname</td>...<td>Status</td></tr>
+    # renderDnsTable: <tr><td>pos</td>[<td>StNr.</td>]<td>Name Vorname</td>...<td>Status</td></tr> -
+    # the race number cell only when the operator's switch shows it.
     return sorted(m.group(1).strip()
-                  for m in re.finditer(r"<tr><td>\d+</td><td>([^<]+)</td>", section))
+                  for m in re.finditer(r"<tr><td>\d+</td>(?:<td>(?:\d+|-)</td>)?<td>([^<]+)</td>", section))
 
 def check(label, actual, want):
     if actual is None:

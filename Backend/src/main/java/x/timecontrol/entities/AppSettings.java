@@ -24,8 +24,9 @@ public record AppSettings(
         Integer seasonStartMonth,
         Integer seasonStartDay,
 
-        // Whether the result PDFs - a single race's and the Gaudi-Modus ones - print each
-        // participant's race number / birth year (see PdfExportService#personColumns). The start
+        // Whether the result PDFs - a single race's and the Gaudi-Modus ones - and the public live
+        // view (RaceLiveService#buildResponse) show each participant's race number / birth year
+        // (see PdfExportService#personColumns). The start
         // list follows only the birth year switch - it always prints the race number.
         boolean pdfShowRaceNumber,
         boolean pdfShowBirthYear

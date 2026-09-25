@@ -1,6 +1,5 @@
 package x.timecontrol.services;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
@@ -62,22 +61,39 @@ public class RankingViewService {
     }
 
     /**
-     * {@code raceNumber}/{@code birthYear} ("-" when unset) are for the result PDFs only and kept
-     * out of the JSON: these rows are also what the anonymous public live view serves, and a
-     * participant's birth year - mostly of minors - has no business on a public page.
+     * {@code raceNumber}/{@code birthYear} are "-" when unset. These rows are also what the
+     * anonymous public live view serves, so {@code RaceLiveService} drops both - to null, via
+     * {@link #withPersonColumns} - unless the operator's switches in {@code AppSettings} show them,
+     * exactly as the printed results do; a birth year (mostly of minors) never reaches a public page
+     * the operator did not choose to print it on.
      */
     @Serdeable
     public record RankingEntry(int place, String name, String externalId, String ageGroup, String team,
                                 String valueFormatted, String penaltyFormatted, String totalFormatted,
                                 String diffFormatted, boolean hasPenalty,
-                                @JsonIgnore String raceNumber, @JsonIgnore String birthYear) {
+                                @Nullable String raceNumber, @Nullable String birthYear) {
+
+        public RankingEntry withPersonColumns(boolean showRaceNumber, boolean showBirthYear) {
+            return new RankingEntry(place, name, externalId, ageGroup, team, valueFormatted, penaltyFormatted,
+                    totalFormatted, diffFormatted, hasPenalty,
+                    showRaceNumber ? raceNumber : null, showBirthYear ? birthYear : null);
+        }
     }
 
     @Serdeable
-    public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
+    public record StartListEntry(String raceNumber, String name, @Nullable String birthYear, String gender,
                                   String ageGroup, String team, String category, boolean hasCategory,
                                   String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup,
                                   String startGroupOffset) {
+
+        /**
+         * Only the birth year can be dropped (to null): a start list is read by race number, so
+         * that one always stays - see PdfExportService#startListColumns.
+         */
+        public StartListEntry withBirthYear(boolean showBirthYear) {
+            return new StartListEntry(raceNumber, name, showBirthYear ? birthYear : null, gender, ageGroup, team,
+                    category, hasCategory, startGroupLabel, startGroupColor, hasStartGroup, startGroupOffset);
+        }
     }
 
     /**
@@ -85,11 +101,17 @@ public class RankingViewService {
      * lacking a valid result. {@code position} is this row's position within the list itself, not
      * a race number. {@code status} is the actual reason ("DSQ"/"DNF"/"DNS" - see
      * {@link RankingService#dnsStatusLabel(Participant)}), not always literally "DNS".
-     * {@code raceNumber}/{@code birthYear} are PDF-only and not serialized, as on {@link RankingEntry}.
+     * {@code raceNumber}/{@code birthYear} follow the operator's switches in the live view, as on
+     * {@link RankingEntry}.
      */
     @Serdeable
     public record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status,
-                         @JsonIgnore String raceNumber, @JsonIgnore String birthYear) {
+                         @Nullable String raceNumber, @Nullable String birthYear) {
+
+        public DnsRow withPersonColumns(boolean showRaceNumber, boolean showBirthYear) {
+            return new DnsRow(position, name, externalId, ageGroup, team, status,
+                    showRaceNumber ? raceNumber : null, showBirthYear ? birthYear : null);
+        }
     }
 
     public record PersonTeamLookup(Map<Long, Person> personsById, Map<Long, Team> teamsById) {

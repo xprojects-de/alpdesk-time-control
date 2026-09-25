@@ -1,6 +1,7 @@
 package x.timecontrol.services
 
 import spock.lang.Specification
+import spock.lang.Unroll
 import x.timecontrol.dto.RaceLiveViewType
 import x.timecontrol.entities.AgeGroup
 import x.timecontrol.entities.DisqualificationStatus
@@ -34,14 +35,17 @@ class RaceLiveServiceSpec extends Specification {
     // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
     // the actual date -> season mapping. With the default 1 January boundary, every race date used
     // in these specs (2026-..-..) resolves to season 2026.
+    // The race number / birth year switches, settable per test; the season fields stay fixed.
+    boolean showRaceNumber = true
+    boolean showBirthYear = true
     SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
+        getSettings() >> { new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, showRaceNumber, showBirthYear) }
     }
     SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
 
     RankingViewService rankingViewService = new RankingViewService(
             ageGroupService, seasonService, categoryService, teamService, personService, new RankingService(startGroupTemplateService), startGroupTemplateService)
-    RaceLiveService raceLiveService = new RaceLiveService(participantService, categoryService, rankingViewService)
+    RaceLiveService raceLiveService = new RaceLiveService(participantService, categoryService, rankingViewService, settingsService)
 
     private static Race race() {
         new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -140,7 +144,7 @@ class RaceLiveServiceSpec extends Specification {
         }
         def viewService = new RankingViewService(ageGroups, seasonService, categoryService, teamService, personService,
                 new RankingService(startGroupTemplateService), startGroupTemplateService)
-        def liveService = new RaceLiveService(participantService, categoryService, viewService)
+        def liveService = new RaceLiveService(participantService, categoryService, viewService, settingsService)
         participantService.findByRaceId(1L) >> [participant(1L, 50000), participant(2L, 60000)]
         personService.findByIds(_) >> [
                 1L: person(1L, "Anna", "Fast", Gender.FEMALE),
@@ -155,5 +159,62 @@ class RaceLiveServiceSpec extends Specification {
         response.sections()[1].entries()*.name() == ["Bert Nomatch"]
         response.sections()[1].entries()*.place() == [1]
         response.notRanked().isEmpty()
+    }
+
+    @Unroll
+    def "race number (#raceNumber) and birth year (#birthYear) follow the switches in ranking and 'nicht gewertet' - response and HTML alike"() {
+        given:
+        showRaceNumber = raceNumber
+        showBirthYear = birthYear
+        participantService.findByRaceId(1L) >> [participant(1L, 50000), participant(3L, 40000, DisqualificationStatus.DSQ)]
+        personService.findByIds(_) >> [
+                1L: person(1L, "Anna", "Fast", Gender.FEMALE),
+                3L: person(3L, "Carl", "Out", Gender.MALE),
+        ]
+
+        when:
+        def response = raceLiveService.buildResponse(race(), RaceLiveViewType.OVERALL, null, null, null)
+        String html = raceLiveService.renderHtml(response)
+
+        then: "dropped from the response itself, not just from the HTML"
+        response.sections()[0].entries()[0].raceNumber() == (raceNumber ? "1" : null)
+        response.sections()[0].entries()[0].birthYear() == (birthYear ? "2000" : null)
+        response.notRanked()[0].raceNumber() == (raceNumber ? "3" : null)
+        response.notRanked()[0].birthYear() == (birthYear ? "2000" : null)
+
+        and:
+        html.contains("<th>StNr.</th>") == raceNumber
+        html.contains("<th>Jg.</th>") == birthYear
+        html.contains("2000") == birthYear
+
+        where:
+        raceNumber | birthYear
+        true       | true
+        true       | false
+        false      | true
+        false      | false
+    }
+
+    @Unroll
+    def "start list keeps the race number and follows only the birth year switch (#birthYear)"() {
+        given:
+        showRaceNumber = false
+        showBirthYear = birthYear
+        participantService.findByRaceId(1L) >> [participant(1L, null)]
+        personService.findByIds(_) >> [1L: person(1L, "Anna", "Fast", Gender.FEMALE)]
+
+        when:
+        def response = raceLiveService.buildResponse(race(), RaceLiveViewType.STARTLIST, null, null, null)
+        String html = raceLiveService.renderHtml(response)
+
+        then:
+        response.startList()[0].raceNumber() == "1"
+        response.startList()[0].birthYear() == (birthYear ? "2000" : null)
+        html.contains("<th>StNr.</th>")
+        html.contains("<th>Jg.</th>") == birthYear
+        html.contains("2000") == birthYear
+
+        where:
+        birthYear << [true, false]
     }
 }
