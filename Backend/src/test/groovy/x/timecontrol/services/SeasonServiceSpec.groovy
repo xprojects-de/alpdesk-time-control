@@ -13,7 +13,7 @@ class SeasonServiceSpec extends Specification {
 
     private SeasonService serviceWithBoundary(int month, int day, List<LocalDate> raceDates = []) {
         def settings = Stub(SettingsService)
-        settings.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, month, day)
+        settings.getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, month, day, true)
         def raceService = Stub(RaceService)
         raceService.findDistinctRaceDates() >> raceDates
         new SeasonService(settings, raceService)

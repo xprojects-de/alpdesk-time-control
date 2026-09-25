@@ -22,6 +22,11 @@ public record AppSettings(
         // Defaults to 1/1 (a season is a calendar year); a club whose season spans the turn of the
         // year can move it to e.g. 1 July so a December and a January race count as one season.
         Integer seasonStartMonth,
-        Integer seasonStartDay
+        Integer seasonStartDay,
+
+        // Whether a single race's result PDFs print each participant's race number and birth year
+        // (see PdfExportService#rankingColumns). The start list always has both and the
+        // Gaudi-Modus exports never do, so neither is affected by this switch.
+        boolean pdfShowRaceNumberAndBirthYear
 ) {
 }

@@ -15,6 +15,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.PdfExportSettingsRequest;
+import x.timecontrol.dto.PdfExportSettingsResponse;
 import x.timecontrol.dto.SeasonSettingsRequest;
 import x.timecontrol.dto.SeasonSettingsResponse;
 import x.timecontrol.dto.TimingProviderSettingsRequest;
@@ -97,6 +99,30 @@ public class SettingsController {
                 currentSeason,
                 seasonService.seasonStartDate(currentSeason),
                 seasonService.seasonEndDate(currentSeason));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Get("/pdf-export")
+    @Operation(summary = "Get the result PDF layout settings", security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF export settings", content = @Content(schema = @Schema(implementation = PdfExportSettingsResponse.class)))
+    public HttpResponse<PdfExportSettingsResponse> getPdfExport() {
+        return HttpResponse.ok(new PdfExportSettingsResponse(settingsService.getSettings().pdfShowRaceNumberAndBirthYear()));
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Put("/pdf-export")
+    @Operation(summary = "Change the result PDF layout settings",
+            description = "Switches the race number and birth year columns of a single race's result PDFs on or off. The start list and the Gaudi-Modus exports are not affected.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "PDF export settings updated", content = @Content(schema = @Schema(implementation = PdfExportSettingsResponse.class)))
+    @ApiResponse(responseCode = "400", description = "showRaceNumberAndBirthYear missing")
+    public HttpResponse<?> updatePdfExport(@Body PdfExportSettingsRequest request) {
+        if (request.showRaceNumberAndBirthYear() == null) {
+            return HttpResponse.badRequest(new ErrorResponse("showRaceNumberAndBirthYear is required"));
+        }
+        AppSettings updated = settingsService.updatePdfShowRaceNumberAndBirthYear(request.showRaceNumberAndBirthYear());
+        return HttpResponse.ok(new PdfExportSettingsResponse(updated.pdfShowRaceNumberAndBirthYear()));
     }
 
     @Produces(MediaType.APPLICATION_JSON)

@@ -186,9 +186,7 @@ jobs:
           retention-days: 14
 
   build-shadow-jar:
-    # Job/artifact keep the "shadow-jar" name so the bundle jobs below stay untouched - the jar
-    # itself is the Micronaut AOT-optimized fat jar (optimizedJitJarAll), see build.gradle.
-    name: Build AOT-Optimized JAR (runs on any Java 25 JRE)
+    name: Build Shadow JAR (fallback, runs on any Java 25 JRE)
     needs: build-frontend
     runs-on: ubuntu-latest
 
@@ -220,14 +218,10 @@ jobs:
           chmod +x gradlew
           ./gradlew copyFrontend --no-daemon
 
-      - name: Build AOT-Optimized JAR
-        run: ./gradlew optimizedJitJarAll --no-daemon
+      - name: Build Shadow JAR
+        run: ./gradlew shadowJar --no-daemon
 
-      # A jar without the AOT-generated configurer would be a silently unoptimized release.
-      - name: Verify AOT Optimizations are Packaged
-        run: unzip -l build/libs/time-control.jar | grep -q 'x/timecontrol/AOTApplicationContextConfigurer.class'
-
-      - name: Rename JAR for release
+      - name: Rename Shadow JAR for release
         run: |
           mkdir -p dist
           version=$(grep '^app.version=' src/main/resources/application.properties | cut -d'=' -f2)

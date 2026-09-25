@@ -41,10 +41,13 @@ public class PdfExportService {
 
     private final CategoryService categoryService;
     private final RankingViewService rankingViewService;
+    private final SettingsService settingsService;
 
-    public PdfExportService(CategoryService categoryService, RankingViewService rankingViewService) {
+    public PdfExportService(CategoryService categoryService, RankingViewService rankingViewService,
+                            SettingsService settingsService) {
         this.categoryService = categoryService;
         this.rankingViewService = rankingViewService;
+        this.settingsService = settingsService;
     }
 
     private record PdfColumn<T>(String header, float weight, Function<T, String> valueFn) {
@@ -52,7 +55,9 @@ public class PdfExportService {
 
     private static final List<PdfColumn<RankingViewService.DnsRow>> DNS_COLUMNS = List.of(
             new PdfColumn<>("Position", 0.6f, e -> String.valueOf(e.position())),
+            new PdfColumn<>("StNr.", 0.5f, RankingViewService.DnsRow::raceNumber),
             new PdfColumn<>("Name Vorname", 2.0f, e -> truncate(e.name(), 30)),
+            new PdfColumn<>("Jg.", 0.5f, RankingViewService.DnsRow::birthYear),
             new PdfColumn<>("ID", 1.0f, e -> externalIdOrDash(e.externalId())),
             new PdfColumn<>("Alterskl.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
@@ -60,13 +65,33 @@ public class PdfExportService {
     );
 
     /**
-     * Drops the "ID" column when no DNS row has an externalId set, mirroring {@link #rankingColumns}.
+     * Drops the "ID" column when no DNS row has an externalId set, and "StNr."/"Jg." unless
+     * requested, mirroring {@link #rankingColumns}.
      */
-    private List<PdfColumn<RankingViewService.DnsRow>> dnsColumns(List<RankingViewService.DnsRow> rows) {
-        if (rows.stream().anyMatch(r -> hasExternalId(r.externalId()))) {
-            return DNS_COLUMNS;
+    private List<PdfColumn<RankingViewService.DnsRow>> dnsColumns(List<RankingViewService.DnsRow> rows,
+                                                                   boolean showRaceNumberAndBirthYear) {
+        List<PdfColumn<RankingViewService.DnsRow>> columns = DNS_COLUMNS;
+        if (!showRaceNumberAndBirthYear) {
+            columns = withoutRaceNumberAndBirthYear(columns);
         }
-        return DNS_COLUMNS.stream().filter(c -> !c.header().equals("ID")).toList();
+        if (rows.stream().noneMatch(r -> hasExternalId(r.externalId()))) {
+            columns = columns.stream().filter(c -> !c.header().equals("ID")).toList();
+        }
+        return columns;
+    }
+
+    private static <T> List<PdfColumn<T>> withoutRaceNumberAndBirthYear(List<PdfColumn<T>> columns) {
+        return columns.stream().filter(c -> !c.header().equals("StNr.") && !c.header().equals("Jg.")).toList();
+    }
+
+    /**
+     * The operator's switch for the "StNr."/"Jg." columns of a single race's result PDFs (see
+     * {@code AppSettings#pdfShowRaceNumberAndBirthYear}), read once per document so every section
+     * of it has the same layout. The Gaudi-Modus exports never consult it - their rows combine
+     * several races, where one race number would be misleading.
+     */
+    private boolean showRaceNumberAndBirthYear() {
+        return settingsService.getSettings().pdfShowRaceNumberAndBirthYear();
     }
 
     /**
@@ -83,7 +108,9 @@ public class PdfExportService {
 
     private static final List<PdfColumn<RankingViewService.RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
+            new PdfColumn<>("StNr.", 0.5f, RankingViewService.RankingEntry::raceNumber),
             new PdfColumn<>("Name Vorname", 1.8f, e -> truncate(e.name(), 30)),
+            new PdfColumn<>("Jg.", 0.5f, RankingViewService.RankingEntry::birthYear),
             new PdfColumn<>("ID", 1.0f, e -> externalIdOrDash(e.externalId())),
             new PdfColumn<>("Alterskl.", 1.2f, e -> truncate(e.ageGroup(), 16)),
             new PdfColumn<>("Team", 1.3f, e -> truncate(e.team(), 18)),
@@ -180,10 +207,15 @@ public class PdfExportService {
      * Drops the "Strafe" and "Gesamt" columns when none of the entries actually have a penalty,
      * instead of always reserving space for columns that would otherwise show "-"/zero for every
      * row, or duplicate "Wert" verbatim since Gesamt == Wert when there is no penalty to add. Also
-     * drops "ID" when no entry has one set, per {@link #hasExternalId}.
+     * drops "ID" when no entry has one set, per {@link #hasExternalId}, and "StNr."/"Jg." when the
+     * operator switched them off (see {@link #showRaceNumberAndBirthYear()}).
      */
-    private List<PdfColumn<RankingViewService.RankingEntry>> rankingColumns(List<RankingViewService.RankingEntry> entries) {
+    private List<PdfColumn<RankingViewService.RankingEntry>> rankingColumns(List<RankingViewService.RankingEntry> entries,
+                                                                           boolean showRaceNumberAndBirthYear) {
         List<PdfColumn<RankingViewService.RankingEntry>> columns = RANKING_COLUMNS;
+        if (!showRaceNumberAndBirthYear) {
+            columns = withoutRaceNumberAndBirthYear(columns);
+        }
         if (entries.stream().noneMatch(RankingViewService.RankingEntry::hasPenalty)) {
             columns = columns.stream()
                     .filter(c -> !c.header().equals("Strafe") && !c.header().equals("Gesamt"))
@@ -230,41 +262,45 @@ public class PdfExportService {
      * doesn't print here - they're not starting.
      */
     public byte[] generateOverallRanking(Iterable<Participant> participants, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, null, null, null, lookup);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
         return renderDocument(race, true, ctx -> {
-            drawSection(ctx, rankingColumns(entries), "Gesamtwertung", entries, true);
-            drawDnsSection(ctx, dns);
+            drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), "Gesamtwertung", entries, true);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateGenderRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, null, null, lookup);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, gender, null, null, lookup);
         String title = "Wertung " + rankingViewService.genderLabel(gender);
         return renderDocument(race, true, ctx -> {
-            drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns);
+            drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, true);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateAgeGroupGenderRanking(Iterable<Participant> participants,
                                                  String ageGroup, String genderStr, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroup, null, lookup);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, gender, ageGroup, null, lookup);
         String title = "Wertung " + ageGroup + " " + rankingViewService.genderLabel(gender);
         return renderDocument(race, true, ctx -> {
-            drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns);
+            drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, true);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateAllAgeGroupsRanking(Iterable<Participant> participants, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(race);
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
@@ -275,15 +311,16 @@ public class PdfExportService {
                     List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, null, lookup);
                     if (!entries.isEmpty()) {
                         String title = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender);
-                        drawSection(ctx, rankingColumns(entries), title, entries, false);
+                        drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, false);
                     }
                 }
             }
-            drawDnsSection(ctx, dns);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateCategoryRanking(Iterable<Participant> participants, Long categoryId, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         String categoryName = categoryService.findById(categoryId)
                 .map(Category::name)
                 .orElse("Unbekannt");
@@ -292,12 +329,13 @@ public class PdfExportService {
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, null, null, categoryId, lookup);
         String title = "Wertung " + categoryName;
         return renderDocument(race, true, ctx -> {
-            drawSection(ctx, rankingColumns(entries), title, entries, true);
-            drawDnsSection(ctx, dns);
+            drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, true);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateOverallByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
         List<RankingViewService.DnsRow> dns = rankingViewService.createDnsRows(participants, race, lookup);
@@ -307,14 +345,15 @@ public class PdfExportService {
                 List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, null, null, category.id(), lookup);
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name();
-                    drawSection(ctx, rankingColumns(entries), title, entries, false);
+                    drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, false);
                 }
             }
-            drawDnsSection(ctx, dns);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateGenderByCategoryRanking(Iterable<Participant> participants, String genderStr, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         Gender gender = Gender.valueOf(genderStr.toUpperCase());
         List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
@@ -327,14 +366,15 @@ public class PdfExportService {
                 List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, null, category.id(), lookup);
                 if (!entries.isEmpty()) {
                     String title = "Wertung " + category.name() + " " + rankingViewService.genderLabel(gender);
-                    drawSection(ctx, rankingColumns(entries), title, entries, false);
+                    drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, false);
                 }
             }
-            drawDnsSection(ctx, dns);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
     public byte[] generateAllAgeGroupsByCategoryRanking(Iterable<Participant> participants, Race race) throws IOException {
+        boolean showRaceNumberAndBirthYear = showRaceNumberAndBirthYear();
         List<String> uniqueAgeGroupNames = rankingViewService.uniqueAgeGroupNamesYoungestFirst(race);
         List<Category> categories = rankingViewService.sortedCategoriesWithNoCategory();
         RankingViewService.PersonTeamLookup lookup = rankingViewService.loadPersonTeamLookup(participants);
@@ -347,12 +387,12 @@ public class PdfExportService {
                         List<RankingViewService.RankingEntry> entries = rankingViewService.createRankingEntriesFromParticipants(participants, race, gender, ageGroupName, category.id(), lookup);
                         if (!entries.isEmpty()) {
                             String title = "Wertung " + rankingViewService.ageGroupSectionLabel(ageGroupName) + " " + rankingViewService.genderLabel(gender) + " " + category.name();
-                            drawSection(ctx, rankingColumns(entries), title, entries, false);
+                            drawSection(ctx, rankingColumns(entries, showRaceNumberAndBirthYear), title, entries, false);
                         }
                     }
                 }
             }
-            drawDnsSection(ctx, dns);
+            drawDnsSection(ctx, dns, showRaceNumberAndBirthYear);
         });
     }
 
@@ -597,7 +637,8 @@ public class PdfExportService {
         for (int i = 0; i < entries.size(); i++) {
             GaudiDnsEntryResponse e = entries.get(i);
             String name = (e.lastName() + " " + e.firstName()).trim();
-            rows.add(new RankingViewService.DnsRow(i + 1, name, e.externalId(), e.ageGroup(), e.team() != null ? e.team() : "-", e.status()));
+            rows.add(new RankingViewService.DnsRow(i + 1, name, e.externalId(), e.ageGroup(), e.team() != null ? e.team() : "-", e.status(),
+                    null, null));
         }
         return rows;
     }
@@ -853,8 +894,17 @@ public class PdfExportService {
      * document-level closing section (one list per race/Gaudi-Modus, not per ranking sub-section -
      * see createDnsRows, so unlike {@link #drawSection} it has only one title size.
      */
+    /**
+     * The Gaudi-Modus variant: never with "StNr."/"Jg.", whose rows carry neither - see
+     * {@link #toDnsRows}.
+     */
     private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows) throws IOException {
-        drawDnsSection(ctx, rows, dnsColumns(rows));
+        drawDnsSection(ctx, rows, false);
+    }
+
+    private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,
+                                boolean showRaceNumberAndBirthYear) throws IOException {
+        drawDnsSection(ctx, rows, dnsColumns(rows, showRaceNumberAndBirthYear));
     }
 
     private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,

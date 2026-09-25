@@ -3,6 +3,7 @@ import {HttpClient} from "@angular/common/http";
 import {Observable} from "rxjs";
 import {TimingProviderSettings, TimingProviderSettingsRequest} from "../models/timing-provider.model";
 import {SeasonSettings, SeasonSettingsRequest} from "../models/season-settings.model";
+import {PdfExportSettings} from "../models/pdf-export-settings.model";
 import {environment} from "../../environments/environment";
 
 @Injectable({
@@ -26,5 +27,13 @@ export class SettingsService {
 
     updateSeason(request: SeasonSettingsRequest): Observable<SeasonSettings> {
         return this.http.put<SeasonSettings>(`${this.apiUrl}/season`, request);
+    }
+
+    getPdfExport(): Observable<PdfExportSettings> {
+        return this.http.get<PdfExportSettings>(`${this.apiUrl}/pdf-export`);
+    }
+
+    updatePdfExport(request: PdfExportSettings): Observable<PdfExportSettings> {
+        return this.http.put<PdfExportSettings>(`${this.apiUrl}/pdf-export`, request);
     }
 }

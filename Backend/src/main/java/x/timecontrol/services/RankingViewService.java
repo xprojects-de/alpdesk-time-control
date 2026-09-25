@@ -1,5 +1,6 @@
 package x.timecontrol.services;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
@@ -60,10 +61,16 @@ public class RankingViewService {
         this.startGroupTemplateService = startGroupTemplateService;
     }
 
+    /**
+     * {@code raceNumber}/{@code birthYear} ("-" when unset) are for the result PDFs only and kept
+     * out of the JSON: these rows are also what the anonymous public live view serves, and a
+     * participant's birth year - mostly of minors - has no business on a public page.
+     */
     @Serdeable
     public record RankingEntry(int place, String name, String externalId, String ageGroup, String team,
                                 String valueFormatted, String penaltyFormatted, String totalFormatted,
-                                String diffFormatted, boolean hasPenalty) {
+                                String diffFormatted, boolean hasPenalty,
+                                @JsonIgnore String raceNumber, @JsonIgnore String birthYear) {
     }
 
     @Serdeable
@@ -78,9 +85,11 @@ public class RankingViewService {
      * lacking a valid result. {@code position} is this row's position within the list itself, not
      * a race number. {@code status} is the actual reason ("DSQ"/"DNF"/"DNS" - see
      * {@link RankingService#dnsStatusLabel(Participant)}), not always literally "DNS".
+     * {@code raceNumber}/{@code birthYear} are PDF-only and not serialized, as on {@link RankingEntry}.
      */
     @Serdeable
-    public record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status) {
+    public record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status,
+                         @JsonIgnore String raceNumber, @JsonIgnore String birthYear) {
     }
 
     public record PersonTeamLookup(Map<Long, Person> personsById, Map<Long, Team> teamsById) {
@@ -226,9 +235,9 @@ public class RankingViewService {
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
             Person person = personsById.get(p.personId());
-            String raceNumber = p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+            String raceNumber = formatRaceNumber(p);
             String name = formatName(person);
-            String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
+            String birthYear = formatBirthYear(person);
             String gender = person != null ? genderLabel(person.gender()) : "-";
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             String team = p.teamId() != null
@@ -310,7 +319,9 @@ public class RankingViewService {
                     formatPenalty(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
-                    p.penalty() != null && p.penalty() != 0
+                    p.penalty() != null && p.penalty() != 0,
+                    formatRaceNumber(p),
+                    formatBirthYear(person)
             ));
         }
 
@@ -405,9 +416,17 @@ public class RankingViewService {
                     : "-";
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             rows.add(new DnsRow(i + 1, formatName(person), person != null ? person.externalId() : null, ageGroup, team,
-                    rankingService.dnsStatusLabel(p)));
+                    rankingService.dnsStatusLabel(p), formatRaceNumber(p), formatBirthYear(person)));
         }
         return rows;
+    }
+
+    private static String formatRaceNumber(Participant p) {
+        return p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+    }
+
+    private static String formatBirthYear(Person person) {
+        return person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
     }
 
     public static String formatTime(Integer timeMs) {

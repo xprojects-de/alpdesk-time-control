@@ -24,7 +24,7 @@ import java.time.LocalDate
  */
 class PdfExportServicePointsCombinationTableRenderSpec extends Specification {
 
-    def service = new PdfExportService(null, null)
+    def service = new PdfExportService(null, null, null)
 
     private static Race race(Long id, String name, ResultUnit unit, String unitLabel) {
         new Race(id, name, LocalDate.of(2026, 9, 12), null, null, null, null, null, null,

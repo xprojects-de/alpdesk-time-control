@@ -68,7 +68,7 @@ class TimingProviderLifecycleSpec extends Specification {
     TimingDataImporter selectedImporter = null
 
     def setup() {
-        settingsService.getSettings() >> { new AppSettings(1L, selectedType, null, 7, 1) }
+        settingsService.getSettings() >> { new AppSettings(1L, selectedType, null, 7, 1, true) }
         settingsService.getProviderConfig(_) >> { selectedConfig }
         registry.findByType(_) >> { TimingProviderType type ->
             Optional.ofNullable(type == TimingProviderType.NONE ? null : selectedImporter)

@@ -84,7 +84,7 @@ found.
 
 ## Steps
 
-1. Build the jar once: `cd Backend && ./gradlew optimizedJitJarAll` (the AOT-optimized jar the release ships; produces
+1. Build the jar once: `cd Backend && ./gradlew shadowJar` (produces
    `Backend/build/libs/time-control.jar`). Skip the rebuild only if that jar already exists and
    is newer than the newest file under `Backend/src`. The Backend requires Java 25
    (`sourceCompatibility 25`); if the default `java` on PATH is older, running the jar fails with

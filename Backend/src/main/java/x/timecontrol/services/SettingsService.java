@@ -82,7 +82,8 @@ public class SettingsService {
             throw new IllegalArgumentException("Could not serialize timing provider config: " + e.getMessage(), e);
         }
         AppSettings current = getSettings();
-        AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay());
+        AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay(),
+                current.pdfShowRaceNumberAndBirthYear());
         return store(updated);
     }
 
@@ -100,7 +101,19 @@ public class SettingsService {
         }
         AppSettings current = getSettings();
         AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(),
-                current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth());
+                current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth(),
+                current.pdfShowRaceNumberAndBirthYear());
+        return store(updated);
+    }
+
+    /**
+     * Switches the race number ("StNr.") and birth year ("Jg.") columns of a single race's result
+     * PDFs on or off - see {@link PdfExportService}. Takes effect with the next export.
+     */
+    public AppSettings updatePdfShowRaceNumberAndBirthYear(boolean show) {
+        AppSettings current = getSettings();
+        AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(), current.timingProviderConfig(),
+                current.seasonStartMonth(), current.seasonStartDay(), show);
         return store(updated);
     }
 

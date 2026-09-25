@@ -84,7 +84,7 @@ class TimingProviderRegistrySpec extends Specification {
     }
 
     private TimingProviderRegistry registryFor(TimingDataImporter importer, TimingProviderType selected) {
-        AppSettings settings = new AppSettings(1L, selected, null, 7, 1)
+        AppSettings settings = new AppSettings(1L, selected, null, 7, 1, true)
         settingsService.getSettings() >> settings
         settingsService.getProviderConfig(_) >> [host: "10.0.0.5"]
         new TimingProviderRegistry([importer], settingsService)
@@ -175,7 +175,7 @@ class TimingProviderRegistrySpec extends Specification {
 
     def "a selection this build has no bean for leaves the settings page usable"() {
         given: "app_settings names a provider whose bean is missing - e.g. an unmet @Requires"
-        AppSettings settings = new AppSettings(1L, TimingProviderType.ALPDESK_TIMECONTROL, null, 7, 1)
+        AppSettings settings = new AppSettings(1L, TimingProviderType.ALPDESK_TIMECONTROL, null, 7, 1, true)
         settingsService.getSettings() >> settings
         settingsService.getProviderConfig(_) >> [:]
         def registry = new TimingProviderRegistry([], settingsService)

@@ -1,5 +1,6 @@
 import {createAction, props} from "@ngrx/store";
 import {SeasonSettings, SeasonSettingsRequest} from "../../models/season-settings.model";
+import {PdfExportSettings} from "../../models/pdf-export-settings.model";
 import {TimingProviderSettings, TimingProviderSettingsRequest} from "../../models/timing-provider.model";
 
 export const loadTimingProvider = createAction("[Settings] Load Timing Provider");
@@ -35,3 +36,18 @@ export const loadSeasonFailure = createAction("[Settings] Load Season Failure", 
 export const updateSeason = createAction("[Settings] Update Season", props<{request: SeasonSettingsRequest}>());
 export const updateSeasonSuccess = createAction("[Settings] Update Season Success", props<{season: SeasonSettings}>());
 export const updateSeasonFailure = createAction("[Settings] Update Season Failure", props<{error: string}>());
+
+// Layout of a single race's result PDFs (race number / birth year columns).
+export const loadPdfExport = createAction("[Settings] Load Pdf Export");
+export const loadPdfExportSuccess = createAction(
+    "[Settings] Load Pdf Export Success",
+    props<{pdfExport: PdfExportSettings}>(),
+);
+export const loadPdfExportFailure = createAction("[Settings] Load Pdf Export Failure", props<{error: string}>());
+
+export const updatePdfExport = createAction("[Settings] Update Pdf Export", props<{request: PdfExportSettings}>());
+export const updatePdfExportSuccess = createAction(
+    "[Settings] Update Pdf Export Success",
+    props<{pdfExport: PdfExportSettings}>(),
+);
+export const updatePdfExportFailure = createAction("[Settings] Update Pdf Export Failure", props<{error: string}>());

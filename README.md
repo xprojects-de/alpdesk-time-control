@@ -272,10 +272,10 @@ npm start            # Dev-Server auf http://localhost:4200
 # Backend (Ordner Backend/)
 ./gradlew run        # API + Oberfläche auf http://localhost:18000
 ./gradlew test       # Spock-Testsuite
-./gradlew optimizedJitJarAll  # lauffähiges Fat-Jar (Micronaut-AOT-optimiert, wie im Release)
+./gradlew shadowJar  # lauffähiges Fat-Jar
 ```
 
-Für einen Produktionsbuild zuerst `npm run deploy` im Frontend, dann `./gradlew optimizedJitJarAll` im
+Für einen Produktionsbuild zuerst `npm run deploy` im Frontend, dann `./gradlew shadowJar` im
 Backend – der Gradle-Task `copyFrontend` übernimmt das gebaute Frontend automatisch.
 
 Das **gebaute Frontend liegt mit im Repository** (`Backend/src/main/resources/public`), obwohl es
