@@ -77,7 +77,8 @@ def expected(gender=None, age_group=None, category=None):
         out = [r for r in out if r["category"] == category]
     return sorted(name_of(r) for r in out)
 
-DNS_ROW = re.compile(r"^\s*\d+\s+(\S+\s+\S+)\s+.*?\b(DNF|DSQ|DNS)\s*$")
+# Position, the optional "StNr." column (a setting), then the name.
+DNS_ROW = re.compile(r"^\s*\d+\s+(?:(?:\d+|-)\s+)?(\S+\s+\S+)\s+.*?\b(DNF|DSQ|DNS)\s*$")
 
 def pdf_not_ranked(path, label):
     st, pdf = c.get_raw(cfg.BASE, token, path)

@@ -69,12 +69,13 @@ def parse(path):
                     (int(matched.group(1)), int(matched.group(2))) if matched else None
                 )
             continue
-        # A participant line: place, then their name/id/team, ending in the total.
-        matched = re.match(r"^\s*(\d+)\s+\S.*?\b(\d{4,6})\b.*?(\d+)\s*$", line)
-        if matched:
-            current = matched.group(2)
-            people[current] = {"place": int(matched.group(1)), "total": int(matched.group(3)),
-                               "stations": {}}
+        # A participant line: place, then their name/id/team, ending in the total - with or
+        # without the optional race number and birth year columns (see pdf_row_place_and_id).
+        row = c.pdf_row_place_and_id(line)
+        total = re.search(r"(\d+)\s*$", line)
+        if row and total:
+            current = row[1]
+            people[current] = {"place": row[0], "total": int(total.group(1)), "stations": {}}
     return people
 
 

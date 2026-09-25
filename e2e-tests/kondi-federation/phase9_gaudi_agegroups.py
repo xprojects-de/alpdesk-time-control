@@ -63,9 +63,12 @@ while i < len(sections) - 1:
 
     pdf_totals = {}
     for line in body.splitlines():
-        m = re.match(r"^\s*(\d+)\s+\S.*?\b(\d{4,6})\b.*?(\d+)\s*$", line)
-        if m:
-            pdf_totals[m.group(2)] = int(m.group(3))
+        # A participant line ends in their total; the per-station lines below it don't start
+        # with a number.
+        row = c.pdf_row_place_and_id(line)
+        total = re.search(r"(\d+)\s*$", line)
+        if row and total:
+            pdf_totals[row[1]] = int(total.group(1))
 
     person_by_id = {p["person"]["id"]: p["person"] for p in all_participants}
     expected_by_ext = {person_by_id[pid]["externalId"]: total for pid, total in expected.items()}

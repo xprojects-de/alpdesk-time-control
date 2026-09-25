@@ -73,9 +73,9 @@ for race_name, direction in RACE_DIRECTIONS.items():
         body_ranked_part = body.split("Nicht gewertet")[0]
         pdf_places = {}
         for line in body_ranked_part.splitlines():
-            m = re.match(r"^\s*(\d+)\s+.*?\b(\d{4,6})\b", line)
-            if m:
-                pdf_places[m.group(2)] = int(m.group(1))
+            row = c.pdf_row_place_and_id(line)
+            if row:
+                pdf_places[row[1]] = row[0]
         total_pdf_ranked += len(pdf_places)
 
         mismatches = [(e, exp, pdf_places.get(e)) for e, exp in expected_places.items() if pdf_places.get(e) != exp]

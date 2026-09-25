@@ -1,6 +1,7 @@
 import json
 import mimetypes
 import os
+import re
 import urllib.request
 import urllib.error
 import uuid
@@ -10,6 +11,32 @@ def results_path(name):
     suite's own directory (and out of git) under results/, instead of littering it on every run."""
     os.makedirs("results", exist_ok=True)
     return os.path.join("results", name)
+
+_PDF_ROW = re.compile(r"^\s*(\d+)\s+(\S.*)$")
+_ID_CANDIDATE = re.compile(r"\b(\d{4,6})\b")
+_BIRTH_YEAR = re.compile(r"(19|20)\d{2}")
+
+
+def pdf_row_place_and_id(line):
+    """(place, externalId) of one table row of a Time Control result PDF (pdftotext -layout), or
+    None for any other line.
+
+    Reads both layouts the exports have had: without and with the optional "StNr." (right after the
+    place) and "Jg." (right after the name) columns, so a reference PDF exported before those
+    columns existed still compares against a fresh one. A race number never has 4 digits here, and a
+    birth year is told apart from the ID by position: a year-looking number that is followed by a
+    further ID candidate is the "Jg." column, not the ID.
+    """
+    m = _PDF_ROW.match(line)
+    if not m:
+        return None
+    candidates = _ID_CANDIDATE.findall(m.group(2))
+    if not candidates:
+        return None
+    if len(candidates) >= 2 and _BIRTH_YEAR.fullmatch(candidates[0]):
+        return int(m.group(1)), candidates[1]
+    return int(m.group(1)), candidates[0]
+
 
 def login(base, username="e2e_admin", password="e2eTestPass123"):
     body = json.dumps({"username": username, "password": password}).encode()
