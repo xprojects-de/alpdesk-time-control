@@ -1,0 +1,1 @@
+import{Nt as rc,_ as Fm}from"./chunk-D-PgdQ4d.js";var r=Fm(`team`);var c=rc(r,e=>e.teams);var m=rc(r,e=>e.loading);rc(r,e=>e.error);export{m as n,c as t};
