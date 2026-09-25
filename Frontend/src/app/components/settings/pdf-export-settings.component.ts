@@ -5,7 +5,7 @@ import {Store} from "@ngrx/store";
 import {Observable} from "rxjs";
 import {Actions, ofType} from "@ngrx/effects";
 import {MatCardModule} from "@angular/material/card";
-import {MatSlideToggleChange, MatSlideToggleModule} from "@angular/material/slide-toggle";
+import {MatSlideToggleModule} from "@angular/material/slide-toggle";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {PdfExportSettings} from "../../models/pdf-export-settings.model";
 import * as SettingsActions from "../../store/settings/settings.actions";
@@ -29,13 +29,22 @@ import * as SettingsSelectors from "../../store/settings/settings.selectors";
                     die Gaudi-Modus-Auswertungen nie.
                 </p>
                 @if (pdfExport$ | async; as pdfExport) {
-                    <mat-slide-toggle
-                        [checked]="pdfExport.showRaceNumberAndBirthYear"
-                        [disabled]="(saving$ | async) === true"
-                        (change)="toggle($event)"
-                    >
-                        Startnummer und Jahrgang anzeigen
-                    </mat-slide-toggle>
+                    <div class="toggles">
+                        <mat-slide-toggle
+                            [checked]="pdfExport.showRaceNumber"
+                            [disabled]="(saving$ | async) === true"
+                            (change)="save(pdfExport, {showRaceNumber: $event.checked})"
+                        >
+                            Startnummer anzeigen
+                        </mat-slide-toggle>
+                        <mat-slide-toggle
+                            [checked]="pdfExport.showBirthYear"
+                            [disabled]="(saving$ | async) === true"
+                            (change)="save(pdfExport, {showBirthYear: $event.checked})"
+                        >
+                            Jahrgang anzeigen
+                        </mat-slide-toggle>
+                    </div>
                 }
             </mat-card-content>
         </mat-card>
@@ -45,6 +54,12 @@ import * as SettingsSelectors from "../../store/settings/settings.selectors";
             mat-card {
                 margin: 20px;
                 max-width: 640px;
+            }
+
+            .toggles {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
             }
 
             .pdf-export-hint {
@@ -90,7 +105,11 @@ export class PdfExportSettingsComponent implements OnInit {
         this.store.dispatch(SettingsActions.loadPdfExport());
     }
 
-    toggle(event: MatSlideToggleChange): void {
-        this.store.dispatch(SettingsActions.updatePdfExport({request: {showRaceNumberAndBirthYear: event.checked}}));
+    /**
+     * Sends both switches, the untouched one from the current state: the endpoint replaces the
+     * whole setting, so a request with only the flipped one would be rejected.
+     */
+    save(current: PdfExportSettings, change: Partial<PdfExportSettings>): void {
+        this.store.dispatch(SettingsActions.updatePdfExport({request: {...current, ...change}}));
     }
 }
