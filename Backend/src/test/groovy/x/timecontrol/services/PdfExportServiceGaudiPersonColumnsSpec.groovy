@@ -167,4 +167,17 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         true       | false
         false      | false
     }
+
+    def "Los-Modus: a self-paired leftover is still marked as such"() {
+        given:
+        switches(true, true)
+        def entries = [entry(label: "Meier Paul (Einzel)", team: "SV", time1Ms: 47650, valueMs: 47650, referenceMs: 48000,
+                diffMs: 350, members: [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013)])]
+
+        when:
+        String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
+
+        then:
+        t.contains("Meier Paul (Einzel)")
+    }
 }

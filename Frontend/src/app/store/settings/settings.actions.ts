@@ -37,7 +37,7 @@ export const updateSeason = createAction("[Settings] Update Season", props<{requ
 export const updateSeasonSuccess = createAction("[Settings] Update Season Success", props<{season: SeasonSettings}>());
 export const updateSeasonFailure = createAction("[Settings] Update Season Failure", props<{error: string}>());
 
-// Layout of a single race's result PDFs (race number / birth year columns).
+// Race number / birth year columns of the result PDFs (single race and Gaudi-Modus) and the live view.
 export const loadPdfExport = createAction("[Settings] Load Pdf Export");
 export const loadPdfExportSuccess = createAction(
     "[Settings] Load Pdf Export Success",

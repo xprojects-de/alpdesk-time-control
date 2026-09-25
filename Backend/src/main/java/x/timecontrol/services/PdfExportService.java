@@ -421,7 +421,7 @@ public class PdfExportService {
         List<PdfColumn<LosPdfRow>> columns = personColumns.apply(List.of(
                 new PdfColumn<>("Platz", 0.6f, r -> r.first() ? String.valueOf(r.pair().place()) : ""),
                 new PdfColumn<>("StNr.", 0.5f, r -> orDash(r.member().raceNumber())),
-                new PdfColumn<>("Name Vorname", 2.0f, r -> truncate(r.member().label(), 30)),
+                new PdfColumn<>("Name Vorname", 2.0f, r -> truncate(r.member().label() + (r.single() ? " (Einzel)" : ""), 30)),
                 new PdfColumn<>("Jg.", 0.5f, r -> orDash(r.member().birthYear())),
                 new PdfColumn<>("Team", 1.5f, r -> truncate(r.member().team(), 20)),
                 new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.member().valueMs())),
@@ -441,6 +441,11 @@ public class PdfExportService {
      * entry whose shared values only its {@code first} line shows.
      */
     private record LosPdfRow(GaudiRankingEntryResponse pair, GaudiTeamMemberResponse member, boolean first) {
+
+        /** A self-paired leftover (odd count), scored against their own value alone. */
+        boolean single() {
+            return pair.members() != null && pair.members().size() == 1;
+        }
     }
 
     private static List<LosPdfRow> losPdfRows(GaudiRankingEntryResponse pair) {
