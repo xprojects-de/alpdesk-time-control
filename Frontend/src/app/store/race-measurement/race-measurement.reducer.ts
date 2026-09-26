@@ -100,6 +100,14 @@ export const raceMeasurementReducer = createReducer(
         error: null,
     })),
     on(
+        RaceMeasurementActions.deleteAllRaceMeasurementsSuccess,
+        RaceMeasurementActions.importRaceMeasurementsCsvSuccess,
+        state => ({
+            ...state,
+            loading: false,
+        }),
+    ),
+    on(
         RaceMeasurementActions.deleteAllRaceMeasurementsFailure,
         RaceMeasurementActions.importRaceMeasurementsCsvFailure,
         (state, {error}) => ({

@@ -178,7 +178,7 @@ public class RaceMeasurementController {
     @Produces("text/csv")
     @Get("/race/{raceId}/export/csv")
     @Operation(summary = "Export a race's archived measurements as CSV",
-            description = "Backup of the race's archived measurements with the columns deviceMeasurementId, raceNumber, lastName, firstName, durationMs, measuredAt. lastName/firstName are informational only. Restore it via POST /race-measurements/race/{raceId}/import-csv.",
+            description = "Backup of the race's archived measurements with the columns deviceMeasurementId, raceNumber, lastName, firstName, durationMs, measuredAt. lastName/firstName are informational only. Restore it via POST /race-measurements/race/{raceId}/import-mapped, which maps this header by itself.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "CSV generated")
     @ApiResponse(responseCode = "404", description = "Race not found")
@@ -257,6 +257,9 @@ public class RaceMeasurementController {
             raw = jsonMapper.readValue(mappingJson.get(), Map.class);
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid mapping JSON: " + e.getMessage());
+        }
+        if (raw == null) {
+            throw new IllegalArgumentException("Invalid mapping JSON: expected an object, got null");
         }
         Map<String, String> mapping = new HashMap<>();
         for (Map.Entry<?, ?> entry : raw.entrySet()) {

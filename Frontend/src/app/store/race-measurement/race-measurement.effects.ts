@@ -1,14 +1,17 @@
 import {inject, Injectable} from "@angular/core";
 import {extractErrorMessage} from "../../utils/http-error.util";
 import {Actions, createEffect, ofType} from "@ngrx/effects";
+import {Store} from "@ngrx/store";
 import {of} from "rxjs";
-import {catchError, map, mergeMap, switchMap, tap} from "rxjs/operators";
+import {catchError, filter, map, mergeMap, switchMap, tap, withLatestFrom} from "rxjs/operators";
 import {RaceMeasurementService} from "../../services/race-measurement.service";
 import * as RaceMeasurementActions from "./race-measurement.actions";
+import * as RaceSelectors from "../race/race.selectors";
 
 @Injectable()
 export class RaceMeasurementEffects {
     private actions$ = inject(Actions);
+    private store = inject(Store);
     private raceMeasurementService = inject(RaceMeasurementService);
 
     // switchMap, not mergeMap: dispatched again on every race-selection change. With mergeMap, quickly
@@ -167,14 +170,18 @@ export class RaceMeasurementEffects {
         ),
     );
 
-    // Both replace the race's whole table on the server, so the list is reloaded rather than patched.
+    // Both replace the race's whole table on the server, so the list is reloaded rather than patched -
+    // but only while that race is still the selected one: loading it after the operator switched to
+    // another race would put its rows under the other race's heading.
     reloadAfterBulkChange$ = createEffect(() =>
         this.actions$.pipe(
             ofType(
                 RaceMeasurementActions.deleteAllRaceMeasurementsSuccess,
                 RaceMeasurementActions.importRaceMeasurementsCsvSuccess,
             ),
-            map(({raceId}) => RaceMeasurementActions.loadRaceMeasurements({raceId})),
+            withLatestFrom(this.store.select(RaceSelectors.selectSelectedRaceId)),
+            filter(([{raceId}, selectedRaceId]) => raceId === selectedRaceId),
+            map(([{raceId}]) => RaceMeasurementActions.loadRaceMeasurements({raceId})),
         ),
     );
 }

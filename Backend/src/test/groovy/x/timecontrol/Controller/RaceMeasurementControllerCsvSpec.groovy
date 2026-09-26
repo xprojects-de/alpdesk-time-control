@@ -107,14 +107,17 @@ class RaceMeasurementControllerCsvSpec extends Specification {
         (response.body() as ErrorResponse).message().contains("line 3")
     }
 
-    def "a mapping that is not JSON answers 400 and imports nothing"() {
+    def "a mapping that is not a JSON object answers 400 and imports nothing: #mappingJson"() {
         when:
-        def response = controller.importMapped(7L, upload("..."), Optional.empty(), Optional.of("raceNumber=Bib"))
+        def response = controller.importMapped(7L, upload("..."), Optional.empty(), Optional.of(mappingJson))
 
         then:
         response.status == HttpStatus.BAD_REQUEST
         (response.body() as ErrorResponse).message().startsWith("Invalid mapping JSON")
         0 * csvService.importMapped(*_)
+
+        where:
+        mappingJson << ["raceNumber=Bib", "null"]
     }
 
     def "an unknown race answers 404 and touches nothing: #endpoint"() {

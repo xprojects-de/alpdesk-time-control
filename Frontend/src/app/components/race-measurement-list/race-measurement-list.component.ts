@@ -579,7 +579,8 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
             return;
         }
         const lines = warnings.map(
-            w => `Zeile ${w.lineNumber}: Startnummer nicht in diesem Rennen – ohne Teilnehmer importiert`,
+            w =>
+                `Zeile ${w.lineNumber} (${w.rawLine}): Startnummer nicht in diesem Rennen – ohne Teilnehmer importiert`,
         );
         this.dialog.open(ConfirmDialogComponent, {
             width: "600px",
