@@ -8,9 +8,10 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.repositories.AgeGroupRepository;
 
 import java.time.LocalDate;
-import java.time.MonthDay;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.StreamSupport;
@@ -48,12 +49,16 @@ public class AgeGroupService {
         this.raceService = raceService;
     }
 
-    /** One variant of a season and the names of the races categorised with it. */
-    public record VariantUsage(String variant, List<String> raceNames) {
+    /**
+     * One variant of a season: how many age groups it has and which races are categorised with it.
+     * A variant with races but no age groups is one whose last group was deleted before this was
+     * guarded - its races come out "ohne Altersklasse" until it is refilled.
+     */
+    public record VariantUsage(String variant, int ageGroupCount, List<String> raceNames) {
     }
 
     public AgeGroup create(AgeGroup ageGroup) {
-        assertValidVariantName(ageGroup.variant());
+        assertValidVariantName(ageGroup.seasonYear(), ageGroup.variant());
         assertNameAvailable(ageGroup.name(), ageGroup.seasonYear(), ageGroup.variant(), null);
         assertNoOverlap(ageGroup, null);
         return repository.save(ageGroup);
@@ -95,7 +100,12 @@ public class AgeGroupService {
      */
     public List<VariantUsage> findVariants(int seasonYear) {
         List<Race> racesOfSeason = racesOfSeason(seasonYear);
-        TreeSet<String> variants = new TreeSet<>(repository.findDistinctVariantsBySeasonYear(seasonYear));
+        Map<String, Integer> ageGroupCountByVariant = new HashMap<>();
+        for (AgeGroup ageGroup : repository.findBySeasonYear(seasonYear)) {
+            ageGroupCountByVariant.merge(ageGroup.variant(), 1, Integer::sum);
+        }
+
+        TreeSet<String> variants = new TreeSet<>(ageGroupCountByVariant.keySet());
         variants.add(AgeGroup.STANDARD_VARIANT);
         for (Race race : racesOfSeason) {
             variants.add(race.ageGroupVariant());
@@ -103,24 +113,37 @@ public class AgeGroupService {
 
         List<VariantUsage> usages = new ArrayList<>();
         for (String variant : variants) {
-            usages.add(new VariantUsage(variant, raceNamesUsing(racesOfSeason, variant)));
+            usages.add(new VariantUsage(variant, ageGroupCountByVariant.getOrDefault(variant, 0),
+                    raceNamesUsing(racesOfSeason, variant)));
         }
         return usages;
     }
 
     /**
-     * @throws IllegalArgumentException if a race of {@code seasonYear} may not be categorised with
-     *                                  {@code variant} because that variant has no age groups in
-     *                                  the season. Variants are set up on the age-group page before
-     *                                  a race picks one; the standard variant is always allowed,
+     * Whether {@code race} may be saved with its age-group variant. {@code previous} is the race as
+     * stored before this update, or null for a new race.
+     * <p>
+     * Only a <em>changed</em> season or variant is checked. A race whose variant has meanwhile lost
+     * its age groups must still be editable - a weather correction on race day must not fail over
+     * the classes - while picking such a variant, or moving the race into a season that lacks it,
+     * is refused.
+     *
+     * @throws IllegalArgumentException if the race's season has no age groups in that variant.
+     *                                  Variants are set up on the age-group page before a race
+     *                                  picks one; the standard variant is always allowed,
      *                                  configured or not.
      */
-    public void assertVariantSelectable(int seasonYear, String variant) {
-        if (AgeGroup.STANDARD_VARIANT.equals(variant)) {
+    public void assertVariantSelectable(Race race, Race previous) {
+        int seasonYear = seasonService.seasonOf(race);
+        boolean unchanged = previous != null
+                && race.ageGroupVariant().equals(previous.ageGroupVariant())
+                && seasonYear == seasonService.seasonOf(previous);
+        if (unchanged || AgeGroup.STANDARD_VARIANT.equals(race.ageGroupVariant())) {
             return;
         }
-        if (repository.findBySeasonYearAndVariant(seasonYear, variant).isEmpty()) {
-            throw new IllegalArgumentException("Age group variant \"" + variant + "\" does not exist in season " + seasonYear);
+        if (repository.findBySeasonYearAndVariant(seasonYear, race.ageGroupVariant()).isEmpty()) {
+            throw new IllegalArgumentException("Age group variant \"" + race.ageGroupVariant()
+                    + "\" does not exist in season " + seasonYear);
         }
     }
 
@@ -169,7 +192,7 @@ public class AgeGroupService {
     public Optional<AgeGroup> update(Long id, AgeGroup ageGroup) {
         Optional<AgeGroup> existing = repository.findById(id);
         if (existing.isPresent()) {
-            assertValidVariantName(ageGroup.variant());
+            assertValidVariantName(ageGroup.seasonYear(), ageGroup.variant());
             assertNameAvailable(ageGroup.name(), ageGroup.seasonYear(), ageGroup.variant(), id);
             assertNoOverlap(ageGroup, id);
             AgeGroup updated = new AgeGroup(
@@ -186,8 +209,31 @@ public class AgeGroupService {
         return Optional.empty();
     }
 
+    /**
+     * @throws IllegalStateException if this is the last age group of a variant that races are
+     *                               still categorised with - it would leave them "ohne
+     *                               Altersklasse" without a word, the same thing
+     *                               {@link #deleteVariant} refuses to do. The standard variant is
+     *                               exempt: every race without a variant of its own uses it, so its
+     *                               last group was always deletable and still is.
+     */
     public void delete(Long id) {
+        Optional<AgeGroup> ageGroup = repository.findById(id);
+        if (ageGroup.isPresent() && isLastOfUsedVariant(ageGroup.get())) {
+            AgeGroup last = ageGroup.get();
+            throw new IllegalStateException("\"" + last.name() + "\" is the last age group of variant \""
+                    + last.variant() + "\", which is still used by: "
+                    + String.join(", ", raceNamesUsing(racesOfSeason(last.seasonYear()), last.variant())));
+        }
         repository.deleteById(id);
+    }
+
+    private boolean isLastOfUsedVariant(AgeGroup ageGroup) {
+        if (AgeGroup.STANDARD_VARIANT.equals(ageGroup.variant())) {
+            return false;
+        }
+        boolean last = repository.findBySeasonYearAndVariant(ageGroup.seasonYear(), ageGroup.variant()).size() == 1;
+        return last && !raceNamesUsing(racesOfSeason(ageGroup.seasonYear()), ageGroup.variant()).isEmpty();
     }
 
     public AgeGroup createFromRequest(AgeGroupRequest request) {
@@ -227,7 +273,7 @@ public class AgeGroupService {
         if (fromSeason == toSeason && fromVariant.equals(toVariant)) {
             throw new IllegalArgumentException("Source and target must differ in season or variant");
         }
-        assertValidVariantName(toVariant);
+        assertValidVariantName(toSeason, toVariant);
         List<AgeGroup> source = repository.findBySeasonYearAndVariant(fromSeason, fromVariant);
         if (source.isEmpty()) {
             throw new IllegalStateException(describe(fromSeason, fromVariant) + " has no age groups to copy");
@@ -353,20 +399,10 @@ public class AgeGroupService {
         return repository.save(new AgeGroup(null, normalized, seasonYear, variant, birthYear, birthYear, gender));
     }
 
-    /**
-     * The races of one season, without their cover-page BLOBs - few enough (a club runs tens of
-     * races a year) to filter in memory rather than giving the season its own query, which would
-     * have to repeat SeasonService's boundary rule in SQL.
-     */
+    /** The races of one season, without their cover-page BLOBs. */
     private List<Race> racesOfSeason(int seasonYear) {
-        MonthDay seasonStart = seasonService.seasonStart();
-        List<Race> races = new ArrayList<>();
-        for (Race race : raceService.findAllWithoutCoverPage()) {
-            if (seasonService.seasonOf(race.date(), seasonStart) == seasonYear) {
-                races.add(race);
-            }
-        }
-        return races;
+        return raceService.findBetweenWithoutCoverPage(
+                seasonService.seasonStartDate(seasonYear), seasonService.seasonEndDate(seasonYear));
     }
 
     private static List<String> raceNamesUsing(List<Race> races, String variant) {
@@ -388,11 +424,20 @@ public class AgeGroupService {
     /**
      * @throws IllegalArgumentException if the variant is called "Standard" (in any case): that is
      *                                  what the UI shows for the real standard variant, and a second
-     *                                  one under that label could not be told apart from it
+     *                                  one under that label could not be told apart from it. Or if
+     *                                  the season already has the variant under another spelling
+     *                                  ("kinder" beside "Kinder"): two variants differing only in
+     *                                  case would look like one in every selector.
      */
-    private static void assertValidVariantName(String variant) {
+    private void assertValidVariantName(int seasonYear, String variant) {
         if (variant.equalsIgnoreCase(STANDARD_VARIANT_LABEL)) {
             throw new IllegalArgumentException("\"" + STANDARD_VARIANT_LABEL + "\" is reserved for the standard variant");
+        }
+        for (AgeGroup ageGroup : repository.findBySeasonYear(seasonYear)) {
+            if (ageGroup.variant().equalsIgnoreCase(variant) && !ageGroup.variant().equals(variant)) {
+                throw new IllegalArgumentException("Season " + seasonYear + " already has this variant as \""
+                        + ageGroup.variant() + "\"");
+            }
         }
     }
 

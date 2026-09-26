@@ -18,6 +18,11 @@ export interface AgeGroupVariantDialogData {
     variant: string;
     /** Names of the shown season's existing variants - a new one must not repeat them. */
     existingVariants: string[];
+    /**
+     * The subset that has age groups. A copy may target an existing variant without any - one that
+     * only races still point at - to refill it, but not one that has groups.
+     */
+    variantsWithAgeGroups: string[];
     /** Seasons offered as copy target. */
     seasonOptions: number[];
 }
@@ -148,11 +153,29 @@ export class AgeGroupVariantDialogComponent {
             if (variant.toLowerCase() === "standard") {
                 return {reserved: true};
             }
-            if (season === this.data.season && this.data.existingVariants.includes(variant)) {
-                return variant === this.data.variant ? {sameAsSource: true} : {exists: true};
+            if (season !== this.data.season) {
+                return null;
             }
-            return null;
+            if (variant === this.data.variant) {
+                return {sameAsSource: true};
+            }
+            return this.clashesWithExistingVariant(variant) ? {exists: true} : null;
         };
+    }
+
+    // Case-insensitive, like the backend: "kinder" beside "Kinder" would look like one variant in
+    // every selector. A copy may refill an exactly-named variant that has no age groups.
+    private clashesWithExistingVariant(variant: string): boolean {
+        const lower = variant.toLowerCase();
+        const sameName = this.data.existingVariants.filter(existing => existing.toLowerCase() === lower);
+        if (sameName.length === 0) {
+            return false;
+        }
+        const refillsEmptyVariant =
+            this.data.mode === "copy" &&
+            sameName.includes(variant) &&
+            !this.data.variantsWithAgeGroups.includes(variant);
+        return !refillsEmptyVariant;
     }
 
     private sameAsSource(season: number, variant: string): ValidationErrors | null {

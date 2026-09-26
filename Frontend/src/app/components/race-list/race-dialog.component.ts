@@ -363,8 +363,12 @@ export class RaceDialogComponent {
      * so a date moved into another season that lacks the chosen one falls back to the standard.
      */
     private watchAgeGroupVariants(): void {
-        this.variantOptions.set([{variant: this.form.value.ageGroupVariant, raceNames: []}]);
+        this.variantOptions.set([{variant: this.form.value.ageGroupVariant, ageGroupCount: 0, raceNames: []}]);
 
+        // Asked for before subscribing: the load action clears whatever list a previous dialog left in
+        // the store, which would otherwise be delivered first - and for a race of the same date be
+        // taken for this one's, possibly resetting its variant from a stale list.
+        this.loadVariantsForDate();
         this.store
             .select(AgeGroupSelectors.selectRaceDialogVariants)
             .pipe(takeUntilDestroyed())
@@ -389,7 +393,6 @@ export class RaceDialogComponent {
             .get("date")!
             .valueChanges.pipe(takeUntilDestroyed())
             .subscribe(() => this.loadVariantsForDate());
-        this.loadVariantsForDate();
     }
 
     private loadVariantsForDate(): void {

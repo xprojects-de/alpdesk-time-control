@@ -211,6 +211,19 @@ check("benutzte Variante löschen -> 409", status, 409)
 status, body = c.delete(config.BASE, token, f"/age-groups/variants?season={SEASON}&variant=")
 check("Standard-Variante löschen -> 400", status, 400)
 
+# Ein Client, der Varianten nicht kennt, darf ein Rennen nicht still auf Standard zurücksetzen.
+without_variant = {k: v for k, v in kids_race.items() if k != "ageGroupVariant"}
+without_variant["weather"] = "Schneefall"
+status, body = c.put(config.BASE, token, f"/races/{kids_race['id']}", without_variant)
+check("Update ohne ageGroupVariant -> 200", status, 200)
+check("Update ohne ageGroupVariant behält die Variante", (body or {}).get("ageGroupVariant"), VARIANT)
+
+status, body = c.post(config.BASE, token, "/age-groups", {
+    "name": "Jahrgang 2009", "seasonYear": SEASON, "variant": VARIANT.lower(),
+    "birthYearFrom": 2009, "birthYearTo": 2009, "gender": "BOTH",
+})
+check("Variante in anderer Schreibweise -> 400", status, 400)
+
 # --- 6. Variante in die nächste Saison übernehmen -------------------------------------------------
 status, next_season = c.post(config.BASE, token, "/age-groups/copy-season",
                              {"fromSeason": SEASON, "fromVariant": VARIANT, "toSeason": SEASON + 1, "toVariant": VARIANT})

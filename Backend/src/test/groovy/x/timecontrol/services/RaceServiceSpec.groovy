@@ -105,7 +105,7 @@ class RaceServiceSpec extends Specification {
         def request = request(null, StartOrderMode.REVERSE_TOP_N, 15)
 
         when:
-        def race = service.createFromRequest(request)
+        def race = service.createFromRequest(request, null)
 
         then: "startOrderMode/Count are meaningless without a link, so they're dropped rather than stored orphaned"
         race.previousRaceId() == null
@@ -113,15 +113,30 @@ class RaceServiceSpec extends Specification {
         race.startOrderReverseTopCount() == null
     }
 
-    def "createFromRequest stores the age-group variant trimmed, and the standard one when none is given"() {
+    def "createFromRequest for a new race stores the age-group variant trimmed, and the standard one when none is given"() {
         expect:
-        service.createFromRequest(request(requested)).ageGroupVariant() == stored
+        service.createFromRequest(request(requested), null).ageGroupVariant() == stored
 
         where:
         requested                          | stored
         null                               | ""
         ""                                 | ""
         " Kinderrennen jahrgangsweise "    | "Kinderrennen jahrgangsweise"
+    }
+
+    def "createFromRequest for an update keeps the stored variant when the request omits it, but an explicit value wins"() {
+        given: "the kids' race is on its variant"
+        def stored = new Race(1L, "Kinderrennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "live-1", "Kinder")
+
+        expect: "a client that does not know about variants cannot move it back to the standard classes"
+        service.createFromRequest(request(requested), stored).ageGroupVariant() == result
+
+        where:
+        requested | result
+        null      | "Kinder"
+        ""        | ""
+        "Alt"     | "Alt"
     }
 
     def "update stores the newly picked age-group variant and keeps the live token"() {
@@ -133,7 +148,7 @@ class RaceServiceSpec extends Specification {
         repository.update(_ as Race) >> { Race r -> r }
 
         when:
-        def result = service.update(1L, service.createFromRequest(request("Kinder")), false)
+        def result = service.update(1L, service.createFromRequest(request("Kinder"), existing), false)
 
         then:
         result.get().ageGroupVariant() == "Kinder"
@@ -145,7 +160,7 @@ class RaceServiceSpec extends Specification {
         repository.findByNameIgnoreCase(_) >> Optional.empty()
 
         when:
-        service.create(service.createFromRequest(request("Kinder")))
+        service.create(service.createFromRequest(request("Kinder"), null))
 
         then:
         1 * repository.save({ Race r -> r.ageGroupVariant() == "Kinder" && r.liveToken() != null }) >> { Race r -> r }

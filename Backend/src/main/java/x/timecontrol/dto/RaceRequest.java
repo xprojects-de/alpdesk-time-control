@@ -78,7 +78,7 @@ public record RaceRequest(
         Integer startOrderReverseTopCount,
 
         @Nullable
-        @Schema(description = "Age-group variant of the race's season this race is categorised with. Omitted or empty means the season's standard variant; any other value must have age groups in that season.", example = "Kinderrennen jahrgangsweise", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        @Schema(description = "Age-group variant of the race's season this race is categorised with. Empty means the season's standard variant; any other value must have age groups in that season. Omitted keeps the race's current variant on an update (the standard one for a new race).", example = "Kinderrennen jahrgangsweise", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
         String ageGroupVariant
 ) {
 }

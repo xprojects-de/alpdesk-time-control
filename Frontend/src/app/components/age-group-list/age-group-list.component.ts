@@ -155,6 +155,14 @@ import {Actions, ofType} from "@ngrx/effects";
                                     Für die Saison {{ shownSeason }} sind keine Altersgruppen angelegt. Rennen dieser
                                     Saison werden ohne Altersklasse ausgewertet, bis hier welche existieren.
                                 </span>
+                            } @else if (selectedVariantRaceNames().length > 0) {
+                                <!-- Its last group was deleted before that was guarded: the races
+                                     still point at it and come out without a class. -->
+                                <span>
+                                    Die Variante „{{ label((selectedVariant$ | async) ?? "") }}“ hat keine Altersgruppen
+                                    mehr - ihre Rennen werden ohne Altersklasse ausgewertet. Lege Altersgruppen an oder
+                                    kopiere eine Variante hierher.
+                                </span>
                             } @else {
                                 <span>
                                     Die Variante „{{ label((selectedVariant$ | async) ?? "") }}“ hat noch keine
@@ -431,7 +439,9 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe(([variants, selectedVariant]) => {
                 const selected = variants.find(v => v.variant === selectedVariant);
-                this.variantOptions.set(selected ? variants : [...variants, {variant: selectedVariant, raceNames: []}]);
+                this.variantOptions.set(
+                    selected ? variants : [...variants, {variant: selectedVariant, ageGroupCount: 0, raceNames: []}],
+                );
                 this.selectedVariantRaceNames.set(selected?.raceNames ?? []);
             });
 
@@ -602,6 +612,10 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             season: this.selectedSeason!,
             variant: this.selectedVariant,
             existingVariants: this.variantOptions().map(v => v.variant),
+            // A variant that only races still point at may be refilled by a copy.
+            variantsWithAgeGroups: this.variantOptions()
+                .filter(v => v.ageGroupCount > 0)
+                .map(v => v.variant),
             seasonOptions: this.seasonOptions(),
         };
         return this.dialog

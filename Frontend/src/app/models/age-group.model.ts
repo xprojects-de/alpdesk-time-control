@@ -57,9 +57,11 @@ export interface CopySeasonRequest {
     toVariant: string;
 }
 
-/** One variant of a season and the races of that season categorised with it. */
+/** One variant of a season, its number of age groups and the races of that season categorised with it. */
 export interface AgeGroupVariant {
     variant: string;
+    /** 0 with races means its last group was deleted - those races come out "ohne Altersklasse". */
+    ageGroupCount: number;
     raceNames: string[];
 }
 

@@ -96,7 +96,7 @@ public class AgeGroupController {
                     "season (" + MIN_SEASON_YEAR + "-" + MAX_SEASON_YEAR + ") or date is required"));
         }
         List<AgeGroupVariantResponse> variants = service.findVariants(seasonYear).stream()
-                .map(AgeGroupVariantResponse::from)
+                .map(usage -> new AgeGroupVariantResponse(usage.variant(), usage.ageGroupCount(), usage.raceNames()))
                 .toList();
         return HttpResponse.ok(new AgeGroupVariantsResponse(seasonYear, variants));
     }
@@ -252,13 +252,18 @@ public class AgeGroupController {
     @Operation(summary = "Delete an age group", security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "204", description = "Age group deleted")
     @ApiResponse(responseCode = "404", description = "Age group not found")
-    public HttpResponse<Void> delete(@PathVariable Long id) {
+    @ApiResponse(responseCode = "409", description = "Last age group of a variant races still use")
+    public HttpResponse<?> delete(@PathVariable Long id) {
         Optional<AgeGroup> ageGroup = service.findById(id);
-        if (ageGroup.isPresent()) {
+        if (ageGroup.isEmpty()) {
+            return HttpResponse.notFound();
+        }
+        try {
             service.delete(id);
             return HttpResponse.noContent();
+        } catch (IllegalStateException e) {
+            return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
-        return HttpResponse.notFound();
     }
 }
 

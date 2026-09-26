@@ -22,9 +22,8 @@ public interface AgeGroupRepository extends CrudRepository<AgeGroup, Long> {
 
     Optional<AgeGroup> findByNameIgnoreCaseAndSeasonYearAndVariant(String name, Integer seasonYear, String variant);
 
-    /** The variants of one season that have any age group, standard ('') first. */
-    @Query(value = "SELECT DISTINCT variant FROM age_group WHERE season_year = :seasonYear ORDER BY variant", nativeQuery = true)
-    List<String> findDistinctVariantsBySeasonYear(Integer seasonYear);
+    /** Every variant's age groups of one season - for listing and checking the season's variants. */
+    List<AgeGroup> findBySeasonYear(Integer seasonYear);
 
     void deleteBySeasonYearAndVariant(Integer seasonYear, String variant);
 

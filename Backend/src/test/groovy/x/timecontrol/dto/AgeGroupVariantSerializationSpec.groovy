@@ -44,7 +44,7 @@ class AgeGroupVariantSerializationSpec extends Specification {
 
     def "an unused standard variant carries its empty name and an empty race list"() {
         when:
-        String json = objectMapper.writeValueAsString(new AgeGroupVariantResponse("", []))
+        String json = objectMapper.writeValueAsString(new AgeGroupVariantResponse("", 0, []))
 
         then:
         json.contains('"variant":""')

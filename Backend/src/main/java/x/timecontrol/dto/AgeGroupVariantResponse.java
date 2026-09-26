@@ -3,7 +3,6 @@ package x.timecontrol.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
-import x.timecontrol.services.AgeGroupService;
 
 import java.util.List;
 
@@ -16,11 +15,11 @@ public record AgeGroupVariantResponse(
         @Schema(description = "Name of the variant; empty for the season's standard variant", example = "Kinderrennen jahrgangsweise")
         String variant,
 
+        @Schema(description = "Number of age groups the variant has in this season. 0 means only races still refer to it - they come out \"ohne Altersklasse\" until it is refilled.", example = "4")
+        int ageGroupCount,
+
         @JsonInclude(JsonInclude.Include.ALWAYS)
         @Schema(description = "Names of the races of this season that use the variant", example = "[\"Kinderrennen\"]")
         List<String> raceNames
 ) {
-    public static AgeGroupVariantResponse from(AgeGroupService.VariantUsage usage) {
-        return new AgeGroupVariantResponse(usage.variant(), usage.raceNames());
-    }
 }

@@ -27,6 +27,17 @@ class AgeGroupServiceSpec extends Specification {
 
     AgeGroupService service = new AgeGroupService(repository, seasonService, raceService)
 
+    // Every age group of a season, across its variants, as repository.findBySeasonYear returns it.
+    // Filled by individual tests instead of re-stubbing findBySeasonYear there: create/update check
+    // the season's variant spellings through it, so it needs a default for every test, and a
+    // second, more specific interaction on the same method would be ambiguous (see the same
+    // pattern in ParticipantServiceSpec).
+    Map<Integer, List<AgeGroup>> groupsBySeason = [:]
+
+    def setup() {
+        repository.findBySeasonYear(_) >> { Integer seasonYear -> groupsBySeason[seasonYear] ?: [] }
+    }
+
     def "findOrCreateForImport creates a new single-year age group when nothing existing covers this year/gender"() {
         given:
         repository.findBySeasonYearAndVariant(2026, "") >> []
@@ -488,67 +499,126 @@ class AgeGroupServiceSpec extends Specification {
         e.message.contains(KIDS)
     }
 
-    def "findVariants lists the standard variant first, every configured variant and one only races still use, each with its races of that season"() {
+    private static final LocalDate SEASON_2026_START = LocalDate.of(2026, 1, 1)
+    private static final LocalDate SEASON_2026_END = LocalDate.of(2026, 12, 31)
+
+    def "findVariants lists the standard variant first, every configured variant and one only races still use, each with its group count and races"() {
         given:
-        repository.findDistinctVariantsBySeasonYear(2026) >> [KIDS]
-        raceService.findAllWithoutCoverPage() >> [
+        groupsBySeason[2026] = [
+                new AgeGroup(1L, "U10", 2026, 2016, 2017, Gender.BOTH),
+                new AgeGroup(2L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH),
+                new AgeGroup(3L, "Jahrgang 2017", 2026, KIDS, 2017, 2017, Gender.BOTH),
+        ]
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> [
                 race(1L, "Vereinsmeisterschaft", LocalDate.of(2026, 2, 1), ""),
                 race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS),
                 race(3L, "Nachtslalom", LocalDate.of(2026, 3, 8), "Alt"),
-                race(4L, "Kinderrennen 2025", LocalDate.of(2025, 3, 1), KIDS),
         ]
 
         when:
         def variants = service.findVariants(2026)
 
-        then: "the 2025 race is left out - a variant belongs to one season"
+        then: "'Alt' has races but no groups left - listed so it can be spotted and refilled"
         variants*.variant() == ["", "Alt", KIDS]
+        variants*.ageGroupCount() == [1, 0, 2]
         variants*.raceNames() == [["Vereinsmeisterschaft"], ["Nachtslalom"], ["Kinderrennen"]]
+    }
+
+    def "findVariants reads only the races dated within the season, as the season boundary puts it"() {
+        given: "a ski winter boundary: season 2025 runs from 1 July 2025 to 30 June 2026"
+        def winterSettings = Stub(SettingsService) {
+            getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 7, 1, true, true)
+        }
+        def winterService = new AgeGroupService(repository, new SeasonService(winterSettings, raceService), raceService)
+        groupsBySeason[2025] = []
+
+        when:
+        winterService.findVariants(2025)
+
+        then:
+        1 * raceService.findBetweenWithoutCoverPage(LocalDate.of(2025, 7, 1), LocalDate.of(2026, 6, 30)) >> []
     }
 
     def "findVariants always offers the standard variant, even for a season with nothing configured"() {
         given:
-        repository.findDistinctVariantsBySeasonYear(2030) >> []
-        raceService.findAllWithoutCoverPage() >> []
+        groupsBySeason[2030] = []
+        raceService.findBetweenWithoutCoverPage(_, _) >> []
 
         expect:
         service.findVariants(2030)*.variant() == [""]
     }
 
-    def "assertVariantSelectable accepts the standard variant and configured ones, and rejects a variant without age groups"() {
+    def "assertVariantSelectable for a new race accepts the standard variant and configured ones, and rejects a variant without age groups"() {
         given:
         repository.findBySeasonYearAndVariant(2026, KIDS) >> [new AgeGroup(1L, "U10", 2026, KIDS, 2016, 2016, Gender.BOTH)]
         repository.findBySeasonYearAndVariant(2026, "Tippfehler") >> []
         repository.findBySeasonYearAndVariant(2027, KIDS) >> []
 
         when: "the standard variant needs no configuration"
-        service.assertVariantSelectable(2026, "")
+        service.assertVariantSelectable(race(null, "Neu", LocalDate.of(2026, 2, 1), ""), null)
 
         then:
         notThrown(IllegalArgumentException)
 
         when:
-        service.assertVariantSelectable(2026, KIDS)
+        service.assertVariantSelectable(race(null, "Neu", LocalDate.of(2026, 2, 1), KIDS), null)
 
         then:
         notThrown(IllegalArgumentException)
 
         when: "a name nobody set up"
-        service.assertVariantSelectable(2026, "Tippfehler")
+        service.assertVariantSelectable(race(null, "Neu", LocalDate.of(2026, 2, 1), "Tippfehler"), null)
 
         then:
         thrown(IllegalArgumentException)
 
         when: "the variant exists, but in another season than the race's"
-        service.assertVariantSelectable(2027, KIDS)
+        service.assertVariantSelectable(race(null, "Neu", LocalDate.of(2027, 2, 1), KIDS), null)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "assertVariantSelectable lets a race keep a variant that has meanwhile lost its age groups"() {
+        given: "the kids' race still points at 'Alt', which has no age groups any more"
+        repository.findBySeasonYearAndVariant(2026, "Alt") >> []
+        def stored = race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), "Alt")
+
+        when: "a weather correction on race day - same date, same variant"
+        service.assertVariantSelectable(race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), "Alt"), stored)
+
+        then:
+        notThrown(IllegalArgumentException)
+
+        when: "the race is moved to another date of the same season"
+        service.assertVariantSelectable(race(2L, "Kinderrennen", LocalDate.of(2026, 4, 1), "Alt"), stored)
+
+        then: "still unchanged - the variant belongs to the season, not the day"
+        notThrown(IllegalArgumentException)
+    }
+
+    def "assertVariantSelectable rejects moving a race into a season that lacks its variant, and picking an empty variant"() {
+        given:
+        repository.findBySeasonYearAndVariant(2027, KIDS) >> []
+        repository.findBySeasonYearAndVariant(2026, "Alt") >> []
+        def stored = race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)
+
+        when: "the date moves the race into season 2027"
+        service.assertVariantSelectable(race(2L, "Kinderrennen", LocalDate.of(2027, 3, 1), KIDS), stored)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when: "the variant is switched to one without age groups"
+        service.assertVariantSelectable(race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), "Alt"), stored)
 
         then:
         thrown(IllegalArgumentException)
     }
 
     def "deleteVariant removes a variant no race of its season uses"() {
-        given: "a race of another season shares the name - that one is categorised with its own season's variant"
-        raceService.findAllWithoutCoverPage() >> [race(4L, "Kinderrennen 2025", LocalDate.of(2025, 3, 1), KIDS)]
+        given: "the season's races come from the date range - a 2025 race of the same name is not among them"
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> []
 
         when:
         service.deleteVariant(2026, KIDS)
@@ -559,7 +629,7 @@ class AgeGroupServiceSpec extends Specification {
 
     def "deleteVariant refuses a variant races of its season still use, naming them"() {
         given:
-        raceService.findAllWithoutCoverPage() >> [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
 
         when:
         service.deleteVariant(2026, KIDS)
@@ -568,6 +638,75 @@ class AgeGroupServiceSpec extends Specification {
         0 * repository.deleteBySeasonYearAndVariant(_, _)
         def e = thrown(IllegalStateException)
         e.message.contains("Kinderrennen")
+    }
+
+    def "delete refuses the last age group of a variant races still use, naming them"() {
+        given:
+        def lastOne = new AgeGroup(5L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(lastOne)
+        repository.findBySeasonYearAndVariant(2026, KIDS) >> [lastOne]
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+
+        when:
+        service.delete(5L)
+
+        then: "the kids' race would otherwise come out 'ohne Altersklasse' without a word"
+        0 * repository.deleteById(_)
+        def e = thrown(IllegalStateException)
+        e.message.contains("Kinderrennen")
+    }
+
+    def "delete removes an age group when #situation"() {
+        given:
+        def group = new AgeGroup(5L, "Jahrgang 2016", 2026, variant, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(group)
+        repository.findBySeasonYearAndVariant(2026, variant) >> [group] * groupsInVariant
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> races
+
+        when:
+        service.delete(5L)
+
+        then:
+        1 * repository.deleteById(5L)
+
+        where:
+        situation                                       | variant | groupsInVariant | races
+        "others of its variant remain"                  | KIDS    | 2               | [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+        "no race uses its variant"                      | KIDS    | 1               | []
+        "it is the standard variant's last one, as ever" | ""      | 1               | [race(1L, "Vereinsmeisterschaft", LocalDate.of(2026, 2, 1), "")]
+    }
+
+    def "create and copyVariant refuse a variant that exists in the season under another spelling"() {
+        given:
+        groupsBySeason[2026] = [new AgeGroup(1L, "Jahrgang 2016", 2026, "Kinder", 2016, 2016, Gender.BOTH)]
+        repository.findByNameIgnoreCaseAndSeasonYearAndVariant(_, _, _) >> Optional.empty()
+
+        when:
+        service.create(new AgeGroup(null, "Jahrgang 2017", 2026, "kinder", 2017, 2017, Gender.BOTH))
+
+        then:
+        thrown(IllegalArgumentException)
+        0 * repository.save(_)
+
+        when:
+        service.copyVariant(2026, "", 2026, "KINDER")
+
+        then:
+        thrown(IllegalArgumentException)
+        0 * repository.saveAll(_)
+    }
+
+    def "create accepts the exact spelling of an existing variant"() {
+        given:
+        groupsBySeason[2026] = [new AgeGroup(1L, "Jahrgang 2016", 2026, "Kinder", 2016, 2016, Gender.BOTH)]
+        repository.findByNameIgnoreCaseAndSeasonYearAndVariant(_, _, _) >> Optional.empty()
+        repository.findBySeasonYearAndVariant(2026, "Kinder") >> []
+
+        when:
+        service.create(new AgeGroup(null, "Jahrgang 2017", 2026, "Kinder", 2017, 2017, Gender.BOTH))
+
+        then:
+        1 * repository.save(_) >> { AgeGroup ag -> ag }
     }
 
     def "deleteVariant refuses the standard variant"() {

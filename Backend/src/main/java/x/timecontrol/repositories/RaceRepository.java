@@ -53,6 +53,18 @@ public interface RaceRepository extends CrudRepository<Race, Long> {
             nativeQuery = true)
     List<Race> findAllWithoutCoverPage();
 
+    /**
+     * The races dated within [from, to], without the cover-page BLOBs - one season's races, for
+     * AgeGroupService's variant usage. Same hazard as {@link #findAllWithoutCoverPage()}: never
+     * use one as the "existing" row of an update or for a PDF export.
+     */
+    @Query(value = "SELECT id, name, date, organisation, referee, race_director, time_control, route_name, " +
+            "elevation_difference, route_length, course_setter, weather, result_unit, result_unit_label, " +
+            "sort_direction, NULL AS cover_page_pdf, previous_race_id, start_order_mode, " +
+            "start_order_reverse_top_count, live_token, age_group_variant FROM race WHERE date BETWEEN :from AND :to",
+            nativeQuery = true)
+    List<Race> findBetweenWithoutCoverPage(LocalDate from, LocalDate to);
+
     /** The ids of races that do have a cover page - the bit {@link #findAllWithoutCoverPage()} drops. */
     @Query(value = "SELECT id FROM race WHERE cover_page_pdf IS NOT NULL", nativeQuery = true)
     List<Long> findIdsWithCoverPage();
