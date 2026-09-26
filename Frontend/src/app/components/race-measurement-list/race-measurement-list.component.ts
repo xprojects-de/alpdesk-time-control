@@ -2,7 +2,7 @@ import {Component, AfterViewInit, OnDestroy, inject} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Observable, combineLatest, Subject} from "rxjs";
-import {map, takeUntil, distinctUntilChanged, filter} from "rxjs/operators";
+import {map, takeUntil, distinctUntilChanged, filter, take} from "rxjs/operators";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
 import {MatIconModule} from "@angular/material/icon";
@@ -13,7 +13,7 @@ import {MatCardModule} from "@angular/material/card";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 import {MatFormFieldModule} from "@angular/material/form-field";
-import {RaceMeasurement} from "../../models/race-measurement.model";
+import {RaceMeasurement, RaceMeasurementImportResponse} from "../../models/race-measurement.model";
 import {shallowArrayEqual} from "../../utils/shallow-equal.util";
 import {formatDeviceMeasurementId, isSyntheticDeviceMeasurementId} from "../../utils/device-measurement-id.util";
 import {formatParticipantMeta} from "../../utils/participant-meta.util";
@@ -26,6 +26,11 @@ import * as ParticipantSelectors from "../../store/participant/participant.selec
 import * as RaceActions from "../../store/race/race.actions";
 import * as RaceSelectors from "../../store/race/race.selectors";
 import {RaceMeasurementDialogComponent} from "./race-measurement-dialog.component";
+import {
+    RaceMeasurementImportMappingDialogComponent,
+    RaceMeasurementImportMappingDialogData,
+    RaceMeasurementImportMappingDialogResult,
+} from "./race-measurement-import-mapping-dialog.component";
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {Actions, ofType} from "@ngrx/effects";
 
@@ -79,6 +84,32 @@ interface RaceMeasurementWithParticipant extends RaceMeasurement {
                         >
                             <mat-icon>sync</mat-icon>
                             Sync zu Teilnehmern
+                        </button>
+                        <button
+                            mat-raised-button
+                            (click)="exportCsv(selectedRaceId)"
+                            matTooltip="Archivierte Messungen dieses Rennens als CSV sichern"
+                        >
+                            <mat-icon>download</mat-icon>
+                            CSV-Export
+                        </button>
+                        <button
+                            mat-raised-button
+                            (click)="openImportDialog(selectedRaceId)"
+                            matTooltip="Archivierte Messungen dieses Rennens durch eine CSV-Datei ersetzen"
+                        >
+                            <mat-icon>upload_file</mat-icon>
+                            CSV-Import
+                        </button>
+                        <button
+                            mat-raised-button
+                            color="warn"
+                            (click)="deleteAllOfRace(selectedRaceId)"
+                            [disabled]="((raceMeasurements$ | async) ?? []).length === 0"
+                            matTooltip="Alle archivierten Messungen dieses Rennens löschen, z. B. um neu zu archivieren"
+                        >
+                            <mat-icon>delete_sweep</mat-icon>
+                            Alle löschen
                         </button>
                     </div>
 
@@ -361,6 +392,29 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
                 });
             });
 
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.deleteAllRaceMeasurementsSuccess), takeUntil(this.destroy$))
+            .subscribe(({response}) => {
+                this.snackBar.open(`${response.deletedCount} archivierte Messungen gelöscht`, "OK", {duration: 5000});
+            });
+
+        this.actions$
+            .pipe(ofType(RaceMeasurementActions.importRaceMeasurementsCsvSuccess), takeUntil(this.destroy$))
+            .subscribe(({response}) => this.showImportResult(response));
+
+        this.actions$
+            .pipe(
+                ofType(
+                    RaceMeasurementActions.deleteAllRaceMeasurementsFailure,
+                    RaceMeasurementActions.exportRaceMeasurementsCsvFailure,
+                    RaceMeasurementActions.importRaceMeasurementsCsvFailure,
+                ),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER: ${error}`, "OK", {duration: 15000, panelClass: "error-snackbar"});
+            });
+
         // Listen for successful delete
         this.actions$
             .pipe(ofType(RaceMeasurementActions.deleteRaceMeasurementSuccess), takeUntil(this.destroy$))
@@ -467,6 +521,70 @@ export class RaceMeasurementListComponent implements AfterViewInit, OnDestroy {
                     this.store.dispatch(RaceMeasurementActions.deleteRaceMeasurement({id: raceMeasurement.id}));
                 }
             });
+    }
+
+    exportCsv(raceId: number): void {
+        this.store.dispatch(RaceMeasurementActions.exportRaceMeasurementsCsv({raceId}));
+    }
+
+    deleteAllOfRace(raceId: number): void {
+        this.raceMeasurements$.pipe(take(1)).subscribe(raceMeasurements => {
+            this.confirm(
+                `Möchten Sie alle ${raceMeasurements.length} archivierten Messungen dieses Rennens löschen? ` +
+                    "Die bereits zu den Teilnehmern synchronisierten Zeiten bleiben unverändert. " +
+                    "Tipp: vorher mit „CSV-Export“ sichern.",
+                "Alle löschen",
+                () => this.store.dispatch(RaceMeasurementActions.deleteAllRaceMeasurements({raceId})),
+            );
+        });
+    }
+
+    openImportDialog(raceId: number): void {
+        this.raceMeasurements$.pipe(take(1)).subscribe(raceMeasurements => {
+            const data: RaceMeasurementImportMappingDialogData = {raceId, existingCount: raceMeasurements.length};
+            this.dialog
+                .open(RaceMeasurementImportMappingDialogComponent, {width: "760px", data})
+                .afterClosed()
+                .pipe(takeUntil(this.destroy$))
+                .subscribe((result: RaceMeasurementImportMappingDialogResult | undefined) => {
+                    if (result) {
+                        this.store.dispatch(RaceMeasurementActions.importRaceMeasurementsCsv({raceId, ...result}));
+                    }
+                });
+        });
+    }
+
+    private confirm(message: string, confirmLabel: string, onConfirm: () => void): void {
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "500px",
+                data: {message, confirmLabel, confirmColor: "warn"},
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    onConfirm();
+                }
+            });
+    }
+
+    private showImportResult(response: RaceMeasurementImportResponse): void {
+        const warnings = response.warnings ?? [];
+        const summary =
+            `${response.importedCount} archivierte Messungen importiert` +
+            (response.withoutParticipantCount > 0 ? `, davon ${response.withoutParticipantCount} ohne Teilnehmer` : "");
+        if (warnings.length === 0) {
+            this.snackBar.open(summary, "OK", {duration: 5000});
+            return;
+        }
+        const lines = warnings.map(
+            w => `Zeile ${w.lineNumber}: Startnummer nicht in diesem Rennen – ohne Teilnehmer importiert`,
+        );
+        this.dialog.open(ConfirmDialogComponent, {
+            width: "600px",
+            data: {title: "Import abgeschlossen", message: `${summary}.\n\n${lines.join("\n")}`, hideCancel: true},
+        });
     }
 
     syncToParticipants(raceId: number): void {

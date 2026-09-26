@@ -72,4 +72,13 @@ class RaceMeasurementServiceSpec extends Specification {
         RaceMeasurementService.getMethod("archiveMeasurementsAndResetDevice", Long, TimingDataImporter)
                 .isAnnotationPresent(Transactional)
     }
+
+    def "deleting all archived measurements of a race reports how many were deleted"() {
+        when:
+        int deleted = service.deleteByRaceId(7L)
+
+        then:
+        1 * repository.deleteByRaceId(7L) >> 12
+        deleted == 12
+    }
 }

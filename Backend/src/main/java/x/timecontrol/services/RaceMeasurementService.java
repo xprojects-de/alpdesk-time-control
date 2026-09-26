@@ -95,4 +95,14 @@ public class RaceMeasurementService {
     public void delete(Long id) {
         measurementTableLock.run(() -> repository.deleteById(id));
     }
+
+    /**
+     * Leaves the participants' synced results alone: deleting is the first step of archiving the
+     * race again or restoring a CSV backup, after which the operator syncs anew.
+     *
+     * @return the number of deleted race measurements
+     */
+    public int deleteByRaceId(Long raceId) {
+        return measurementTableLock.get(() -> repository.deleteByRaceId(raceId));
+    }
 }

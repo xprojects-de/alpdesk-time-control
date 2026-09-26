@@ -98,14 +98,24 @@ public final class MeasurementImportParsers {
      * the caller is always free to override or omit fields.
      */
     public static Map<String, String> suggestMapping(List<String> availableFields) {
+        return suggestMapping(availableFields, TARGET_FIELDS, TARGET_FIELD_ALIASES);
+    }
+
+    /**
+     * The same alias matching for another set of target fields - the archived race measurements'
+     * import (RaceMeasurementCsvService) maps onto race numbers instead of participant ids.
+     * {@code aliases} holds each target's accepted source names, already normalized.
+     */
+    public static Map<String, String> suggestMapping(List<String> availableFields, List<String> targetFields,
+                                                     Map<String, List<String>> aliases) {
         Map<String, String> normalizedAvailable = new LinkedHashMap<>();
         for (String field : availableFields) {
             normalizedAvailable.putIfAbsent(normalize(field), field);
         }
 
         Map<String, String> suggestion = new LinkedHashMap<>();
-        for (String target : TARGET_FIELDS) {
-            for (String alias : TARGET_FIELD_ALIASES.get(target)) {
+        for (String target : targetFields) {
+            for (String alias : aliases.get(target)) {
                 String match = normalizedAvailable.get(alias);
                 if (match != null) {
                     suggestion.put(target, match);

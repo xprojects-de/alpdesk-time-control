@@ -16,6 +16,8 @@ public interface RaceMeasurementRepository extends CrudRepository<RaceMeasuremen
 
     Optional<RaceMeasurement> findByRaceIdAndParticipantId(Long raceId, Long participantId);
 
+    int deleteByRaceId(Long raceId);
+
     // Upserts on the unique (race_id, device_measurement_id) index so that copying/archiving the
     // same race again is safe: it neither duplicates already-copied rows nor discards a re-measured
     // value, it overwrites the existing row with the current measurement data instead. Copying

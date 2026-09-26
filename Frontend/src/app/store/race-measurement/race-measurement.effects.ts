@@ -2,7 +2,7 @@ import {inject, Injectable} from "@angular/core";
 import {extractErrorMessage} from "../../utils/http-error.util";
 import {Actions, createEffect, ofType} from "@ngrx/effects";
 import {of} from "rxjs";
-import {catchError, map, mergeMap, switchMap} from "rxjs/operators";
+import {catchError, map, mergeMap, switchMap, tap} from "rxjs/operators";
 import {RaceMeasurementService} from "../../services/race-measurement.service";
 import * as RaceMeasurementActions from "./race-measurement.actions";
 
@@ -86,6 +86,95 @@ export class RaceMeasurementEffects {
                     ),
                 ),
             ),
+        ),
+    );
+
+    deleteAllRaceMeasurements$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(RaceMeasurementActions.deleteAllRaceMeasurements),
+            mergeMap(({raceId}) =>
+                this.raceMeasurementService.deleteAllOfRace(raceId).pipe(
+                    map(response => RaceMeasurementActions.deleteAllRaceMeasurementsSuccess({raceId, response})),
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.deleteAllRaceMeasurementsFailure({
+                                error: extractErrorMessage(
+                                    error,
+                                    "Archivierte Messungen konnten nicht gelöscht werden",
+                                ),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    exportRaceMeasurementsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(RaceMeasurementActions.exportRaceMeasurementsCsv),
+            mergeMap(({raceId}) =>
+                this.raceMeasurementService.exportCsv(raceId).pipe(
+                    map(blob =>
+                        RaceMeasurementActions.exportRaceMeasurementsCsvSuccess({
+                            blob,
+                            filename: `renn-messungen_${raceId}.csv`,
+                        }),
+                    ),
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.exportRaceMeasurementsCsvFailure({
+                                error: extractErrorMessage(error, "Export fehlgeschlagen"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    downloadExportedCsv$ = createEffect(
+        () =>
+            this.actions$.pipe(
+                ofType(RaceMeasurementActions.exportRaceMeasurementsCsvSuccess),
+                tap(({blob, filename}) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }),
+            ),
+        {dispatch: false},
+    );
+
+    importRaceMeasurementsCsv$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(RaceMeasurementActions.importRaceMeasurementsCsv),
+            mergeMap(({raceId, file, delimiter, mapping}) =>
+                this.raceMeasurementService.importMapped(raceId, file, delimiter, mapping).pipe(
+                    map(response => RaceMeasurementActions.importRaceMeasurementsCsvSuccess({raceId, response})),
+                    catchError(error =>
+                        of(
+                            RaceMeasurementActions.importRaceMeasurementsCsvFailure({
+                                error: extractErrorMessage(error, "Import fehlgeschlagen"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    // Both replace the race's whole table on the server, so the list is reloaded rather than patched.
+    reloadAfterBulkChange$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(
+                RaceMeasurementActions.deleteAllRaceMeasurementsSuccess,
+                RaceMeasurementActions.importRaceMeasurementsCsvSuccess,
+            ),
+            map(({raceId}) => RaceMeasurementActions.loadRaceMeasurements({raceId})),
         ),
     );
 }

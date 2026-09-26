@@ -1,15 +1,24 @@
 package x.timecontrol.Controller;
 
+import x.timecontrol.dto.ErrorResponse;
+import x.timecontrol.dto.MeasurementImportPreviewResponse;
+import x.timecontrol.dto.RaceMeasurementDeleteResponse;
+import x.timecontrol.dto.RaceMeasurementImportResponse;
 import x.timecontrol.dto.RaceMeasurementRequest;
 import x.timecontrol.dto.RaceMeasurementResponse;
 import x.timecontrol.dto.SyncMeasurementsResponse;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.RaceMeasurement;
 import x.timecontrol.services.ParticipantService;
+import x.timecontrol.services.RaceMeasurementCsvService;
 import x.timecontrol.services.RaceMeasurementService;
+import x.timecontrol.services.RaceService;
+import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
+import io.micronaut.http.multipart.CompletedFileUpload;
+import io.micronaut.json.JsonMapper;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -22,7 +31,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -36,6 +49,15 @@ public class RaceMeasurementController {
 
     @Inject
     ParticipantService participantService;
+
+    @Inject
+    RaceMeasurementCsvService csvService;
+
+    @Inject
+    RaceService raceService;
+
+    @Inject
+    JsonMapper jsonMapper;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get("/race/{raceId}")
@@ -137,5 +159,111 @@ public class RaceMeasurementController {
             );
             return HttpResponse.serverError().body(errorResponse);
         }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Delete("/race/{raceId}")
+    @Operation(summary = "Delete all archived measurements of a race",
+            description = "Deletes every archived measurement of the race, e.g. to archive it again from the measurement table or to restore a CSV backup. The participants' synced results are left unchanged.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Archived measurements deleted", content = @Content(schema = @Schema(implementation = RaceMeasurementDeleteResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<RaceMeasurementDeleteResponse> deleteAllOfRace(@PathVariable Long raceId) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        return HttpResponse.ok(new RaceMeasurementDeleteResponse(service.deleteByRaceId(raceId)));
+    }
+
+    @Produces("text/csv")
+    @Get("/race/{raceId}/export/csv")
+    @Operation(summary = "Export a race's archived measurements as CSV",
+            description = "Backup of the race's archived measurements with the columns deviceMeasurementId, raceNumber, lastName, firstName, durationMs, measuredAt. lastName/firstName are informational only. Restore it via POST /race-measurements/race/{raceId}/import-csv.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "CSV generated")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> exportCsv(@PathVariable Long raceId) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        return HttpResponse.ok(csvService.exportCsv(raceId).getBytes(StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"renn-messungen_" + raceId + ".csv\"");
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/race/{raceId}/import-preview")
+    @Operation(summary = "Preview a CSV of archived measurements for a race",
+            description = "Parses a CSV (any delimiter) and returns the detected source fields, a suggested mapping onto our fields (deviceMeasurementId, raceNumber, durationMs, measuredAt) and a few sample rows - for the column-mapping dialog. Nothing is saved.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Preview generated", content = @Content(schema = @Schema(implementation = MeasurementImportPreviewResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unreadable file")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> importPreview(@PathVariable Long raceId, @Part("file") CompletedFileUpload file,
+                                         @Part("delimiter") Optional<String> delimiter) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        try {
+            return HttpResponse.ok(csvService.previewImport(file.getBytes(), delimiterOf(delimiter)));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Post("/race/{raceId}/import-mapped")
+    @Operation(summary = "Replace a race's archived measurements with a CSV, using a column mapping",
+            description = "Deletes every archived measurement of the race and imports the rows of a CSV (any delimiter), reading our fields (deviceMeasurementId, raceNumber, durationMs, measuredAt) from the columns the mapping names; only durationMs is required. If mapping is omitted, the suggested mapping (see import-preview) is used - a file exported via export/csv maps itself. Participants are matched by raceNumber; a race number that matches nobody in the race is imported without participant and reported as a warning. The whole file is validated first: an invalid row rejects the import with 400 and leaves the race unchanged. The participants' synced results are not touched - sync afterwards.",
+            security = @SecurityRequirement(name = "BearerAuth"))
+    @ApiResponse(responseCode = "200", description = "Archived measurements replaced", content = @Content(schema = @Schema(implementation = RaceMeasurementImportResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Unreadable file, invalid mapping or invalid row - nothing was changed")
+    @ApiResponse(responseCode = "404", description = "Race not found")
+    public HttpResponse<?> importMapped(@PathVariable Long raceId, @Part("file") CompletedFileUpload file,
+                                        @Part("delimiter") Optional<String> delimiter,
+                                        @Part("mapping") Optional<String> mappingJson) {
+        if (!raceService.existsById(raceId)) {
+            return HttpResponse.notFound();
+        }
+        try {
+            RaceMeasurementCsvService.ImportResult result = csvService.importMapped(
+                    raceId, file.getBytes(), delimiterOf(delimiter), mappingOf(mappingJson));
+            return HttpResponse.ok(new RaceMeasurementImportResponse(
+                    result.importedCount(), result.withoutParticipantCount(), result.warnings()));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
+        } catch (IOException e) {
+            return HttpResponse.badRequest(new ErrorResponse("Failed to read the uploaded file: " + e.getMessage()));
+        }
+    }
+
+    private static Character delimiterOf(Optional<String> delimiter) {
+        return delimiter.filter(d -> !d.isEmpty()).map(d -> d.charAt(0)).orElse(null);
+    }
+
+    /**
+     * An omitted mapping means "use the suggested one" (null); an explicitly empty one maps nothing -
+     * the same distinction as MeasurementController#importMapped.
+     *
+     * @throws IllegalArgumentException if the mapping part is not a JSON object
+     */
+    private Map<String, String> mappingOf(Optional<String> mappingJson) {
+        if (mappingJson.isEmpty() || mappingJson.get().isBlank()) {
+            return null;
+        }
+        Map<?, ?> raw;
+        try {
+            raw = jsonMapper.readValue(mappingJson.get(), Map.class);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid mapping JSON: " + e.getMessage());
+        }
+        Map<String, String> mapping = new HashMap<>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (entry.getValue() != null) {
+                mapping.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+            }
+        }
+        return mapping;
     }
 }
