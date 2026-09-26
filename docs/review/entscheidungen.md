@@ -184,3 +184,79 @@ würde.
   Fix klein ist - das ist hier der Fall (Größe S). Solange dieser Eintrag steht, gilt E03 nicht mehr vollständig.
 - **Aufgehoben, wenn:** der Fix umgesetzt ist oder eine Veranstaltung mit Lizenznummern (z. B. DSV-Import) ansteht.
 - **Quelle:** Auswertungs-Review 2026-09-26 (B3), `RankingViewService#withPersonColumns`, `RaceLiveService#renderHtml`
+
+### E19 · Sync löscht nie ein Ergebnis (Bedienfehler)
+- **Bereich:** Zeitmessung, Zuordnung & Sync
+- **Entscheidung:** `ParticipantService#syncMeasurementsToParticipants` schreibt nur die Teilnehmer, auf die eine
+  Renn-Messung zeigt. Wird eine Renn-Messung nach einem Sync umgehängt, gelöscht oder auf „Kein Teilnehmer“ gesetzt,
+  behält der vorherige Teilnehmer seine Zeit; ein `clearResult` wird vom nächsten Sync zurückgeschrieben, solange die
+  Renn-Messung noch auf den Teilnehmer zeigt.
+- **Begründung:** Bedienfehler: wer nach dem Sync umhängt, korrigiert den alten Teilnehmer in der Teilnehmerliste.
+  **Achtung:** Die Folge (dieselbe Zeit an zwei Teilnehmern in der Ergebnisliste) fällt nach der Pflegeregel unter
+  „wird gefixt“; eingetragen auf Wunsch des Nutzers.
+- **Aufgehoben, wenn:** so eine doppelte Zeit in einer veröffentlichten Liste auftaucht - dann Teilnehmer ohne
+  Renn-Messung, die noch deren alte Zeit tragen, im Sync leeren und melden (Spec in `ParticipantServiceSpec`).
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B1)
+
+### E20 · Sync überschreibt eine Handzeit am Teilnehmer
+- **Bereich:** Zeitmessung, Zuordnung & Sync
+- **Entscheidung:** Der Sync schreibt Dauer und Zeitpunkt jeder zugeordneten Renn-Messung ohne Rückfrage auf den
+  Teilnehmer, auch wenn dort inzwischen eine Handzeit oder Korrektur steht. Status und Strafe bleiben.
+- **Begründung:** Die Renn-Messung ist die maßgebliche Zeit; wer korrigieren will, korrigiert sie in
+  „Zuordnung & Sync“.
+- **Aufgehoben, wenn:** Handzeiten am Teilnehmer regelmäßig neben Gerätezeiten gepflegt werden.
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B2)
+
+### E21 · Erneutes Archivieren übernimmt die Dauer aus „Messungen“
+- **Bereich:** Zeitmessung, Archivieren
+- **Entscheidung:** `RaceMeasurementRepository#copyFromMeasurements` überschreibt beim erneuten Archivieren Dauer und
+  Zeitpunkt einer bestehenden Renn-Messung mit dem Rohwert; nur der Teilnehmer bleibt (COALESCE). Eine Korrektur der
+  Dauer in „Zuordnung & Sync“ geht damit bei einem späteren Archiv desselben Rennens verloren.
+- **Begründung:** Korrekturen werden nach dem endgültigen Archiv gemacht, nicht zwischen Vorschau- und Endarchiv.
+  **Achtung:** Eine überschriebene Korrektur fällt nach der Pflegeregel unter „wird gefixt“; eingetragen auf Wunsch
+  des Nutzers.
+- **Aufgehoben, wenn:** das Vorschau-Archiv („ohne Löschen“) mit anschließender Korrektur üblich wird - dann die Dauer
+  bearbeiteter Zeilen genauso schützen wie den Teilnehmer.
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B3)
+
+### E22 · Zweites löschendes Archiv ins selbe Rennen (Bedienfehler)
+- **Bereich:** Zeitmessung, Archivieren
+- **Entscheidung:** Renn-Messungen sind über `(race_id, device_measurement_id)` eindeutig. Wird nach einem Archiv mit
+  Geräte-Reset erneut in dasselbe Rennen archiviert, überschreiben die neu ab 1 (bzw. -1 für Handeinträge) gezählten
+  Messungen die gleich nummerierten des ersten Archivs; der Teilnehmer der alten Zeile bleibt.
+- **Begründung:** Bedienfehler: nach einem löschenden Archiv wird nicht mehr in dasselbe Rennen archiviert,
+  Nachstarter werden von Hand eingetragen. **Achtung:** Dabei geht eine Zielzeit verloren und eine falsche steht in
+  der Liste - nach der Pflegeregel „wird gefixt“; eingetragen auf Wunsch des Nutzers.
+- **Aufgehoben, wenn:** Nachstarter oder ein zweiter Durchgang unter demselben Rennen archiviert werden sollen - dann
+  eine Archiv-Generation in den Unique-Index (Migration, Spec in `RaceMeasurementServiceSpec`).
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B4)
+
+### E23 · „Archivieren (nur Datenbank)“ mit abfragendem Gerät
+- **Bereich:** Zeitmessung, Archivieren
+- **Entscheidung:** Der Modus leert nur die Tabelle, nicht das Gerät. Ein abfragendes Gerät liefert beim nächsten
+  Poll seine ganze Liste erneut; die Zeiten stehen dann wieder unzugeordnet in „Messungen“. Gleiches gilt für
+  „Alle Messungen löschen (nur Datenbank)“.
+- **Begründung:** Der Modus ist für Geräte ohne Reset und für den NONE-Modus gedacht; der Bediener sieht die
+  zurückgekommenen Zeilen in „Messungen“.
+- **Aufgehoben, wenn:** der Modus bei einem abfragenden Gerät im Rennbetrieb benutzt wird.
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B5)
+
+### E24 · Zwei Renn-Messungen für einen Teilnehmer möglich
+- **Bereich:** Zeitmessung, Zuordnung & Sync
+- **Entscheidung:** `race_measurement` hat keinen Unique-Index auf `(race_id, participant_id)`. Über Kopie/Archiv (z. B.
+  Wiederholungslauf mit set-next `force` zwischen Vorschau- und Endarchiv) kann ein Teilnehmer zwei Zeilen bekommen;
+  der Sync schreibt dann beide, welche gewinnt, ist nicht festgelegt. Nur `PUT /race-measurements` verhindert die
+  Doppelzuordnung (409).
+- **Begründung:** Beide Zeilen stehen sichtbar in „Zuordnung & Sync“ und lassen sich dort bereinigen.
+- **Aufgehoben, wenn:** der Ablauf Vorschau-Archiv → Wiederholungslauf → Endarchiv üblich wird.
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B6)
+
+### E25 · Löschendes Archiv nimmt Zeiten anderer Rennen mit (Bedienfehler)
+- **Bereich:** Zeitmessung, Archivieren
+- **Entscheidung:** `copyFromMeasurements` kopiert alle Zeilen aus „Messungen“; Zeilen, die Teilnehmern eines anderen
+  Rennens zugeordnet sind, landen ohne Teilnehmer im gewählten Rennen, danach wird „Messungen“ geleert. Ins
+  eigentliche Rennen lassen sie sich nicht mehr übertragen.
+- **Begründung:** Bedienfehler: jedes Rennen wird archiviert, bevor das nächste gezeitet wird.
+- **Aufgehoben, wenn:** mehrere Rennen parallel ohne Archiv dazwischen gezeitet werden - dann ein löschendes Archiv mit
+  409 ablehnen, solange Zeilen fremder Rennen in der Tabelle liegen.
+- **Quelle:** Zeitmessungs-Review 2026-09-26 (B7)

@@ -11,6 +11,7 @@ import x.timecontrol.entities.Measurement;
 import x.timecontrol.services.AutoAssignService;
 import x.timecontrol.services.DeviceCapability;
 import x.timecontrol.services.DeviceImportGate;
+import x.timecontrol.services.DeviceResetFailedException;
 import x.timecontrol.services.MeasurementService;
 import x.timecontrol.services.ParticipantService;
 import x.timecontrol.services.PollingTimingImporter;
@@ -236,54 +237,43 @@ public class MeasurementController {
 
     @Delete("/reset")
     @Operation(summary = "Delete all measurements and optionally reset device",
-            description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, any pending measurements are pulled from the device first, then the device is reset. If the pull or the device reset fails (e.g. device unreachable), database is not deleted.",
+            description = "Deletes all measurements from the database and optionally resets the SKitiming Controller device at http://192.168.4.1/reset. If resetDevice=true, any pending measurements are pulled from the device first, then the database is cleared and the device reset as the last step of the same transaction. If the pull, the delete or the device reset fails (e.g. device unreachable), database is not deleted.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements deleted successfully")
     @ApiResponse(responseCode = "500", description = "Reset failed")
     public HttpResponse<?> resetAll(@QueryValue(defaultValue = "true") boolean resetDevice) {
         return importGate.pauseDuring(() -> {
             try {
-                // If device reset is requested AND a timing device is actually configured, do it
-                // first before deleting the database. No configured device just means there's
-                // nothing to reset - deleting measurements is a pure local-DB operation and must
-                // keep working in evaluation-only (NONE) mode, so this is not an error condition.
-                boolean deviceResetPerformed = false;
-                if (resetDevice) {
-                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter()
-                            // A device without a reset command (an ALGE clock on a serial line has
-                            // none) is treated exactly like no device: there is nothing to reset, so
-                            // the local wipe below proceeds instead of failing with a device error.
-                            .filter(i -> i.capabilities().contains(DeviceCapability.RESET));
-                    if (importerOpt.isPresent()) {
-                        TimingDataImporter importer = importerOpt.get();
-                        // Same reasoning as RaceController#archiveMeasurements: pull in anything the
-                        // device recorded since the last scheduled poll before wiping it, or that data
-                        // is silently lost - resetDevice() only sends the reset command, it never reads
-                        // data itself. Nothing to pull for a streaming provider: whatever the device
-                        // recorded has already been pushed and written.
-                        if (importer instanceof PollingTimingImporter polling) {
-                            polling.importDataFromDevice();
-                        }
-                        boolean deviceReset = importer.resetDevice();
-                        if (!deviceReset) {
-                            return HttpResponse.serverError()
-                                    .body(new ErrorResponse("Failed to reset device. Database was not modified."));
-                        }
-                        deviceResetPerformed = true;
-                    }
-                }
-
-                // Only delete database if device reset was successful (or not requested/not applicable)
-                service.deleteAll();
-
-                if (deviceResetPerformed) {
-                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
-                    // decides which confirmation to show by checking this message for the phrase
-                    // "device reset" (case-insensitive) - keep it if rewording this string.
-                    return HttpResponse.ok("Device reset and all measurements deleted successfully");
-                } else {
+                // No configured device just means there's nothing to reset - deleting measurements is
+                // a pure local-DB operation and must keep working in evaluation-only (NONE) mode, so
+                // this is not an error condition. A device without a reset command (an ALGE clock on
+                // a serial line has none) is treated exactly like no device.
+                Optional<TimingDataImporter> deviceToReset = resetDevice
+                        ? timingProviderRegistry.getActiveImporter().filter(i -> i.capabilities().contains(DeviceCapability.RESET))
+                        : Optional.empty();
+                if (deviceToReset.isEmpty()) {
+                    service.deleteAll();
                     return HttpResponse.ok("All measurements deleted successfully");
                 }
+
+                // Same reasoning as RaceController#archiveMeasurements: pull in anything the device
+                // recorded since the last scheduled poll before wiping it, or that data is silently
+                // lost - resetDevice() only sends the reset command, it never reads data itself.
+                // Nothing to pull for a streaming provider: whatever the device recorded has already
+                // been pushed and written.
+                TimingDataImporter device = deviceToReset.get();
+                if (device instanceof PollingTimingImporter polling) {
+                    polling.importDataFromDevice();
+                }
+                try {
+                    service.deleteAllAndResetDevice(device);
+                } catch (DeviceResetFailedException e) {
+                    return HttpResponse.serverError().body(new ErrorResponse(e.getMessage()));
+                }
+                // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                // decides which confirmation to show by checking this message for the phrase
+                // "device reset" (case-insensitive) - keep it if rewording this string.
+                return HttpResponse.ok("Device reset and all measurements deleted successfully");
             } catch (DataAccessException e) {
                 throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
             } catch (Exception e) {
