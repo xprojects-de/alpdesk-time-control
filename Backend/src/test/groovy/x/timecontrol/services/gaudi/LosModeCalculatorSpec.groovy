@@ -1,6 +1,8 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import spock.lang.Unroll
+import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiLosPairing
@@ -11,7 +13,9 @@ import x.timecontrol.entities.Person
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.entities.Team
 import x.timecontrol.repositories.GaudiLosPairingRepository
+import x.timecontrol.services.CategoryService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
 import x.timecontrol.services.StartGroupTemplateService
@@ -25,8 +29,10 @@ class LosModeCalculatorSpec extends Specification {
     GaudiLosPairingRepository pairingRepository = Mock()
     PersonService personService = Mock()
     TeamService teamService = Mock()
+    CategoryService categoryService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
-    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(startGroupTemplateService), teamService)
+    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(startGroupTemplateService),
+            teamService, categoryService)
 
     Race race = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
@@ -49,11 +55,13 @@ class LosModeCalculatorSpec extends Specification {
     // "last declared wins" tie-break does not reliably apply.
     def knownPersons = [:]
     def knownTeams = [:]
+    def knownCategories = [:]
 
     def setup() {
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
         personService.findByIds(_) >> { knownPersons }
         teamService.findByIds(_) >> { knownTeams }
+        categoryService.findByIds(_) >> { knownCategories }
     }
 
     def "the pair closest to the overall average wins, ranked ahead of a farther pair"() {
@@ -126,10 +134,10 @@ class LosModeCalculatorSpec extends Specification {
     }
 
     def "diffMs is derived from the printed (rounded) Ø-Werte, not from independently rounding the raw gap"() {
-        given: "overall average of all four participants (4083,4083,33525,33525) is 18804ms -> prints as 0:18.80; the tested pair's average is 4083ms -> prints as 0:04.08"
+        given: "the pair averages 4085ms -> prints as 0:04.09; the whole field (4080,4090,33520,33520) averages 18802.5ms -> prints as 0:18.80"
         def participants = [
-                participant(1L, 4083), participant(2L, 4083),   // this pair: average 4083ms
-                participant(3L, 33525), participant(4L, 33525), // only present to shift the overall average, not part of a tested pairing
+                participant(1L, 4080), participant(2L, 4090),   // this pair: average 4085ms
+                participant(3L, 33520), participant(4L, 33520), // only present to shift the overall average, not part of a tested pairing
         ]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
         knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
@@ -138,11 +146,11 @@ class LosModeCalculatorSpec extends Specification {
         when:
         def ranking = calculator.computeRanking(losMode(), races)
 
-        then: "the raw gap |4083-18804|=14721ms (the old, now-wrong behaviour) does not equal the difference of the two printed values 0:18.80-0:04.08=0:14.72=14720ms, which is what's now returned - alongside the printed averages themselves"
+        then: "the gap |4085-18802.5|=14717.5ms rounded on its own would be 0:14.72, but the two printed values differ by 0:18.80-0:04.09=0:14.71, which is what's returned - alongside the printed averages themselves"
         ranking.size() == 1
-        ranking[0].valueMs() == 4080
+        ranking[0].valueMs() == 4090
         ranking[0].referenceMs() == 18800
-        ranking[0].diffMs() == 14720
+        ranking[0].diffMs() == 14710
     }
 
     def "diffMs is derived from the printed values for POINTS races too, not just TIME"() {
@@ -190,6 +198,17 @@ class LosModeCalculatorSpec extends Specification {
         dns*.lastName() == ["C & D", "E (Einzel)"]
         dns*.status() == ["DNF", "DNS"]
 
+        and: "C's time still counts in the field average, so it is listed with the pair"
+        dns*.valueMs() == [80000, null]
+        dns*.notDrawn() == [false, false]
+
+        and: "each person of the pair on their own, the one who didn't finish with their own status"
+        dns[0].members()*.label() == ["C", "D"]
+        dns[0].members()*.valueMs() == [80000, null]
+        dns[0].members()*.status() == [null, "DNF"]
+        dns[1].members()*.label() == ["E"]
+        dns[1].members()*.status() == ["DNS"]
+
         and: "the ranking itself still only contains the complete pair"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
@@ -213,16 +232,70 @@ class LosModeCalculatorSpec extends Specification {
         then: "each on their own line with their own status - there is no partner they cost anything"
         dns*.lastName() == ["C", "D"]
         dns*.status() == ["DNS", "DSQ"]
+        dns*.valueMs() == [null, null]
+        dns*.notDrawn() == [true, true]
 
         and: "the drawn pair is unaffected"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
 
-    def "a pair average is rounded once, straight to the printed hundredth - not to a whole ms first"() {
-        given: "10004 and 10005 average 10004.5ms: rounding to 10005ms first would print 0:10.01, but the value is closer to 0:10.00"
+    def "someone with a result who is in no pair counts in the field average and is listed with that value"() {
+        given: "A and B were drawn; C was entered after the draw and rode 0:50.00"
+        def participants = [participant(1L, 60000), participant(2L, 70000), participant(3L, 50000)]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+        def dns = calculator.computeDnsEntries(losMode(), races)
+
+        then: "field average (60 + 70 + 50) / 3 = 60.00, pair average 65.00, Abweichung 5.00"
+        ranking.size() == 1
+        ranking[0].referenceMs() == 60000
+        ranking[0].valueMs() == 65000
+        ranking[0].diffMs() == 5000
+
+        and: "C is printed with the value the field average was built from, so it can be recomputed"
+        dns.size() == 1
+        dns[0].lastName() == "C"
+        dns[0].valueMs() == 50000
+        dns[0].status() == LosModeCalculator.NOT_DRAWN_STATUS
+        dns[0].notDrawn()
+        dns[0].members()*.valueMs() == [50000]
+        dns[0].members()*.status() == [LosModeCalculator.NOT_DRAWN_STATUS]
+    }
+
+    @Unroll
+    def "a pair average is built from the printed hundredths, so it can be recomputed from the PDF by hand (#v1 + #v2)"() {
+        given:
+        def participants = [participant(1L, v1), participant(2L, v2)]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then: "the printed values' average, commercially rounded - the raw ms would round the other way"
+        ranking[0].valueMs() == printedAverage
+
+        and: "each member carries the value that counted, i.e. the printed one"
+        ranking[0].time1Ms() == printed1
+        ranking[0].time2Ms() == printed2
+        ranking[0].members()*.valueMs() == [printed1, printed2]
+
+        where: "raw average 27:31.7025 / 0:10.0045, printed values average 27:31.705 / 0:10.005"
+        v1      | v2      | printed1 | printed2 | printedAverage
+        1130266 | 2173139 | 1130270  | 2173140  | 1651710 // 18:50.27 + 36:13.14 -> 27:31.71
+        10004   | 10005   | 10000    | 10010    | 10010   // 0:10.00 + 0:10.01 -> 0:10.01
+    }
+
+    def "the field average is built from the printed hundredths as well"() {
+        given: "raw average 10004.5ms would print 0:10.00, the printed values 0:10.01/0:10.00 average 0:10.005"
         def participants = [
-                participant(1L, 10004), participant(2L, 10005), // this pair: average 10004.5ms
-                participant(3L, 10000), participant(4L, 10000), // overall average 10002.25ms -> 0:10.00
+                participant(1L, 10005), participant(2L, 10004),
+                participant(3L, 10005), participant(4L, 10004),
         ]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
         knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
@@ -231,10 +304,41 @@ class LosModeCalculatorSpec extends Specification {
         when:
         def ranking = calculator.computeRanking(losMode(), races)
 
-        then: "pair and overall average both print as 0:10.00, so the pair hits the average exactly"
-        ranking.size() == 1
-        ranking[0].valueMs() == 10000
-        ranking[0].referenceMs() == 10000
-        ranking[0].diffMs() == 0
+        then:
+        ranking[0].referenceMs() == 10010
+    }
+
+    def "each pair carries its members one by one - own value, team, race number, birth year and category - for the PDF's one-line-per-person layout"() {
+        given:
+        def participants = [
+                new Participant(1L, 1L, 1L, 17, 1L, 5L, 60000, null, null, null),
+                new Participant(2L, 1L, 2L, 23, 2L, null, 120000, null, null, null),
+                new Participant(3L, 1L, 3L, null, null, null, 90000, null, null, null),
+        ]
+        pairingRepository.findByGaudiModeId(1L) >> [
+                new GaudiLosPairing(1L, 1L, 1L, 2L),
+                new GaudiLosPairing(2L, 1L, 3L, null),
+        ]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C")])
+        knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
+        knownCategories.putAll([5L: new Category(5L, "Snowboard")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+        def pair = ranking.find { it.members().size() == 2 }
+        def single = ranking.find { it.members().size() == 1 }
+
+        then:
+        pair.members()*.label() == ["A", "B"]
+        pair.members()*.valueMs() == [60000, 120000]
+        pair.members()*.team() == ["Team A", "Team B"]
+        pair.members()*.raceNumber() == [17, 23]
+        pair.members()*.birthYear() == [1990, 1990]
+        pair.members()*.category() == ["Snowboard", null]
+
+        and: "a self-paired leftover has just the one member, without a race number if none was given"
+        single.members()*.label() == ["C"]
+        single.members()[0].raceNumber() == null
     }
 }

@@ -13,19 +13,24 @@ import java.util.Optional;
 public interface AgeGroupRepository extends CrudRepository<AgeGroup, Long> {
 
     /**
-     * Every age group configured for one season - the lookup practically all resolution goes
+     * Every age group of one variant of one season - the lookup practically all resolution goes
      * through, since which classes apply depends on the season of the race being looked at (see
-     * {@link x.timecontrol.services.SeasonService}). {@link #findAll()} remains only for the
-     * configuration UI, which lists seasons side by side.
+     * {@link x.timecontrol.services.SeasonService}) and on the variant it picked.
+     * {@link #findAll()} remains only for the configuration UI, which lists seasons side by side.
      */
+    List<AgeGroup> findBySeasonYearAndVariant(Integer seasonYear, String variant);
+
+    Optional<AgeGroup> findByNameIgnoreCaseAndSeasonYearAndVariant(String name, Integer seasonYear, String variant);
+
+    /** Every variant's age groups of one season - for listing and checking the season's variants. */
     List<AgeGroup> findBySeasonYear(Integer seasonYear);
 
-    Optional<AgeGroup> findByNameIgnoreCaseAndSeasonYear(String name, Integer seasonYear);
+    void deleteBySeasonYearAndVariant(Integer seasonYear, String variant);
 
     /**
      * The distinct seasons that have any age group configured, newest first - what the
      * configuration UI offers as its season selector, and what
-     * {@link x.timecontrol.services.AgeGroupService#copySeason} offers as source seasons.
+     * {@link x.timecontrol.services.AgeGroupService#copyVariant} offers as source seasons.
      */
     @Query(value = "SELECT DISTINCT season_year FROM age_group ORDER BY season_year DESC", nativeQuery = true)
     List<Integer> findDistinctSeasonYears();

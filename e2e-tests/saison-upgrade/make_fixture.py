@@ -29,7 +29,10 @@ APPLIED = [
 ]
 
 # Must exist but must NOT be pre-applied: starting the instance is what runs these, in this order.
-PENDING = ["V3__add_start_group.sql", "V4__age_group_season.sql"]
+# V6 rebuilds age_group a second time (UNIQUE(name, season_year) -> UNIQUE(name, season_year,
+# variant)), so the same rows go through both rebuilds here.
+PENDING = ["V3__add_start_group.sql", "V4__age_group_season.sql", "V5__pdf_race_number_birth_year.sql",
+           "V6__age_group_variant.sql", "V7__pdf_race_number_birth_year_off.sql"]
 
 target = pathlib.Path(sys.argv[1])
 migrations = pathlib.Path(__file__).resolve().parents[2] / "Backend/src/main/resources/db/migration"

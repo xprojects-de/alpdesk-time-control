@@ -13,6 +13,10 @@ export const selectSeasonSettings = createSelector(selectSettingsState, state =>
 
 export const selectSeasonSaving = createSelector(selectSettingsState, state => state.seasonSaving);
 
+export const selectPdfExportSettings = createSelector(selectSettingsState, state => state.pdfExport);
+
+export const selectPdfExportSaving = createSelector(selectSettingsState, state => state.pdfExportSaving);
+
 export const selectSettingsError = createSelector(selectSettingsState, state => state.error);
 
 // Whether a timing device is configured (type !== NONE). null while settings are still loading -

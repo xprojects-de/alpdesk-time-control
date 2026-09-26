@@ -13,12 +13,13 @@ import x.timecontrol.entities.Person;
 import x.timecontrol.entities.PointsScale;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
-import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.PointsScaleService;
 import x.timecontrol.services.RankingService;
 import x.timecontrol.services.TeamService;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -47,17 +48,15 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
     private final PointsScaleService pointsScaleService;
     private final TeamService teamService;
     private final AgeGroupService ageGroupService;
-    private final SeasonService seasonService;
 
     public PointsCombinationModeCalculator(RankingService rankingService, PersonService personService,
                                             PointsScaleService pointsScaleService, TeamService teamService,
-                                            AgeGroupService ageGroupService, SeasonService seasonService) {
+                                            AgeGroupService ageGroupService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.pointsScaleService = pointsScaleService;
         this.teamService = teamService;
         this.ageGroupService = ageGroupService;
-        this.seasonService = seasonService;
     }
 
     @Override
@@ -88,7 +87,8 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Person> personsById = personService.findByIds(participantByPersonAndRace.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
-        record PersonResult(Long personId, String label, String externalId, int totalPoints, List<GaudiRankingLegResponse> legs, String team) {
+        record PersonResult(Long personId, String label, String externalId, int totalPoints, List<GaudiRankingLegResponse> legs, String team,
+                            Integer raceNumber, Integer birthYear) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -102,18 +102,20 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             }
 
             List<GaudiRankingLegResponse> legs = new ArrayList<>();
-            // Each leg's weighted points are kept as a double and only the total is rounded below -
+            // Each leg's weighted points are kept exact and only the total is rounded below -
             // rounding every leg separately compounds error across legs for a non-integer weight
             // (e.g. two legs at weight 0.5 would round 16.5 -> 17 twice instead of the correct 33),
             // which would otherwise flip close placings. Per-leg points shown in the response are
             // still rounded individually - only for display, the total below is not derived from them.
-            double weightedTotal = 0;
+            BigDecimal weightedTotal = BigDecimal.ZERO;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
                 Integer place = p != null ? placesByRace.get(race.raceId()).get(p.id()) : null;
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
-                double weightedPoints = place != null ? pointsScaleService.pointsForPlace(scalePoints, place) * race.weight() : 0;
-                weightedTotal += weightedPoints;
+                BigDecimal weightedPoints = place != null
+                        ? GaudiModeCalculator.weighted(pointsScaleService.pointsForPlace(scalePoints, place), race.weight())
+                        : BigDecimal.ZERO;
+                weightedTotal = weightedTotal.add(weightedPoints);
                 // A leg without a place shows its effective DSQ/DNF/DNS status (falling back to the
                 // generic "DNS" for a missing Participant record or a status-less missing result) -
                 // only reachable here at all when that status's own keep*InRanking flag kept the
@@ -127,18 +129,19 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                         p != null ? p.penalty() : null,
                         adjusted,
                         place,
-                        (int) Math.round(weightedPoints),
+                        roundHalfUp(weightedPoints),
                         legStatus,
                         p != null ? rankingService.startGroupOffsetMs(race.race(), p) : null
                 ));
             }
-            int totalPoints = (int) Math.round(weightedTotal);
+            int totalPoints = roundHalfUp(weightedTotal);
 
             Optional<Person> person = Optional.ofNullable(personsById.get(personId));
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace, teamsById);
-            results.add(new PersonResult(personId, label, externalId, totalPoints, legs, team));
+            results.add(new PersonResult(personId, label, externalId, totalPoints, legs, team,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
         results.sort(Comparator.comparingInt(PersonResult::totalPoints).reversed());
@@ -160,7 +163,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
                     r.team(),
                     null,
                     r.personId(),
-                    r.externalId()
+                    r.externalId(),
+                    r.raceNumber(),
+                    r.birthYear()
             ));
         }
 
@@ -195,10 +200,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        // Scoped to the season these races are scored in; a combination spanning two is scored
-        // against the first race's season, which SeasonService also reports (see #scoringSeasonOf).
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.scoringSeasonOf(races.stream().map(RaceParticipants::race).toList()));
+        // Scoped to the season and variant these races are scored in; a combination spanning two is
+        // scored against the first race's (see AgeGroupService#findForScoring).
+        List<AgeGroup> ageGroups = ageGroupService.findForScoring(races.stream().map(RaceParticipants::race).toList());
         Map<Long, Person> personsById = personService.findByIds(notRanked.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(notRanked));
 
@@ -210,8 +214,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             String firstName = person.map(Person::firstName).orElse("");
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), p.gender(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
-            String status = rankingService.dnsStatusLabel(byRace.values());
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status));
+            String status = exclusionStatus(gaudiMode, races, byRace, placesByRace).name();
+            dns.add(GaudiDnsEntryResponse.ofPerson(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
@@ -248,6 +253,36 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
         }
         return requiredRaces.stream().allMatch(race ->
                 hasValidPlace(race, byRace, placesByRace) || isTolerated(gaudiMode, effectiveStatus(byRace.get(race.raceId()))));
+    }
+
+    /**
+     * Why a person is on the "nicht gewertet" list: the status of the first counted leg (in the
+     * configured race order) that {@link #isEligibleForRanking} could not accept - a leg without a
+     * place whose status no keep*InRanking flag tolerates. A tolerated DSQ in leg 1 is therefore
+     * not the reason when the person was never entered in leg 2; the printed "DSQ" would read as
+     * if the operator's flag had been ignored. Only when every bad leg is tolerated (the person
+     * has no valid result anywhere) the first bad leg's status is reported.
+     */
+    private static DisqualificationStatus exclusionStatus(GaudiMode gaudiMode, List<RaceParticipants> races,
+                                                          Map<Long, Participant> byRace, Map<Long, Map<Long, Integer>> placesByRace) {
+        DisqualificationStatus firstBadLeg = null;
+        for (RaceParticipants race : races) {
+            if (race.weight() == 0 || hasValidPlace(race, byRace, placesByRace)) {
+                continue;
+            }
+            DisqualificationStatus status = effectiveStatus(byRace.get(race.raceId()));
+            if (!isTolerated(gaudiMode, status)) {
+                return status;
+            }
+            if (firstBadLeg == null) {
+                firstBadLeg = status;
+            }
+        }
+        return firstBadLeg != null ? firstBadLeg : DisqualificationStatus.DNS;
+    }
+
+    private static int roundHalfUp(BigDecimal points) {
+        return points.setScale(0, RoundingMode.HALF_UP).intValue();
     }
 
     private static boolean hasValidPlace(RaceParticipants race, Map<Long, Participant> byRace,

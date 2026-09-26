@@ -49,7 +49,6 @@ public class GaudiModeService {
     private final RaceService raceService;
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
-    private final SeasonService seasonService;
     private final Map<GaudiModeType, GaudiModeCalculator> calculatorsByType;
     private final TransactionOperations<Connection> transactionOperations;
 
@@ -60,7 +59,6 @@ public class GaudiModeService {
                              RaceService raceService,
                              PersonService personService,
                              AgeGroupService ageGroupService,
-                             SeasonService seasonService,
                              List<GaudiModeCalculator> calculators,
                              TransactionOperations<Connection> transactionOperations) {
         this.repository = repository;
@@ -70,7 +68,6 @@ public class GaudiModeService {
         this.raceService = raceService;
         this.personService = personService;
         this.ageGroupService = ageGroupService;
-        this.seasonService = seasonService;
         this.calculatorsByType = new EnumMap<>(GaudiModeType.class);
         for (GaudiModeCalculator calculator : calculators) {
             this.calculatorsByType.put(calculator.getType(), calculator);
@@ -275,6 +272,11 @@ public class GaudiModeService {
                 throw new IllegalArgumentException("All races combined in a TIME_COMBINATION must use the same sort direction");
             }
         }
+        // With every weight at 0 no race counts, and PointsCombinationModeCalculator would rank the
+        // whole field - people without any result included - on place 1 with 0 points.
+        if (type == GaudiModeType.POINTS_COMBINATION && races.stream().noneMatch(entry -> entry.weight() == null || entry.weight() > 0)) {
+            throw new IllegalArgumentException("At least one race of a POINTS_COMBINATION must have a weight above 0");
+        }
         if (type == GaudiModeType.TEAM && (teamSize == null || teamSize < 1)) {
             throw new IllegalArgumentException("teamSize must be at least 1 for TEAM mode");
         }
@@ -460,13 +462,13 @@ public class GaudiModeService {
             }
         }
 
-        // Only the season of these races applies - an age class means different birth years in
-        // different seasons, so filtering by the class name "U14" is only meaningful within one.
-        // A Gaudi-Modus spanning several is scored against the first race's season (SeasonService
-        // #scoringSeasonOf); one whose races have all been deleted has nothing to
+        // Only the season and variant of these races apply - an age class means different birth
+        // years in different seasons and variants, so filtering by the class name "U14" is only
+        // meaningful within one. A Gaudi-Modus spanning several is scored against the first race's
+        // (AgeGroupService#findForScoring); one whose races have all been deleted has nothing to
         // categorise against, and personIds is empty then anyway.
         List<AgeGroup> ageGroups = filterAgeGroup != null && !races.isEmpty()
-                ? ageGroupService.findBySeason(seasonService.scoringSeasonOf(races))
+                ? ageGroupService.findForScoring(races)
                 : List.of();
         Map<Long, Person> personsById = personService.findByIds(personIds);
 

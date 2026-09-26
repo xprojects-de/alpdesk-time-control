@@ -21,9 +21,11 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.AgeGroupService;
 import x.timecontrol.services.CategoryService;
 import x.timecontrol.services.DeviceCapability;
 import x.timecontrol.services.DeviceImportGate;
+import x.timecontrol.services.DeviceResetFailedException;
 import x.timecontrol.services.PollingTimingImporter;
 import x.timecontrol.services.RaceLiveService;
 import x.timecontrol.services.RaceMeasurementService;
@@ -63,6 +65,9 @@ public class RaceController {
 
     @Inject
     SeasonService seasonService;
+
+    @Inject
+    AgeGroupService ageGroupService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -135,7 +140,8 @@ public class RaceController {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
         try {
-            Race race = service.createFromRequest(request);
+            Race race = service.createFromRequest(request, null);
+            ageGroupService.assertVariantSelectable(race, null);
             Race created = service.create(race);
             return HttpResponse.created(RaceResponse.from(created, seasonService.seasonOf(created)));
         } catch (IllegalArgumentException e) {
@@ -161,9 +167,14 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
+        Optional<Race> existing = service.findById(id);
+        if (existing.isEmpty()) {
+            return HttpResponse.notFound();
+        }
         Optional<Race> updated;
         try {
-            Race race = service.createFromRequest(request);
+            Race race = service.createFromRequest(request, existing.get());
+            ageGroupService.assertVariantSelectable(race, existing.get());
             updated = service.update(id, race, Boolean.TRUE.equals(request.removeCoverPage()));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));
@@ -194,7 +205,7 @@ public class RaceController {
 
     @Post("/{raceId}/archive-measurements")
     @Operation(summary = "Archive current measurements into this race, optionally clearing the measurement table",
-            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset first (if pulling pending measurements or the device reset fails, e.g. device unreachable, no data is copied or deleted). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
+            description = "Copies all rows from the measurement table into race_measurement (tagged with this race's ID, using their own independent IDs). If clearAfterArchive is true (default), the measurement table is cleared afterwards so a new race can be measured right away, optionally resetting the SKitiming Controller device at http://192.168.4.1/reset as the last step of the same transaction (if pulling pending measurements, the copy or the device reset fails, e.g. device unreachable, no data is copied or deleted and the device is left as it was). If clearAfterArchive is false, the measurement table and device are left untouched and can be cleared/reset manually later; resetDevice is ignored in that case.",
             security = @SecurityRequirement(name = "BearerAuth"))
     @ApiResponse(responseCode = "200", description = "Measurements archived successfully")
     @ApiResponse(responseCode = "404", description = "Race not found")
@@ -221,43 +232,35 @@ public class RaceController {
 
         return importGate.pauseDuring(() -> {
             try {
-                // If device reset is requested AND a timing device is actually configured, pull in
-                // anything the device recorded since the last scheduled poll before wiping it -
-                // resetDevice() only sends the reset command, it never reads data itself, and
-                // pausing the scheduler above stops future polls but doesn't retroactively catch up
-                // on the last cycle. No configured device just means there's nothing to reset -
-                // archiving must keep working in evaluation-only (NONE) mode.
-                boolean deviceResetPerformed = false;
-                if (resetDevice) {
-                    // A device that has no reset command is treated like no device at all - see
-                    // MeasurementController#resetAll.
-                    Optional<TimingDataImporter> importerOpt = timingProviderRegistry.getActiveImporter()
-                            .filter(i -> i.capabilities().contains(DeviceCapability.RESET));
-                    if (importerOpt.isPresent()) {
-                        TimingDataImporter importer = importerOpt.get();
-                        // Nothing to pull for a streaming provider: it has already pushed whatever
-                        // the device recorded.
-                        if (importer instanceof PollingTimingImporter polling) {
-                            polling.importDataFromDevice();
-                        }
-                        boolean deviceReset = importer.resetDevice();
-                        if (!deviceReset) {
-                            return HttpResponse.serverError()
-                                    .body(new ErrorResponse("Failed to reset device. Measurements were not archived."));
-                        }
-                        deviceResetPerformed = true;
-                    }
-                }
-
-                raceMeasurementService.archiveMeasurements(raceId);
-                if (deviceResetPerformed) {
-                    // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
-                    // decides which confirmation to show by checking this message for the phrase
-                    // "device reset" (case-insensitive) - keep it if rewording this string.
-                    return HttpResponse.ok("Measurements archived and device reset successfully");
-                } else {
+                // No configured device just means there's nothing to reset - archiving must keep
+                // working in evaluation-only (NONE) mode. A device that has no reset command is
+                // treated like no device at all - see MeasurementController#resetAll.
+                Optional<TimingDataImporter> deviceToReset = resetDevice
+                        ? timingProviderRegistry.getActiveImporter().filter(i -> i.capabilities().contains(DeviceCapability.RESET))
+                        : Optional.empty();
+                if (deviceToReset.isEmpty()) {
+                    raceMeasurementService.archiveMeasurements(raceId);
                     return HttpResponse.ok("Measurements archived successfully");
                 }
+
+                // Pull in anything the device recorded since the last scheduled poll before wiping it -
+                // resetDevice() only sends the reset command, it never reads data itself, and pausing
+                // the scheduler above stops future polls but doesn't retroactively catch up on the last
+                // cycle. Nothing to pull for a streaming provider: it has already pushed whatever the
+                // device recorded.
+                TimingDataImporter device = deviceToReset.get();
+                if (device instanceof PollingTimingImporter polling) {
+                    polling.importDataFromDevice();
+                }
+                try {
+                    raceMeasurementService.archiveMeasurementsAndResetDevice(raceId, device);
+                } catch (DeviceResetFailedException e) {
+                    return HttpResponse.serverError().body(new ErrorResponse(e.getMessage()));
+                }
+                // Frontend contract: measurement-list.component.ts's deviceWasResetFromMessage()
+                // decides which confirmation to show by checking this message for the phrase
+                // "device reset" (case-insensitive) - keep it if rewording this string.
+                return HttpResponse.ok("Measurements archived and device reset successfully");
             } catch (DataAccessException e) {
                 throw e; // let GlobalExceptionHandler produce a consistent, non-leaking response
             } catch (Exception e) {

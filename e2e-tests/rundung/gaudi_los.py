@@ -1,8 +1,9 @@
 """Step 5: Gaudi-Modus Los-Modus over 4 dedicated participants, drawn into pairs by the backend
 (random - see config.py for why the exact pairing doesn't matter). Independently recomputes every
-returned pairing's "Abweichung" using the FIXED formula (round each side to the printed hundredth,
-THEN subtract - matching LosModeCalculator/RankingService#roundForDisplay) and cross-checks it
-EXACTLY (no tolerance) against the API response, including the place assigned from it.
+returned pairing's "Abweichung" the way LosModeCalculator does - every individual time rounded to
+the printed hundredth first, the averages built from those, each average rounded to the hundredth,
+THEN subtracted (RankingService#roundForDisplay) - and cross-checks it EXACTLY (no tolerance)
+against the API response, including the place assigned from it.
 
 Math note: Java's Math.round() rounds a `.5` boundary UP (away from zero), not to-even like Python's
 built-in round() - round_for_display() below replicates Java's rule explicitly. 33525/10=3352.5 is
@@ -52,7 +53,9 @@ status, ranking = c.get(config.BASE, token, f"/gaudi-modes/{gm_id}/ranking")
 assert status == 200, ranking
 print(f"{len(ranking)} Paare in der Wertung (aus {len(config.LOS_PARTICIPANTS)} Teilnehmern)")
 
-overall_average_ms = sum(durations_by_lastname.values()) / len(durations_by_lastname)
+# The averages are built from the printed hundredths, not the raw ms (LosModeCalculator#printedValue).
+printed_by_lastname = {ln: round_for_display(ms) for ln, ms in durations_by_lastname.items()}
+overall_average_ms = sum(printed_by_lastname.values()) / len(printed_by_lastname)
 overall_display = round_for_display(overall_average_ms)
 print(f"Gesamtdurchschnitt: {overall_average_ms}ms -> gedruckt {overall_display}ms")
 
@@ -62,7 +65,7 @@ for entry in ranking:
     # label is "Lastname Firstname [& Lastname Firstname]" - both members' raw times are known from
     # durations_by_lastname, so the pairing itself (random) doesn't need to be predicted up front.
     lastnames = [part.split(" ")[0] for part in entry["label"].replace(" (Einzel)", "").split(" & ")]
-    values = [durations_by_lastname[ln] for ln in lastnames if ln in durations_by_lastname]
+    values = [printed_by_lastname[ln] for ln in lastnames if ln in printed_by_lastname]
     if len(values) != len(lastnames):
         problems.append(("Unbekannter Name im Los-Ranking", entry["label"]))
         continue
@@ -72,8 +75,8 @@ for entry in ranking:
     expected_diff = abs(pair_display - overall_display)
     expected_diffs.append(expected_diff)
 
-    # valueMs/referenceMs are the PRINTED averages - rounded once, straight from the raw average to
-    # the hundredth (no intermediate rounding to a whole ms).
+    # valueMs/referenceMs are the PRINTED averages - the average of the printed values, rounded
+    # once more to the hundredth.
     if entry.get("valueMs") != pair_display:
         problems.append((entry["label"], "valueMs", f"erwartet {pair_display}", entry.get("valueMs")))
     if entry.get("referenceMs") != overall_display:

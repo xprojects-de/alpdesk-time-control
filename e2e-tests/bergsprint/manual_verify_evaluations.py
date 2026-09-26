@@ -69,10 +69,11 @@ for gender in ("FEMALE", "MALE"):
 
         # --- actual, parsed out of the PDF ---------------------------------------------------
         # The export drops columns that are empty for the whole section (no external ID, no
-        # penalty here), so anchor on the LAST time column ("Gesamt", = "Wert" without penalties)
+        # penalty here), and the "StNr." column after the place is optional (a setting), so
+        # anchor on the LAST time column ("Gesamt", = "Wert" without penalties)
         # followed by the "Diff" column.
         row_re = re.compile(
-            r"^\s*(\d+)\s+(\S+\s+\S+)\s+.*?(\d+:\d{2}\.\d{2})\s+([-+]\d+:\d{2}\.\d{2}|-)\s*$")
+            r"^\s*(\d+)\s+(?:(?:\d+|-)\s+)?(\S+\s+\S+)\s+.*?(\d+:\d{2}\.\d{2})\s+([-+]\d+:\d{2}\.\d{2}|-)\s*$")
         actual = []
         for line in body.splitlines():
             m = row_re.match(line)
@@ -110,3 +111,4 @@ print(f"\nAbweichungen: {len(problems)}")
 for p in problems:
     print("  ", p)
 print("\nSCHRITT 4: " + ("ALLES KORREKT" if not problems else "ABWEICHUNGEN"))
+sys.exit(1 if problems else 0)

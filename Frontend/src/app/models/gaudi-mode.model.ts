@@ -93,6 +93,24 @@ export interface GaudiNotRankedEntry {
     ageGroup: string;
     externalId?: string;
     status: string;
+    /** Los-Modus: a value that still counts in the field average although it belongs to no ranked pair. */
+    valueMs?: number;
+    /** Los-Modus: the participant is in no drawn pair. */
+    notDrawn?: boolean;
+    /** Los-Modus: the persons of this entry one by one (both members of an excluded pair, or the undrawn participant). */
+    members?: GaudiNotRankedMember[];
+}
+
+/** One person of a Los-Modus "nicht gewertet" entry. */
+export interface GaudiNotRankedMember {
+    label: string;
+    valueMs?: number;
+    team?: string;
+    raceNumber?: number;
+    birthYear?: number;
+    category?: string;
+    /** DSQ/DNF/DNS or "nicht ausgelost"; absent for the member of an excluded pair who did finish. */
+    status?: string;
 }
 
 export interface GaudiRankingEntry {

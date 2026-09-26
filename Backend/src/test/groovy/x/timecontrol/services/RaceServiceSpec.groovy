@@ -1,6 +1,7 @@
 package x.timecontrol.services
 
 import spock.lang.Specification
+import x.timecontrol.dto.RaceRequest
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
@@ -22,6 +23,13 @@ class RaceServiceSpec extends Specification {
         new Race(id, "Rennen $id", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, previousRaceId,
                 previousRaceId != null ? StartOrderMode.REVERSE_TOP_N : null, previousRaceId != null ? 15 : null)
+    }
+
+    private static RaceRequest request(String ageGroupVariant, StartOrderMode startOrderMode = null,
+                                       Integer startOrderReverseTopCount = null) {
+        new RaceRequest("Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null, null, null, null,
+                ResultUnit.TIME, null, SortDirection.ASC, null, null, null, startOrderMode, startOrderReverseTopCount,
+                ageGroupVariant)
     }
 
     def "update rejects a race linking to itself"() {
@@ -94,16 +102,67 @@ class RaceServiceSpec extends Specification {
 
     def "createFromRequest drops startOrderMode/startOrderReverseTopCount when previousRaceId is not set"() {
         given:
-        def request = new x.timecontrol.dto.RaceRequest("Rennen", LocalDate.of(2026, 1, 1), null, null, null,
-                null, null, null, null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null,
-                null, StartOrderMode.REVERSE_TOP_N, 15)
+        def request = request(null, StartOrderMode.REVERSE_TOP_N, 15)
 
         when:
-        def race = service.createFromRequest(request)
+        def race = service.createFromRequest(request, null)
 
         then: "startOrderMode/Count are meaningless without a link, so they're dropped rather than stored orphaned"
         race.previousRaceId() == null
         race.startOrderMode() == null
         race.startOrderReverseTopCount() == null
+    }
+
+    def "createFromRequest for a new race stores the age-group variant trimmed, and the standard one when none is given"() {
+        expect:
+        service.createFromRequest(request(requested), null).ageGroupVariant() == stored
+
+        where:
+        requested                          | stored
+        null                               | ""
+        ""                                 | ""
+        " Kinderrennen jahrgangsweise "    | "Kinderrennen jahrgangsweise"
+    }
+
+    def "createFromRequest for an update keeps the stored variant when the request omits it, but an explicit value wins"() {
+        given: "the kids' race is on its variant"
+        def stored = new Race(1L, "Kinderrennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "live-1", "Kinder")
+
+        expect: "a client that does not know about variants cannot move it back to the standard classes"
+        service.createFromRequest(request(requested), stored).ageGroupVariant() == result
+
+        where:
+        requested | result
+        null      | "Kinder"
+        ""        | ""
+        "Alt"     | "Alt"
+    }
+
+    def "update stores the newly picked age-group variant and keeps the live token"() {
+        given:
+        def existing = new Race(1L, "Rennen 1", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "live-1", "")
+        repository.findById(1L) >> Optional.of(existing)
+        repository.findByNameIgnoreCase(_) >> Optional.empty()
+        repository.update(_ as Race) >> { Race r -> r }
+
+        when:
+        def result = service.update(1L, service.createFromRequest(request("Kinder"), existing), false)
+
+        then:
+        result.get().ageGroupVariant() == "Kinder"
+        result.get().liveToken() == "live-1"
+    }
+
+    def "create keeps the picked age-group variant when it generates the live token"() {
+        given:
+        repository.findByNameIgnoreCase(_) >> Optional.empty()
+
+        when:
+        service.create(service.createFromRequest(request("Kinder"), null))
+
+        then:
+        1 * repository.save({ Race r -> r.ageGroupVariant() == "Kinder" && r.liveToken() != null }) >> { Race r -> r }
     }
 }

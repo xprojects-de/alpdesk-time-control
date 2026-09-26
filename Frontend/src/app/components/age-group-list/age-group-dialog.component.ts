@@ -6,15 +6,16 @@ import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
 import {MatSelectModule} from "@angular/material/select";
-import {AgeGroup, AgeGroupRequest} from "../../models/age-group.model";
+import {AgeGroup, AgeGroupRequest, STANDARD_VARIANT, variantLabel} from "../../models/age-group.model";
 
 /**
- * An existing age group to edit, or just the season a new one is being created in - the dialog
- * always needs the season, since a class's birth years are only meaningful together with it.
+ * An existing age group to edit, or just the season and variant a new one is being created in -
+ * the dialog always needs both, since a class's birth years are only meaningful together with them.
  */
 export interface AgeGroupDialogData {
     ageGroup: AgeGroup | null;
     seasonYear: number;
+    variant: string;
 }
 import {Gender, GenderLabels} from "../../models/gender.model";
 import {notBlank} from "../../utils/validators.util";
@@ -34,6 +35,9 @@ import {notBlank} from "../../utils/validators.util";
         <h2 mat-dialog-title>
             {{ data.ageGroup ? "Altersgruppe bearbeiten" : "Neue Altersgruppe" }}
             <span class="season-badge">Saison {{ data.seasonYear }}</span>
+            @if (data.variant !== standardVariant) {
+                <span class="season-badge">{{ label(data.variant) }}</span>
+            }
         </h2>
         <mat-dialog-content>
             <form [formGroup]="form" class="age-group-form">
@@ -54,8 +58,11 @@ import {notBlank} from "../../utils/validators.util";
                      editable would be the one way to write a group into a season the table next to
                      it does not show. Switching seasons goes through the season selector. -->
                 <p class="season-note">
-                    Diese Geburtsjahrgänge gelten für <strong>Saison {{ data.seasonYear }}</strong
-                    >. Für eine andere Saison oben die Saison wechseln.
+                    Diese Geburtsjahrgänge gelten für <strong>Saison {{ data.seasonYear }}</strong>
+                    @if (data.variant !== standardVariant) {
+                        in der Variante <strong>{{ label(data.variant) }}</strong>
+                    }
+                    . Für eine andere Saison oder Variante oben umschalten.
                 </p>
 
                 <mat-form-field appearance="outline">
@@ -148,6 +155,8 @@ export class AgeGroupDialogComponent {
     public data = inject<AgeGroupDialogData>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    standardVariant = STANDARD_VARIANT;
+    label = variantLabel;
     genderOptions = [
         {value: Gender.FEMALE, label: GenderLabels[Gender.FEMALE]},
         {value: Gender.MALE, label: GenderLabels[Gender.MALE]},
@@ -194,6 +203,7 @@ export class AgeGroupDialogComponent {
                 // From the dialog data, not from the form: editing keeps the group's own season,
                 // creating uses the one on screen - changing it here is not offered (see template).
                 seasonYear: this.data.ageGroup?.seasonYear ?? this.data.seasonYear,
+                variant: this.data.ageGroup?.variant ?? this.data.variant,
                 gender: formValue.gender,
                 birthYearFrom: Number(formValue.birthYearFrom),
                 birthYearTo: Number(formValue.birthYearTo),

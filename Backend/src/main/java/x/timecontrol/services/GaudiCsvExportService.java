@@ -36,16 +36,13 @@ public class GaudiCsvExportService {
 
     private final PersonService personService;
     private final AgeGroupService ageGroupService;
-    private final SeasonService seasonService;
     private final RankingViewService rankingViewService;
 
     public GaudiCsvExportService(PersonService personService,
                                  AgeGroupService ageGroupService,
-                                 SeasonService seasonService,
                                  RankingViewService rankingViewService) {
         this.personService = personService;
         this.ageGroupService = ageGroupService;
-        this.seasonService = seasonService;
         this.rankingViewService = rankingViewService;
     }
 
@@ -91,10 +88,10 @@ public class GaudiCsvExportService {
                 .collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
         // The header race is the Gaudi-Modus' first race, which is exactly the one
-        // {@link SeasonService#scoringSeasonOf} resolves the calculators' season from - so a combination
-        // spanning two seasons prints the same classes here as the ranking it accompanies, rather
-        // than each side picking its own.
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonService.seasonOf(headerRace));
+        // {@link AgeGroupService#findForScoring} resolves the calculators' season and variant from -
+        // so a combination spanning two seasons or variants prints the same classes here as the
+        // ranking it accompanies, rather than each side picking its own.
+        List<AgeGroup> ageGroups = ageGroupService.findForScoring(List.of(headerRace));
 
         StringBuilder csv = new StringBuilder();
         csv.append(String.join(String.valueOf(DELIMITER), HEADER)).append('\n');

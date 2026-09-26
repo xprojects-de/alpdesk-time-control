@@ -35,7 +35,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 sleep 6
 echo ""
 echo "Health check:"
-curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/" || true
+curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/watchdog" || true
 curl -s -o /dev/null -w "  device port $DEVICE_PORT: HTTP %{http_code}\n" "http://localhost:$DEVICE_PORT/ping" || true
 echo ""
 echo "To stop: pkill -f 'time-control.jar' && pkill -f 'fake_device.py'"

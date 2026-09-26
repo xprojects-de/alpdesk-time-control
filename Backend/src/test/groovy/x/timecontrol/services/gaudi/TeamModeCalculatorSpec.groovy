@@ -223,4 +223,23 @@ class TeamModeCalculatorSpec extends Specification {
         ranking*.valueMs() == [20000, 20000]
         ranking*.place() == [1, 1]
     }
+
+    def "each counted member carries race number and birth year for the PDF's member sub-table"() {
+        given:
+        knownTeams.putAll([1L: new Team(1L, "Team A")])
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def participants = [
+                new Participant(1L, 1L, 1L, 17, 1L, null, 60000, null, null, null),
+                new Participant(2L, 1L, 2L, null, 1L, null, 50000, null, null, null),
+        ]
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race(SortDirection.ASC), 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(teamMode(2), races)
+
+        then: "best first, as counted"
+        ranking[0].members()*.label() == ["B", "A"]
+        ranking[0].members()*.raceNumber() == [null, 17]
+        ranking[0].members()*.birthYear() == [1990, 1990]
+    }
 }

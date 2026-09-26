@@ -11,6 +11,7 @@ const zeitrennen: Race = {
     resultUnit: ResultUnit.TIME,
     sortDirection: SortDirection.ASC,
     hasCoverPage: false,
+    ageGroupVariant: "",
 };
 
 const punkterennen: Race = {...zeitrennen, resultUnit: ResultUnit.POINTS, sortDirection: SortDirection.DESC};

@@ -125,10 +125,10 @@ def parse_pdf_places(pdf_bytes, tmp_name):
         if line.strip().startswith("Nicht gewertet"):
             in_dns = True
             continue
-        m = re.match(r"^\s*(\d+)\s+.*?\b(\d{4,6})\b", line)
-        if not m:
+        row = c.pdf_row_place_and_id(line)
+        if not row:
             continue
-        num, ext_id = m.group(1), m.group(2)
+        num, ext_id = row
         if in_dns:
             dns_ids.add(ext_id)
         else:
@@ -177,3 +177,4 @@ if __name__ == "__main__":
 
     print()
     print("ALLES KORREKT" if all_ok else "ES GIBT ABWEICHUNGEN - siehe oben")
+    sys.exit(0 if all_ok else 1)

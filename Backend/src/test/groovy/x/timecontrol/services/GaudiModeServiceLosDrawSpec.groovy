@@ -2,14 +2,12 @@ package x.timecontrol.services
 
 import io.micronaut.transaction.TransactionOperations
 import spock.lang.Specification
-import x.timecontrol.entities.AppSettings
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.GaudiLosPairing
 import x.timecontrol.entities.GaudiMode
 import x.timecontrol.entities.GaudiModeRace
 import x.timecontrol.entities.GaudiModeType
 import x.timecontrol.entities.Participant
-import x.timecontrol.entities.TimingProviderType
 import x.timecontrol.repositories.GaudiLosPairingRepository
 import x.timecontrol.repositories.GaudiModeRaceRepository
 import x.timecontrol.repositories.GaudiModeRepository
@@ -34,13 +32,8 @@ class GaudiModeServiceLosDrawSpec extends Specification {
     RaceService raceService = Mock()
     TransactionOperations transactionOperations = Mock()
 
-    SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
-    }
-    SeasonService seasonService = new SeasonService(settingsService, raceService)
-
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
-            raceService, Mock(PersonService), Mock(AgeGroupService), seasonService, [], transactionOperations)
+            raceService, Mock(PersonService), Mock(AgeGroupService), [], transactionOperations)
 
     static final GaudiMode LOS = new GaudiMode(1L, GaudiModeType.LOS, "Losrennen", null, null,
             false, false, false, LocalDateTime.now())

@@ -60,17 +60,40 @@ public class RankingViewService {
         this.startGroupTemplateService = startGroupTemplateService;
     }
 
+    /**
+     * {@code raceNumber}/{@code birthYear} are "-" when unset. These rows are also what the
+     * anonymous public live view serves, so {@code RaceLiveService} drops both - to null, via
+     * {@link #withPersonColumns} - unless the operator's switches in {@code AppSettings} show them,
+     * exactly as the printed results do; a birth year (mostly of minors) never reaches a public page
+     * the operator did not choose to print it on.
+     */
     @Serdeable
     public record RankingEntry(int place, String name, String externalId, String ageGroup, String team,
                                 String valueFormatted, String penaltyFormatted, String totalFormatted,
-                                String diffFormatted, boolean hasPenalty) {
+                                String diffFormatted, boolean hasPenalty,
+                                @Nullable String raceNumber, @Nullable String birthYear) {
+
+        public RankingEntry withPersonColumns(boolean showRaceNumber, boolean showBirthYear) {
+            return new RankingEntry(place, name, externalId, ageGroup, team, valueFormatted, penaltyFormatted,
+                    totalFormatted, diffFormatted, hasPenalty,
+                    showRaceNumber ? raceNumber : null, showBirthYear ? birthYear : null);
+        }
     }
 
     @Serdeable
-    public record StartListEntry(String raceNumber, String name, String birthYear, String gender,
+    public record StartListEntry(String raceNumber, String name, @Nullable String birthYear, String gender,
                                   String ageGroup, String team, String category, boolean hasCategory,
                                   String startGroupLabel, @Nullable String startGroupColor, boolean hasStartGroup,
                                   String startGroupOffset) {
+
+        /**
+         * Only the birth year can be dropped (to null): a start list is read by race number, so
+         * that one always stays - see PdfExportService#startListColumns.
+         */
+        public StartListEntry withBirthYear(boolean showBirthYear) {
+            return new StartListEntry(raceNumber, name, showBirthYear ? birthYear : null, gender, ageGroup, team,
+                    category, hasCategory, startGroupLabel, startGroupColor, hasStartGroup, startGroupOffset);
+        }
     }
 
     /**
@@ -78,9 +101,17 @@ public class RankingViewService {
      * lacking a valid result. {@code position} is this row's position within the list itself, not
      * a race number. {@code status} is the actual reason ("DSQ"/"DNF"/"DNS" - see
      * {@link RankingService#dnsStatusLabel(Participant)}), not always literally "DNS".
+     * {@code raceNumber}/{@code birthYear} follow the operator's switches in the live view, as on
+     * {@link RankingEntry}.
      */
     @Serdeable
-    public record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status) {
+    public record DnsRow(int position, String name, String externalId, String ageGroup, String team, String status,
+                         @Nullable String raceNumber, @Nullable String birthYear) {
+
+        public DnsRow withPersonColumns(boolean showRaceNumber, boolean showBirthYear) {
+            return new DnsRow(position, name, externalId, ageGroup, team, status,
+                    showRaceNumber ? raceNumber : null, showBirthYear ? birthYear : null);
+        }
     }
 
     public record PersonTeamLookup(Map<Long, Person> personsById, Map<Long, Team> teamsById) {
@@ -121,7 +152,7 @@ public class RankingViewService {
      * classes it was run under rather than whatever is configured now.
      */
     public List<AgeGroup> loadAgeGroups(Race race) {
-        return ageGroupService.findBySeason(seasonService.seasonOf(race));
+        return ageGroupService.findBySeasonAndVariant(seasonService.seasonOf(race), race.ageGroupVariant());
     }
 
     public List<Category> sortedCategories() {
@@ -226,9 +257,9 @@ public class RankingViewService {
         List<StartListEntry> entries = new ArrayList<>();
         for (Participant p : sorted) {
             Person person = personsById.get(p.personId());
-            String raceNumber = p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+            String raceNumber = formatRaceNumber(p);
             String name = formatName(person);
-            String birthYear = person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
+            String birthYear = formatBirthYear(person);
             String gender = person != null ? genderLabel(person.gender()) : "-";
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             String team = p.teamId() != null
@@ -310,7 +341,9 @@ public class RankingViewService {
                     formatPenalty(race, p.penalty()),
                     formatValue(race, adjustedValue),
                     diff != null ? (diff >= 0 ? "+" : "-") + formatValue(race, Math.abs(diff)) : "-",
-                    p.penalty() != null && p.penalty() != 0
+                    p.penalty() != null && p.penalty() != 0,
+                    formatRaceNumber(p),
+                    formatBirthYear(person)
             ));
         }
 
@@ -405,9 +438,17 @@ public class RankingViewService {
                     : "-";
             String ageGroup = person != null ? calculateAgeGroup(person.birthDate(), person.gender(), ageGroups) : "Unbekannt";
             rows.add(new DnsRow(i + 1, formatName(person), person != null ? person.externalId() : null, ageGroup, team,
-                    rankingService.dnsStatusLabel(p)));
+                    rankingService.dnsStatusLabel(p), formatRaceNumber(p), formatBirthYear(person)));
         }
         return rows;
+    }
+
+    private static String formatRaceNumber(Participant p) {
+        return p.raceNumber() != null ? String.valueOf(p.raceNumber()) : "-";
+    }
+
+    private static String formatBirthYear(Person person) {
+        return person != null && person.birthDate() != null ? String.valueOf(person.birthDate().getYear()) : "-";
     }
 
     public static String formatTime(Integer timeMs) {
@@ -416,8 +457,9 @@ public class RankingViewService {
         // Round to the nearest 10ms (hundredth of a second) before splitting into
         // minutes/seconds/hundredths, rather than truncating - a thousandths digit >= 5 rounds the
         // hundredths up, otherwise down, and a carry (e.g. 0:00.996 -> 0:01.00) falls out correctly
-        // since it's applied to the total milliseconds first.
-        int roundedMs = Math.round(timeMs / 10.0f) * 10;
+        // since it's applied to the total milliseconds first. The same routine RankingService ties
+        // places on and the Los-Modus averages from, so a printed time is always that value.
+        int roundedMs = (int) RankingService.roundToTensOfMs(timeMs);
         int totalSeconds = roundedMs / 1000;
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;

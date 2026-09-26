@@ -1,8 +1,8 @@
-import {Component, computed, inject, input, output, effect, signal} from "@angular/core";
+import {Component, computed, DestroyRef, inject, input, output, effect, signal} from "@angular/core";
 import {CommonModule} from "@angular/common";
 import {Store} from "@ngrx/store";
 import {Actions, ofType} from "@ngrx/effects";
-import {Observable} from "rxjs";
+import {map, Observable} from "rxjs";
 import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {MatTableModule} from "@angular/material/table";
 import {MatButtonModule} from "@angular/material/button";
@@ -13,6 +13,7 @@ import {MatCardModule} from "@angular/material/card";
 import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatTooltipModule} from "@angular/material/tooltip";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
+import {MatDialog, MatDialogModule} from "@angular/material/dialog";
 import {
     GaudiCsvExportVariant,
     GaudiLosPairing,
@@ -22,10 +23,23 @@ import {
     GaudiRankingEntry,
     GaudiRankingLeg,
 } from "../../models/gaudi-mode.model";
+import {variantLabel} from "../../models/age-group.model";
 import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as GaudiModeActions from "../../store/gaudi-mode/gaudi-mode.actions";
+import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
 import {selectAllRaces} from "../../store/race/race.selectors";
+
+/** One line of the "Nicht gewertet" table. */
+interface NotRankedRow {
+    position: number;
+    /** First line of its entry - only it shows the position. */
+    first: boolean;
+    name: string;
+    team?: string;
+    valueMs?: number;
+    status: string;
+}
 
 @Component({
     selector: "app-gaudi-mode-detail",
@@ -40,6 +54,7 @@ import {selectAllRaces} from "../../store/race/race.selectors";
         MatProgressSpinnerModule,
         MatTooltipModule,
         MatSnackBarModule,
+        MatDialogModule,
     ],
     template: `
         <mat-card class="detail-card">
@@ -71,6 +86,17 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                             <strong>{{ seasonSpanInfo.scoredIn }}</strong> ausgewertet - der des ersten Rennens. Sollen
                             die Rennen zur selben Saison gehören, passe unter <strong>Einstellungen</strong> den
                             Saisonstart an.
+                        </span>
+                    </div>
+                } @else if (variantSpan(); as variantSpanInfo) {
+                    <div class="season-span-warning">
+                        <mat-icon>warning</mat-icon>
+                        <span>
+                            Die Rennen dieser Wertung verwenden verschiedene Altersklassen-Varianten ({{
+                                variantSpanInfo.all.join(", ")
+                            }}). Ausgewertet wird nach <strong>{{ variantSpanInfo.scoredIn }}</strong> - der Variante
+                            des ersten Rennens. Sollen alle gleich gewertet werden, wähle in den Rennen dieselbe
+                            Variante.
                         </span>
                     </div>
                 }
@@ -307,8 +333,8 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                                     <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.referenceMs) }}</td>
                                 </ng-container>
                                 <ng-container matColumnDef="diffMs">
-                                    <th mat-header-cell *matHeaderCellDef>Abweichung</th>
-                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
+                                    <th mat-header-cell *matHeaderCellDef>Abweichung (±)</th>
+                                    <td mat-cell *matCellDef="let r">{{ signedDiffDisplay(r) }}</td>
                                 </ng-container>
                                 @if (gaudiMode().type === gaudiModeType.TEAM) {
                                     <ng-container matColumnDef="members">
@@ -327,24 +353,50 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 
                 @if ((notRanked$ | async)?.length) {
                     <h3 class="not-ranked-title">Nicht gewertet</h3>
+                    @if (undrawnWithResultCount((notRanked$ | async) || []); as undrawnCount) {
+                        <div class="season-span-warning">
+                            <mat-icon>warning</mat-icon>
+                            <span>
+                                {{ undrawnCount }}
+                                {{
+                                    undrawnCount === 1
+                                        ? "Teilnehmer hat eine Zeit, ist aber in keinem Paar"
+                                        : "Teilnehmer haben eine Zeit, sind aber in keinem Paar"
+                                }}
+                                (z.&nbsp;B. nach der Auslosung nachgemeldet). Jede solche Zeit zählt in den Ø-Wert
+                                Gesamt und steht mit ihrem Wert unter „Nicht gewertet“. Für eine Wertung im Paar muss
+                                neu ausgelost werden.
+                            </span>
+                        </div>
+                    }
                     <div class="table-container">
-                        <table mat-table [dataSource]="(notRanked$ | async) || []" class="detail-table">
+                        <table mat-table [dataSource]="(notRankedRows$ | async) || []" class="detail-table">
+                            <ng-container matColumnDef="position">
+                                <th mat-header-cell *matHeaderCellDef>Position</th>
+                                <td mat-cell *matCellDef="let r">{{ r.first ? r.position : "" }}</td>
+                            </ng-container>
                             <ng-container matColumnDef="name">
-                                <th mat-header-cell *matHeaderCellDef>
-                                    {{ gaudiMode().type === gaudiModeType.LOS ? "Paarung" : "Name" }}
-                                </th>
-                                <td mat-cell *matCellDef="let e">{{ notRankedName(e) }}</td>
+                                <th mat-header-cell *matHeaderCellDef>Name</th>
+                                <td mat-cell *matCellDef="let r">{{ r.name }}</td>
                             </ng-container>
                             <ng-container matColumnDef="team">
                                 <th mat-header-cell *matHeaderCellDef>Team</th>
-                                <td mat-cell *matCellDef="let e">{{ e.team || "-" }}</td>
+                                <td mat-cell *matCellDef="let r">{{ r.team || "-" }}</td>
+                            </ng-container>
+                            <ng-container matColumnDef="value">
+                                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                                <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.valueMs) }}</td>
                             </ng-container>
                             <ng-container matColumnDef="status">
                                 <th mat-header-cell *matHeaderCellDef>Status</th>
-                                <td mat-cell *matCellDef="let e">{{ e.status }}</td>
+                                <td mat-cell *matCellDef="let r">{{ r.status }}</td>
                             </ng-container>
-                            <tr mat-header-row *matHeaderRowDef="notRankedColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: notRankedColumns"></tr>
+                            <tr mat-header-row *matHeaderRowDef="notRankedColumns()"></tr>
+                            <tr
+                                mat-row
+                                *matRowDef="let row; columns: notRankedColumns()"
+                                [class.pair-continued]="!row.first"
+                            ></tr>
                         </table>
                     </div>
                 }
@@ -395,6 +447,15 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                 margin: 8px 0;
             }
 
+            /* The second person of a pair joins the line above it, so a pair reads as one block. */
+            .detail-table tr.pair-continued td {
+                border-top: none;
+            }
+
+            .detail-table tr:has(+ tr.pair-continued) td {
+                border-bottom-style: dotted;
+            }
+
             .hint {
                 color: rgba(0, 0, 0, 0.6);
                 font-style: italic;
@@ -405,6 +466,8 @@ import {selectAllRaces} from "../../store/race/race.selectors";
 export class GaudiModeDetailComponent {
     private store = inject(Store);
     private snackBar = inject(MatSnackBar);
+    private dialog = inject(MatDialog);
+    private destroyRef = inject(DestroyRef);
     private actions$ = inject(Actions);
 
     gaudiMode = input.required<GaudiMode>();
@@ -417,9 +480,19 @@ export class GaudiModeDetailComponent {
     legColumns: {raceId: number; raceName: string}[] = [];
 
     pairing$: Observable<GaudiLosPairing[]> = this.store.select(GaudiModeSelectors.selectPairing);
+    private pairing = this.store.selectSignal(GaudiModeSelectors.selectPairing);
     ranking$: Observable<GaudiRankingEntry[]> = this.store.select(GaudiModeSelectors.selectRanking);
     notRanked$: Observable<GaudiNotRankedEntry[]> = this.store.select(GaudiModeSelectors.selectNotRanked);
-    notRankedColumns = ["name", "team", "status"];
+    notRankedRows$: Observable<NotRankedRow[]> = this.notRanked$.pipe(map(entries => this.toNotRankedRows(entries)));
+    /**
+     * Los-Modus lists one line per person, like the PDF - numbered pairs, with "Wert", the one mode
+     * whose not-ranked values still count (in the field average).
+     */
+    notRankedColumns = computed(() =>
+        this.gaudiMode().type === GaudiModeType.LOS
+            ? ["position", "name", "team", "value", "status"]
+            : ["name", "team", "status"],
+    );
 
     trackByPairingId = (_index: number, pairing: GaudiLosPairing) => pairing.id;
 
@@ -456,6 +529,21 @@ export class GaudiModeDetailComponent {
             .filter((season): season is number => season != null);
         const distinct = [...new Set(seasons)].sort((a, b) => a - b);
         return distinct.length > 1 ? {scoredIn: seasons[0], all: distinct} : null;
+    });
+
+    /**
+     * The age-group variants this mode's races use - null as long as there is only one. Like
+     * seasons, the backend scores against the first race's variant (AgeGroupService#findForScoring).
+     * Only looked at within one season: across seasons, seasonSpan already explains the mismatch.
+     */
+    variantSpan = computed(() => {
+        const byId = new Map(this.races().map(r => [r.id, r]));
+        const variants = this.gaudiMode()
+            .races.map(r => byId.get(r.raceId)?.ageGroupVariant)
+            .filter((variant): variant is string => variant != null)
+            .map(variantLabel);
+        const distinct = [...new Set(variants)];
+        return distinct.length > 1 ? {scoredIn: variants[0], all: distinct} : null;
     });
 
     constructor() {
@@ -516,7 +604,37 @@ export class GaudiModeDetailComponent {
         this.closed.emit();
     }
 
+    /**
+     * A redraw throws away pairs that may already be posted or announced at the venue, so it asks
+     * first; the very first draw has nothing to lose and runs straight away.
+     */
     draw(): void {
+        if (!this.pairing()?.length) {
+            this.runDraw();
+            return;
+        }
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    title: "Neu auslosen?",
+                    message:
+                        "Die bestehende Auslosung wird verworfen und alle Paare werden neu gezogen. Eine bereits " +
+                        "ausgehängte oder verkündete Paarung stimmt danach nicht mehr.",
+                    confirmLabel: "Neu auslosen",
+                    confirmColor: "warn",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    this.runDraw();
+                }
+            });
+    }
+
+    private runDraw(): void {
         this.store.dispatch(GaudiModeActions.drawPairing({id: this.gaudiMode().id}));
         this.snackBar.open("Auslosung wird durchgeführt...", "OK", {duration: 2000});
     }
@@ -575,6 +693,42 @@ export class GaudiModeDetailComponent {
     private buildFilename(gaudiMode: GaudiMode, suffix: string, extension = "pdf"): string {
         const base = `gaudi_${gaudiMode.name.replace(/\s+/g, "_").toLowerCase()}`;
         return suffix ? `${base}_${suffix}.${extension}` : `${base}.${extension}`;
+    }
+
+    undrawnWithResultCount(entries: GaudiNotRankedEntry[]): number {
+        return entries.filter(e => e.notDrawn && e.valueMs !== undefined && e.valueMs !== null).length;
+    }
+
+    /**
+     * One row per person: a Los-Modus entry (a pair, or someone who was not drawn) is split into its
+     * members; the other modes' entries already are one person each.
+     */
+    private toNotRankedRows(entries: GaudiNotRankedEntry[]): NotRankedRow[] {
+        const rows: NotRankedRow[] = [];
+        entries.forEach((entry, index) => {
+            if (!entry.members?.length) {
+                rows.push({
+                    position: index + 1,
+                    first: true,
+                    name: this.notRankedName(entry),
+                    team: entry.team,
+                    status: entry.status,
+                });
+                return;
+            }
+            const single = !entry.notDrawn && entry.members.length === 1;
+            entry.members.forEach((member, memberIndex) =>
+                rows.push({
+                    position: index + 1,
+                    first: memberIndex === 0,
+                    name: single ? `${member.label} (Einzel)` : member.label,
+                    team: member.team,
+                    valueMs: member.valueMs,
+                    status: member.status ?? "",
+                }),
+            );
+        });
+        return rows;
     }
 
     /** Los-Modus puts the whole pair label into lastName (firstName empty). */
@@ -680,6 +834,19 @@ export class GaudiModeDetailComponent {
             return entry.totalPoints !== undefined && entry.totalPoints !== null ? String(entry.totalPoints) : "-";
         }
         return this.singleRaceValueDisplay(entry.valueMs);
+    }
+
+    /**
+     * Los-Modus "Abweichung" with the side of the field average the pair landed on: "-" below,
+     * "+" above. Only the distance counts for the place, so -0.20 and +0.20 tie. The sign comes
+     * from the two printed averages, which the backend rounds before diffMs is taken from them.
+     */
+    signedDiffDisplay(entry: GaudiRankingEntry): string {
+        const diff = this.singleRaceValueDisplay(entry.diffMs);
+        if (!entry.diffMs || entry.valueMs == null || entry.referenceMs == null) {
+            return diff;
+        }
+        return (entry.valueMs < entry.referenceMs ? "-" : "+") + diff;
     }
 
     /**

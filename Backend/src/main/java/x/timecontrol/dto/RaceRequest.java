@@ -75,6 +75,10 @@ public record RaceRequest(
 
         @Nullable
         @Schema(description = "Number of top-placed previousRaceId finishers (per age group) to start in reverse order when startOrderMode is REVERSE_TOP_N", example = "15", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
-        Integer startOrderReverseTopCount
+        Integer startOrderReverseTopCount,
+
+        @Nullable
+        @Schema(description = "Age-group variant of the race's season this race is categorised with. Empty means the season's standard variant; any other value must have age groups in that season. Omitted keeps the race's current variant on an update (the standard one for a new race).", example = "Kinderrennen jahrgangsweise", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        String ageGroupVariant
 ) {
 }

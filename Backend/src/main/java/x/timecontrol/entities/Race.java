@@ -44,7 +44,12 @@ public record Race(
         // Opaque, unguessable identifier for this race's public live-results URLs
         // (RaceLiveController) - deliberately unrelated to `id` so those URLs can't be walked by
         // incrementing/guessing a number. Always set by RaceService before a race is first saved.
-        String liveToken
+        String liveToken,
+
+        // Which age-group variant of its season this race is categorised with (see
+        // AgeGroup#variant); AgeGroup.STANDARD_VARIANT unless the operator picked another one. The
+        // season itself is never stored - it always comes from the date.
+        String ageGroupVariant
 ) {
     /**
      * Legacy 19-arg constructor predating liveToken, kept so the many call sites (mostly tests)
@@ -61,6 +66,22 @@ public record Race(
                 @Nullable StartOrderMode startOrderMode, @Nullable Integer startOrderReverseTopCount) {
         this(id, name, date, organisation, referee, raceDirector, timeControl, routeName, elevationDifference,
                 routeLength, courseSetter, weather, resultUnit, resultUnitLabel, sortDirection, coverPagePdf,
-                previousRaceId, startOrderMode, startOrderReverseTopCount, null);
+                previousRaceId, startOrderMode, startOrderReverseTopCount, null, AgeGroup.STANDARD_VARIANT);
+    }
+
+    /**
+     * Legacy 20-arg constructor predating ageGroupVariant, kept for the same reason as the one
+     * above: the race is categorised with its season's standard variant.
+     */
+    public Race(Long id, String name, LocalDate date, @Nullable String organisation, @Nullable String referee,
+                @Nullable String raceDirector, @Nullable String timeControl, @Nullable String routeName,
+                @Nullable String elevationDifference, @Nullable String routeLength, @Nullable String courseSetter,
+                @Nullable String weather, ResultUnit resultUnit, @Nullable String resultUnitLabel,
+                SortDirection sortDirection, @Nullable byte[] coverPagePdf, @Nullable Long previousRaceId,
+                @Nullable StartOrderMode startOrderMode, @Nullable Integer startOrderReverseTopCount,
+                String liveToken) {
+        this(id, name, date, organisation, referee, raceDirector, timeControl, routeName, elevationDifference,
+                routeLength, courseSetter, weather, resultUnit, resultUnitLabel, sortDirection, coverPagePdf,
+                previousRaceId, startOrderMode, startOrderReverseTopCount, liveToken, AgeGroup.STANDARD_VARIANT);
     }
 }

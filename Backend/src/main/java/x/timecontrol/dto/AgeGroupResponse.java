@@ -1,5 +1,6 @@
 package x.timecontrol.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.AgeGroup;
@@ -17,6 +18,11 @@ public record AgeGroupResponse(
         @Schema(description = "Season this configuration is valid for", example = "2026")
         Integer seasonYear,
 
+        // ALWAYS: the standard variant is "", which Serde would otherwise leave out as empty.
+        @JsonInclude(JsonInclude.Include.ALWAYS)
+        @Schema(description = "Variant of the season this age group belongs to; empty for the season's standard variant", example = "")
+        String variant,
+
         @Schema(description = "Starting birth year for range", example = "1985")
         Integer birthYearFrom,
 
@@ -31,6 +37,7 @@ public record AgeGroupResponse(
                 ageGroup.id(),
                 ageGroup.name(),
                 ageGroup.seasonYear(),
+                ageGroup.variant(),
                 ageGroup.birthYearFrom(),
                 ageGroup.birthYearTo(),
                 ageGroup.gender()

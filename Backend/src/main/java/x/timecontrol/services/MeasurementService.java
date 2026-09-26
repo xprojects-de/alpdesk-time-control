@@ -5,6 +5,7 @@ import x.timecontrol.dto.MeasurementImportRowError;
 import x.timecontrol.entities.Measurement;
 import x.timecontrol.repositories.MeasurementRepository;
 import jakarta.inject.Singleton;
+import jakarta.transaction.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -138,12 +139,30 @@ public class MeasurementService {
         measurementTableLock.run(() -> repository.deleteById(id));
     }
 
-    @jakarta.transaction.Transactional
+    @Transactional
     public void deleteAll() {
+        measurementTableLock.run(this::clearTable);
+    }
+
+    /**
+     * Resets the device as the last step inside the transaction that clears the table - see
+     * RaceMeasurementService#archiveMeasurementsAndResetDevice for why it must not come first.
+     *
+     * @throws DeviceResetFailedException if the device does not confirm the reset; nothing is deleted
+     */
+    @Transactional
+    public void deleteAllAndResetDevice(TimingDataImporter device) {
         measurementTableLock.run(() -> {
-            repository.deleteAll();
-            repository.resetSequence();
+            clearTable();
+            if (!device.resetDevice()) {
+                throw new DeviceResetFailedException("Failed to reset device. Database was not modified.");
+            }
         });
+    }
+
+    private void clearTable() {
+        repository.deleteAll();
+        repository.resetSequence();
     }
 
     public Measurement upsertByDeviceMeasurementId(Long deviceMeasurementId, Long participantId, Integer durationMs, java.time.LocalDateTime measuredAt) {

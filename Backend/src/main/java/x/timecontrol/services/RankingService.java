@@ -97,11 +97,11 @@ public class RankingService {
     }
 
     /**
-     * Same as {@link #dnsStatusLabel(Participant)}, but for a Gaudi-Modus person who is excluded
-     * for missing a valid result in at least one of several combined races: reports the first leg
-     * that actually carries an explicit status (DSQ/DNF/DNS), since a single person can only be
-     * shown with one label even though the reason may differ per leg. Falls back to the generic
-     * "DNS" when none of their legs has an explicit status.
+     * Same as {@link #dnsStatusLabel(Participant)}, but for a Los-Modus pair that is excluded because
+     * a member has no valid result: reports the first given member that carries an explicit status
+     * (DSQ/DNF/DNS), since one pair line can only show one label. Falls back to the generic "DNS"
+     * when none has an explicit status. The multi-race modes pick their reason per leg themselves
+     * (the leg that actually excluded the person, see their calculators).
      */
     public String dnsStatusLabel(Collection<Participant> legParticipants) {
         for (Participant participant : legParticipants) {
@@ -155,7 +155,7 @@ public class RankingService {
         return roundForDisplay(race, adjustedValue(race, participant));
     }
 
-    private static double roundToTensOfMs(double valueMs) {
+    static double roundToTensOfMs(double valueMs) {
         return Math.round(valueMs / 10.0) * 10.0;
     }
 

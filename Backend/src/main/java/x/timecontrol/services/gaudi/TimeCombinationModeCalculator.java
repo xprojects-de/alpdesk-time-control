@@ -8,16 +8,17 @@ import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.entities.Participant;
 import x.timecontrol.entities.AgeGroup;
+import x.timecontrol.entities.DisqualificationStatus;
 import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.SortDirection;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
-import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
 import x.timecontrol.services.TeamService;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -42,15 +43,13 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
     private final PersonService personService;
     private final TeamService teamService;
     private final AgeGroupService ageGroupService;
-    private final SeasonService seasonService;
 
     public TimeCombinationModeCalculator(RankingService rankingService, PersonService personService,
-                                         TeamService teamService, AgeGroupService ageGroupService, SeasonService seasonService) {
+                                         TeamService teamService, AgeGroupService ageGroupService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.teamService = teamService;
         this.ageGroupService = ageGroupService;
-        this.seasonService = seasonService;
     }
 
     @Override
@@ -63,6 +62,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         if (races.isEmpty()) {
             return List.of();
         }
+        assertLegsComparable(races);
 
         Map<Long, Map<Long, Integer>> placesByRace = GaudiModeCalculator.computePlacesByRace(rankingService, races);
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
@@ -72,7 +72,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         record PersonResult(Long personId, String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs,
-                            String team) {
+                            String team, Integer raceNumber, Integer birthYear) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -98,16 +98,17 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             // hundredth for TIME races, RankingService#roundForDisplay) - summing the raw ms
             // instead would let the combined total disagree with the printed legs: 10.004s four
             // times prints as 10.00 each but sums to 40.016 -> 40.02, tying someone who printed
-            // 10.01 four times. The weighted sum is accumulated as a double and rounded only once
+            // 10.01 four times. The weighted sum is accumulated exactly and rounded only once
             // at the end (not per leg) - rounding each weighted leg separately compounds error
             // across legs for a non-integer weight (e.g. two legs at weight 0.5 would round
             // 16.5 -> 17 twice instead of the correct 33).
-            double weightedTotal = 0;
+            BigDecimal weightedTotal = BigDecimal.ZERO;
             for (RaceParticipants race : races) {
                 Participant p = byRace.get(race.raceId());
                 Integer adjusted = p != null ? rankingService.adjustedValue(race.race(), p) : null;
                 if (adjusted != null) {
-                    weightedTotal += rankingService.roundForDisplay(race.race(), adjusted) * race.weight();
+                    weightedTotal = weightedTotal.add(
+                            GaudiModeCalculator.weighted(rankingService.roundForDisplay(race.race(), adjusted), race.weight()));
                 }
                 legs.add(new GaudiRankingLegResponse(
                         race.raceId(),
@@ -127,16 +128,19 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             // Rueckstand) is the double rounding that method's javadoc warns about: with a
             // non-integer race weight, 9904.5ms would become 9905ms and print as 0:09.91, although
             // the value itself is closer to 0:09.90.
-            int total = rankingService.roundForDisplay(races.getFirst().race(), weightedTotal);
+            // The exact sum is a multiple of the typed weights' decimals, so a half hundredth
+            // (e.g. 3605 ms) is still exactly representable as a double here.
+            int total = rankingService.roundForDisplay(races.getFirst().race(), weightedTotal.doubleValue());
 
             Optional<Person> person = Optional.ofNullable(personsById.get(personId));
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace, teamsById);
-            results.add(new PersonResult(personId, label, externalId, total, legs, team));
+            results.add(new PersonResult(personId, label, externalId, total, legs, team,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
-        // GaudiModeService.validate() guarantees every combined race shares the same sortDirection,
+        // assertLegsComparable() guarantees every combined race shares the same sortDirection,
         // so the first race's direction applies to the combined total too - without this, a
         // TIME_COMBINATION over DESC (higher-is-better, e.g. points) races would always rank
         // ascending and award the win to the worst total instead of the best, mirroring the
@@ -168,7 +172,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     r.team(),
                     null,
                     r.personId(),
-                    r.externalId()
+                    r.externalId(),
+                    r.raceNumber(),
+                    r.birthYear()
             ));
         }
 
@@ -186,6 +192,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         if (races.isEmpty()) {
             return List.of();
         }
+        assertLegsComparable(races);
 
         Map<Long, Map<Long, Participant>> participantByPersonAndRace = GaudiModeCalculator.groupParticipantsByPersonAndRace(races);
 
@@ -210,10 +217,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        // Scoped to the season these races are scored in; a combination spanning two is scored
-        // against the first race's season, which SeasonService also reports (see #scoringSeasonOf).
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.scoringSeasonOf(races.stream().map(RaceParticipants::race).toList()));
+        // Scoped to the season and variant these races are scored in; a combination spanning two is
+        // scored against the first race's (see AgeGroupService#findForScoring).
+        List<AgeGroup> ageGroups = ageGroupService.findForScoring(races.stream().map(RaceParticipants::race).toList());
         Map<Long, Person> personsById = personService.findByIds(incomplete.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(incomplete));
 
@@ -225,13 +231,51 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             String firstName = person.map(Person::firstName).orElse("");
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), p.gender(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
-            String status = rankingService.dnsStatusLabel(byRace.values());
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status));
+            String status = missingLegStatus(races, byRace).name();
+            dns.add(GaudiDnsEntryResponse.ofPerson(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                 .thenComparing(GaudiDnsEntryResponse::firstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
         return dns;
+    }
+
+    /**
+     * GaudiModeService#validate checks this when the instance is saved, but a race's result unit or
+     * sort direction can still be edited afterwards. Summing milliseconds with points, or ranking a
+     * DESC leg ascending, would print a wrong total and wrong places without any error - so the
+     * combination is refused here, where the operator sees it as a 409 with this message.
+     */
+    private static void assertLegsComparable(List<RaceParticipants> races) {
+        Race first = races.getFirst().race();
+        for (RaceParticipants race : races) {
+            if (race.race().resultUnit() != first.resultUnit() || race.race().sortDirection() != first.sortDirection()) {
+                throw new IllegalStateException("Race \"" + race.race().name() + "\" no longer uses the same result unit and sort "
+                        + "direction as \"" + first.name() + "\" - a Zeit-Kombination can only combine comparable races");
+            }
+        }
+    }
+
+    /**
+     * Why a person is on the "nicht gewertet" list: the status of the first counted leg, in the
+     * configured race order, without a valid result - DNS for a race they were never entered in.
+     */
+    private DisqualificationStatus missingLegStatus(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+        for (RaceParticipants race : races) {
+            if (race.weight() == 0) {
+                continue;
+            }
+            Participant p = byRace.get(race.raceId());
+            if (p == null) {
+                return DisqualificationStatus.DNS;
+            }
+            if (rankingService.adjustedValue(race.race(), p) == null) {
+                DisqualificationStatus status = p.status();
+                return status != null && status != DisqualificationStatus.NONE ? status : DisqualificationStatus.DNS;
+            }
+        }
+        return DisqualificationStatus.DNS;
     }
 
     /**

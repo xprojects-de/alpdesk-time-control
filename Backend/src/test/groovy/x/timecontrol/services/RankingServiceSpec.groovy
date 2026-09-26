@@ -234,6 +234,41 @@ class RankingServiceSpec extends Specification {
         places == [1L: 1, 2L: 1, 3L: 3]
     }
 
+    @Unroll
+    def "computePlaces in a DESC #unit race shares the place of a printed tie and skips the next one"() {
+        given: "higher is better"
+        def descRace = race(SortDirection.DESC, unit)
+        def participants = [participant(1L, low), participant(2L, high), participant(3L, tied)]
+
+        when:
+        def places = rankingService.computePlaces(descRace, participants)
+
+        then:
+        places == expected
+
+        where: "TIME: 90.004 and 90.000 both print as 1:30.00"
+        unit              | high  | tied  | low   || expected
+        ResultUnit.TIME   | 90004 | 90000 | 80000 || [2L: 1, 3L: 1, 1L: 3]
+        ResultUnit.POINTS | 1250  | 1250  | 1100  || [2L: 1, 3L: 1, 1L: 3]
+    }
+
+    @Unroll
+    def "computePlaces ranks on the value with the penalty, which can change the order (#direction)"() {
+        given:
+        def participants = [participant(1L, first, penalty), participant(2L, second)]
+
+        when:
+        def places = rankingService.computePlaces(race(direction, ResultUnit.TIME), participants)
+
+        then:
+        places == expected
+
+        where: "ASC: 60.00 + 2 s is behind 61.00; DESC: 12.00 - 2.00 is behind 11.00"
+        direction          | first | penalty | second || expected
+        SortDirection.ASC  | 60000 | 2000    | 61000  || [2L: 1, 1L: 2]
+        SortDirection.DESC | 1200  | 200     | 1100   || [2L: 1, 1L: 2]
+    }
+
     def "computePlaces does not round POINTS races, where the stored value is already the printed precision"() {
         given:
         def racePoints = race(SortDirection.ASC, ResultUnit.POINTS)

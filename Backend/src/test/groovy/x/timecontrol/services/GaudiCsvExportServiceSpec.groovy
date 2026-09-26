@@ -19,24 +19,24 @@ import x.timecontrol.entities.TimingProviderType
 class GaudiCsvExportServiceSpec extends Specification {
 
     PersonService personService = Mock()
-    AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     RankingViewService rankingViewService = Mock()
 
     // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
     // the actual date -> season mapping. With the default 1 January boundary, every race date used
     // in these specs (2026-..-..) resolves to season 2026.
     SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
     }
     SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
+    AgeGroupService ageGroupService = Spy(new AgeGroupService(null, seasonService, null))
 
-    def service = new GaudiCsvExportService(personService, ageGroupService, seasonService, rankingViewService)
+    def service = new GaudiCsvExportService(personService, ageGroupService, rankingViewService)
 
     def race = new Race(10L, "Riesenslalom", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
 
     def setup() {
-        ageGroupService.findBySeason(2026) >> [new AgeGroup(1L, "U14", 2026, 2013, 2014, Gender.BOTH)]
+        ageGroupService.findBySeasonAndVariant(2026, "") >> [new AgeGroup(1L, "U14", 2026, 2013, 2014, Gender.BOTH)]
         personService.findByIds(_ as Set) >> [
                 1L: new Person(1L, "Max", "Muster", LocalDate.of(2013, 5, 1), Gender.MALE, "EXT-1"),
                 2L: new Person(2L, "Anna", "Beispiel", LocalDate.of(1980, 5, 1), Gender.FEMALE, null)
@@ -44,7 +44,7 @@ class GaudiCsvExportServiceSpec extends Specification {
     }
 
     private static GaudiRankingEntryResponse entry(int place, Long personId, String team, Integer valueMs, Integer points, String externalId) {
-        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId)
+        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId, null, null)
     }
 
     private static List<String> lines(byte[] bytes) {

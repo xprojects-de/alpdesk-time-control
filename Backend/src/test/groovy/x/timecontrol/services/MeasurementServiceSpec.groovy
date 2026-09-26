@@ -1,5 +1,6 @@
 package x.timecontrol.services
 
+import jakarta.transaction.Transactional
 import spock.lang.Specification
 import x.timecontrol.entities.Measurement
 import x.timecontrol.repositories.MeasurementRepository
@@ -215,5 +216,48 @@ class MeasurementServiceSpec extends Specification {
         0 * repository.save(_)
         result.errors().size() == 1
         result.errors().first().reason() == "deviceMeasurementId is not a valid number"
+    }
+
+    def "clearing the table with device reset resets the device only after the table was cleared"() {
+        given:
+        TimingDataImporter device = Mock()
+
+        when:
+        service.deleteAllAndResetDevice(device)
+
+        then:
+        1 * repository.deleteAll()
+        1 * repository.resetSequence()
+
+        then:
+        1 * device.resetDevice() >> true
+    }
+
+    def "a failing delete never reaches the device"() {
+        given:
+        TimingDataImporter device = Mock()
+        repository.deleteAll() >> { throw new RuntimeException("database is locked") }
+
+        when:
+        service.deleteAllAndResetDevice(device)
+
+        then:
+        thrown(RuntimeException)
+        0 * device.resetDevice()
+    }
+
+    def "a device that does not confirm the reset fails the delete, so its transaction rolls back"() {
+        given:
+        TimingDataImporter device = Stub() {
+            resetDevice() >> false
+        }
+
+        when:
+        service.deleteAllAndResetDevice(device)
+
+        then:
+        DeviceResetFailedException e = thrown()
+        e.message == "Failed to reset device. Database was not modified."
+        MeasurementService.getMethod("deleteAllAndResetDevice", TimingDataImporter).isAnnotationPresent(Transactional)
     }
 }

@@ -13,7 +13,8 @@ roster = state["roster"]
 by_pid = {r["participantId"]: r for r in roster}
 
 def round10(x):
-    """RankingService#roundForDisplay: nearest 10ms, half up - applied ONCE to the raw average."""
+    """RankingService#roundForDisplay: nearest 10ms, half up - applied once to each printed value
+    and once to each average built from them."""
     return int(math.floor(x / 10.0 + 0.5)) * 10
 
 def fmt(ms):
@@ -21,7 +22,9 @@ def fmt(ms):
     return f"{r // 60000}:{(r // 1000) % 60:02d}.{(r % 1000) // 10:02d}"
 
 def value(r):
-    return r["durationMs"] if (r and r["durationMs"] is not None and r["status"] is None) else None
+    """LosModeCalculator#printedValue: the averages are built from the printed hundredths, not the
+    raw ms, so the PDF can be recomputed by hand."""
+    return round10(r["durationMs"]) if (r and r["durationMs"] is not None and r["status"] is None) else None
 
 problems = []
 
@@ -42,8 +45,16 @@ for p in pairings:
     drawn_ids.append(p["participant1Id"])
     if p.get("participant2Id"):
         drawn_ids.append(p["participant2Id"])
-if sorted(drawn_ids) != sorted(r["participantId"] for r in roster):
-    problems.append("Auslosung deckt nicht jeden Teilnehmer genau einmal ab")
+# Anyone already marked DNS/DNF/DSQ at draw time is left out on purpose (see
+# GaudiModeService#drawLosPairing): a known non-starter would only cost their partner the placing.
+# Here that is bib 17 (DNF) and bib 27 (DSQ), both set by manual_setup.py before the draw. Bib 16
+# (never started, but no status) is still drawn - the draw goes by status alone.
+expected_drawn = sorted(r["participantId"] for r in roster if r["status"] is None)
+if sorted(drawn_ids) != expected_drawn:
+    problems.append("Auslosung deckt nicht jeden Teilnehmer ohne Status genau einmal ab")
+not_drawn = [r for r in roster if r["participantId"] not in drawn_ids]
+print("nicht ausgelost (Status vor der Auslosung): "
+      + ", ".join(f"StNr {r['raceNumber']} {r['status']}" for r in not_drawn))
 if len(set(drawn_ids)) != len(drawn_ids):
     problems.append("Ein Teilnehmer wurde in mehr als ein Paar gelost")
 
@@ -125,3 +136,4 @@ print(f"\nAbweichungen: {len(problems)}")
 for p in problems:
     print("  ", p)
 print("\nSCHRITT 5: " + ("ALLES KORREKT" if not problems else "ABWEICHUNGEN"))
+sys.exit(1 if problems else 0)

@@ -5,14 +5,11 @@ import sys, json, re, subprocess
 sys.path.insert(0, '.')
 import common as c
 import config
-from phase6_verify_rankings import (compute_expected_places, combination_totals, RACE_DIRECTIONS)
+from phase6_verify_rankings import (compute_expected_places, combination_totals, places_from_totals, RACE_DIRECTIONS)
 
 token = c.login(config.MAIN)
 race_ids = json.load(open(c.results_path("state.json")))["race_ids"]
 gaudi_id = json.load(open(c.results_path("gaudi_state.json")))["gm_id"]
-
-_, age_groups = c.get(config.MAIN, token, "/age-groups")
-print("age groups:", [(a["name"], a["gender"]) for a in age_groups])
 
 per_race = {}
 for race_name, direction in RACE_DIRECTIONS.items():
@@ -36,6 +33,9 @@ def expected_totals_for_subset(person_ids_subset):
 
 
 all_participants = next(iter(per_race.values()))["participants"]
+# A Gaudi-Modus is scored against the first race's season and variant (E09).
+age_groups = c.age_groups_of_race(config.MAIN, token, all_participants[0]["race"])
+print("age groups:", [(a["name"], a["gender"]) for a in age_groups])
 
 status, pdf_bytes = c.get_raw(config.MAIN, token, f"/gaudi-modes/{gaudi_id}/export/pdf/agegroups/all")
 print("Gaudi agegroups/all PDF status:", status)
@@ -44,39 +44,45 @@ with open(c.results_path("gaudi_agegroups_all.pdf"), "wb") as f:
     f.write(pdf_bytes)
 text = subprocess.run(["pdftotext", "-layout", c.results_path("gaudi_agegroups_all.pdf"), "-"], capture_output=True, text=True).stdout
 
-sections = re.split(r"\nWertung ([\w ]+?) (weiblich|männlich)\n", "\n" + text)
-all_ok, seen_sections, i = True, 0, 1
-while i < len(sections) - 1:
-    ag_name, gender_de = sections[i], sections[i + 1]
-    body = sections[i + 2]
-    i += 3
+all_ok, seen_sections = True, 0
+for ag_name, gender_en, body in c.age_group_sections(text):
     seen_sections += 1
-    gender_en = "FEMALE" if gender_de == "weiblich" else "MALE"
-
-    ag = next((a for a in age_groups if a["name"].lower() == ag_name.strip().lower()), None)
-    assert ag is not None, f"age group {ag_name} not found"
+    known = ag_name == c.UNKNOWN_AGE_GROUP_SECTION or any(a["name"].lower() == ag_name.lower() for a in age_groups)
+    if not known:
+        all_ok = False
+        print(f"{ag_name}/{gender_en}: section names no age group of the scoring season/variant => MISMATCH")
+        continue
 
     subset_ids = {p["person"]["id"] for p in all_participants
-                  if p["person"]["gender"] == gender_en
-                  and ag["birthYearFrom"] <= int(p["person"]["birthDate"][:4]) <= ag["birthYearTo"]}
+                  if c.in_age_group_section(p["person"], ag_name, gender_en, age_groups)}
     expected = expected_totals_for_subset(subset_ids)
 
-    pdf_totals = {}
-    for line in body.splitlines():
-        m = re.match(r"^\s*(\d+)\s+\S.*?\b(\d{4,6})\b.*?(\d+)\s*$", line)
-        if m:
-            pdf_totals[m.group(2)] = int(m.group(3))
+    pdf_totals, pdf_places = {}, {}
+    for line in body.split("Nicht gewertet")[0].splitlines():
+        # A participant line ends in their total; the per-station lines below it don't start
+        # with a number.
+        row = c.pdf_row_place_and_id(line)
+        total = re.search(r"(\d+)\s*$", line)
+        if row and total:
+            pdf_places[row[1]] = row[0]
+            pdf_totals[row[1]] = int(total.group(1))
 
     person_by_id = {p["person"]["id"]: p["person"] for p in all_participants}
     expected_by_ext = {person_by_id[pid]["externalId"]: total for pid, total in expected.items()}
+    expected_places = places_from_totals(expected_by_ext)
 
     mismatches = [(ext, exp, pdf_totals.get(ext)) for ext, exp in expected_by_ext.items() if pdf_totals.get(ext) != exp]
+    place_mismatches = [(ext, exp, pdf_places.get(ext)) for ext, exp in expected_places.items()
+                        if ext in pdf_places and pdf_places[ext] != exp]
     missing = set(expected_by_ext) - set(pdf_totals)
-    ok = not mismatches and not missing
+    extra = set(pdf_totals) - set(expected_by_ext)
+    ok = not mismatches and not place_mismatches and not missing and not extra
     all_ok = all_ok and ok
-    print(f"{ag_name}/{gender_de}: expected_scored={len(expected_by_ext)} pdf_rows={len(pdf_totals)} mismatches={len(mismatches)} missing={len(missing)} => {'OK' if ok else 'MISMATCH'}")
-    if mismatches:
-        print("   ", mismatches[:10])
+    print(f"{ag_name}/{gender_en}: expected_scored={len(expected_by_ext)} pdf_rows={len(pdf_totals)} mismatches={len(mismatches)} "
+          f"place_mismatches={len(place_mismatches)} missing={len(missing)} extra={len(extra)} => {'OK' if ok else 'MISMATCH'}")
+    if mismatches or place_mismatches or extra:
+        print("   ", mismatches[:10], place_mismatches[:10], sorted(extra)[:10])
 
 print(f"\nsections parsed: {seen_sections}")
 print("GAUDI ALTERSKLASSEN: " + ("ALLES KORREKT" if all_ok else "ABWEICHUNGEN"))
+sys.exit(0 if all_ok else 1)

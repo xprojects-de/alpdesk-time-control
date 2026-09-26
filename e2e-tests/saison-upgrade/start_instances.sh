@@ -1,7 +1,7 @@
 #!/bin/bash
 # Starts 1 isolated backend instance for the Saison-Upgrade E2E test, against a database that is
 # still at migration V2 - the state a 1.4 installation in the field is in - so starting it applies
-# V3 and then V4, the age_group table rebuild, exactly as a real upgrade does.
+# V3 to V7 - including both age_group table rebuilds (V4, V6) - exactly as a real upgrade does.
 # NEVER points at the real production database.
 #
 # Usage: ./start_instances.sh /path/to/time-control.jar [/path/to/work-dir]
@@ -40,7 +40,7 @@ grep -E "Migrating schema|Successfully applied|Current version" "$WORK_DIR/app/b
   echo "  (nothing found - check $WORK_DIR/app/backend.log)"
 echo ""
 echo "Health check:"
-curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/" || true
+curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/watchdog" || true
 echo ""
 echo "DB (for the verification step): $WORK_DIR/app/database/time-control.db"
 echo "To stop: pkill -f 'time-control.jar'"

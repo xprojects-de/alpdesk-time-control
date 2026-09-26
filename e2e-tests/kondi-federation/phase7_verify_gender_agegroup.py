@@ -41,7 +41,8 @@ print("=" * 70)
 for race_name, direction in RACE_DIRECTIONS.items():
     race_id = race_ids[race_name]
     _, participants = c.get(config.MAIN, token, f"/participants?raceId={race_id}")
-    _, age_groups = c.get(config.MAIN, token, "/age-groups")
+    age_groups = c.age_groups_of_race(config.MAIN, token, participants[0]["race"])
+    all_ranked, _ = compute_expected_places(participants, direction)
 
     status, pdf_bytes = c.get_raw(config.MAIN, token, f"/participants/export/pdf/agegroups/all/{race_id}")
     assert status == 200
@@ -50,43 +51,39 @@ for race_name, direction in RACE_DIRECTIONS.items():
         f.write(pdf_bytes)
     text = subprocess.run(["pdftotext", "-layout", fname, "-"], capture_output=True, text=True).stdout
 
-    sections = re.split(r"\nWertung ([\w ]+?) (weiblich|männlich)\n", "\n" + text)
-    total_expected_ranked = total_pdf_ranked = section_mismatches = 0
-    i = 1
-    while i < len(sections) - 1:
-        ag_name, gender_de = sections[i], sections[i + 1]
-        body = sections[i + 2]
-        i += 3
-        gender_en = "FEMALE" if gender_de == "weiblich" else "MALE"
-
-        ag = next((a for a in age_groups if a["name"].lower() == ag_name.strip().lower()), None)
-        if ag is None:
-            print(f"  WARNING: age group '{ag_name}' from PDF not found via API")
+    total_pdf_ranked = section_mismatches = 0
+    for ag_name, gender_en, body in c.age_group_sections(text):
+        known = ag_name == c.UNKNOWN_AGE_GROUP_SECTION or any(a["name"].lower() == ag_name.lower() for a in age_groups)
+        if not known:
+            section_mismatches += 1
+            print(f"  {race_name}: section 'Wertung {ag_name}' names no age group of the race's season/variant")
             continue
 
-        subset = [p for p in participants
-                  if p["person"]["gender"] == gender_en
-                  and ag["birthYearFrom"] <= int(p["person"]["birthDate"][:4]) <= ag["birthYearTo"]]
+        subset = [p for p in participants if c.in_age_group_section(p["person"], ag_name, gender_en, age_groups)]
         expected_places, _ = compute_expected_places(subset, direction)
-        total_expected_ranked += len(expected_places)
 
-        body_ranked_part = body.split("Nicht gewertet")[0]
         pdf_places = {}
-        for line in body_ranked_part.splitlines():
-            m = re.match(r"^\s*(\d+)\s+.*?\b(\d{4,6})\b", line)
-            if m:
-                pdf_places[m.group(2)] = int(m.group(1))
+        for line in body.split("Nicht gewertet")[0].splitlines():
+            row = c.pdf_row_place_and_id(line)
+            if row:
+                pdf_places[row[1]] = row[0]
         total_pdf_ranked += len(pdf_places)
 
         mismatches = [(e, exp, pdf_places.get(e)) for e, exp in expected_places.items() if pdf_places.get(e) != exp]
         missing = set(expected_places) - set(pdf_places)
-        if mismatches or missing:
+        extra = set(pdf_places) - set(expected_places)
+        if mismatches or missing or extra:
             section_mismatches += 1
-            print(f"  {race_name}/{ag_name}/{gender_de}: expected={len(expected_places)} pdf={len(pdf_places)} mismatches={mismatches[:5]} missing={missing}")
+            print(f"  {race_name}/{ag_name}/{gender_en}: expected={len(expected_places)} pdf={len(pdf_places)} "
+                  f"mismatches={mismatches[:5]} missing={missing} extra={extra}")
 
-    ok = section_mismatches == 0
+    # Every ranked participant lands in exactly one age group x gender section - a section the
+    # parser could not see, or one the PDF left out, shows up here.
+    ok = section_mismatches == 0 and total_pdf_ranked == len(all_ranked)
     all_ok = all_ok and ok
-    print(f"{race_name}: total expected ranked={total_expected_ranked}, total in PDF={total_pdf_ranked}, sections_with_mismatch={section_mismatches} => {'OK' if ok else 'MISMATCH'}")
+    print(f"{race_name}: ranked in race={len(all_ranked)}, ranked in PDF sections={total_pdf_ranked}, "
+          f"sections_with_mismatch={section_mismatches} => {'OK' if ok else 'MISMATCH'}")
 
 print()
 print("ALLES KORREKT (Gender+Altersklassen)" if all_ok else "ES GIBT ABWEICHUNGEN (Gender+Altersklassen) - siehe oben")
+sys.exit(0 if all_ok else 1)

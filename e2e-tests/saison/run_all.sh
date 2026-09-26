@@ -28,4 +28,8 @@ echo "=== 5: Gaudi-Wertung ueber zwei Saisons ==="
 python3 verify_gaudi_cross_season.py
 
 echo ""
+echo "=== 6: Altersklassen-Varianten - zwei Einteilungen in einer Saison ==="
+python3 verify_variants.py
+
+echo ""
 echo "All steps complete."

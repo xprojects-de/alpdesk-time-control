@@ -55,7 +55,12 @@ status, ranking = c.get(config.BASE, token, f"/gaudi-modes/{gm_id}/ranking")
 assert status == 200, ranking
 print(f"{len(ranking)} Paare in der Wertung")
 
-all_values = [v for v in (adjusted_value(p) for p in all_participants) if v is not None]
+def printed_value(p):
+    """LosModeCalculator#printedValue: every average is built from the value as the results list
+    prints it (to the hundredth for TIME), not from the raw ms - so it can be recomputed by hand."""
+    return round_to_10ms(adjusted_value(p))
+
+all_values = [v for v in (printed_value(p) for p in all_participants) if v is not None]
 overall_avg = sum(all_values) / len(all_values)
 overall_average_display = round_average_for_display(overall_avg)
 print(f"\nErwarteter Gesamtdurchschnitt (aus {len(all_values)} gueltigen Werten): {overall_avg:.3f} ms")
@@ -64,8 +69,8 @@ expected_pairs, skipped_pairs = [], []
 for pairing in pairings:
     p1 = by_id.get(pairing["participant1Id"])
     p2 = by_id.get(pairing.get("participant2Id")) if pairing.get("participant2Id") else None
-    v1 = adjusted_value(p1) if p1 else None
-    v2 = adjusted_value(p2) if p2 else None
+    v1 = printed_value(p1) if p1 else None
+    v2 = printed_value(p2) if p2 else None
     if v1 is None or (pairing.get("participant2Id") and v2 is None):
         skipped_pairs.append((pairing["participant1Name"], pairing.get("participant2Name")))
         continue
@@ -112,5 +117,7 @@ with open(c.results_path("los_ranking.pdf"), "wb") as f:
     f.write(pdf_bytes)
 print(f"\nPDF-Export erfolgreich ({len(pdf_bytes)} bytes)")
 
+ok = not mismatches and len(ranking) == len(expected_pairs)
 print()
-print("LOS-MODUS: " + ("KORREKT" if not mismatches and len(ranking) == len(expected_pairs) else "ABWEICHUNGEN GEFUNDEN"))
+print("LOS-MODUS: " + ("KORREKT" if ok else "ABWEICHUNGEN GEFUNDEN"))
+sys.exit(0 if ok else 1)

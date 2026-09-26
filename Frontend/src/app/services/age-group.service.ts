@@ -1,7 +1,13 @@
 import {Injectable, inject} from "@angular/core";
 import {HttpClient} from "@angular/common/http";
 import {Observable} from "rxjs";
-import {AgeGroup, AgeGroupRequest, AgeGroupSeasons, CopySeasonRequest} from "../models/age-group.model";
+import {
+    AgeGroup,
+    AgeGroupRequest,
+    AgeGroupSeasons,
+    AgeGroupVariants,
+    CopySeasonRequest,
+} from "../models/age-group.model";
 import {environment} from "../../environments/environment";
 
 @Injectable({
@@ -12,13 +18,30 @@ export class AgeGroupService {
     private readonly apiUrl = `${environment.apiUrl}/age-groups`;
 
     /**
-     * Without a season, every season's age groups - only the configuration UI wants that. Anything
-     * showing a participant's class reads it off the participant, already resolved against that
-     * participant's own race season by the backend.
+     * Without a season, every season's age groups - only the configuration UI wants that. With one,
+     * the groups of that season's variant (the standard one if omitted). Anything showing a
+     * participant's class reads it off the participant, already resolved against that participant's
+     * own race season and variant by the backend.
      */
-    getAll(season?: number): Observable<AgeGroup[]> {
-        const params = season != null ? {params: {season}} : {};
+    getAll(season?: number, variant?: string): Observable<AgeGroup[]> {
+        const params = season != null ? {params: {season, variant: variant ?? ""}} : {};
         return this.http.get<AgeGroup[]>(this.apiUrl, params);
+    }
+
+    getVariants(season: number): Observable<AgeGroupVariants> {
+        return this.http.get<AgeGroupVariants>(`${this.apiUrl}/variants`, {params: {season}});
+    }
+
+    /**
+     * The variants of the season a race date falls into - the season boundary is the backend's to
+     * apply, so the race dialog asks by date rather than computing the season itself.
+     */
+    getVariantsForDate(date: string): Observable<AgeGroupVariants> {
+        return this.http.get<AgeGroupVariants>(`${this.apiUrl}/variants`, {params: {date}});
+    }
+
+    deleteVariant(season: number, variant: string): Observable<void> {
+        return this.http.delete<void>(`${this.apiUrl}/variants`, {params: {season, variant}});
     }
 
     getSeasons(): Observable<AgeGroupSeasons> {
@@ -26,8 +49,9 @@ export class AgeGroupService {
     }
 
     /**
-     * Rolls a season's configuration over to another one, shifting every birth-year range by the
-     * difference between the two.
+     * Copies one variant's age groups to another season and/or variant, shifting every birth-year
+     * range by the difference between the two seasons - rolls a season over, or starts a new
+     * variant from an existing one.
      */
     copySeason(request: CopySeasonRequest): Observable<AgeGroup[]> {
         return this.http.post<AgeGroup[]>(`${this.apiUrl}/copy-season`, request);

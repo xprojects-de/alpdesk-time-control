@@ -1,6 +1,7 @@
 package x.timecontrol.dto;
 
 import io.micronaut.core.annotation.Nullable;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.Race;
@@ -75,7 +76,12 @@ public record RaceResponse(
 
         @Nullable
         @Schema(description = "Number of top-placed previousRaceId finishers (per age group) started in reverse order, if startOrderMode is REVERSE_TOP_N", nullable = true)
-        Integer startOrderReverseTopCount
+        Integer startOrderReverseTopCount,
+
+        // ALWAYS: the standard variant is "", which Serde would otherwise leave out as empty.
+        @JsonInclude(JsonInclude.Include.ALWAYS)
+        @Schema(description = "Age-group variant of seasonYear this race is categorised with; empty for the season's standard variant", example = "")
+        String ageGroupVariant
 ) {
     /**
      * This race's live-results links (see {@code RaceController#liveLinks},
@@ -118,7 +124,8 @@ public record RaceResponse(
                 hasCoverPage,
                 race.previousRaceId(),
                 race.startOrderMode(),
-                race.startOrderReverseTopCount()
+                race.startOrderReverseTopCount(),
+                race.ageGroupVariant()
         );
     }
 }

@@ -4,10 +4,12 @@ import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.Participant;
+import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.services.RankingService;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,5 +73,34 @@ public interface GaudiModeCalculator {
             }
         }
         return byPersonAndRace;
+    }
+
+    /**
+     * A person's race number in a multi-race Gaudi-Modus: race numbers are per race, so this takes
+     * the first race (in the given order) where the person has one - the same rule as their team
+     * (see the calculators' teamOf), rather than requiring it to be identical on every leg.
+     */
+    static Integer raceNumberOf(List<RaceParticipants> races, Map<Long, Participant> byRace) {
+        for (RaceParticipants race : races) {
+            Participant p = byRace.get(race.raceId());
+            if (p != null && p.raceNumber() != null) {
+                return p.raceNumber();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A leg's value times its race weight, computed exactly. In {@code double}, 45 points x 0.7 is
+     * 31.499999999999996 and rounds to 31, although an official multiplying by hand gets 31.5 and
+     * rounds up to 32; the same happens to a hundredth of a weighted time. {@code BigDecimal.valueOf}
+     * takes the weight as it was typed (0.7), so a half stays an exact half.
+     */
+    static BigDecimal weighted(long value, double weight) {
+        return BigDecimal.valueOf(value).multiply(BigDecimal.valueOf(weight));
+    }
+
+    static Integer birthYearOf(Person person) {
+        return person != null && person.birthDate() != null ? person.birthDate().getYear() : null;
     }
 }

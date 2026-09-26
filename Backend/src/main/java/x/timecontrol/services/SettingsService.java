@@ -82,7 +82,8 @@ public class SettingsService {
             throw new IllegalArgumentException("Could not serialize timing provider config: " + e.getMessage(), e);
         }
         AppSettings current = getSettings();
-        AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay());
+        AppSettings updated = new AppSettings(SETTINGS_ID, type, json, current.seasonStartMonth(), current.seasonStartDay(),
+                current.pdfShowRaceNumber(), current.pdfShowBirthYear());
         return store(updated);
     }
 
@@ -100,7 +101,21 @@ public class SettingsService {
         }
         AppSettings current = getSettings();
         AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(),
-                current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth());
+                current.timingProviderConfig(), seasonStart.getMonthValue(), seasonStart.getDayOfMonth(),
+                current.pdfShowRaceNumber(), current.pdfShowBirthYear());
+        return store(updated);
+    }
+
+    /**
+     * Switches the race number ("StNr.") and birth year ("Jg.") columns on or off, each on its own:
+     * in the result PDFs (a single race's and the Gaudi-Modus ones, see {@link PdfExportService})
+     * and in the public live view ({@link RaceLiveService}). Takes effect with the next export or
+     * live request.
+     */
+    public AppSettings updatePdfExport(boolean showRaceNumber, boolean showBirthYear) {
+        AppSettings current = getSettings();
+        AppSettings updated = new AppSettings(SETTINGS_ID, current.timingProviderType(), current.timingProviderConfig(),
+                current.seasonStartMonth(), current.seasonStartDay(), showRaceNumber, showBirthYear);
         return store(updated);
     }
 

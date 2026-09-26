@@ -134,11 +134,13 @@ jobs:
           # above may therefore show HTTP 000 even though everything is fine and still starting.
           #
           # So wait properly here: poll every backend port until it serves. Slow is acceptable,
-          # unclear is not.
+          # unclear is not. The probe is /watchdog, the app's own liveness endpoint, not "/":
+          # this job builds the jar without the frontend (not needed by any suite, and it is no
+          # longer checked in), and without it "/" answers 500 instead of serving index.html.
           #
           # Only backend instances, which is what "dir=" filters for. bergsprint and nachtslalom
           # also start a fake timing device, printed as "fake_device: PID=<n> port=<n>" without a
-          # dir - and that one answers on /data, not on /, so probing it here would wait for a 200
+          # dir - and that one answers on /data, not on /watchdog, so probing it here would wait for a 200
           # that never comes. It needs no waiting anyway: it is a small Python script rather than a
           # JVM, and start_instances.sh already checked it on its own endpoint.
           ports=$(sed -nE 's/.*port=([0-9]+) dir=.*/\1/p' start.log | sort -u)
@@ -147,12 +149,12 @@ jobs:
           for p in $ports; do
             code=000
             for i in $(seq 1 90); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$p/" 2>/dev/null || echo 000)
-              case "$code" in 200|302) break ;; esac
+              code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$p/watchdog" 2>/dev/null || echo 000)
+              case "$code" in 200) break ;; esac
               sleep 2
             done
             case "$code" in
-              200|302)
+              200)
                 echo "  port $p bereit nach ca. $((i * 2))s"
                 ;;
               *)

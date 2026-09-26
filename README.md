@@ -275,13 +275,13 @@ npm start            # Dev-Server auf http://localhost:4200
 ./gradlew shadowJar  # lauffähiges Fat-Jar
 ```
 
-Für einen Produktionsbuild zuerst `npm run deploy` im Frontend, dann `./gradlew shadowJar` im
-Backend – der Gradle-Task `copyFrontend` übernimmt das gebaute Frontend automatisch.
+Für einen Produktionsbuild zuerst `npm run deploy` im Frontend, dann `./gradlew copyFrontend shadowJar`
+im Backend – `copyFrontend` übernimmt das gebaute Frontend nach `Backend/src/main/resources/public`
+und muss ausdrücklich mit aufgerufen werden.
 
-Das **gebaute Frontend liegt mit im Repository** (`Backend/src/main/resources/public`), obwohl es
-Build-Ergebnis ist. Das ist Absicht: So kommt man mit einem reinen Java-Setup ohne npm zu einem
-lauffähigen Jar. Der Preis ist, dass nach einem Frontend-Build die neu gehashten Bundles im Diff
-auftauchen – wer nur am Backend arbeitet, lässt sie aus dem Commit heraus.
+Das gebaute Frontend liegt **nicht** im Repository (`Backend/src/main/resources/public` steht in der
+`.gitignore`): Die Release-Builds auf GitHub bauen es selbst. Ein Jar ohne vorherigen Frontend-Build
+startet und bedient die API, hat aber keine Oberfläche.
 
 Details zu Architektur, Konventionen und Build-Varianten stehen in [CONTRIBUTING.md](CONTRIBUTING.md)
 und [CLAUDE.md](CLAUDE.md).

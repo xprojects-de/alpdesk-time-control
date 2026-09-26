@@ -1,8 +1,16 @@
 import {Injectable, inject} from "@angular/core";
 import {HttpClient} from "@angular/common/http";
 import {Observable} from "rxjs";
-import {RaceMeasurement, RaceMeasurementRequest, SyncMeasurementsResponse} from "../models/race-measurement.model";
+import {
+    RaceMeasurement,
+    RaceMeasurementDeleteResponse,
+    RaceMeasurementImportResponse,
+    RaceMeasurementRequest,
+    SyncMeasurementsResponse,
+} from "../models/race-measurement.model";
+import {MeasurementImportPreviewResponse} from "../models/measurement-import.model";
 import {environment} from "../../environments/environment";
+import {buildImportFormData} from "../utils/import-form-data.util";
 
 @Injectable({
     providedIn: "root",
@@ -29,5 +37,33 @@ export class RaceMeasurementService {
 
     syncToParticipants(raceId: number): Observable<SyncMeasurementsResponse> {
         return this.http.post<SyncMeasurementsResponse>(`${this.apiUrl}/race/${raceId}/sync-to-participants`, null);
+    }
+
+    deleteAllOfRace(raceId: number): Observable<RaceMeasurementDeleteResponse> {
+        return this.http.delete<RaceMeasurementDeleteResponse>(`${this.apiUrl}/race/${raceId}`);
+    }
+
+    exportCsv(raceId: number): Observable<Blob> {
+        return this.http.get(`${this.apiUrl}/race/${raceId}/export/csv`, {responseType: "blob"});
+    }
+
+    previewImport(raceId: number, file: File, delimiter?: string): Observable<MeasurementImportPreviewResponse> {
+        return this.http.post<MeasurementImportPreviewResponse>(
+            `${this.apiUrl}/race/${raceId}/import-preview`,
+            buildImportFormData(file, {delimiter}),
+        );
+    }
+
+    // `mapping` is always sent, even when empty - see MeasurementService#importMapped for why an
+    // explicitly empty mapping must not be dropped.
+    importMapped(
+        raceId: number,
+        file: File,
+        delimiter: string | undefined,
+        mapping: Record<string, string>,
+    ): Observable<RaceMeasurementImportResponse> {
+        const formData = buildImportFormData(file, {delimiter});
+        formData.append("mapping", JSON.stringify(mapping ?? {}));
+        return this.http.post<RaceMeasurementImportResponse>(`${this.apiUrl}/race/${raceId}/import-mapped`, formData);
     }
 }

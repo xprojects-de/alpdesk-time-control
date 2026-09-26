@@ -1,5 +1,6 @@
 package x.timecontrol.dto;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 import x.timecontrol.entities.Gender;
@@ -12,6 +13,10 @@ public record AgeGroupRequest(
 
         @Schema(description = "Season this configuration is valid for - age classes roll over every year, so the same name exists once per season with different birth years", example = "2026", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer seasonYear,
+
+        @Nullable
+        @Schema(description = "Variant of the season this age group belongs to - two races of one season may group the same birth years differently. Omitted or empty means the season's standard variant.", example = "Kinderrennen jahrgangsweise", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        String variant,
 
         @Schema(description = "Starting birth year for range (e.g., 1985 or 1800 for very old)", example = "1985", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer birthYearFrom,

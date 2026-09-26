@@ -92,4 +92,28 @@ export const raceMeasurementReducer = createReducer(
         loading: false,
         error,
     })),
+
+    // Delete all / CSV import: the list is reloaded afterwards (see reloadAfterBulkChange$)
+    on(RaceMeasurementActions.deleteAllRaceMeasurements, RaceMeasurementActions.importRaceMeasurementsCsv, state => ({
+        ...state,
+        loading: true,
+        error: null,
+    })),
+    on(
+        RaceMeasurementActions.deleteAllRaceMeasurementsSuccess,
+        RaceMeasurementActions.importRaceMeasurementsCsvSuccess,
+        state => ({
+            ...state,
+            loading: false,
+        }),
+    ),
+    on(
+        RaceMeasurementActions.deleteAllRaceMeasurementsFailure,
+        RaceMeasurementActions.importRaceMeasurementsCsvFailure,
+        (state, {error}) => ({
+            ...state,
+            loading: false,
+            error,
+        }),
+    ),
 );
