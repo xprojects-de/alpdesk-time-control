@@ -451,10 +451,6 @@ public class PdfExportService {
     }
 
     /**
-     * One printed line of a Los-Modus pair: the {@code member} it is about, plus the {@code pair}
-     * entry whose shared values only its {@code first} line shows.
-     */
-    /**
      * Los-Modus "Nicht gewertet", laid out like the ranking above it: one line per person with
      * their own race number, birth year, team, category, value and status, a pair kept together
      * and numbered on its first line. "Wert" appears once a listed value still counts in "Ø-Wert
@@ -507,6 +503,10 @@ public class PdfExportService {
         return rows;
     }
 
+    /**
+     * One printed line of a Los-Modus pair: the {@code member} it is about, plus the {@code pair}
+     * entry whose shared values only its {@code first} line shows.
+     */
     private record LosPdfRow(GaudiRankingEntryResponse pair, GaudiTeamMemberResponse member, boolean first) {
 
         /** A self-paired leftover (odd count), scored against their own value alone. */
