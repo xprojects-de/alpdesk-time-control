@@ -19,6 +19,9 @@ ist als `idx_age_group_season_year_variant` neu angelegt (er geht mit der alten 
 `race.age_group_variant` existiert, und derselbe Klassenname mit denselben Jahrgängen ist in einer
 zweiten Variante derselben Saison anlegbar.
 
+**Migration V7** schaltet die mit V5 eingeführten Spalten StNr./Jg. aus. Geprüft wird, dass beide
+Schalter nach dem Upgrade auf „aus“ stehen.
+
 ## Was geprüft wird
 
 **Der Rebuild selbst**
@@ -47,7 +50,7 @@ zweiten Variante derselben Saison anlegbar.
 
 `make_fixture.py` baut die Datenbank auf dem Stand **V2** – dem Stand, in dem eine Installation im
 Feld tatsächlich steht, denn die letzte Version vor diesem Feature (app.version 1.4, Branch `main`)
-liefert nur V1 und V2 aus. Der Start wendet dann **V3 bis V6 hintereinander** an, genau wie ein
+liefert nur V1 und V2 aus. Der Start wendet dann **V3 bis V7 hintereinander** an, genau wie ein
 echtes Update. Eine Fixture auf V3 würde einen Zustand prüfen, den es nirgends gibt, und nie das
 ausführen, was bei jedem echten Update passiert.
 
@@ -58,7 +61,7 @@ tatsächlich erzeugt hat, und es landet nichts Unlesbares in git.
 Die `flyway_schema_history`-Zeilen werden von Hand mit `NULL`-Prüfsummen geschrieben. Deshalb
 startet die Instanz mit `-Dflyway.datasources.default.validate-on-migrate=false` – Flyways eigenen
 Prüfsummen-Algorithmus hier nachzubauen würde die Fixture ohne Gegenwert an ein Interna binden.
-**V3 bis V6 selbst werden völlig normal angewendet**; das Flag überspringt oder verändert keine
+**V3 bis V7 selbst werden völlig normal angewendet**; das Flag überspringt oder verändert keine
 Migration.
 
 ## Voraussetzungen

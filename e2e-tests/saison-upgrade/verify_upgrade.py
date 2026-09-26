@@ -30,6 +30,12 @@ upgrade_season = season_settings["currentSeason"]
 check("Saisongrenze steht nach dem Upgrade auf dem 1.1.",
       [season_settings["seasonStartMonth"], season_settings["seasonStartDay"]], [1, 1])
 
+# V7: StNr./Jg. sind nach dem Update aus - die Ergebnislisten sehen aus wie im letzten Release, und
+# die öffentliche Live-Ansicht zeigt keine Jahrgänge, solange der Bediener sie nicht einschaltet.
+_, pdf_settings = c.get(config.BASE, token, "/settings/pdf-export")
+check("StNr./Jg. nach dem Upgrade aus (V7)",
+      [pdf_settings.get("showRaceNumber"), pdf_settings.get("showBirthYear")], [False, False])
+
 # --- 1. Kein Bestand verloren, keine ID vergeben ------------------------------------------------
 _, groups = c.get(config.BASE, token, "/age-groups")
 by_id = {ag["id"]: ag for ag in groups}
@@ -167,6 +173,9 @@ if db_path:
         applied_v6 = conn.execute(
             "SELECT success FROM flyway_schema_history WHERE version = '6'").fetchone()
         check("Migration V6 erfolgreich angewendet", applied_v6[0] if applied_v6 else None, 1)
+        applied_v7 = conn.execute(
+            "SELECT success FROM flyway_schema_history WHERE version = '7'").fetchone()
+        check("Migration V7 erfolgreich angewendet", applied_v7[0] if applied_v7 else None, 1)
     finally:
         conn.close()
 else:
