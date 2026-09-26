@@ -18,11 +18,6 @@ import x.timecontrol.services.TeamService
 
 import java.time.LocalDate
 import java.time.LocalDateTime
-import x.timecontrol.entities.AppSettings
-import x.timecontrol.entities.TimingProviderType
-import x.timecontrol.services.RaceService
-import x.timecontrol.services.SeasonService
-import x.timecontrol.services.SettingsService
 
 class TimeCombinationModeCalculatorSpec extends Specification {
 
@@ -30,17 +25,9 @@ class TimeCombinationModeCalculatorSpec extends Specification {
     TeamService teamService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
     AgeGroupService ageGroupService = Mock() {
-        findBySeason(2026) >> []
+        findForScoring(_) >> []
     }
-    // A real SeasonService over a stubbed settings row rather than a mock, so the specs exercise
-    // the actual date -> season mapping. With the default 1 January boundary, every race date used
-    // in these specs (2026-..-..) resolves to season 2026.
-    SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
-    }
-    SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
-
-    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, teamService, ageGroupService, seasonService)
+    TimeCombinationModeCalculator calculator = new TimeCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, teamService, ageGroupService)
 
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -263,7 +250,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         ranking[1].diffMs() == 40
     }
 
-    def "computeDnsEntries scores a combination spanning two seasons against the first race's season instead of failing"() {
+    def "computeDnsEntries scores a combination spanning two seasons against the first race's classes instead of failing"() {
         given: "a December and a January race with the default 1 January boundary - one club championship, two seasons"
         knownPersons.putAll([1L: person(1L, "Anna")])
         def races = [
@@ -274,8 +261,8 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         when: "Anna is missing the second leg, so she lands on the \"nicht gewertet\" list"
         def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
 
-        then: "the classes come from 2025, the first race's season - and the export is produced rather than refused"
-        1 * ageGroupService.findBySeason(2025) >> []
+        then: "the races are handed over in their configured order, so the first one (2025) decides - and the export is produced rather than refused"
+        1 * ageGroupService.findForScoring({ List<Race> scored -> scored*.id() == [1L, 2L] }) >> []
         dns.size() == 1
         dns[0].lastName() == "Test"
     }
@@ -292,7 +279,7 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
 
         then: "nothing to categorise means nothing to look up"
-        0 * ageGroupService.findBySeason(_)
+        0 * ageGroupService.findForScoring(_)
         dns.isEmpty()
     }
 

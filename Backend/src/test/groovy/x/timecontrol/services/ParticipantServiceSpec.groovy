@@ -53,7 +53,7 @@ class ParticipantServiceSpec extends Specification {
             repository, ageGroupService, seasonService, raceService, teamService, categoryService, personService, autoAssignService, rankingService, startGroupTemplateService, transactionOperations, losPairingRepository)
 
     // Mutated by individual tests instead of re-stubbing autoAssignService.isActiveFor(_)/
-    // ageGroupService.findBySeason(2026) with a more specific interaction - a single closure-based
+    // ageGroupService.findBySeasonAndVariant(2026, "") with a more specific interaction - a single closure-based
     // interaction per mock method avoids the ambiguity of two equally-plausible interactions on
     // the same method (see the identical pattern/reasoning in the gaudi calculator specs'
     // knownPersons/knownTeams maps).
@@ -61,7 +61,7 @@ class ParticipantServiceSpec extends Specification {
     List<AgeGroup> ageGroups = []
 
     def setup() {
-        ageGroupService.findBySeason(2026) >> { ageGroups }
+        ageGroupService.findBySeasonAndVariant(2026, "") >> { ageGroups }
         // Mirrors AgeGroupService's real isYearInAgeGroup() exactly - safe to stub globally
         // (deterministic, no per-test variation needed) unlike the mutable fields above.
         ageGroupService.isYearInAgeGroup(_, _) >> { AgeGroup ageGroup, int birthYear ->
@@ -80,6 +80,12 @@ class ParticipantServiceSpec extends Specification {
     private static Race raceWithId(Long id) {
         new Race(id, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+    }
+
+    /** Like raceWithId, but categorised with an age-group variant of season 2026. */
+    private static Race raceWithVariant(Long id, String variant) {
+        new Race(id, "Rennen " + variant, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "token-" + id, variant)
     }
 
     private static Person person() {
@@ -382,7 +388,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
         raceService.existsById(4L) >> true
-        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeasonAndVariant(2026, "") >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -501,7 +507,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
         raceService.existsById(4L) >> true
-        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeasonAndVariant(2026, "") >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -538,7 +544,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
         raceService.existsById(4L) >> true
-        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeasonAndVariant(2026, "") >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -626,7 +632,7 @@ class ParticipantServiceSpec extends Specification {
         raceService.existsById(5L) >> true
         raceService.findById(4L) >> Optional.of(race4)
         raceService.existsById(4L) >> true
-        // ageGroupService.findBySeason(2026) >> [] is already stubbed once in setup() - re-stubbing it here
+        // ageGroupService.findBySeasonAndVariant(2026, "") >> [] is already stubbed once in setup() - re-stubbing it here
         // too would be a redundant, ambiguous second interaction on the same mock method.
         personService.findByIds(_) >> [:]
 
@@ -1159,7 +1165,7 @@ class ParticipantServiceSpec extends Specification {
                  team: "Verein", ageGroup: "Klasse", category: "Kategorie"])
 
         then: "the AgeGroup is resolved (not treated as the free-text category) and the real category column still goes through categoryService"
-        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE, 2026) >> new AgeGroup(1L, "U14M", 2026, 2012, 2012, Gender.MALE)
+        1 * ageGroupService.findOrCreateForImport("U14m", 2012, Gender.MALE, 2026, "") >> new AgeGroup(1L, "U14M", 2026, 2012, 2012, Gender.MALE)
         1 * categoryService.findOrCreateByName("Ski Alpin") >> new Category(1L, "SKI ALPIN")
         result.imported().size() == 1
         result.errors().isEmpty()
@@ -1725,5 +1731,80 @@ class ParticipantServiceSpec extends Specification {
         then:
         pendingResult.updated().first().comment() == "Nachstart"
         unmappedResult.updated().first().comment() == "Ski gebrochen"
+    }
+
+    def "toResponses categorises the same person per race with that race's age-group variant"() {
+        given: "a 2016-born boy in the club championship (standard: U10 = 2016-2017) and in the kids' race (one class per birth year)"
+        def boy = new Person(1L, "Max", "Klein", LocalDate.of(2016, 5, 1), Gender.MALE, null)
+        def inStandardRace = new Participant(10L, 5L, 1L, 1, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        def inKidsRace = new Participant(11L, 6L, 1L, 1, null, null, null, null, null, null, DisqualificationStatus.NONE)
+        raceService.findByIds(_ as Set) >> [5L: raceWithId(5L), 6L: raceWithVariant(6L, "Kinder")]
+        personService.findByIds(_ as Set) >> [1L: boy]
+        teamService.findByIds(_ as Set) >> [:]
+        categoryService.findByIds(_ as Set) >> [:]
+        startGroupTemplateService.findByIds(_ as Set) >> [:]
+        ageGroups = [new AgeGroup(1L, "U10", 2026, 2016, 2017, Gender.BOTH)]
+        ageGroupService.findBySeasonAndVariant(2026, "Kinder") >> [new AgeGroup(2L, "Jahrgang 2016", 2026, "Kinder", 2016, 2016, Gender.BOTH)]
+
+        when:
+        def responses = service.toResponses([inStandardRace, inKidsRace])
+
+        then:
+        responses*.ageGroup()*.name() == ["U10", "Jahrgang 2016"]
+        responses*.race()*.ageGroupVariant() == ["", "Kinder"]
+    }
+
+    def "mapped import creates missing classes in the variant of the race it imports into"() {
+        given:
+        raceService.findById(6L) >> Optional.of(raceWithVariant(6L, "Kinder"))
+        raceService.existsById(6L) >> true
+        repository.findByRaceId(6L) >> []
+        personService.create(_ as Person) >> { Person p -> new Person(1L, p.firstName(), p.lastName(), p.birthDate(), p.gender(), p.externalId()) }
+        repository.findByRaceIdAndPersonId(_, _) >> Optional.empty()
+        repository.save(_) >> { Participant p -> p }
+
+        def csv = "Nachname;Vorname;Jahrgang;Geschlecht;Klasse\n" +
+                "Klein;Max;2016;M;Jahrgang 2016\n"
+
+        when:
+        def result = service.importMapped(6L, csv.getBytes("UTF-8"), ParticipantImportFormat.CSV, null,
+                [lastName: "Nachname", firstName: "Vorname", birthDate: "Jahrgang", gender: "Geschlecht", ageGroup: "Klasse"])
+
+        then:
+        1 * ageGroupService.findOrCreateForImport("Jahrgang 2016", 2016, Gender.MALE, 2026, "Kinder") >>
+                new AgeGroup(2L, "JAHRGANG 2016", 2026, "Kinder", 2016, 2016, Gender.MALE)
+        result.imported().size() == 1
+        result.errors().isEmpty()
+    }
+
+    def "assignRaceNumbers groups the start order by the age groups of the race's own variant"() {
+        given: "two 2016-born and one 2017-born child: one class in the standard variant, two in the kids' variant"
+        raceService.findById(6L) >> Optional.of(raceWithVariant(6L, "Kinder"))
+        def participants = [
+                new Participant(10L, 6L, 1L, null, null, null, null, null, null, null, DisqualificationStatus.NONE),
+                new Participant(11L, 6L, 2L, null, null, null, null, null, null, null, DisqualificationStatus.NONE),
+                new Participant(12L, 6L, 3L, null, null, null, null, null, null, null, DisqualificationStatus.NONE),
+        ]
+        repository.findByRaceId(6L) >> participants
+        personService.findByIds(_ as Set) >> [
+                1L: new Person(1L, "Anton", "A", LocalDate.of(2016, 1, 1), Gender.MALE, null),
+                2L: new Person(2L, "Bert", "B", LocalDate.of(2017, 1, 1), Gender.MALE, null),
+                3L: new Person(3L, "Carl", "C", LocalDate.of(2016, 6, 1), Gender.MALE, null),
+        ]
+        ageGroups = [new AgeGroup(1L, "U10", 2026, 2016, 2017, Gender.BOTH)]
+        ageGroupService.findBySeasonAndVariant(2026, "Kinder") >> [
+                new AgeGroup(2L, "Jahrgang 2016", 2026, "Kinder", 2016, 2016, Gender.BOTH),
+                new AgeGroup(3L, "Jahrgang 2017", 2026, "Kinder", 2017, 2017, Gender.BOTH),
+        ]
+        Map<Long, Integer> numberByParticipant = [:]
+        repository.update(_ as Participant) >> { Participant p -> numberByParticipant[p.id()] = p.raceNumber(); p }
+
+        when:
+        service.assignRaceNumbers(6L)
+
+        then: "the youngest class of the kids' variant (2017) starts first - with the standard U10 all three would be shuffled together"
+        numberByParticipant[11L] == 1
+        numberByParticipant[10L] in [2, 3]
+        numberByParticipant[12L] in [2, 3]
     }
 }

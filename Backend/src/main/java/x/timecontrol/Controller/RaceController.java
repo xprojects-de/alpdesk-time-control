@@ -21,6 +21,7 @@ import x.timecontrol.dto.RaceRequest;
 import x.timecontrol.dto.RaceResponse;
 import x.timecontrol.entities.Category;
 import x.timecontrol.entities.Race;
+import x.timecontrol.services.AgeGroupService;
 import x.timecontrol.services.CategoryService;
 import x.timecontrol.services.DeviceCapability;
 import x.timecontrol.services.DeviceImportGate;
@@ -63,6 +64,9 @@ public class RaceController {
 
     @Inject
     SeasonService seasonService;
+
+    @Inject
+    AgeGroupService ageGroupService;
 
     @Produces(MediaType.APPLICATION_JSON)
     @Get
@@ -135,7 +139,8 @@ public class RaceController {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
         try {
-            Race race = service.createFromRequest(request);
+            Race race = service.createFromRequest(request, null);
+            ageGroupService.assertVariantSelectable(race, null);
             Race created = service.create(race);
             return HttpResponse.created(RaceResponse.from(created, seasonService.seasonOf(created)));
         } catch (IllegalArgumentException e) {
@@ -161,9 +166,14 @@ public class RaceController {
         if (!isValid(request)) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse("name and date are required"));
         }
+        Optional<Race> existing = service.findById(id);
+        if (existing.isEmpty()) {
+            return HttpResponse.notFound();
+        }
         Optional<Race> updated;
         try {
-            Race race = service.createFromRequest(request);
+            Race race = service.createFromRequest(request, existing.get());
+            ageGroupService.assertVariantSelectable(race, existing.get());
             updated = service.update(id, race, Boolean.TRUE.equals(request.removeCoverPage()));
         } catch (IllegalArgumentException e) {
             return HttpResponse.badRequest(new x.timecontrol.dto.ErrorResponse(e.getMessage()));

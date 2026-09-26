@@ -50,6 +50,22 @@ Bene hat im Januar-Rennen bewusst **kein Ergebnis**. Damit landet er in der Gaud
    Standardgrenze zwei Saisons. Wertung, „nicht gewertet"-Liste, PDF und CSV müssen alle antworten
    (kein 500), und zwar nach der Saison des **ersten** Rennens: derselbe Gaudi-Modus mit
    umgekehrter Reihenfolge führt Bene als U16 statt U14.
+6. **`verify_variants.py`** – zwei Einteilungen in **einer** Saison: ein Kinderrennen (2026-02-01)
+   wählt die Variante „Jahrgangsweise“ (per Kopie aus dem Standard angelegt und auf einzelne
+   Jahrgänge umgeschnitten), während das Januar-Rennen beim Standard U14/U16 bleibt. Geprüft über
+   Teilnehmerliste, Live-Ansicht und PDF. Der Import folgt der Variante des Zielrennens: der
+   einfache CSV-Import legt keine Klassen an und ordnet dieselbe Datei im Kinder- und im
+   Januar-Rennen verschieden ein; der Import mit Klassen-Spalte ergänzt eine fehlende Klasse in der
+   Variante (bzw. im Standard beim Standard-Rennen), verwendet eine vorhandene, die den Jahrgang
+   abdeckt, und meldet einen passenden Namen mit falschem Jahrgang als Zeilenfehler, während der
+   Rest der Datei importiert wird. Dazu die Schutzregeln: unbekannte Variante am
+   Rennen (400), Datum in eine Saison ohne diese Variante (400), benutzte Variante löschen (409),
+   Standard löschen (400) – und die Übernahme der Variante in die nächste Saison. Zum Schluss, was
+   aus der Variante folgt: ein zweiter Lauf leitet seine Startreihenfolge pro Klasse der Variante ab
+   (jüngste zuerst, ohne Klasse zuletzt); ein Gaudi-Modus über Kinder- und Januar-Rennen wertet nach
+   den Klassen des ersten Rennens (Rangliste und „nicht gewertet“, in beiden Reihenfolgen); der
+   PDF-Text (per `pdftotext`) und die Altersklassen-Spalte der Ergebnis- und Startlisten-CSV zeigen
+   die Klassen der Variante bzw. des Standards.
 
 ## Voraussetzungen
 

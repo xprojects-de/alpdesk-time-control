@@ -11,6 +11,7 @@ import x.timecontrol.entities.Person
 import x.timecontrol.entities.Race
 import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
+import x.timecontrol.repositories.AgeGroupRepository
 
 import java.time.LocalDate
 import x.timecontrol.entities.AppSettings
@@ -61,7 +62,7 @@ class RaceLiveServiceSpec extends Specification {
     }
 
     def setup() {
-        ageGroupService.findBySeason(2026) >> []
+        ageGroupService.findBySeasonAndVariant(2026, "") >> []
         ageGroupService.calculateAgeGroupName(*_) >> "AK"
         teamService.findByIds(_) >> [:]
         categoryService.sortedByName() >> []
@@ -138,7 +139,7 @@ class RaceLiveServiceSpec extends Specification {
     def "ALL_AGEGROUPS view adds an 'ohne Altersklasse' section for participants matching no age group instead of dropping them"() {
         given: "Anna falls into U14, Bert (born outside every configured range) matches none"
         def ageGroups = Stub(AgeGroupService) {
-            findBySeason(2026) >> [new AgeGroup(1L, "U14", 2026, 2012, 2013, Gender.BOTH)]
+            findBySeasonAndVariant(2026, "") >> [new AgeGroup(1L, "U14", 2026, 2012, 2013, Gender.BOTH)]
             calculateAgeGroupName(_, Gender.FEMALE, _) >> "U14"
             calculateAgeGroupName(_, Gender.MALE, _) >> AgeGroupService.UNKNOWN_AGE_GROUP
         }
@@ -159,6 +160,31 @@ class RaceLiveServiceSpec extends Specification {
         response.sections()[1].entries()*.name() == ["Bert Nomatch"]
         response.sections()[1].entries()*.place() == [1]
         response.notRanked().isEmpty()
+    }
+
+    def "ALL_AGEGROUPS view of a race on an age-group variant shows that variant's classes - response and HTML alike"() {
+        given: "the standard variant has one open class, the race's variant one per birth year"
+        def repository = Stub(AgeGroupRepository) {
+            findBySeasonYearAndVariant(2026, "") >> [new AgeGroup(1L, "Allgemein", 2026, 1950, 2010, Gender.BOTH)]
+            findBySeasonYearAndVariant(2026, "Kinder") >> [new AgeGroup(2L, "Jahrgang 2000", 2026, "Kinder", 2000, 2000, Gender.BOTH)]
+        }
+        def ageGroups = new AgeGroupService(repository, seasonService, Stub(RaceService))
+        def viewService = new RankingViewService(ageGroups, seasonService, categoryService, teamService, personService,
+                new RankingService(startGroupTemplateService), startGroupTemplateService)
+        def liveService = new RaceLiveService(participantService, categoryService, viewService, settingsService)
+        participantService.findByRaceId(1L) >> [participant(1L, 50000)]
+        personService.findByIds(_) >> [1L: person(1L, "Anna", "Fast", Gender.FEMALE)]
+        def kidsRace = new Race(1L, "Test-Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "test-token", "Kinder")
+
+        when:
+        def response = liveService.buildResponse(kidsRace, RaceLiveViewType.ALL_AGEGROUPS, null, null, null)
+        String html = liveService.renderHtml(response)
+
+        then:
+        response.sections()*.title() == ["Wertung Jahrgang 2000 weiblich"]
+        html.contains("Wertung Jahrgang 2000 weiblich")
+        !html.contains("Allgemein")
     }
 
     @Unroll

@@ -40,7 +40,6 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
     ParticipantService participantService = Mock()
     RaceService raceService = Mock()
     PersonService personService = Mock()
-    AgeGroupService ageGroupService = Spy(new AgeGroupService(null))
     PointsScaleService pointsScaleService = Mock()
     TeamService teamService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
@@ -53,11 +52,12 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
         getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
     }
     SeasonService seasonService = new SeasonService(settingsService, raceService)
+    AgeGroupService ageGroupService = Spy(new AgeGroupService(null, seasonService, raceService))
 
-    def calculator = new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService, seasonService)
+    def calculator = new PointsCombinationModeCalculator(new RankingService(startGroupTemplateService), personService, pointsScaleService, teamService, ageGroupService)
 
     def service = new GaudiModeService(repository, gaudiModeRaceRepository, pairingRepository, participantService,
-            raceService, personService, ageGroupService, seasonService, [calculator], transactionOperations)
+            raceService, personService, ageGroupService, [calculator], transactionOperations)
 
     def gaudiMode = new GaudiMode(1L, GaudiModeType.POINTS_COMBINATION, "Kondiwettkamp", null, 1L, false, false, false, LocalDateTime.now())
     def race = new Race(10L, "Schnelligkeit", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
@@ -151,7 +151,7 @@ class GaudiModeServiceCategoryRankingSpec extends Specification {
                 new AgeGroup(1L, "U14", 2026, 2012, 2013, Gender.BOTH),
                 new AgeGroup(2L, "U16", 2026, 2010, 2011, Gender.BOTH),
         ]
-        ageGroupService.findBySeason(2026) >> ageGroups
+        ageGroupService.findBySeasonAndVariant(2026, "") >> ageGroups
         def persons = [
                 1L: person(1L, Gender.MALE, LocalDate.of(2012, 1, 1)),
                 2L: person(2L, Gender.MALE, LocalDate.of(2013, 1, 1)),

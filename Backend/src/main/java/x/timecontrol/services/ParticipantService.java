@@ -311,13 +311,13 @@ public class ParticipantService {
     }
 
     /**
-     * The age groups that apply to one race: those configured for the season the race's date falls
-     * into (see {@link SeasonService}). Never "all age groups" - an age class rolls over every
-     * year, so several seasons' rows describe the same class with different birth years and
-     * matching a person against all of them at once would pick whichever season came first.
+     * The age groups that apply to one race: those of the variant it picked, in the season its date
+     * falls into (see {@link SeasonService}). Never "all age groups" - an age class rolls over every
+     * year and a variant cuts the same birth years differently, so matching a person against all
+     * of them at once would pick whichever row came first.
      */
     private List<AgeGroup> ageGroupsForRace(Race race) {
-        return ageGroupService.findBySeason(seasonService.seasonOf(race));
+        return ageGroupService.findBySeasonAndVariant(seasonService.seasonOf(race), race.ageGroupVariant());
     }
 
     private Race requireRace(Long raceId) {
@@ -350,6 +350,14 @@ public class ParticipantService {
      * of one gender. {@code ageGroupId == null} is the catch-all "no matching age group" bucket
      * ({@code gender} unused/null in that case).
      */
+    /** The season and variant whose age groups a race is categorised with. */
+    private record SeasonVariant(int seasonYear, String variant) {
+    }
+
+    private SeasonVariant seasonVariantOf(Race race) {
+        return new SeasonVariant(seasonService.seasonOf(race), race.ageGroupVariant());
+    }
+
     private record AgeGroupBucketKey(Long ageGroupId, Gender gender) {
         private static final AgeGroupBucketKey NO_AGE_GROUP = new AgeGroupBucketKey(null, null);
     }
@@ -370,8 +378,8 @@ public class ParticipantService {
      * the ordering convention can't drift between the two. {@code personsById} is caller-provided
      * since both callers already need to batch-load it for other purposes too.
      */
-    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById, int seasonYear) {
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(seasonYear).stream()
+    private Map<AgeGroupBucketKey, List<Participant>> groupByAgeGroup(List<Participant> participants, Map<Long, Person> personsById, Race race) {
+        List<AgeGroup> ageGroups = ageGroupsForRace(race).stream()
                 .sorted(Comparator.comparing(AgeGroup::birthYearTo).reversed()
                         .thenComparing(AgeGroup::gender))
                 .toList();
@@ -419,20 +427,22 @@ public class ParticipantService {
         Map<Long, Team> teamsById = teamService.findByIds(teamIds);
         Map<Long, Category> categoriesById = categoryService.findByIds(categoryIds);
         Map<Long, StartGroupTemplate> startGroupsById = startGroupTemplateService.findByIds(startGroupIds);
-        // A batch can span races of different seasons (the roster of one race never does, but
-        // cross-race callers exist), and each race has to be categorised against its own season's
-        // age groups. Resolved once per race up front and keyed by race id, so the per-participant
-        // loop below is a plain map lookup: deriving the season per participant would re-read the
-        // settings row (SeasonService#seasonStart) once for every row in the batch.
-        Map<Integer, List<AgeGroup>> ageGroupsBySeason = new HashMap<>();
+        // A batch can span races of different seasons and variants (the roster of one race never
+        // does, but cross-race callers exist), and each race has to be categorised against its own
+        // season's and variant's age groups. Resolved once per race up front and keyed by race id,
+        // so the per-participant loop below is a plain map lookup: deriving the season per
+        // participant would re-read the settings row (SeasonService#seasonStart) once for every
+        // row in the batch.
+        Map<SeasonVariant, List<AgeGroup>> ageGroupsBySeasonVariant = new HashMap<>();
         Map<Long, List<AgeGroup>> ageGroupsByRaceId = new HashMap<>();
         Map<Long, Integer> seasonByRaceId = new HashMap<>();
         MonthDay seasonStart = seasonService.seasonStart();
         for (Race race : racesById.values()) {
             int season = seasonService.seasonOf(race.date(), seasonStart);
             seasonByRaceId.put(race.id(), season);
-            ageGroupsByRaceId.put(race.id(),
-                    ageGroupsBySeason.computeIfAbsent(season, ageGroupService::findBySeason));
+            ageGroupsByRaceId.put(race.id(), ageGroupsBySeasonVariant.computeIfAbsent(
+                    new SeasonVariant(season, race.ageGroupVariant()),
+                    key -> ageGroupService.findBySeasonAndVariant(key.seasonYear(), key.variant())));
         }
 
         List<ParticipantResponse> result = new ArrayList<>();
@@ -613,7 +623,7 @@ public class ParticipantService {
         Set<Long> personIds = participants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
         Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
-                groupByAgeGroup(participants, personsById, seasonService.seasonOf(requireRace(raceId)));
+                groupByAgeGroup(participants, personsById, requireRace(raceId));
 
         Random random = new Random();
         List<Participant> ordered = new ArrayList<>();
@@ -709,12 +719,12 @@ public class ParticipantService {
         // bucket last).
         Set<Long> previousPersonIds = previousParticipants.stream().map(Participant::personId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> previousPersonsById = personService.findByIds(previousPersonIds);
-        // Bucketed against the *target* race's season, not the previous race's: the order computed
-        // here becomes that race's start order and has to line up with the age-group sections its
-        // own start list and rankings print. Two runs of the same event are in the same season
-        // anyway; this only matters if they were ever split across the season boundary.
+        // Bucketed against the *target* race's season and variant, not the previous race's: the
+        // order computed here becomes that race's start order and has to line up with the
+        // age-group sections its own start list and rankings print. Two runs of the same event
+        // normally share both; this only matters if they don't.
         Map<AgeGroupBucketKey, List<Participant>> byAgeGroup =
-                groupByAgeGroup(previousParticipants, previousPersonsById, seasonService.seasonOf(race));
+                groupByAgeGroup(previousParticipants, previousPersonsById, race);
 
         List<Participant> ordered = new ArrayList<>();
         Set<Long> matchedPersonIds = new HashSet<>();
@@ -1107,7 +1117,7 @@ public class ParticipantService {
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
         // Resolved once for the whole file rather than per row: it is the same race for every row,
         // and resolving it per row would read the settings table once per participant.
-        int seasonYear = seasonService.seasonOf(requireRace(raceId));
+        SeasonVariant target = seasonVariantOf(requireRace(raceId));
 
         String line;
         int lineNumber = 0;
@@ -1132,7 +1142,7 @@ public class ParticipantService {
             }
 
             String externalId = parts.length > 5 ? parts[5].trim() : "";
-            importRow(raceId, seasonYear, lineNumber, line,
+            importRow(raceId, target, lineNumber, line,
                     new ImportRowFields(parts[0], parts[1], parts[2], parts[3], parts[4], externalId,
                             null, null, null, null, null, null, null, null),
                     existingNameBirthDateKeys, imported, errors);
@@ -1162,12 +1172,12 @@ public class ParticipantService {
         List<Participant> imported = new ArrayList<>();
         List<ParticipantImportRowError> errors = new ArrayList<>();
         Set<String> existingNameBirthDateKeys = loadExistingNameBirthDateKeys(raceId);
-        int seasonYear = seasonService.seasonOf(requireRace(raceId));
+        SeasonVariant target = seasonVariantOf(requireRace(raceId));
 
         int rowNumber = 1;
         for (Map<String, String> row : parsed.rows()) {
             rowNumber++;
-            importRow(raceId, seasonYear, rowNumber, row.toString(),
+            importRow(raceId, target, rowNumber, row.toString(),
                     new ImportRowFields(
                             valueFor(row, effectiveMapping, "lastName"),
                             valueFor(row, effectiveMapping, "firstName"),
@@ -1735,7 +1745,7 @@ public class ParticipantService {
      * {@code existingNameBirthDateKeys} is grown in place so duplicate ExternalId-less rows later in
      * the same file are also caught.
      */
-    private void importRow(Long raceId, int seasonYear, int rowNumber, String rawRowDescription, ImportRowFields fields,
+    private void importRow(Long raceId, SeasonVariant target, int rowNumber, String rawRowDescription, ImportRowFields fields,
                             Set<String> existingNameBirthDateKeys, List<Participant> imported, List<ParticipantImportRowError> errors) {
         String lastName = fields.lastName() != null ? fields.lastName().trim() : "";
         String firstName = fields.firstName() != null ? fields.firstName().trim() : "";
@@ -1804,11 +1814,13 @@ public class ParticipantService {
                 // AgeGroup isn't a participant FK - it's computed from birthDate/gender at read time
                 // (findMatchingAgeGroup) - so importing "Klasse" just needs a matching AgeGroup row to
                 // exist, not anything set on the Participant itself. It has to exist in *this race's
-                // season*: scoped to the target race rather than to whatever "U14" happens to exist,
-                // an import can neither silently reuse a past season's class nor widen its birth-year
-                // range and thereby re-categorise races already run under it.
+                // season and variant*: scoped to the target race rather than to whatever "U14" happens
+                // to exist, an import can neither silently reuse a past season's or another variant's
+                // class nor widen its birth-year range and thereby re-categorise races already run
+                // under it.
                 if (!ageGroupName.isEmpty()) {
-                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender, seasonYear);
+                    ageGroupService.findOrCreateForImport(ageGroupName, birthDate.getYear(), gender,
+                            target.seasonYear(), target.variant());
                 }
 
                 Person person;

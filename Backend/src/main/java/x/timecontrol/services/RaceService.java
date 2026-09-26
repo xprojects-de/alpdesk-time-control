@@ -3,6 +3,7 @@ package x.timecontrol.services;
 import jakarta.inject.Singleton;
 import org.apache.pdfbox.Loader;
 import x.timecontrol.dto.RaceRequest;
+import x.timecontrol.entities.AgeGroup;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.ResultUnit;
 import x.timecontrol.entities.SortDirection;
@@ -67,7 +68,7 @@ public class RaceService {
                 race.raceDirector(), race.timeControl(), race.routeName(), race.elevationDifference(),
                 race.routeLength(), race.courseSetter(), race.weather(), race.resultUnit(), race.resultUnitLabel(),
                 race.sortDirection(), race.coverPagePdf(), race.previousRaceId(), race.startOrderMode(),
-                race.startOrderReverseTopCount(), liveToken);
+                race.startOrderReverseTopCount(), liveToken, race.ageGroupVariant());
     }
 
     public Iterable<Race> findAll() {
@@ -81,6 +82,11 @@ public class RaceService {
      */
     public List<Race> findAllWithoutCoverPage() {
         return repository.findAllWithoutCoverPage();
+    }
+
+    /** The races dated within [from, to], inclusive, without their cover-page BLOBs. */
+    public List<Race> findBetweenWithoutCoverPage(LocalDate from, LocalDate to) {
+        return repository.findBetweenWithoutCoverPage(from, to);
     }
 
     public Set<Long> findIdsWithCoverPage() {
@@ -173,7 +179,8 @@ public class RaceService {
                     startOrder.reverseTopCount(),
                     // liveToken isn't exposed in RaceRequest at all - always carried over from the
                     // existing row, never regenerated or cleared by an unrelated edit.
-                    existing.get().liveToken()
+                    existing.get().liveToken(),
+                    race.ageGroupVariant()
             );
             return Optional.of(repository.update(updated));
         }
@@ -199,9 +206,15 @@ public class RaceService {
     }
 
     /**
+     * @param existing the race as stored, when the request updates it; null for a new race. A
+     *                 request without {@code ageGroupVariant} keeps the existing race's variant -
+     *                 the same "omitted means unchanged" as for the cover page - so a client that
+     *                 does not know about variants cannot silently move a race back to the standard
+     *                 classes and re-categorise its results. A new race without one gets the
+     *                 standard variant.
      * @throws IllegalArgumentException if {@code request.coverPagePdf()} is set but isn't a parseable PDF
      */
-    public Race createFromRequest(RaceRequest request) {
+    public Race createFromRequest(RaceRequest request, Race existing) {
         if (request.coverPagePdf() != null) {
             validateCoverPagePdf(request.coverPagePdf());
         }
@@ -225,7 +238,11 @@ public class RaceService {
                 request.coverPagePdf(),
                 request.previousRaceId(),
                 startOrder.mode(),
-                startOrder.reverseTopCount()
+                startOrder.reverseTopCount(),
+                null,
+                request.ageGroupVariant() != null ? AgeGroupService.normalizeVariant(request.ageGroupVariant())
+                        : existing != null ? existing.ageGroupVariant()
+                        : AgeGroup.STANDARD_VARIANT
         );
     }
 
