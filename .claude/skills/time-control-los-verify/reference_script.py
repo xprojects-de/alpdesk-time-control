@@ -306,11 +306,13 @@ def main():
 
     # When both sources are on hand, prove they describe the same draw before trusting anything.
     if PAIRS_FROM_PDF or PAIRS_FALLBACK is not None:
-        try:
-            from_json = [(p["participant1Name"], p.get("participant2Name"))
-                         for p in json.load(open(PAIRING_JSON, encoding="utf-8"))]
-        except FileNotFoundError:
-            from_json = None
+        from_json = None
+        if PAIRING_JSON:
+            try:
+                from_json = [(p["participant1Name"], p.get("participant2Name"))
+                             for p in json.load(open(PAIRING_JSON, encoding="utf-8"))]
+            except FileNotFoundError:
+                pass
         if from_json is not None:
             by_name = {v["name"]: k for k, v in results.items()}
             resolved = [(by_name.get(a), by_name.get(b) if b else None) for a, b in from_json]
