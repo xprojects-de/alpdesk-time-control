@@ -260,3 +260,60 @@ würde.
 - **Aufgehoben, wenn:** mehrere Rennen parallel ohne Archiv dazwischen gezeitet werden - dann ein löschendes Archiv mit
   409 ablehnen, solange Zeilen fremder Rennen in der Tabelle liegen.
 - **Quelle:** Zeitmessungs-Review 2026-09-26 (B7)
+
+### E26 · Ein Poll überschreibt eine von Hand korrigierte Dauer
+- **Bereich:** Zeitmessung, Gerät bis Messung
+- **Entscheidung:** Meldet das Gerät für eine Geräte-Nr. eine andere Dauer als die gespeicherte, schreibt
+  `TimingEventSink#acceptOne` die Gerätedauer (Upsert, `MeasurementRepository#upsertByDeviceMeasurementId`); nur
+  Teilnehmer und Zeitpunkt bleiben. Eine Korrektur der Dauer einer Gerätezeile in „Messungen“ hält damit nur bis zum
+  nächsten Poll bzw. bis zum Sicherheits-Pull vor Archiv/Reset.
+- **Begründung:** Die Gerätezeit ist die maßgebliche Zeit; korrigiert wird nach dem Archiv in „Zuordnung & Sync“.
+  **Achtung:** Eine überschriebene Korrektur fällt nach der Pflegeregel unter „wird gefixt“; eingetragen auf Wunsch
+  des Nutzers.
+- **Aufgehoben, wenn:** Zeiten von Geräteeinträgen vor dem Archiv in „Messungen“ korrigiert werden - dann bearbeitete
+  Zeilen markieren (Migration) und ihre Dauer im Sink nicht mehr überschreiben (Spec in `TimingEventSinkSpec`, der
+  bestehende Fall „a changed duration is written …“ wird angepasst).
+- **Quelle:** Zeitmessungs-Review 2026-09-26, Alpdesk-Pfad (B1)
+
+### E27 · Ein neu zählendes Gerät überschreibt gespeicherte Zeilen
+- **Bereich:** Zeitmessung, Gerät bis Messung
+- **Entscheidung:** Der Sink erkennt nicht, dass das Gerät wieder bei 1 zu zählen begonnen hat, solange die Tabelle
+  noch Zeilen mit denselben Geräte-Nrn. hält. Neue Zielzeiten landen dann per Upsert auf den alten Zeilen und behalten
+  deren Teilnehmer. Wege dahin: `/reset` ausgeführt, aber die Antwort geht verloren (Rollback trotz leerem Gerät,
+  `MeasurementService#deleteAllAndResetDevice`), Umschalten des Dauerbetriebs (`MeasurementController#setContinuousMode`
+  ohne Pause, Sicherheits-Pull oder Tabellenprüfung), Wechsel von Basis-URL oder Provider mitten im Rennen, Gerät
+  aus- und eingeschaltet.
+- **Begründung:** Ablauf am Renntag: vor jedem Neustart des Geräts wird archiviert bzw. gelöscht. **Achtung:** Dabei
+  geht eine Zielzeit verloren und eine falsche steht beim alten Teilnehmer - nach der Pflegeregel „wird gefixt“;
+  eingetragen auf Wunsch des Nutzers.
+- **Aufgehoben, wenn:** so ein Fall im Rennbetrieb auftritt - dann im Sink keine abweichende Gerätedauer auf eine
+  zugeordnete Zeile schreiben, den Batch ablehnen und als Konflikt sichtbar machen; Dauerbetrieb mit 409 ablehnen,
+  solange Gerätezeilen in der Tabelle liegen (Specs in `TimingEventSinkSpec` und einem Controller-Spec, e2e mit einem
+  Fake, der ohne `/reset` neu zählt).
+- **Quelle:** Zeitmessungs-Review 2026-09-26, Alpdesk-Pfad (B2)
+
+### E28 · Eine gelöschte Gerätezeile kommt beim nächsten Poll zurück
+- **Bereich:** Zeitmessung, Gerät bis Messung
+- **Entscheidung:** `MeasurementService#delete` und `AutoAssignService#discardExistingMeasurements` (set-next mit
+  `force`) löschen nur die Zeile; das Gerät meldet die Geräte-Nr. weiter, und der Sink fügt sie neu und unzugeordnet
+  ein. Auto-Assign gibt sie dann dem nächsten erwarteten Starter.
+- **Begründung:** Wunsch des Nutzers; der Bediener sieht die zurückgekommene Zeile in „Messungen“. **Achtung:** Bei
+  laufender Automatik-Zuordnung verschiebt das alle folgenden Zeiten um einen Teilnehmer, beim Wiederholungslauf mit
+  `force` bekommt der Läufer die verworfene Zeit zurück - nach der Pflegeregel „wird gefixt“; eingetragen auf Wunsch
+  des Nutzers.
+- **Aufgehoben, wenn:** Fehlauslösungen oder Wiederholungsläufe bei laufender Automatik-Zuordnung vorkommen - dann
+  gelöschte positive Geräte-Nrn. (mit Dauer) als Merker speichern, im Sink überspringen und beim Leeren der Tabelle
+  mitleeren (Specs in `TimingEventSinkSpec`, `AutoAssignServiceSpec`, e2e nachtslalom mit Wiederholungslauf).
+- **Quelle:** Zeitmessungs-Review 2026-09-26, Alpdesk-Pfad (B3)
+
+### E29 · Fehler beim automatischen Poll stehen nur im Log
+- **Bereich:** Zeitmessung, Gerät bis Messung
+- **Entscheidung:** Scheitert der 5s-Poll (Gerät nicht erreichbar, 5xx, Timeout) oder liefert eine 200-Antwort keine
+  lesbare Zeile, schreibt `DataImportScheduler` ein WARN beim ersten Fehler und danach nur DEBUG; eine unlesbare
+  Antwort gilt als erfolgreicher Poll ohne neue Zeiten. Die Verbindungsanzeige fragt nur `/ping` ab und bleibt grün.
+- **Begründung:** Der Bediener sieht, dass in „Messungen“ keine neuen Zeiten ankommen; die Zeiten bleiben auf dem Gerät
+  und kommen mit dem nächsten erfolgreichen Poll.
+- **Aufgehoben, wenn:** ein Poll-Fehler im Rennbetrieb unbemerkt bleibt - dann letzten Fehler/Erfolg des Polls per
+  Endpunkt ausliefern und neben der Verbindungsanzeige zeigen, eine nicht leere Antwort ohne lesbare Zeile als Fehler
+  werten.
+- **Quelle:** Zeitmessungs-Review 2026-09-26, Alpdesk-Pfad (B4)

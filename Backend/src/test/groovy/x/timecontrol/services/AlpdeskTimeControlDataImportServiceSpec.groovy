@@ -3,6 +3,8 @@ package x.timecontrol.services
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.client.BlockingHttpClient
 import io.micronaut.http.client.HttpClient
+import io.micronaut.http.client.exceptions.HttpClientException
+import io.micronaut.http.client.exceptions.HttpClientResponseException
 import spock.lang.Specification
 import x.timecontrol.entities.Measurement
 
@@ -84,6 +86,66 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         then: "upserting on -3 would replace the time an official typed in by hand"
         0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
         imported.empty
+    }
+
+    def "a device that cannot be read fails the poll instead of looking like an empty device"() {
+        given: "the safety pull before a reset/archive relies on this - an empty list would let it wipe the device"
+        blockingHttpClient.exchange(_, String) >> { throw failure }
+
+        when:
+        service.importDataFromDevice()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.startsWith("Could not connect to device at http://192.168.4.1/data")
+        0 * measurementService.findAll()
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+
+        where:
+        failure << [
+                new HttpClientException("Read Timeout"),
+                new HttpClientResponseException("Internal Server Error", HttpResponse.serverError()),
+        ]
+    }
+
+    def "a line the device garbled is skipped: #reason"() {
+        given: "one readable line next to the garbled one"
+        deviceReports(line + "\n2,51000\n")
+        measurementService.findAll() >> []
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "only the readable line is written"
+        1 * measurementService.upsertByDeviceMeasurementId(2L, null, 51000, _) >>
+                new Measurement(8L, 2L, null, 51000, MEASURED_AT)
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        imported*.deviceMeasurementId() == [2L]
+
+        where:
+        line              | reason
+        "1,50000,3"       | "a third column"
+        "1,"              | "no duration"
+        "x,50000"         | "a non-numeric id"
+        "0,50000"         | "device id 0, which no real counter reports"
+        "1,Infinity"      | "an infinite duration"
+        "1,3000000000"    | "a duration beyond the column's range, which would wrap around"
+        "1,-5"            | "a negative duration"
+    }
+
+    def "a duration with a fraction is rounded to whole milliseconds, also with Windows line endings"() {
+        given:
+        deviceReports("1,50000.6\r\n2,50000.4\r\n")
+        measurementService.findAll() >> []
+
+        when:
+        service.importDataFromDevice()
+
+        then:
+        1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50001, _) >>
+                new Measurement(7L, 1L, null, 50001, MEASURED_AT)
+        1 * measurementService.upsertByDeviceMeasurementId(2L, null, 50000, _) >>
+                new Measurement(8L, 2L, null, 50000, MEASURED_AT)
     }
 
     def "a device holding no measurements is not treated as a device failure"() {

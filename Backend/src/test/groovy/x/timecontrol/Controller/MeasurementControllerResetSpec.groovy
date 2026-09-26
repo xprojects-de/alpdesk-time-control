@@ -49,6 +49,23 @@ class MeasurementControllerResetSpec extends Specification {
         response.body() == "Device reset and all measurements deleted successfully"
     }
 
+    def "a safety pull that cannot reach the device leaves the table and the device untouched"() {
+        given: "the device holds times the last poll has not fetched yet"
+        device.importDataFromDevice() >> { throw new IllegalStateException("Could not connect to device at http://192.168.4.1/data: Read Timeout") }
+
+        when:
+        def response = controller.resetAll(true)
+
+        then: "wiping now would lose those times for good"
+        0 * measurementRepository.deleteAll()
+        0 * device.resetDevice()
+
+        and:
+        response.status == HttpStatus.INTERNAL_SERVER_ERROR
+        (response.body() as ErrorResponse).message() ==
+                "Error during reset operation: Could not connect to device at http://192.168.4.1/data: Read Timeout"
+    }
+
     def "a delete that fails in the database leaves the device untouched"() {
         given:
         measurementRepository.deleteAll() >> { throw new DataAccessException("database is locked") }
