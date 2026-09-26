@@ -51,3 +51,4 @@ SEASON_START_DEFAULT = {"seasonStartMonth": 1, "seasonStartDay": 1}
 KIDS_VARIANT = "Jahrgangsweise"
 RACE_KIDS_NAME = "Saison Kinderrennen"
 RACE_KIDS_DATE = "2026-02-01"
+RACE_KIDS_RUN2_NAME = "Saison Kinderrennen Lauf 2"

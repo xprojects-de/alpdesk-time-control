@@ -8,7 +8,10 @@ PDF export, the mapped import (which creates missing classes in the race's varia
 guards around it: a race cannot pick a variant its season does not have, and a variant in use
 cannot be deleted.
 """
+import csv
+import io
 import json
+import subprocess
 import sys
 
 import common as c
@@ -235,6 +238,90 @@ status, body = c.delete(config.BASE, token,
 check("unbenutzte Variante löschen -> 204", status, 204)
 _, gone = c.get(config.BASE, token, f"/age-groups?season={SEASON + 1}&variant={VARIANT.replace(' ', '%20')}")
 check("gelöschte Variante ist leer", gone, [])
+
+# --- 7. Was aus der Variante folgt: Startreihenfolge, Gaudi, PDF-Text, CSV-Exporte ---------------
+# 7a. Startreihenfolge eines zweiten Laufs: pro Altersklasse der *Variante* des Rennens, jüngste
+# Klasse zuerst, Teilnehmer ohne passende Klasse am Ende. Mit den Standard-Klassen stünde Ida
+# (2014) in U14 zusammen mit Anna, Jonas und Paul; in der Variante hat sie keine Klasse.
+status, run2 = c.post(config.BASE, token, "/races", {
+    "name": config.RACE_KIDS_RUN2_NAME, "date": config.RACE_KIDS_DATE, "resultUnit": "TIME", "sortDirection": "ASC",
+    "ageGroupVariant": VARIANT, "previousRaceId": kids_race["id"],
+    "startOrderMode": "REVERSE_TOP_N", "startOrderReverseTopCount": 0,
+})
+require("Kinderrennen Lauf 2 anlegen", status, 201, run2)
+_, kids_participants = c.get(config.BASE, token, f"/participants?raceId={kids_race['id']}")
+for p in kids_participants:
+    status, body = c.post(config.BASE, token, "/participants", {"raceId": run2["id"], "personId": p["person"]["id"]})
+    require(f"{p['person']['firstName']} in Lauf 2", status, 201, body)
+status, ordered = c.post(config.BASE, token, f"/participants/race/{run2['id']}/apply-start-order-from-previous-race", {})
+require("Startreihenfolge aus Lauf 1 übernehmen", status, 200, ordered)
+_, run2_participants = c.get(config.BASE, token, f"/participants?raceId={run2['id']}")
+by_start = sorted(run2_participants, key=lambda p: p["startSequence"])
+class_blocks = []
+for p in by_start:
+    name = (p.get("ageGroup") or {}).get("name")
+    if not class_blocks or class_blocks[-1] != name:
+        class_blocks.append(name)
+check("Lauf 2: Startblöcke nach den Klassen der Variante, jüngste zuerst, ohne Klasse zuletzt",
+      class_blocks, ["JAHRGANG 2015", "Jahrgang 2013", "Jahrgang 2012", None])
+check("Lauf 2: Ida (2014, in der Variante ohne Klasse) startet zuletzt",
+      by_start[-1]["person"]["firstName"], "Ida")
+
+# 7b. Gaudi über Rennen mit verschiedenen Varianten: das erste Rennen entscheidet über die Klassen.
+def gaudi_age_groups(first_race_id, second_race_id, label):
+    status, gm = c.post(config.BASE, token, "/gaudi-modes", {
+        "name": f"Varianten-Gaudi {label}", "type": "POINTS_COMBINATION",
+        "races": [{"raceId": first_race_id, "weight": 1.0}, {"raceId": second_race_id, "weight": 1.0}],
+    })
+    require(f"Gaudi {label} anlegen", status, 201, gm)
+    status, csv_bytes = c.get_raw(config.BASE, token, f"/gaudi-modes/{gm['id']}/export/csv")
+    require(f"Gaudi {label} CSV", status, 200, csv_bytes)
+    rows = list(csv.DictReader(io.StringIO(csv_bytes.decode("utf-8")), delimiter=";"))
+    ranked = {row["Vorname"]: row["Altersklasse"] for row in rows}
+    _, not_ranked = c.get(config.BASE, token, f"/gaudi-modes/{gm['id']}/not-ranked")
+    unranked = {e.get("firstName"): e.get("ageGroup") for e in (not_ranked or [])}
+    return ranked, unranked
+
+ranked, unranked = gaudi_age_groups(kids_race["id"], state["race_jan"], "Kinder zuerst")
+check("Gaudi Kinderrennen zuerst: Anna in der Klasse der Variante", ranked.get("Anna"), "Jahrgang 2013")
+check("Gaudi Kinderrennen zuerst: Bene (nicht gewertet) in der Klasse der Variante", unranked.get("Bene"), "Jahrgang 2012")
+ranked, unranked = gaudi_age_groups(state["race_jan"], kids_race["id"], "Januar zuerst")
+check("Gaudi Januar-Rennen zuerst: Anna in der Standard-Klasse", ranked.get("Anna"), "U14")
+check("Gaudi Januar-Rennen zuerst: Bene (nicht gewertet) in der Standard-Klasse", unranked.get("Bene"), "U16")
+
+# 7c. Der Text im PDF, nicht nur dass eines zurückkommt.
+def pdf_text(path, file_name):
+    status, pdf = c.get_raw(config.BASE, token, path)
+    require(f"PDF {file_name}", status, 200, pdf)
+    with open(c.results_path(file_name), "wb") as f:
+        f.write(pdf)
+    return subprocess.run(["pdftotext", "-layout", c.results_path(file_name), "-"],
+                          capture_output=True, text=True, check=True).stdout
+
+kids_pdf = pdf_text(f"/participants/export/pdf/agegroups/all/{kids_race['id']}", "kinderrennen_altersklassen.pdf")
+jan_pdf = pdf_text(f"/participants/export/pdf/agegroups/all/{state['race_jan']}", "januar_altersklassen.pdf")
+check("PDF Kinderrennen: Abschnitt Jahrgang 2013", "Wertung Jahrgang 2013" in kids_pdf, True)
+check("PDF Kinderrennen: Abschnitt Jahrgang 2012", "Wertung Jahrgang 2012" in kids_pdf, True)
+check("PDF Kinderrennen: kein Abschnitt U14/U16", "Wertung U14" in kids_pdf or "Wertung U16" in kids_pdf, False)
+check("PDF Januar-Rennen: Abschnitt U14", "Wertung U14" in jan_pdf, True)
+check("PDF Januar-Rennen: kein Abschnitt der Variante", "Jahrgang 2013" in jan_pdf, False)
+run2_start_pdf = pdf_text(f"/participants/export/pdf/startlist/{run2['id']}", "kinderrennen_lauf2_startliste.pdf")
+check("PDF Startliste Lauf 2 nennt die Klassen der Variante", "Jahrgang 2013" in run2_start_pdf, True)
+
+# 7d. Die Altersklassen-Spalte der CSV-Exporte.
+def csv_age_groups(path):
+    status, body = c.get_raw(config.BASE, token, path)
+    require(f"CSV {path}", status, 200, body)
+    return {row["firstName"]: row["ageGroup"]
+            for row in csv.DictReader(io.StringIO(body.decode("utf-8")), delimiter=";")}
+
+results_csv = csv_age_groups(f"/participants/export/results-csv/{kids_race['id']}")
+startlist_csv = csv_age_groups(f"/participants/export/startlist-csv/{run2['id']}")
+jan_results_csv = csv_age_groups(f"/participants/export/results-csv/{state['race_jan']}")
+check("Ergebnis-CSV Kinderrennen: Anna", results_csv.get("Anna"), "Jahrgang 2013")
+check("Ergebnis-CSV Kinderrennen: Ida ohne Klasse", results_csv.get("Ida"), "")
+check("Startlisten-CSV Lauf 2: Carla", startlist_csv.get("Carla"), "JAHRGANG 2015")
+check("Ergebnis-CSV Januar-Rennen: Anna im Standard", jan_results_csv.get("Anna"), "U14")
 
 print()
 if failures:

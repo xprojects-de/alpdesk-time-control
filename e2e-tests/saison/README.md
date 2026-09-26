@@ -60,7 +60,12 @@ Bene hat im Januar-Rennen bewusst **kein Ergebnis**. Damit landet er in der Gaud
    abdeckt, und meldet einen passenden Namen mit falschem Jahrgang als Zeilenfehler, während der
    Rest der Datei importiert wird. Dazu die Schutzregeln: unbekannte Variante am
    Rennen (400), Datum in eine Saison ohne diese Variante (400), benutzte Variante löschen (409),
-   Standard löschen (400) – und die Übernahme der Variante in die nächste Saison.
+   Standard löschen (400) – und die Übernahme der Variante in die nächste Saison. Zum Schluss, was
+   aus der Variante folgt: ein zweiter Lauf leitet seine Startreihenfolge pro Klasse der Variante ab
+   (jüngste zuerst, ohne Klasse zuletzt); ein Gaudi-Modus über Kinder- und Januar-Rennen wertet nach
+   den Klassen des ersten Rennens (Rangliste und „nicht gewertet“, in beiden Reihenfolgen); der
+   PDF-Text (per `pdftotext`) und die Altersklassen-Spalte der Ergebnis- und Startlisten-CSV zeigen
+   die Klassen der Variante bzw. des Standards.
 
 ## Voraussetzungen
 
