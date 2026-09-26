@@ -126,24 +126,76 @@ check("PDF Kinderrennen ist ein PDF", pdf[:4], b"%PDF")
 with open(c.results_path("kinderrennen_altersklassen.pdf"), "wb") as f:
     f.write(pdf)
 
-# --- 4. Import legt fehlende Klassen in der Variante des Rennens an --------------------------------
-csv = ("Nachname;Vorname;Jahrgang;Geschlecht;Klasse\n"
-       "Klein;Carla;2015;W;Jahrgang 2015\n").encode()
+# --- 4. Import: die Klasse folgt der Variante des Zielrennens --------------------------------------
+def groups_of(variant):
+    _, groups = c.get(config.BASE, token, f"/age-groups?season={SEASON}&variant={variant.replace(' ', '%20')}")
+    return sorted((ag["name"], ag["birthYearFrom"], ag["birthYearTo"]) for ag in groups)
+
+def classes_in(race_id):
+    _, rows = c.get(config.BASE, token, f"/participants?raceId={race_id}")
+    return {p["person"]["firstName"]: (p.get("ageGroup") or {}).get("name") for p in rows}
+
+standard_before = groups_of("")
+variant_before = groups_of(VARIANT)
+
+# 4a. Einfacher CSV-Import (ohne Klassen-Spalte): legt nie Klassen an, die Einordnung ergibt sich
+# beim Lesen aus der Variante des Rennens. Dieselbe Datei in beide Rennen derselben Saison.
+plain_csv = (b"Lastname,Firstname,Birthdate,Team,Gender\n"
+             b"Imhof,Ida,2014-06-01,SC Test,FEMALE\n"
+             b"Jaeger,Jonas,2013-02-01,SC Test,MALE\n")
+for race_id, label in [(kids_race["id"], "Kinderrennen"), (state["race_jan"], "Januar-Rennen")]:
+    status, result = c.post_multipart(config.BASE, token, f"/participants/import/{race_id}", {},
+                                      {"file": ("einfach.csv", plain_csv, "text/csv")})
+    require(f"einfacher Import ins {label}", status, 200, result)
+    # An empty error list is left out of the JSON altogether.
+    check(f"einfacher Import ins {label} ohne Zeilenfehler", result.get("errors", []), [])
+kids_classes = classes_in(kids_race["id"])
+jan_classes = classes_in(state["race_jan"])
+check("einfacher Import: Jonas (2013) im Kinderrennen", kids_classes.get("Jonas"), "Jahrgang 2013")
+check("einfacher Import: Ida (2014) im Kinderrennen ohne Klasse - 2014 fehlt in der Variante",
+      kids_classes.get("Ida"), None)
+check("einfacher Import: Jonas im Januar-Rennen (Standard)", jan_classes.get("Jonas"), "U14")
+check("einfacher Import: Ida im Januar-Rennen (Standard)", jan_classes.get("Ida"), "U14")
+check("einfacher Import legt im Standard nichts an", groups_of(""), standard_before)
+check("einfacher Import legt in der Variante nichts an", groups_of(VARIANT), variant_before)
+
+# 4b. Import mit Klassen-Spalte ins Kinderrennen: fehlende Klasse wird in der Variante angelegt, eine
+# vorhandene, die den Jahrgang abdeckt, wird verwendet (egal wie sie heißt), und ein Name, der in
+# der Variante existiert, aber nicht passt, ist ein Zeilenfehler - der Rest der Datei läuft durch.
 mapping = {"lastName": "Nachname", "firstName": "Vorname", "birthDate": "Jahrgang",
            "gender": "Geschlecht", "ageGroup": "Klasse"}
+mapped_csv = ("Nachname;Vorname;Jahrgang;Geschlecht;Klasse\n"
+              "Klein;Carla;2015;W;Jahrgang 2015\n"
+              "Pohl;Paul;2013;M;U14\n"
+              "Ernst;Emil;2010;M;Jahrgang 2012\n").encode()
 status, result = c.post_multipart(config.BASE, token, f"/participants/import-mapped/{kids_race['id']}",
                                   {"format": "CSV", "delimiter": ";", "mapping": json.dumps(mapping)},
-                                  {"file": ("kinder.csv", csv, "text/csv")})
-require("Import ins Kinderrennen", status, 200, result)
-# An empty error list is left out of the JSON altogether.
-check("Import ohne Zeilenfehler", result.get("errors", []), [])
-check("eine Zeile importiert", result.get("importedCount"), 1)
+                                  {"file": ("kinder.csv", mapped_csv, "text/csv")})
+require("Import mit Klassen ins Kinderrennen", status, 200, result)
+check("Import mit Klassen: zwei Zeilen importiert", result.get("importedCount"), 2)
+row_errors = result.get("errors", [])
+check("Import mit Klassen: ein Zeilenfehler (Emil)", len(row_errors), 1)
+check("Zeilenfehler nennt die Variante", VARIANT in (row_errors[0].get("reason", "") if row_errors else ""), True)
+check("Import hat nur JAHRGANG 2015 in der Variante ergänzt",
+      groups_of(VARIANT), sorted(variant_before + [("JAHRGANG 2015", 2015, 2015)]))
+check("Import ins Kinderrennen lässt den Standard unberührt", groups_of(""), standard_before)
+kids_classes = classes_in(kids_race["id"])
+check("Carla (2015) in der neu angelegten Klasse", kids_classes.get("Carla"), "JAHRGANG 2015")
+check("Paul (2013, Datei sagt U14) in der vorhandenen Klasse der Variante", kids_classes.get("Paul"), "Jahrgang 2013")
+
+# 4c. Import mit Klassen-Spalte ins Standard-Rennen: legt im Standard an, die Variante bleibt.
+variant_after_kids_import = groups_of(VARIANT)
+standard_csv = "Nachname;Vorname;Jahrgang;Geschlecht;Klasse\nFink;Fritz;2010;M;U18\n".encode()
+status, result = c.post_multipart(config.BASE, token, f"/participants/import-mapped/{state['race_jan']}",
+                                  {"format": "CSV", "delimiter": ";", "mapping": json.dumps(mapping)},
+                                  {"file": ("standard.csv", standard_csv, "text/csv")})
+require("Import mit Klassen ins Januar-Rennen", status, 200, result)
+check("Import ins Januar-Rennen ohne Zeilenfehler", result.get("errors", []), [])
+check("Import ins Januar-Rennen legt U18 im Standard an",
+      groups_of(""), sorted(standard_before + [("U18", 2010, 2010)]))
+check("Import ins Januar-Rennen lässt die Variante unberührt", groups_of(VARIANT), variant_after_kids_import)
+check("Fritz im Januar-Rennen", classes_in(state["race_jan"]).get("Fritz"), "U18")
 _, variant_groups = c.get(config.BASE, token, f"/age-groups?season={SEASON}&variant={VARIANT}")
-check("Import hat JAHRGANG 2015 in der Variante angelegt",
-      [(ag["birthYearFrom"], ag["birthYearTo"]) for ag in variant_groups if ag["name"] == "JAHRGANG 2015"],
-      [(2015, 2015)])
-_, standard_after = c.get(config.BASE, token, f"/age-groups?season={SEASON}")
-check("Standard-Variante vom Import unberührt", len(standard_after), 2)
 
 # --- 5. Übersicht und Schutz ----------------------------------------------------------------------
 _, variants = c.get(config.BASE, token, f"/age-groups/variants?season={SEASON}")
