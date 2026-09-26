@@ -421,7 +421,10 @@ public class PdfExportService {
         List<PdfColumn<LosPdfRow>> columns = personColumns.apply(List.of(
                 new PdfColumn<>("Platz", 0.6f, r -> r.first() ? String.valueOf(r.pair().place()) : ""),
                 new PdfColumn<>("StNr.", 0.5f, r -> orDash(r.member().raceNumber())),
-                new PdfColumn<>("Name Vorname", 2.0f, r -> truncate(r.member().label() + (r.single() ? " (Einzel)" : ""), 30)),
+                // A long name is shortened, never the " (Einzel)" marker: 21 + 9 = the usual 30.
+                new PdfColumn<>("Name Vorname", 2.0f, r -> r.single()
+                        ? truncate(r.member().label(), 21) + " (Einzel)"
+                        : truncate(r.member().label(), 30)),
                 new PdfColumn<>("Jg.", 0.5f, r -> orDash(r.member().birthYear())),
                 new PdfColumn<>("Team", 1.5f, r -> truncate(r.member().team(), 20)),
                 new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.member().valueMs())),

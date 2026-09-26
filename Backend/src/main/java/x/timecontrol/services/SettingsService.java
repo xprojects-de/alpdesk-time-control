@@ -107,9 +107,10 @@ public class SettingsService {
     }
 
     /**
-     * Switches the race number ("StNr.") and birth year ("Jg.") columns of the result PDFs (a
-     * single race's and the Gaudi-Modus ones) on or off, each on its own - see {@link PdfExportService}. Takes effect with the next
-     * export.
+     * Switches the race number ("StNr.") and birth year ("Jg.") columns on or off, each on its own:
+     * in the result PDFs (a single race's and the Gaudi-Modus ones, see {@link PdfExportService})
+     * and in the public live view ({@link RaceLiveService}). Takes effect with the next export or
+     * live request.
      */
     public AppSettings updatePdfExport(boolean showRaceNumber, boolean showBirthYear) {
         AppSettings current = getSettings();

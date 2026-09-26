@@ -1,7 +1,6 @@
--- Whether each participant's race number ("StNr.") and birth year ("Jg.") are shown: in every
--- result PDF of a single race, in every Gaudi-Modus export and in the public live view. The start
--- list, printed and live, follows only the birth year switch - it always shows the race number.
--- Two independent switches, since a club may well want one without the other. Both on by
+-- Whether the race result PDFs (every ranking/results export of a single race, not the start list
+-- and not the Gaudi-Modus exports) print each participant's race number ("StNr.") and birth year
+-- ("Jg."). Two independent switches, since a club may well want one without the other. Both on by
 -- default, so existing installations get the new columns without having to find the switches
 -- first; an operator who prefers the old, narrower layout turns them off under Settings. Stored as
 -- 0/1 like gaudi_mode's keep_*_in_ranking flags.

@@ -40,7 +40,8 @@ jumping around. Lean and readable beats clever and general.
 - **Plain Java where it is clearer**: a loop instead of a stream chain that needs reading twice; records for data;
   a `switch` over an enum instead of a class hierarchy.
 - **Follow the neighbours**: a new class looks like the existing ones of its layer - services take their
-  dependencies through the constructor, controllers through `@Inject` fields; settings via `@Value`; a service
+  dependencies through the constructor (the `@Inject` fields of `DataImportScheduler` and
+  `AlpdeskTimeControlDataImportService` are the exception, not the model), controllers through `@Inject` fields; settings via `@Value`; a service
   signals bad input with `IllegalArgumentException` (and a broken invariant with `IllegalStateException`), which
   the controller turns into an `ErrorResponse` with the matching status; the same package layout.
 - **Imports, no fully qualified class names in code** (Java and Groovy): `import java.util.List;` and `List<...>`,
