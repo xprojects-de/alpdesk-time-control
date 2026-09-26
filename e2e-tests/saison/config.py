@@ -45,3 +45,9 @@ BENE_DEZ_MS = 63000
 
 SEASON_START_WINTER = {"seasonStartMonth": 7, "seasonStartDay": 1}
 SEASON_START_DEFAULT = {"seasonStartMonth": 1, "seasonStartDay": 1}
+
+# A kids' race of season 2026 that groups the same birth years one class per year, while the
+# January race keeps the standard U14/U16 - see verify_variants.py.
+KIDS_VARIANT = "Jahrgangsweise"
+RACE_KIDS_NAME = "Saison Kinderrennen"
+RACE_KIDS_DATE = "2026-02-01"

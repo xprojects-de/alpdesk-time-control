@@ -8,8 +8,16 @@ geändert, sondern **neu gebaut**: umbenennen, neu anlegen, kopieren, alte Tabel
 genau einmal pro Installation, auf einer Datenbank mit echter Rennhistorie, und es gibt keinen
 zweiten Versuch, wenn dabei eine Zeile verschwindet oder eine ID neu vergeben wird.
 
-Die übrigen Suiten starten immer auf einer leeren Datenbank und durchlaufen V1–V4 am Stück – der
-Rebuild kopiert dort also nichts. Nur hier läuft er mit Inhalt.
+Die übrigen Suiten starten immer auf einer leeren Datenbank und durchlaufen alle Migrationen am
+Stück – der Rebuild kopiert dort also nichts. Nur hier läuft er mit Inhalt.
+
+**Migration V6** (Altersklassen-Varianten) baut `age_group` ein zweites Mal um: aus
+`UNIQUE(name, season_year)` wird `UNIQUE(name, season_year, variant)`. Dieselben Zeilen laufen hier
+also durch beide Rebuilds. Zusätzlich geprüft: alle Bestandsgruppen landen in der
+Standard-Variante (`variant = ''`), die V6-Zwischentabelle `age_group_v4` ist weg, der Index aus V4
+ist als `idx_age_group_season_year_variant` neu angelegt (er geht mit der alten Tabelle verloren),
+`race.age_group_variant` existiert, und derselbe Klassenname mit denselben Jahrgängen ist in einer
+zweiten Variante derselben Saison anlegbar.
 
 ## Was geprüft wird
 
@@ -39,7 +47,7 @@ Rebuild kopiert dort also nichts. Nur hier läuft er mit Inhalt.
 
 `make_fixture.py` baut die Datenbank auf dem Stand **V2** – dem Stand, in dem eine Installation im
 Feld tatsächlich steht, denn die letzte Version vor diesem Feature (app.version 1.4, Branch `main`)
-liefert nur V1 und V2 aus. Der Start wendet dann **V3 und V4 hintereinander** an, genau wie ein
+liefert nur V1 und V2 aus. Der Start wendet dann **V3 bis V6 hintereinander** an, genau wie ein
 echtes Update. Eine Fixture auf V3 würde einen Zustand prüfen, den es nirgends gibt, und nie das
 ausführen, was bei jedem echten Update passiert.
 
@@ -50,7 +58,7 @@ tatsächlich erzeugt hat, und es landet nichts Unlesbares in git.
 Die `flyway_schema_history`-Zeilen werden von Hand mit `NULL`-Prüfsummen geschrieben. Deshalb
 startet die Instanz mit `-Dflyway.datasources.default.validate-on-migrate=false` – Flyways eigenen
 Prüfsummen-Algorithmus hier nachzubauen würde die Fixture ohne Gegenwert an ein Interna binden.
-**V3 und V4 selbst werden völlig normal angewendet**; das Flag überspringt oder verändert keine
+**V3 bis V6 selbst werden völlig normal angewendet**; das Flag überspringt oder verändert keine
 Migration.
 
 ## Voraussetzungen

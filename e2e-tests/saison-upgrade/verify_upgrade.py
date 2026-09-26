@@ -42,6 +42,7 @@ for expected in config.PRE_V4_AGE_GROUPS:
           [actual["name"], actual["birthYearFrom"], actual["birthYearTo"], actual["gender"]],
           [expected["name"], expected["birthYearFrom"], expected["birthYearTo"], expected["gender"]])
     check(f"Gruppe {expected['id']} auf die Upgrade-Saison gestempelt", actual["seasonYear"], upgrade_season)
+    check(f"Gruppe {expected['id']} in der Standard-Variante (V6)", actual["variant"], "")
 
 # --- 2. AUTOINCREMENT: die nächste ID darf keine alte wiederverwenden ----------------------------
 status, created = c.post(config.BASE, token, "/age-groups", {
@@ -69,6 +70,17 @@ if status == 201:
     check("derselbe Name zweimal in derselben Saison -> 409", status, 409)
     c.delete(config.BASE, token, f"/age-groups/{other_season['id']}")
 
+# --- 3b. Zweck von V6: derselbe Name und dieselben Jahrgänge in einer anderen Variante ------------
+status, in_variant = c.post(config.BASE, token, "/age-groups", {
+    "name": config.PRE_V4_AGE_GROUPS[0]["name"], "seasonYear": upgrade_season, "variant": "Upgrade-Test",
+    "birthYearFrom": config.PRE_V4_AGE_GROUPS[0]["birthYearFrom"],
+    "birthYearTo": config.PRE_V4_AGE_GROUPS[0]["birthYearTo"],
+    "gender": config.PRE_V4_AGE_GROUPS[0]["gender"],
+})
+check("derselbe Name/Jahrgang in einer zweiten Variante derselben Saison anlegbar", status, 201)
+if status == 201:
+    c.delete(config.BASE, token, f"/age-groups/{in_variant['id']}")
+
 # --- 4. Die Folge für alte Rennen, und dass sie aus der Oberfläche behebbar ist -------------------
 today = datetime.date.today()
 # Der 29. Februar hat im Vorjahr kein Gegenstück, deshalb der Tag gekappt - das Jahr ist das
@@ -87,6 +99,7 @@ for key, name, date in [
     races[key] = race
 
 check("Rennen der laufenden Saison", races["current"]["seasonYear"], upgrade_season)
+check("neues Rennen ohne Angabe in der Standard-Variante", races["current"]["ageGroupVariant"], "")
 check("Rennen der Vorsaison", races["previous"]["seasonYear"], upgrade_season - 1)
 
 status, person = c.post(config.BASE, token, "/persons", config.PERSON)
@@ -136,16 +149,24 @@ if db_path:
         tables = [row[0] for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")]
         check("Zwischentabelle des Rebuilds entfernt", "age_group_v1" in tables, False)
+        check("Zwischentabelle des V6-Rebuilds entfernt", "age_group_v4" in tables, False)
         check("age_group existiert", "age_group" in tables, True)
         indexes = [row[0] for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'age_group'"
             " AND name NOT LIKE 'sqlite_autoindex%'")]
-        check("Saison-Index angelegt", "idx_age_group_season_year" in indexes, True)
+        # V4 legte idx_age_group_season_year an; der Rebuild in V6 verliert ihn mit der alten
+        # Tabelle und legt ihn auf (season_year, variant) neu an.
+        check("Saison-/Varianten-Index angelegt", indexes, ["idx_age_group_season_year_variant"])
+        race_columns = [row[1] for row in conn.execute("PRAGMA table_info(race)")]
+        check("race.age_group_variant angelegt", "age_group_variant" in race_columns, True)
         # Auf "V4 wurde erfolgreich angewendet" geprüft, nicht auf "4 ist der neueste Stand" -
         # sonst wird dieser Test von der nächsten Migration rot, ohne dass an V4 etwas falsch wäre.
         applied = conn.execute(
             "SELECT success FROM flyway_schema_history WHERE version = '4'").fetchone()
         check("Migration V4 erfolgreich angewendet", applied[0] if applied else None, 1)
+        applied_v6 = conn.execute(
+            "SELECT success FROM flyway_schema_history WHERE version = '6'").fetchone()
+        check("Migration V6 erfolgreich angewendet", applied_v6[0] if applied_v6 else None, 1)
     finally:
         conn.close()
 else:
