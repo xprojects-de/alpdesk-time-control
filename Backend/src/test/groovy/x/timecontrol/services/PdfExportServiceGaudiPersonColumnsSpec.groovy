@@ -220,18 +220,27 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         [null, null]         | false
     }
 
-    def "Los-Modus: the Gaudi-Modus name is printed in the page header only, not again above the table"() {
+    @Unroll
+    def "#mode: the Gaudi-Modus name is printed in the page header only, not again above the table"() {
         given:
         switches(true, true)
-        def losMode = new GaudiMode(null, null, "Losrennen Herbst", null, null, false, false, false, null, null)
-        def entries = [entry(label: "Meier Paul (Einzel)", valueMs: 47650, referenceMs: 48000, diffMs: 350,
-                members: [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, null)])]
+        def namedMode = new GaudiMode(null, null, "Herbstgaudi", null, null, false, false, false, null, null)
+        def members = [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, null)]
+        def entries = [entry(label: "Meier Paul", team: "SV", valueMs: 47650, referenceMs: 48000, diffMs: 350,
+                totalPoints: 100, legs: legs(), members: members)]
 
         when:
-        String t = text(service.generateLosModeRanking(losMode, entries, race, []))
+        String t = text(render.call(service, race, namedMode, entries))
 
         then:
-        t.count("Losrennen Herbst") == 1
+        t.count("Herbstgaudi") == 1
+
+        where:
+        mode                  | render
+        "Los-Modus"           | { PdfExportService s, Race r, m, e -> s.generateLosModeRanking(m, e, r, []) }
+        "Mannschaftswertung"  | { PdfExportService s, Race r, m, e -> s.generateTeamModeRanking(m, e, r) }
+        "Zeit-Kombination"    | { PdfExportService s, Race r, m, e -> s.generateTimeCombinationRanking(m, e, [r], r, []) }
+        "Punkte-Mischwertung" | { PdfExportService s, Race r, m, e -> s.generatePointsCombinationRanking(m, e, [r], r, []) }
     }
 
     @Unroll

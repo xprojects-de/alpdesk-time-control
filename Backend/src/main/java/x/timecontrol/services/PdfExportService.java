@@ -504,7 +504,7 @@ public class PdfExportService {
                 new PdfColumn<>("Wert", 1.0f, m -> RankingViewService.formatValue(race, m.valueMs()))
         ));
         return renderDocument(race, gaudiMode, false,
-                ctx -> drawSectionWithDetailTable(ctx, columns, gaudiMode.name(), entries, true,
+                ctx -> drawSectionWithDetailTable(ctx, columns, null, entries, true,
                         memberColumns, e -> e.members() != null ? e.members() : List.of()));
     }
 
@@ -538,8 +538,7 @@ public class PdfExportService {
         ));
 
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetails(ctx, personColumns.apply(summaryColumns), gaudiMode.name(), entries, true,
-                    e -> timeCombinationDetailBlocks(e, legRaces));
+            drawSectionWithDetails(ctx, personColumns.apply(summaryColumns), entries, e -> timeCombinationDetailBlocks(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
     }
@@ -567,7 +566,7 @@ public class PdfExportService {
         PersonColumns personColumns = personColumns();
         boolean showStrafe = anyLegHasPenalty(entries);
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), gaudiMode.name(), entries, true,
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), null, entries, true,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
@@ -1054,7 +1053,7 @@ public class PdfExportService {
     private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, List<List<T>> groups) throws IOException {
         ctx.ensureSpace(60);
 
-        ctx.y -= 15;
+        ctx.y -= UNTITLED_SECTION_GAP;
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
@@ -1072,22 +1071,23 @@ public class PdfExportService {
 
     private static final float PAIR_GAP = 4;
 
+    /** Space above a table that has no title of its own, because the page header already names it. */
+    private static final float UNTITLED_SECTION_GAP = 15;
+
     /**
      * Like {@link #drawSection}, but for tables where entries additionally carry a variable-length
      * breakdown (e.g. a per-race Wert/Platz/Punkte summary for a multi-race Gaudimodus ranking) that
      * doesn't fit as fixed side-by-side columns without becoming unreadably narrow once there are more
      * than a few races. {@code detailBlocksFn} returns that breakdown as one string per logical block
      * (e.g. one per race); blocks are drawn as wrapped, indented line(s) below the fixed summary
-     * row, growing the row's height instead of shrinking column widths.
+     * row, growing the row's height instead of shrinking column widths. No title of its own: its only
+     * user, the Zeit-Kombination, is already named in the page header.
      */
-    private <T> void drawSectionWithDetails(PdfContext ctx, List<PdfColumn<T>> columns, String title,
-                                             List<T> entries, boolean mainTitle,
+    private <T> void drawSectionWithDetails(PdfContext ctx, List<PdfColumn<T>> columns, List<T> entries,
                                              Function<T, List<String>> detailBlocksFn) throws IOException {
-        ctx.ensureSpace(mainTitle ? 90 : 100);
+        ctx.ensureSpace(60);
 
-        ctx.y -= mainTitle ? 10 : 15;
-        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
-        ctx.y -= mainTitle ? 30 : 25;
+        ctx.y -= UNTITLED_SECTION_GAP;
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
@@ -1129,16 +1129,21 @@ public class PdfExportService {
      * Like {@link #drawSectionWithDetails}, but the per-entry breakdown is drawn as a small,
      * column-aligned sub-table (one row per race) instead of wrapped "Rennen: Wert X, Platz Y"
      * text - used by Punkte-Mischwertung so the per-race breakdown reads as a table, not a
-     * comma-separated string.
+     * comma-separated string. A {@code null} title draws none, for a table the page header's
+     * Gaudi-Modus name already heads (the whole-field Punkte-Mischwertung, the Mannschaftswertung).
      */
     private <T, D> void drawSectionWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, String title,
                                                     List<T> entries, boolean mainTitle,
                                                     List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
-        ctx.ensureSpace(mainTitle ? 90 : 100);
-
-        ctx.y -= mainTitle ? 10 : 15;
-        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
-        ctx.y -= mainTitle ? 30 : 25;
+        if (title == null) {
+            ctx.ensureSpace(60);
+            ctx.y -= UNTITLED_SECTION_GAP;
+        } else {
+            ctx.ensureSpace(mainTitle ? 90 : 100);
+            ctx.y -= mainTitle ? 10 : 15;
+            ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
+            ctx.y -= mainTitle ? 30 : 25;
+        }
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
