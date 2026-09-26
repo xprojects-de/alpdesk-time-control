@@ -50,10 +50,13 @@ Everything else is files:
      `{participant1Id, participant1Name, participant2Id, participant2Name}`, `participant2*` null
      for the leftover single when the field size is odd. Names are `displayName` = "Nachname
      Vorname".
-   - Otherwise read the pairs out of the reference PDF's "Paarung" column ("Nachname Vorname &
-     Nachname Vorname", or "Nachname Vorname (Einzel)"). Fine — the pairing is input, not a
-     computed result — but note in the report that the pairs were taken from the very document
-     being checked, so a pair that the app *forgot* to print can't be noticed this way.
+   - Otherwise read the pairs out of the reference PDF (layout under input #3): a line with a
+     Platz starts a pair, the line below it without one is the partner; "Nachname Vorname
+     (Einzel)" is the leftover single. `parse_reference_pdf` in the reference script does exactly
+     that. Fine — the pairing is input, not a computed result — but note in the report that the
+     pairs were taken from the very document being checked, so a pair that the app *forgot* to
+     print can't be noticed this way. Counting the printed persons against the results CSV at least
+     shows that nobody is missing (Step 0).
    Pairs whose members have no valid result are **not** in the ranking table; they appear under
    "Nicht gewertet" instead, so take those pairs from that section.
    **The pairing is not stable over time**: the "Neu auslosen" button discards the previous pairing
@@ -64,10 +67,23 @@ Everything else is files:
    the two exports; every "mismatch" you'd report otherwise is an artefact. With only one of the
    two, ask whether a re-draw happened after that export.
 3. **Reference output to diff against** — preferred: the Los ranking PDF
-   (`GET /gaudi-modes/{id}/export/pdf`), whose columns are
-   `Platz | Paarung | Team | Wert 1 | Wert 2 | Ø-Wert Paar | Ø-Wert Gesamt | Abweichung` plus a
-   "Nicht gewertet" section. Alternative: the ranking JSON (`GET /gaudi-modes/{id}/ranking`,
-   fields `place, label, time1Ms, time2Ms, valueMs, referenceMs, diffMs`).
+   (`GET /gaudi-modes/{id}/export/pdf`). Since 2026-09-26 it prints **one line per person**:
+   `Platz | StNr. | Name Vorname | Jg. | Team | Kategorie | Wert | Ø-Wert Paar | Ø-Wert Gesamt |
+   Abweichung (±)`. The pair's shared values (Platz, the three averages/deviation) stand on its
+   first line only; the partner's line carries just their own StNr./Name/Jg./Team/Kategorie/Wert.
+   `StNr.` and `Jg.` follow the operator's PDF switches, `Kategorie` only appears once somebody has
+   one — so don't parse by column position. `Abweichung (±)` is **signed**: `-` below the field
+   average, `+` above, no sign when exactly on it (Step 3). The Gaudi-Modus name stands in the page
+   header only, there is no title above the table.
+   Older PDFs (printed results of earlier events) use one line per pair instead:
+   `Platz | Paarung | Team | Wert 1 | Wert 2 | Ø-Wert Paar | Ø-Wert Gesamt | Abweichung`, with an
+   unsigned deviation. `parse_reference_pdf` reads both layouts.
+   Either layout ends with a "Nicht gewertet" section whose rows are still whole pairs
+   ("A & B" / "A (Einzel)") or never-drawn singles — absent when nobody drops out.
+   Alternative: the ranking JSON (`GET /gaudi-modes/{id}/ranking`, fields
+   `place, label, time1Ms, time2Ms, valueMs, referenceMs, diffMs`, plus `members` with each
+   person's own value). `diffMs` there is **always unsigned** — the sign exists only in the PDF and
+   the frontend view, derived from `valueMs` vs. `referenceMs`.
    **Don't use `GET /gaudi-modes/{id}/export/csv` as the reference** — for LOS it puts the whole
    pair label into the "Nachname" column, leaves "Vorname" empty and carries **neither the
    individual times nor the deviation**, so it can't confirm the numbers that matter here.
@@ -147,6 +163,9 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
 - `Abweichung = |pairAverageDisplay - overallAverageDisplay|` — the difference of the two
   **already-rounded** values, not the raw gap rounded afterwards. Rounding does not distribute
   over subtraction, so doing it the other way can differ by a printed hundredth.
+- Printed sign (display only, `PdfExportService#signedDiff`): `-` when `pairAverageDisplay <
+  overallAverageDisplay`, `+` when above, none when the deviation is 0. It plays no part in the
+  ranking — `-0:00.20` and `+0:00.20` tie.
 
 **Step 4 — places:**
 - Sort ranked pairs by `Abweichung` ascending — smallest deviation wins.
@@ -177,7 +196,8 @@ they hit a subset of rows and leave every place intact, which reads exactly like
   145786.5` → Java `145787` = `24:17.87`, Python `145786` = `24:17.86`. Use
   `int(math.floor(x / 10.0 + 0.5)) * 10` — never `round()` — everywhere the app rounds: the field
   average, every pair average, and the printed individual values.
-- **The printed `Wert 1`/`Wert 2` are rounded, not truncated.** `RankingViewService.formatTime`
+- **The printed individual values (`Wert`, or `Wert 1`/`Wert 2` in the old layout) are rounded,
+  not truncated.** `RankingViewService.formatTime`
   rounds the raw ms to the nearest 10 ms *before* splitting into minutes/seconds/hundredths (a carry
   like `0:00.996` → `0:01.00` falls out of that correctly), so `2081758 ms` prints `34:41.76`, not
   `34:41.75`. Formatting `(ms % 1000) // 10` straight off the raw value diverges on roughly half of
@@ -197,7 +217,12 @@ they hit a subset of rows and leave every place intact, which reads exactly like
    Bergsprint export (37 participants, 18 pairs + 1 Einzel), once with a clean field and once with
    a DNF set *after* the draw — there the pair dropped out whole, the field average fell from 37 to
    36 values, and the shifted average reordered two otherwise unchanged pairs; all of it matched.
-   Both runs were **TIME** races without start groups — the POINTS branch and the start-group
+   Confirmed a third time on 2026-09-26 against the new one-line-per-person PDF (35 participants,
+   17 pairs + 1 Einzel, pairs read out of the PDF): everything including the sign matched,
+   among it six pairs whose average of the *printed* values ends exactly on half a hundredth —
+   decided correctly only because the raw ms lie just below it. That is why the results CSV
+   (`m:ss.SSS`) is the input, never values read back off the PDF.
+   All three runs were **TIME** races without start groups — the POINTS branch and the start-group
    netting are written to the spec but have not been exercised, so read those two paths against the
    Java code rather than trusting them.
    Keep it a plain script you can inspect and rerun; this is arithmetic over dozens of pairs,
@@ -205,11 +230,12 @@ they hit a subset of rows and leave every place intact, which reads exactly like
    — the two rounding traps above cost a full extra diff cycle on exactly that mistake.
 2. Before trusting the run: if both the pairing JSON and the reference PDF are available, confirm
    their pair lists match (see input #2). Then run the script, producing: the ranked table (Platz,
-   Paarung, Wert 1, Wert 2, Ø-Paar, Abweichung), the field average, and the "Nicht gewertet" list
-   with each pair's reason.
-3. Extract the app's reference output into the same shape — parse the PDF with the `pdf` skill, or
-   read the ranking JSON.
-4. Diff pair by pair: flag any mismatch in place, Ø-Wert Paar, Abweichung, the field average, or
+   Paarung, Wert 1, Wert 2, Ø-Paar, signed Abweichung), the field average, and the "Nicht
+   gewertet" list with each pair's reason.
+3. Extract the app's reference output into the same shape — `pdftotext -layout` on the PDF, then
+   `parse_reference_pdf` (both layouts), or read the ranking JSON.
+4. Diff pair by pair (`compare` in the reference script): flag any mismatch in place, the
+   individual values, Ø-Wert Paar, Abweichung incl. its sign, the field average, or
    nicht-gewertet membership. For each mismatch drill into that pair's two individual values and
    show where the divergence starts (a single participant's netted/penalised value, the field
    average, a rounding step, or the place assignment).
@@ -223,7 +249,10 @@ Answer in German, with:
   if that number is wrong, every deviation in the table is wrong with it, so it belongs in the
   report even when everything matches.
 - On mismatches: a table of affected pairs with berechnet vs. Referenz (Platz, Ø-Wert Paar,
-  Abweichung) and the responsible step for each.
+  Abweichung incl. Vorzeichen) and the responsible step for each.
+- Pairs whose average of the *printed* values lands exactly on half a hundredth are decided by
+  the raw ms alone — when a user cross-checks by hand from the PDF, name them and show the raw
+  average, so a correct rounding doesn't look like an off-by-one.
 - Always the sentence that the draw itself is not verified, only the computation on top of it —
   plus the Step 0 coverage result ("jeder Teilnehmer genau einmal gezogen" or the concrete
   discrepancy).

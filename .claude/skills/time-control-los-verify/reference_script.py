@@ -18,14 +18,19 @@ from collections import Counter
 # CONFIG - replace every value with this run's actual answers
 # ----------------------------------------------------------------------------------------------
 RESULTS_CSV = "results-csv.csv"      # GET /participants/export/results-csv/{raceId}
-PAIRING_JSON = "pairing.json"        # GET /gaudi-modes/{id}/pairing  (or build the list by hand
-                                     # from the PDF's "Paarung" column - see PAIRS_FALLBACK below)
+PAIRING_JSON = "pairing.json"        # GET /gaudi-modes/{id}/pairing - optional when the pairs are
+                                     # read out of the reference PDF instead (PAIRS_FROM_PDF)
+# `pdftotext -layout` output of GET /gaudi-modes/{id}/export/pdf - the reference to diff against.
+# None to only print the recomputed table.
+REFERENCE_PDF_TEXT = "los.txt"
+# True: take the pairs from REFERENCE_PDF_TEXT (no pairing JSON at hand). Say so in the report.
+PAIRS_FROM_PDF = False
 RESULT_UNIT = "TIME"                 # "TIME" (m:ss.SSS, ascending) or "POINTS" (decimal, descending)
 SORT_DIRECTION = "ASC"               # "ASC" for TIME, "DESC" for a higher-is-better POINTS race
 # externalId (or "Nachname Vorname") -> start-group Zeitversatz in seconds. Empty when the race
 # used no start groups, or none of them had an offset. TIME races only.
 START_GROUP_OFFSET_SECONDS = {}
-# Fallback when there is no pairing JSON: list of (name1, name2_or_None) read off the PDF.
+# Fallback when there is neither a pairing JSON nor PAIRS_FROM_PDF: (name1, name2_or_None) by hand.
 PAIRS_FALLBACK = None
 
 DELIMITER = ";"
@@ -69,6 +74,77 @@ def fmt(value):
     return f"{r // 60000}:{(r // 1000) % 60:02d}.{(r % 1000) // 10:02d}"
 
 
+def fmt_signed_diff(entry, overall_display):
+    """PdfExportService#signedDiff: '-' below the field average, '+' above, no sign on it. Display
+    only - the ranking uses the unsigned deviation."""
+    if entry["diff"] == 0:
+        return fmt(entry["diff"])
+    return ("-" if entry["avg"] < overall_display else "+") + fmt(entry["diff"])
+
+
+# ----------------------------------------------------------------------------------------------
+# The app's PDF, read back (`pdftotext -layout`)
+# ----------------------------------------------------------------------------------------------
+_VALUE = re.compile(r"^[+-]?(?:\d+:)?\d+[.,]\d\d(?: \S+)?$")  # 0:47.65, +0:05.02, 12.50 Pkt.
+
+
+def parse_reference_pdf(path):
+    """The ranking table of the Los PDF as [{place, names, values, avg, ref, dev}], in print order.
+
+    Reads both layouts (see SKILL.md, input #3):
+    - since 2026-09-26: one line per person - the pair's first line has Platz and the three shared
+      values, the partner's line only their own Wert. StNr./Jg./Kategorie may be switched off or
+      absent, so cells are located by content, never by position.
+    - before: one line per pair - Platz | Paarung ("A & B") | Team | Wert 1 | Wert 2 | Ø-Paar |
+      Ø-Gesamt | Abweichung.
+    Stops at "Nicht gewertet"; that section lists whole pairs in both layouts.
+    """
+    text = open(path, encoding="utf-8").read()
+    old_layout = "Paarung" in text
+    entries = []
+    for line in text.splitlines():
+        if line.strip().startswith("Nicht gewertet"):
+            break
+        cells = [c for c in re.split(r"\s{2,}", line.strip()) if c]
+        if len(cells) < 2 or not _VALUE.match(cells[-1]):
+            continue
+        has_place = cells[0].isdigit() and (old_layout or len(cells) >= 5 and _VALUE.match(cells[-4]))
+        name = next(c for c in cells[1 if has_place else 0:] if not c.isdigit())
+        if old_layout:
+            names = [n.replace("(Einzel)", "").strip() for n in name.split(" & ")]
+            values = [v for v in cells[-5:-3] if v != "-"]
+            entries.append({"place": int(cells[0]), "names": names, "values": values,
+                            "avg": cells[-3], "ref": cells[-2], "dev": cells[-1]})
+        elif has_place:
+            entries.append({"place": int(cells[0]), "names": [name.replace("(Einzel)", "").strip()],
+                            "values": [cells[-4]], "avg": cells[-3], "ref": cells[-2], "dev": cells[-1]})
+        else:
+            entries[-1]["names"].append(name)
+            entries[-1]["values"].append(cells[-1])
+    return entries
+
+
+def compare(ranked, overall_display, reference):
+    """Mismatches between the recomputed ranking and the parsed PDF, pair by pair. The old layout's
+    deviation is unsigned, so only a signed reference is held to the sign."""
+    by_first_name = {e["label"].replace(" (Einzel)", "").split(" & ")[0]: e for e in ranked}
+    mismatches = []
+    for ref in reference:
+        e = by_first_name.get(ref["names"][0])
+        if e is None:
+            mismatches.append((ref["names"], "im PDF, aber nicht berechnet"))
+            continue
+        dev = fmt_signed_diff(e, overall_display) if ref["dev"][0] in "+-" or e["diff"] == 0 else fmt(e["diff"])
+        calc = {"place": e["place"], "values": [fmt(e["v1"])] + ([fmt(e["v2"])] if e["v2"] is not None else []),
+                "avg": fmt(e["avg"]), "ref": fmt(overall_display), "dev": dev}
+        diffs = {k: (calc[k], ref[k]) for k in calc if calc[k] != ref[k]}
+        if diffs:
+            mismatches.append((ref["names"], diffs))
+    if len(reference) != len(ranked):
+        mismatches.append(("Anzahl", (len(ranked), len(reference))))
+    return mismatches
+
+
 # ----------------------------------------------------------------------------------------------
 # Step 1 - the value that counts per participant
 # ----------------------------------------------------------------------------------------------
@@ -108,6 +184,9 @@ def load_pairs(results):
             return by_name[name]
         raise KeyError(f"pairing names someone the results CSV does not: {name!r}")
 
+    if PAIRS_FROM_PDF:
+        return [(resolve(e["names"][0]), resolve(e["names"][1]) if len(e["names"]) > 1 else None)
+                for e in parse_reference_pdf(REFERENCE_PDF_TEXT)]
     if PAIRS_FALLBACK is not None:
         return [(resolve(a), resolve(b)) for a, b in PAIRS_FALLBACK]
     with open(PAIRING_JSON, encoding="utf-8") as f:
@@ -222,7 +301,7 @@ def main():
     pairs = load_pairs(results)
 
     # When both sources are on hand, prove they describe the same draw before trusting anything.
-    if PAIRS_FALLBACK is not None:
+    if PAIRS_FROM_PDF or PAIRS_FALLBACK is not None:
         try:
             from_json = [(p["participant1Name"], p.get("participant2Name"))
                          for p in json.load(open(PAIRING_JSON, encoding="utf-8"))]
@@ -253,12 +332,19 @@ def main():
     print(f"\n{'Pl':>3}  {'Paarung':<44} {'Wert 1':>10} {'Wert 2':>10} {'Oe Paar':>10} {'Abweichung':>11}")
     for e in ranked:
         print(f"{e['place']:>3}. {e['label']:<44} {fmt(e['v1']):>10} {fmt(e['v2']):>10} "
-              f"{fmt(e['avg']):>10} {fmt(e['diff']):>11}")
+              f"{fmt(e['avg']):>10} {fmt_signed_diff(e, overall):>11}")
 
     if not_ranked:
         print("\nNicht gewertet:")
         for e in not_ranked:
             print(f"   {e['label']:<44} {e['status']:<5} ({e['reason']})")
+
+    if REFERENCE_PDF_TEXT:
+        mismatches = compare(ranked, overall, parse_reference_pdf(REFERENCE_PDF_TEXT))
+        print(f"\nVergleich mit dem PDF: {len(mismatches)} Abweichungen")
+        for names, what in mismatches:
+            print(f"   {names}: {what}")
+        return 1 if mismatches else 0
     return 0
 
 
