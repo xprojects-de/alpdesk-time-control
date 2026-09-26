@@ -24,6 +24,10 @@ public record GaudiTeamMemberResponse(
 
         @Nullable
         @Schema(description = "Member's birth year", example = "2012", nullable = true)
-        Integer birthYear
+        Integer birthYear,
+
+        @Nullable
+        @Schema(description = "Member's category in this race (Los-Modus only)", example = "Snowboard", nullable = true)
+        String category
 ) {
 }

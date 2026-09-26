@@ -413,12 +413,15 @@ public class PdfExportService {
      * Los-Modus: one line per person rather than one "A & B" line per pair, so each member's own
      * race number, birth year, team and value can stand next to their name. The pair's shared
      * values (Platz, Ø-Wert Paar, Ø-Wert Gesamt, Abweichung) are printed on its first line only,
-     * and a pair is never split across a page break - see {@link #drawPairedSection}.
+     * and a pair is never split across a page break - see {@link #drawPairedSection}. "Kategorie" is
+     * only printed once somebody has one.
      */
     public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race,
                                          List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         PersonColumns personColumns = personColumns();
-        List<PdfColumn<LosPdfRow>> columns = personColumns.apply(List.of(
+        List<List<LosPdfRow>> pairs = entries.stream().map(PdfExportService::losPdfRows).toList();
+        boolean anyCategory = pairs.stream().flatMap(List::stream).anyMatch(r -> r.member().category() != null);
+        List<PdfColumn<LosPdfRow>> allColumns = personColumns.apply(List.of(
                 new PdfColumn<>("Platz", 0.6f, r -> r.first() ? String.valueOf(r.pair().place()) : ""),
                 new PdfColumn<>("StNr.", 0.5f, r -> orDash(r.member().raceNumber())),
                 // A long name is shortened, never the " (Einzel)" marker: 21 + 9 = the usual 30.
@@ -427,16 +430,33 @@ public class PdfExportService {
                         : truncate(r.member().label(), 30)),
                 new PdfColumn<>("Jg.", 0.5f, r -> orDash(r.member().birthYear())),
                 new PdfColumn<>("Team", 1.5f, r -> truncate(r.member().team(), 20)),
+                new PdfColumn<>("Kategorie", 1.3f, r -> truncate(r.member().category(), 20)),
                 new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.member().valueMs())),
                 new PdfColumn<>("Ø-Wert Paar", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().valueMs()) : ""),
                 new PdfColumn<>("Ø-Wert Gesamt", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().referenceMs()) : ""),
-                new PdfColumn<>("Abweichung", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().diffMs()) : "")
+                new PdfColumn<>("Abweichung (±)", 1f, r -> r.first() ? signedDiff(race, r.pair()) : "")
         ));
-        List<List<LosPdfRow>> pairs = entries.stream().map(PdfExportService::losPdfRows).toList();
+        List<PdfColumn<LosPdfRow>> columns = anyCategory
+                ? allColumns
+                : allColumns.stream().filter(c -> !c.header().equals("Kategorie")).toList();
         return renderDocument(race, gaudiMode, true, ctx -> {
-            drawPairedSection(ctx, columns, gaudiMode.name(), pairs);
+            drawPairedSection(ctx, columns, pairs);
             drawDnsSection(ctx, toDnsRows(dnsEntries), LOS_DNS_COLUMNS);
         });
+    }
+
+    /**
+     * "Abweichung" with the side of the field average the pair landed on: "-" below, "+" above.
+     * Only the distance counts for the place, so -0:00.20 and +0:00.20 tie. The sign is read off
+     * the two printed averages, which diffMs was derived from after rounding (see
+     * LosModeCalculator), so it always matches the printed distance.
+     */
+    private static String signedDiff(Race race, GaudiRankingEntryResponse pair) {
+        String diff = RankingViewService.formatValue(race, pair.diffMs());
+        if (pair.diffMs() == null || pair.diffMs() == 0 || pair.valueMs() == null || pair.referenceMs() == null) {
+            return diff;
+        }
+        return (pair.valueMs() < pair.referenceMs() ? "-" : "+") + diff;
     }
 
     /**
@@ -1029,14 +1049,12 @@ public class PdfExportService {
      * Like {@link #drawSection}, but for rows that belong together in groups (a Los-Modus pair):
      * a group is always kept on one page, and a little space separates it from the next one, so a
      * reader can tell where one pair ends without the pair label that used to hold it together.
+     * No title of its own: the Gaudi-Modus name already heads every page.
      */
-    private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, String title,
-                                       List<List<T>> groups) throws IOException {
-        ctx.ensureSpace(90);
+    private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, List<List<T>> groups) throws IOException {
+        ctx.ensureSpace(60);
 
-        ctx.y -= 10;
-        ctx.text(FONT_BOLD, 14, MARGIN, ctx.y, title);
-        ctx.y -= 30;
+        ctx.y -= 15;
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);

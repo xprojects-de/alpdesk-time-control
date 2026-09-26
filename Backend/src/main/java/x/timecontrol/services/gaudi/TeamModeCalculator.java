@@ -90,7 +90,7 @@ public class TeamModeCalculator implements GaudiModeCalculator {
 
             List<GaudiTeamMemberResponse> memberResponses = countedMembers.stream()
                     .map(p -> new GaudiTeamMemberResponse(formatName(p, personsById), rankingService.adjustedValue(race, p),
-                            null, p.raceNumber(), GaudiModeCalculator.birthYearOf(personsById.get(p.personId()))))
+                            null, p.raceNumber(), GaudiModeCalculator.birthYearOf(personsById.get(p.personId())), null))
                     .toList();
 
             Team team = teamsById.get(entry.getKey());

@@ -4,6 +4,7 @@ import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiTeamMemberResponse;
+import x.timecontrol.entities.Category;
 import x.timecontrol.entities.GaudiLosPairing;
 import x.timecontrol.entities.GaudiMode;
 import x.timecontrol.entities.GaudiModeType;
@@ -12,6 +13,7 @@ import x.timecontrol.entities.Person;
 import x.timecontrol.entities.Race;
 import x.timecontrol.entities.Team;
 import x.timecontrol.repositories.GaudiLosPairingRepository;
+import x.timecontrol.services.CategoryService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.RankingService;
 import x.timecontrol.services.TeamService;
@@ -38,12 +40,15 @@ public class LosModeCalculator implements GaudiModeCalculator {
     private final PersonService personService;
     private final RankingService rankingService;
     private final TeamService teamService;
+    private final CategoryService categoryService;
 
-    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService, RankingService rankingService, TeamService teamService) {
+    public LosModeCalculator(GaudiLosPairingRepository pairingRepository, PersonService personService, RankingService rankingService,
+                             TeamService teamService, CategoryService categoryService) {
         this.pairingRepository = pairingRepository;
         this.personService = personService;
         this.rankingService = rankingService;
         this.teamService = teamService;
+        this.categoryService = categoryService;
     }
 
     @Override
@@ -65,11 +70,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         // Batch-loaded once for the whole race instead of one findById() per pairing member in the
-        // formatName()/teamNameOf() calls below.
+        // formatName()/teamNameOf()/member() calls below.
         Set<Long> personIds = raceParticipants.stream().map(Participant::personId).collect(Collectors.toSet());
         Set<Long> teamIds = raceParticipants.stream().map(Participant::teamId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> categoryIds = raceParticipants.stream().map(Participant::categoryId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Person> personsById = personService.findByIds(personIds);
         Map<Long, Team> teamsById = teamService.findByIds(teamIds);
+        Map<Long, Category> categoriesById = categoryService.findByIds(categoryIds);
 
         List<GaudiLosPairing> pairings = StreamSupport
                 .stream(pairingRepository.findByGaudiModeId(gaudiMode.id()).spliterator(), false)
@@ -132,8 +139,9 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     diffDisplay,
                     formatTeam(p1, p2, teamsById),
                     value2 != null
-                            ? List.of(member(p1, value1, personsById, teamsById), member(p2, value2, personsById, teamsById))
-                            : List.of(member(p1, value1, personsById, teamsById))
+                            ? List.of(member(p1, value1, personsById, teamsById, categoriesById),
+                                      member(p2, value2, personsById, teamsById, categoriesById))
+                            : List.of(member(p1, value1, personsById, teamsById, categoriesById))
             ));
         }
 
@@ -263,12 +271,14 @@ public class LosModeCalculator implements GaudiModeCalculator {
     }
 
     /**
-     * One pair member on their own - own team, race number and birth year - so the PDF can print
-     * the pair as one line per person rather than as a single "A & B" label.
+     * One pair member on their own - own team, race number, birth year and category - so the PDF
+     * can print the pair as one line per person rather than as a single "A & B" label.
      */
-    private GaudiTeamMemberResponse member(Participant p, Integer value, Map<Long, Person> personsById, Map<Long, Team> teamsById) {
+    private GaudiTeamMemberResponse member(Participant p, Integer value, Map<Long, Person> personsById, Map<Long, Team> teamsById,
+                                           Map<Long, Category> categoriesById) {
+        Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
         return new GaudiTeamMemberResponse(formatName(p, personsById), value, teamNameOf(p, teamsById), p.raceNumber(),
-                GaudiModeCalculator.birthYearOf(personsById.get(p.personId())));
+                GaudiModeCalculator.birthYearOf(personsById.get(p.personId())), category != null ? category.name() : null);
     }
 
     private String formatName(Participant p, Map<Long, Person> personsById) {

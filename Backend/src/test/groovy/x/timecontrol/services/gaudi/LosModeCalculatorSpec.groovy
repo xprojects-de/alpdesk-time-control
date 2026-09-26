@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiLosPairing
@@ -13,6 +14,7 @@ import x.timecontrol.entities.ResultUnit
 import x.timecontrol.entities.SortDirection
 import x.timecontrol.entities.Team
 import x.timecontrol.repositories.GaudiLosPairingRepository
+import x.timecontrol.services.CategoryService
 import x.timecontrol.services.PersonService
 import x.timecontrol.services.RankingService
 import x.timecontrol.services.StartGroupTemplateService
@@ -26,8 +28,10 @@ class LosModeCalculatorSpec extends Specification {
     GaudiLosPairingRepository pairingRepository = Mock()
     PersonService personService = Mock()
     TeamService teamService = Mock()
+    CategoryService categoryService = Mock()
     StartGroupTemplateService startGroupTemplateService = Mock()
-    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(startGroupTemplateService), teamService)
+    LosModeCalculator calculator = new LosModeCalculator(pairingRepository, personService, new RankingService(startGroupTemplateService),
+            teamService, categoryService)
 
     Race race = new Race(1L, "Rennen", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
             null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
@@ -50,11 +54,13 @@ class LosModeCalculatorSpec extends Specification {
     // "last declared wins" tie-break does not reliably apply.
     def knownPersons = [:]
     def knownTeams = [:]
+    def knownCategories = [:]
 
     def setup() {
         personService.displayName(_ as Person) >> { Person p -> p.firstName() }
         personService.findByIds(_) >> { knownPersons }
         teamService.findByIds(_) >> { knownTeams }
+        categoryService.findByIds(_) >> { knownCategories }
     }
 
     def "the pair closest to the overall average wins, ranked ahead of a farther pair"() {
@@ -239,10 +245,10 @@ class LosModeCalculatorSpec extends Specification {
         ranking[0].diffMs() == 0
     }
 
-    def "each pair carries its members one by one - own value, team, race number and birth year - for the PDF's one-line-per-person layout"() {
+    def "each pair carries its members one by one - own value, team, race number, birth year and category - for the PDF's one-line-per-person layout"() {
         given:
         def participants = [
-                new Participant(1L, 1L, 1L, 17, 1L, null, 60000, null, null, null),
+                new Participant(1L, 1L, 1L, 17, 1L, 5L, 60000, null, null, null),
                 new Participant(2L, 1L, 2L, 23, 2L, null, 120000, null, null, null),
                 new Participant(3L, 1L, 3L, null, null, null, 90000, null, null, null),
         ]
@@ -252,6 +258,7 @@ class LosModeCalculatorSpec extends Specification {
         ]
         knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C")])
         knownTeams.putAll([1L: new Team(1L, "Team A"), 2L: new Team(2L, "Team B")])
+        knownCategories.putAll([5L: new Category(5L, "Snowboard")])
         def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
 
         when:
@@ -265,6 +272,7 @@ class LosModeCalculatorSpec extends Specification {
         pair.members()*.team() == ["Team A", "Team B"]
         pair.members()*.raceNumber() == [17, 23]
         pair.members()*.birthYear() == [1990, 1990]
+        pair.members()*.category() == ["Snowboard", null]
 
         and: "a self-paired leftover has just the one member, without a race number if none was given"
         single.members()*.label() == ["C"]

@@ -106,8 +106,8 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         given:
         switches(raceNumber, birthYear)
         def members = [
-                new GaudiTeamMemberResponse("Meier Paul", 47650, null, 417, 2013),
-                new GaudiTeamMemberResponse("Huber Elias", 49980, null, 388, 2015),
+                new GaudiTeamMemberResponse("Meier Paul", 47650, null, 417, 2013, null),
+                new GaudiTeamMemberResponse("Huber Elias", 49980, null, 388, 2015, null),
         ]
         def entries = [entry(label: "SV SCHNEEKRISTALL", valueMs: 97630, members: members)]
 
@@ -135,8 +135,8 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         given:
         switches(raceNumber, birthYear)
         def members = [
-                new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013),
-                new GaudiTeamMemberResponse("Huber Elias", 49980, "TSV", 388, 2015),
+                new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, null),
+                new GaudiTeamMemberResponse("Huber Elias", 49980, "TSV", 388, 2015, null),
         ]
         def entries = [entry(label: "Meier Paul & Huber Elias", team: "SV / TSV", time1Ms: 47650, time2Ms: 49980,
                 valueMs: 48820, referenceMs: 48000, diffMs: 820, members: members)]
@@ -172,7 +172,7 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         given:
         switches(true, true)
         def entries = [entry(label: "Meier Paul (Einzel)", team: "SV", time1Ms: 47650, valueMs: 47650, referenceMs: 48000,
-                diffMs: 350, members: [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013)])]
+                diffMs: 350, members: [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, null)])]
 
         when:
         String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
@@ -186,7 +186,7 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         switches(true, true)
         String longName = "Oberhuber-Schwarzenegger Maximilian"
         def entries = [entry(label: longName + " (Einzel)", team: "SV", time1Ms: 47650, valueMs: 47650, referenceMs: 48000,
-                diffMs: 350, members: [new GaudiTeamMemberResponse(longName, 47650, "SV", 417, 2013)])]
+                diffMs: 350, members: [new GaudiTeamMemberResponse(longName, 47650, "SV", 417, 2013, null)])]
 
         when:
         String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
@@ -194,4 +194,65 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         then:
         t.contains("(Einzel)")
     }
+
+    @Unroll
+    def "Los-Modus: 'Kategorie' is printed only once somebody has one (#categories)"() {
+        given:
+        switches(true, true)
+        def members = [
+                new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, categories[0]),
+                new GaudiTeamMemberResponse("Huber Elias", 49980, "TSV", 388, 2015, categories[1]),
+        ]
+        def entries = [entry(label: "Meier Paul & Huber Elias", valueMs: 48820, referenceMs: 48000, diffMs: 820, members: members)]
+
+        when:
+        String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
+
+        then:
+        t.contains("Kategorie") == printed
+        t.readLines().any { it.contains("Meier Paul") && it.contains("Snowboard") } == (categories[0] != null)
+        t.readLines().any { it.contains("Huber Elias") && it.contains("Ski") } == (categories[1] != null)
+
+        where:
+        categories           | printed
+        ["Snowboard", "Ski"] | true
+        ["Snowboard", null]  | true
+        [null, null]         | false
+    }
+
+    def "Los-Modus: the Gaudi-Modus name is printed in the page header only, not again above the table"() {
+        given:
+        switches(true, true)
+        def losMode = new GaudiMode(null, null, "Losrennen Herbst", null, null, false, false, false, null, null)
+        def entries = [entry(label: "Meier Paul (Einzel)", valueMs: 47650, referenceMs: 48000, diffMs: 350,
+                members: [new GaudiTeamMemberResponse("Meier Paul", 47650, "SV", 417, 2013, null)])]
+
+        when:
+        String t = text(service.generateLosModeRanking(losMode, entries, race, []))
+
+        then:
+        t.count("Losrennen Herbst") == 1
+    }
+
+    @Unroll
+    def "Los-Modus: 'Abweichung' shows which side of the field average the pair landed on (#pairAverageMs vs. 48000)"() {
+        given:
+        switches(true, true)
+        def entries = [entry(label: "Meier Paul (Einzel)", valueMs: pairAverageMs, referenceMs: 48000, diffMs: diffMs,
+                members: [new GaudiTeamMemberResponse("Meier Paul", pairAverageMs, "SV", 417, 2013, null)])]
+
+        when:
+        String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
+
+        then:
+        t.contains("Abweichung (±)")
+        t.readLines().any { it.contains("Meier Paul") && it.endsWith(printed) }
+
+        where: "exactly on the average: no sign"
+        pairAverageMs | diffMs | printed
+        48820         | 820    | "+0:00.82"
+        47180         | 820    | "-0:00.82"
+        48000         | 0      | " 0:00.00"
+    }
 }
+

@@ -307,8 +307,8 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                                     <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.referenceMs) }}</td>
                                 </ng-container>
                                 <ng-container matColumnDef="diffMs">
-                                    <th mat-header-cell *matHeaderCellDef>Abweichung</th>
-                                    <td mat-cell *matCellDef="let r">{{ singleRaceValueDisplay(r.diffMs) }}</td>
+                                    <th mat-header-cell *matHeaderCellDef>Abweichung (±)</th>
+                                    <td mat-cell *matCellDef="let r">{{ signedDiffDisplay(r) }}</td>
                                 </ng-container>
                                 @if (gaudiMode().type === gaudiModeType.TEAM) {
                                     <ng-container matColumnDef="members">
@@ -680,6 +680,19 @@ export class GaudiModeDetailComponent {
             return entry.totalPoints !== undefined && entry.totalPoints !== null ? String(entry.totalPoints) : "-";
         }
         return this.singleRaceValueDisplay(entry.valueMs);
+    }
+
+    /**
+     * Los-Modus "Abweichung" with the side of the field average the pair landed on: "-" below,
+     * "+" above. Only the distance counts for the place, so -0.20 and +0.20 tie. The sign comes
+     * from the two printed averages, which the backend rounds before diffMs is taken from them.
+     */
+    signedDiffDisplay(entry: GaudiRankingEntry): string {
+        const diff = this.singleRaceValueDisplay(entry.diffMs);
+        if (!entry.diffMs || entry.valueMs == null || entry.referenceMs == null) {
+            return diff;
+        }
+        return (entry.valueMs < entry.referenceMs ? "-" : "+") + diff;
     }
 
     /**
