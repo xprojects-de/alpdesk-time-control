@@ -29,8 +29,9 @@ Wertungen) deckt alle vier Fixes ab, statt vieler isolierter Einzeltests:
   DESC-sortierten (hoeher-ist-besser) Rennen tatsaechlich `-0:29.45` zeigen statt des alten,
   immer-"+"-praefixierten Datenmuells - per `pdftotext` direkt am erzeugten PDF geprueft, da dieser
   Bug rein in der PDF-Text-Formatierung sass (die JSON-API war nie betroffen).
-- **Abweichung-Konsistenz im Los-Modus**: unabhaengige Python-Nachrechnung (rundet Paar- und
-  Gesamt-Durchschnitt getrennt auf die gedruckte Genauigkeit, erst DANN subtrahieren) wird exakt
+- **Abweichung-Konsistenz im Los-Modus**: unabhaengige Python-Nachrechnung (mittelt die gedruckten
+  Hundertstel statt der rohen Millisekunden, rundet Paar- und Gesamt-Durchschnitt getrennt auf die
+  gedruckte Genauigkeit, erst DANN subtrahieren) wird exakt
   (ohne Toleranz) gegen die tatsaechliche API-Antwort geprueft, fuer die vom Backend zufaellig
   gezogene Paarung.
 

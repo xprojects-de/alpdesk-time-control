@@ -13,7 +13,8 @@ roster = state["roster"]
 by_pid = {r["participantId"]: r for r in roster}
 
 def round10(x):
-    """RankingService#roundForDisplay: nearest 10ms, half up - applied ONCE to the raw average."""
+    """RankingService#roundForDisplay: nearest 10ms, half up - applied once to each printed value
+    and once to each average built from them."""
     return int(math.floor(x / 10.0 + 0.5)) * 10
 
 def fmt(ms):
@@ -21,7 +22,9 @@ def fmt(ms):
     return f"{r // 60000}:{(r // 1000) % 60:02d}.{(r % 1000) // 10:02d}"
 
 def value(r):
-    return r["durationMs"] if (r and r["durationMs"] is not None and r["status"] is None) else None
+    """LosModeCalculator#printedValue: the averages are built from the printed hundredths, not the
+    raw ms, so the PDF can be recomputed by hand."""
+    return round10(r["durationMs"]) if (r and r["durationMs"] is not None and r["status"] is None) else None
 
 problems = []
 

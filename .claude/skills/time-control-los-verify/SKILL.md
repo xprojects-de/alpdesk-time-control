@@ -143,9 +143,15 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
   (`net = max(0, value - offsetSeconds*1000)`, TIME races with a start group only), then
   `adjusted = net + penalty` for ascending/TIME, `net - penalty` for descending/POINTS, floored
   at 0.
+- **Then round it to the printed precision** (`LosModeCalculator#printedValue` =
+  `RankingService.roundForDisplay(Race, Integer)`: nearest 10 ms half-up for TIME, unchanged for
+  POINTS). Every average below is built from these printed values, **not from the raw ms** — since
+  2026-09-26, so that an official can recompute the PDF by hand. Before that date the app averaged
+  the raw ms; a PDF printed earlier differs by a hundredth wherever the printed values' average
+  ends on exactly half a hundredth, which is the old rule, not a bug.
 
 **Step 2 — the field average (`Ø-Wert Gesamt`), computed over the WHOLE race:**
-- `overallAverage = mean(all adjusted values of the race)` as a plain double — **every** scored
+- `overallAverage = mean(all printed values of the race)` as a plain double — **every** scored
   participant of the race, not only those sitting in a scorable pair. This is the single most
   likely place to get a wrong-but-plausible number, so build the mean explicitly from the full
   field.
@@ -158,7 +164,7 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
 - If the pair has a second member and that member has no value → likewise not ranked. A pair is
   dropped by **either** member missing a result.
 - The leftover single (no second member) is ranked on its own value alone.
-- `pairAverage = (v1 + v2) / 2.0`, or `v1` for the single. Round it the same way as Step 2 —
+- `pairAverage = (v1 + v2) / 2.0` over the two **printed** values, or `v1` for the single. Round it the same way as Step 2 —
   **once**, straight to the printed precision.
 - `Abweichung = |pairAverageDisplay - overallAverageDisplay|` — the difference of the two
   **already-rounded** values, not the raw gap rounded afterwards. Rounding does not distribute
@@ -220,8 +226,9 @@ they hit a subset of rows and leave every place intact, which reads exactly like
    Confirmed a third time on 2026-09-26 against the new one-line-per-person PDF (35 participants,
    17 pairs + 1 Einzel, pairs read out of the PDF): everything including the sign matched,
    among it six pairs whose average of the *printed* values ends exactly on half a hundredth —
-   decided correctly only because the raw ms lie just below it. That is why the results CSV
-   (`m:ss.SSS`) is the input, never values read back off the PDF.
+   under the raw-ms rule of that day decided by the thousandths alone, which is what led to
+   averaging the printed values instead (Step 1). The results CSV (`m:ss.SSS`) stays the input
+   anyway: the netting and penalty (Step 1) apply to the raw value before it is rounded.
    All three runs were **TIME** races without start groups — the POINTS branch and the start-group
    netting are written to the spec but have not been exercised, so read those two paths against the
    Java code rather than trusting them.
@@ -250,9 +257,9 @@ Answer in German, with:
   report even when everything matches.
 - On mismatches: a table of affected pairs with berechnet vs. Referenz (Platz, Ø-Wert Paar,
   Abweichung incl. Vorzeichen) and the responsible step for each.
-- Pairs whose average of the *printed* values lands exactly on half a hundredth are decided by
-  the raw ms alone — when a user cross-checks by hand from the PDF, name them and show the raw
-  average, so a correct rounding doesn't look like an off-by-one.
+- For a PDF exported before 2026-09-26 (raw-ms averaging, see Step 1): pairs whose average of the
+  printed values lands exactly on half a hundredth are decided by the raw ms there — name them and
+  show the raw average, so the old rule's rounding doesn't look like an off-by-one.
 - Always the sentence that the draw itself is not verified, only the computation on top of it —
   plus the Step 0 coverage result ("jeder Teilnehmer genau einmal gezogen" or the concrete
   discrepancy).

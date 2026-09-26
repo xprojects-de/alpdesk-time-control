@@ -166,6 +166,10 @@ def load_results(path):
                 offset_ms = int(START_GROUP_OFFSET_SECONDS.get(key, 0) * 1000)
                 net = max(0, value - offset_ms)
                 adjusted = max(0, net - penalty if SORT_DIRECTION == "DESC" else net + penalty)
+                # LosModeCalculator#printedValue: the averages are built from the printed value
+                # (hundredths for TIME), not the raw ms. POINTS values are stored at that precision.
+                if RESULT_UNIT == "TIME":
+                    adjusted = round_for_display(adjusted)
 
             out[key] = {"name": name, "value": value, "penalty": penalty,
                         "status": status, "adjusted": adjusted}
