@@ -137,3 +137,50 @@ würde.
 - **Begründung:** So vom Nutzer gewünscht; der Import erkennt einen BOM trotzdem (`TextFileDecoder`).
 - **Aufgehoben, wenn:** der Nutzer einen BOM verlangt.
 - **Quelle:** `GaudiCsvExportService`, Entscheidung des Nutzers
+
+### E15 · Live-Ansicht: Teilnehmer ohne Zeit stehen während des Rennens als „DNS“ da (vertagt)
+- **Bereich:** Live-Ansicht, Ausgaben
+- **Entscheidung:** Vorerst bleibt es dabei, dass wer weder Ergebnis noch Status hat, unter „Nicht gewertet“ als
+  „DNS“ erscheint (`RankingService#dnsStatusLabel`), auch in der Live-Ansicht während des Rennens. **Festgelegt für
+  die Umsetzung:** In der Live-Ansicht kommen diese Teilnehmer in einen eigenen Abschnitt „Noch ohne Zeit“; ein
+  ausdrücklich gesetztes DNS bleibt DNS. Das PDF bleibt unverändert und druckt weiter „DNS“ - nach dem Rennen ist
+  „ohne Zeit, ohne Status“ ein Nichtstarter.
+- **Begründung:** Die Anzeige ist zur Laufzeit irreführend, aber kein Wertungsfehler; die Schlussliste ist korrekt.
+- **Aufgehoben, wenn:** die Live-Ansicht umgebaut wird oder Rückmeldungen von Zuschauern/Eltern kommen - dann wie oben
+  umsetzen, mit Spec in `RaceLiveServiceSpec` und angepasstem Parser in `bergsprint/manual_verify_dns_scope.py`.
+- **Quelle:** Auswertungs-Review 2026-09-26 (B4), Entscheidung des Nutzers
+
+### E16 · Startgruppen-Vorlagen wirken auf alle Rennen, die sie nutzen (vertagt)
+- **Bereich:** Einzelrennen, Startgruppen
+- **Entscheidung:** Der Versatz einer Startgruppen-Vorlage wird bei jeder Auswertung live gelesen
+  (`RankingService#startGroupOffsetMs`). Wer ihn ändert oder die Vorlage löscht, ändert damit auch schon gelaufene
+  Rennen, die sie benutzen. **Festgelegt für die Umsetzung:** eine Sperre in `StartGroupTemplateService` - Versatz
+  ändern und Löschen (auch mit `force`) werden mit 409 abgelehnt, sobald Teilnehmer mit Ergebnis aus **mehr als
+  einem Rennen** die Vorlage nutzen; die Meldung nennt die Rennen. Innerhalb eines Rennens bleibt die Korrektur
+  eines vertippten Versatzes möglich. Keine Migration, kein am Teilnehmer gespeicherter Versatz.
+- **Begründung:** Vorlagen werden in der Praxis pro Veranstaltung angelegt; der Bediener sieht die Änderung in der
+  Liste und kann sie zurücknehmen.
+- **Aufgehoben, wenn:** Vorlagen über mehrere Veranstaltungen hinweg wiederverwendet werden - dann die Sperre wie
+  oben umsetzen, mit Spec in `StartGroupTemplateServiceSpec`.
+- **Quelle:** Auswertungs-Review 2026-09-26 (B5), Entscheidung des Nutzers
+
+### E17 · Versatz größer als die Rohzeit ergibt 0:00.00 (vertagt)
+- **Bereich:** Einzelrennen, Startgruppen
+- **Entscheidung:** Ist der Startgruppen-Versatz größer als die gemessene Zeit (falsche Startgruppe zugewiesen), wird
+  die Nettozeit auf 0 gesetzt und der Teilnehmer steht mit 0:00.00 auf Platz 1 (`RankingService#netDurationMs`).
+- **Begründung:** Der Fehler ist in jeder Liste sofort sichtbar und durch Korrektur der Startgruppe behebbar.
+- **Aufgehoben, wenn:** so ein Fall im Rennbetrieb unbemerkt veröffentlicht wird - dann Netto ≤ 0 als „kein
+  gültiges Ergebnis“ werten (eigenes Etikett unter „Nicht gewertet“) und den Spec „floors at 0 …“ ersetzen.
+- **Quelle:** Auswertungs-Review 2026-09-26 (M4)
+
+### E18 · `externalId` auf der öffentlichen Live-Ansicht (vertagt, widerspricht der Pflegeregel)
+- **Bereich:** Live-Ansicht, Datenschutz
+- **Entscheidung:** Die Live-Ansicht (JSON und HTML) zeigt die `externalId` (Lizenz-/Verbandsnummer) jedes
+  Teilnehmers, für den eine gesetzt ist; einen Schalter gibt es nicht. **Festgelegt für die Umsetzung:** die ID aus
+  der Live-Antwort entfernen (PDFs und Bediener-UI behalten sie), ohne neuen Schalter; den Kommentar in
+  `RaceLiveController` korrigieren; Spec in `RaceLiveServiceSpec`.
+- **Begründung:** Auf Wunsch des Nutzers vorerst nicht umgesetzt. **Achtung:** Nach der Pflegeregel oben gehört ein
+  Befund, der Daten Minderjähriger ungewollt veröffentlichen kann, nicht ins Register, sondern wird gefixt, wenn der
+  Fix klein ist - das ist hier der Fall (Größe S). Solange dieser Eintrag steht, gilt E03 nicht mehr vollständig.
+- **Aufgehoben, wenn:** der Fix umgesetzt ist oder eine Veranstaltung mit Lizenznummern (z. B. DSV-Import) ansteht.
+- **Quelle:** Auswertungs-Review 2026-09-26 (B3), `RankingViewService#withPersonColumns`, `RaceLiveService#renderHtml`
