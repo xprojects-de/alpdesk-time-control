@@ -13,6 +13,7 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
+import x.timecontrol.dto.GaudiDnsMemberResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.AppSettings;
@@ -101,40 +102,6 @@ public class PdfExportService {
     private PersonColumns personColumns() {
         AppSettings settings = settingsService.getSettings();
         return new PersonColumns(settings.pdfShowRaceNumber(), settings.pdfShowBirthYear());
-    }
-
-    /** One numbered line of the Los-Modus "Nicht gewertet" list. */
-    private record LosDnsRow(int position, GaudiDnsEntryResponse entry) {
-    }
-
-    /**
-     * "Nicht gewertet" columns for Los-Modus, whose rows are whole pairs or single undrawn
-     * participants (see LosModeCalculator#computeDnsEntries) - no single person's ID or age group
-     * to show, and the pair label needs the extra width instead. "Wert" appears once a listed value
-     * still counts in "Ø-Wert Gesamt", so the printed field average can be recomputed from the
-     * document; without one the list keeps its old four columns.
-     */
-    private static List<PdfColumn<LosDnsRow>> losDnsColumns(Race race, List<GaudiDnsEntryResponse> dnsEntries) {
-        List<PdfColumn<LosDnsRow>> columns = new ArrayList<>(List.of(
-                new PdfColumn<>("Position", 0.6f, r -> String.valueOf(r.position())),
-                new PdfColumn<>("Paarung", 3.2f, r -> truncate(r.entry().lastName(), 48)),
-                new PdfColumn<>("Team", 1.5f, r -> truncate(r.entry().team() != null ? r.entry().team() : "-", 20))));
-        if (dnsEntries.stream().noneMatch(e -> e.valueMs() != null)) {
-            columns.add(new PdfColumn<>("Status", 0.8f, r -> r.entry().status()));
-            return columns;
-        }
-        columns.add(new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.entry().valueMs())));
-        // Wide enough for "nicht ausgelost", which only occurs together with a value.
-        columns.add(new PdfColumn<>("Status", 1.1f, r -> r.entry().status()));
-        return columns;
-    }
-
-    private static List<LosDnsRow> losDnsRows(List<GaudiDnsEntryResponse> dnsEntries) {
-        List<LosDnsRow> rows = new ArrayList<>();
-        for (int i = 0; i < dnsEntries.size(); i++) {
-            rows.add(new LosDnsRow(i + 1, dnsEntries.get(i)));
-        }
-        return rows;
     }
 
     private static final List<PdfColumn<RankingViewService.RankingEntry>> RANKING_COLUMNS = List.of(
@@ -465,7 +432,7 @@ public class PdfExportService {
                 .toList();
         return renderDocument(race, gaudiMode, true, ctx -> {
             drawPairedSection(ctx, columns, pairs);
-            drawDnsSection(ctx, losDnsRows(dnsEntries), losDnsColumns(race, dnsEntries));
+            drawLosDnsSection(ctx, race, personColumns, dnsEntries);
         });
     }
 
@@ -487,6 +454,59 @@ public class PdfExportService {
      * One printed line of a Los-Modus pair: the {@code member} it is about, plus the {@code pair}
      * entry whose shared values only its {@code first} line shows.
      */
+    /**
+     * Los-Modus "Nicht gewertet", laid out like the ranking above it: one line per person with
+     * their own race number, birth year, team, category, value and status, a pair kept together
+     * and numbered on its first line. "Wert" appears once a listed value still counts in "Ø-Wert
+     * Gesamt" - the finished member of an excluded pair, or a participant with a result who was not
+     * drawn - so the printed field average can be recomputed from the document alone.
+     */
+    private void drawLosDnsSection(PdfContext ctx, Race race, PersonColumns personColumns,
+                                   List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
+        List<List<LosDnsPdfRow>> groups = new ArrayList<>();
+        for (int i = 0; i < dnsEntries.size(); i++) {
+            groups.add(losDnsPdfRows(i + 1, dnsEntries.get(i)));
+        }
+        List<LosDnsPdfRow> rows = groups.stream().flatMap(List::stream).toList();
+        boolean anyTeam = rows.stream().anyMatch(r -> r.member().team() != null);
+        boolean anyCategory = rows.stream().anyMatch(r -> r.member().category() != null);
+        boolean anyValue = rows.stream().anyMatch(r -> r.member().valueMs() != null);
+        List<PdfColumn<LosDnsPdfRow>> columns = personColumns.apply(List.<PdfColumn<LosDnsPdfRow>>of(
+                        new PdfColumn<>("Position", 0.6f, r -> r.first() ? String.valueOf(r.position()) : ""),
+                        new PdfColumn<>("StNr.", 0.5f, r -> orDash(r.member().raceNumber())),
+                        new PdfColumn<>("Name Vorname", 2.0f, r -> r.single()
+                                ? truncate(r.member().label(), 21) + " (Einzel)"
+                                : truncate(r.member().label(), 30)),
+                        new PdfColumn<>("Jg.", 0.5f, r -> orDash(r.member().birthYear())),
+                        new PdfColumn<>("Team", 1.5f, r -> truncate(r.member().team(), 20)),
+                        new PdfColumn<>("Kategorie", 1.3f, r -> truncate(r.member().category(), 20)),
+                        new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.member().valueMs())),
+                        new PdfColumn<>("Status", 1.1f, r -> r.member().status() != null ? r.member().status() : "")))
+                .stream()
+                .filter(c -> anyTeam || !c.header().equals("Team"))
+                .filter(c -> anyCategory || !c.header().equals("Kategorie"))
+                .filter(c -> anyValue || !c.header().equals("Wert"))
+                .toList();
+        drawPairedSection(ctx, columns, groups, "Nicht gewertet");
+    }
+
+    private record LosDnsPdfRow(int position, GaudiDnsEntryResponse entry, GaudiDnsMemberResponse member, boolean first) {
+
+        /** An excluded self-paired leftover - marked like in the ranking, unlike a participant who was never drawn. */
+        boolean single() {
+            return !entry.notDrawn() && entry.members().size() == 1;
+        }
+    }
+
+    private static List<LosDnsPdfRow> losDnsPdfRows(int position, GaudiDnsEntryResponse entry) {
+        List<GaudiDnsMemberResponse> members = entry.members() != null ? entry.members() : List.of();
+        List<LosDnsPdfRow> rows = new ArrayList<>();
+        for (int i = 0; i < members.size(); i++) {
+            rows.add(new LosDnsPdfRow(position, entry, members.get(i), i == 0));
+        }
+        return rows;
+    }
+
     private record LosPdfRow(GaudiRankingEntryResponse pair, GaudiTeamMemberResponse member, boolean first) {
 
         /** A self-paired leftover (odd count), scored against their own value alone. */
@@ -1003,7 +1023,8 @@ public class PdfExportService {
         drawDnsSection(ctx, rows, dnsColumns(rows, personColumns));
     }
 
-    private <T> void drawDnsSection(PdfContext ctx, List<T> rows, List<PdfColumn<T>> columns) throws IOException {
+    private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,
+                                List<PdfColumn<RankingViewService.DnsRow>> columns) throws IOException {
         if (rows.isEmpty()) {
             return;
         }
@@ -1074,9 +1095,23 @@ public class PdfExportService {
      * No title of its own: the Gaudi-Modus name already heads every page.
      */
     private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, List<List<T>> groups) throws IOException {
+        drawPairedSection(ctx, columns, groups, null);
+    }
+
+    /** Same, under a section title (the Los-Modus "Nicht gewertet" list); nothing is drawn for no groups. */
+    private <T> void drawPairedSection(PdfContext ctx, List<PdfColumn<T>> columns, List<List<T>> groups, String title) throws IOException {
+        if (title != null && groups.isEmpty()) {
+            return;
+        }
         ctx.ensureSpace(60);
 
-        ctx.y -= UNTITLED_SECTION_GAP;
+        if (title != null) {
+            ctx.y -= 8;
+            ctx.text(FONT_BOLD, 12, MARGIN, ctx.y, title);
+            ctx.y -= 22;
+        } else {
+            ctx.y -= UNTITLED_SECTION_GAP;
+        }
 
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);

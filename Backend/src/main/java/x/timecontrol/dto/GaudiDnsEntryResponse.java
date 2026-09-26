@@ -4,6 +4,8 @@ import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 @Serdeable
 @Schema(description = "One person referenced by a multi-race Gaudi-Modus (Zeit-Kombination / Punkte-Mischwertung) " +
         "who is missing a valid result in at least one of the combined races and was therefore excluded " +
@@ -46,13 +48,18 @@ public record GaudiDnsEntryResponse(
         Integer valueMs,
 
         @Schema(description = "Los-Modus only: the participant is in no drawn pair", example = "false")
-        boolean notDrawn
+        boolean notDrawn,
+
+        @Nullable
+        @Schema(description = "Los-Modus only: the persons of this entry one by one (both members of an excluded pair, or the " +
+                "one participant who was not drawn); null for the multi-race modes", nullable = true)
+        List<GaudiDnsMemberResponse> members
 ) {
 
     /** An entry of the multi-race modes, which have no field average and no draw. */
     public static GaudiDnsEntryResponse ofPerson(String lastName, String firstName, String team, String ageGroup,
                                                  String externalId, String status, Integer raceNumber, Integer birthYear) {
         return new GaudiDnsEntryResponse(lastName, firstName, team, ageGroup, externalId, status, raceNumber, birthYear,
-                null, false);
+                null, false, null);
     }
 }

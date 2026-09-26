@@ -2,6 +2,7 @@ package x.timecontrol.services.gaudi;
 
 import jakarta.inject.Singleton;
 import x.timecontrol.dto.GaudiDnsEntryResponse;
+import x.timecontrol.dto.GaudiDnsMemberResponse;
 import x.timecontrol.dto.GaudiRankingEntryResponse;
 import x.timecontrol.dto.GaudiTeamMemberResponse;
 import x.timecontrol.entities.Category;
@@ -231,26 +232,19 @@ public class LosModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        Set<Long> personIds = new HashSet<>();
-        Set<Long> teamIds = new HashSet<>();
+        List<Participant> listed = new ArrayList<>(notDrawn);
         for (Participant[] pair : excludedPairs) {
             for (Participant p : pair) {
                 if (p != null) {
-                    personIds.add(p.personId());
-                    if (p.teamId() != null) {
-                        teamIds.add(p.teamId());
-                    }
+                    listed.add(p);
                 }
             }
         }
-        for (Participant p : notDrawn) {
-            personIds.add(p.personId());
-            if (p.teamId() != null) {
-                teamIds.add(p.teamId());
-            }
-        }
-        Map<Long, Person> personsById = personService.findByIds(personIds);
-        Map<Long, Team> teamsById = teamService.findByIds(teamIds);
+        Map<Long, Person> personsById = personService.findByIds(listed.stream().map(Participant::personId).collect(Collectors.toSet()));
+        Map<Long, Team> teamsById = teamService.findByIds(
+                listed.stream().map(Participant::teamId).filter(Objects::nonNull).collect(Collectors.toSet()));
+        Map<Long, Category> categoriesById = categoryService.findByIds(
+                listed.stream().map(Participant::categoryId).filter(Objects::nonNull).collect(Collectors.toSet()));
 
         List<GaudiDnsEntryResponse> dns = new ArrayList<>();
         for (Participant[] pair : excludedPairs) {
@@ -260,6 +254,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     ? formatName(p1, personsById) + " & " + formatName(p2, personsById)
                     : formatName(p1, personsById) + " (Einzel)";
             List<Participant> withoutResult = new ArrayList<>();
+            List<GaudiDnsMemberResponse> members = new ArrayList<>();
             Integer finishedValue = null;
             for (Participant p : pair) {
                 if (p == null) {
@@ -271,17 +266,20 @@ public class LosModeCalculator implements GaudiModeCalculator {
                 } else {
                     finishedValue = value;
                 }
+                members.add(dnsMember(p, value, value == null ? rankingService.dnsStatusLabel(p) : null,
+                        personsById, teamsById, categoriesById));
             }
             // Pairs aren't persons, so lastName carries the whole pair label (PdfExportService joins
             // lastName + firstName into the printed name) and there's no single age group to show.
             dns.add(new GaudiDnsEntryResponse(label, "", formatTeam(p1, p2, teamsById), "-", null,
-                    rankingService.dnsStatusLabel(withoutResult), null, null, finishedValue, false));
+                    rankingService.dnsStatusLabel(withoutResult), null, null, finishedValue, false, members));
         }
         for (Participant p : notDrawn) {
             Integer value = printedValue(race, p);
             String status = value != null ? NOT_DRAWN_STATUS : rankingService.dnsStatusLabel(p);
             dns.add(new GaudiDnsEntryResponse(formatName(p, personsById), "", formatTeam(p, null, teamsById),
-                    "-", null, status, null, null, value, true));
+                    "-", null, status, null, null, value, true,
+                    List.of(dnsMember(p, value, status, personsById, teamsById, categoriesById))));
         }
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
         return dns;
@@ -308,6 +306,13 @@ public class LosModeCalculator implements GaudiModeCalculator {
         Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
         return new GaudiTeamMemberResponse(formatName(p, personsById), value, teamNameOf(p, teamsById), p.raceNumber(),
                 GaudiModeCalculator.birthYearOf(personsById.get(p.personId())), category != null ? category.name() : null);
+    }
+
+    private GaudiDnsMemberResponse dnsMember(Participant p, Integer value, String status, Map<Long, Person> personsById,
+                                             Map<Long, Team> teamsById, Map<Long, Category> categoriesById) {
+        Category category = p.categoryId() != null ? categoriesById.get(p.categoryId()) : null;
+        return new GaudiDnsMemberResponse(formatName(p, personsById), value, teamNameOf(p, teamsById), p.raceNumber(),
+                GaudiModeCalculator.birthYearOf(personsById.get(p.personId())), category != null ? category.name() : null, status);
     }
 
     private String formatName(Participant p, Map<Long, Person> personsById) {
