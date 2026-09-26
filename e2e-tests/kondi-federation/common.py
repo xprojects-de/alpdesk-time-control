@@ -2,6 +2,7 @@ import json
 import mimetypes
 import os
 import re
+import urllib.parse
 import urllib.request
 import urllib.error
 import uuid
@@ -36,6 +37,57 @@ def pdf_row_place_and_id(line):
     if len(candidates) >= 2 and _BIRTH_YEAR.fullmatch(candidates[0]):
         return int(m.group(1)), candidates[1]
     return int(m.group(1)), candidates[0]
+
+
+# "Wertung <Altersklasse> <weiblich|männlich>" - any age-group name ("U14-m", "Jg. 2012/13"), not
+# just word characters, so no section's rows are silently merged into the one above it.
+_AGE_GROUP_SECTION = re.compile(r"\nWertung ([^\n]+?) (weiblich|männlich)\n")
+
+# How a PDF titles the catch-all section of participants who match no age group
+# (RankingViewService#ageGroupSectionLabel).
+UNKNOWN_AGE_GROUP_SECTION = "ohne Altersklasse"
+
+
+def age_group_sections(text):
+    """(age group label, gender, body) for every age group x gender section of a pdftotext text."""
+    parts = _AGE_GROUP_SECTION.split("\n" + text)
+    sections = []
+    for i in range(1, len(parts) - 2, 3):
+        gender = "FEMALE" if parts[i + 1] == "weiblich" else "MALE"
+        sections.append((parts[i].strip(), gender, parts[i + 2]))
+    return sections
+
+
+def age_groups_of_race(base, token, race):
+    """The age groups a race is scored against: its own season and variant, not every season's."""
+    path = f"/age-groups?season={race['seasonYear']}"
+    if race.get("ageGroupVariant"):
+        path += "&variant=" + urllib.parse.quote(race["ageGroupVariant"])
+    status, groups = get(base, token, path)
+    assert status == 200, (status, groups)
+    return groups
+
+
+def age_group_of(person, age_groups):
+    """Name of the age group a person falls into (birth year and gender, BOTH matching either), or
+    None - the same rule as AgeGroupService#calculateAgeGroupName, recomputed independently."""
+    if not person.get("birthDate"):
+        return None
+    year = int(person["birthDate"][:4])
+    for group in age_groups:
+        if group["gender"] in ("BOTH", person["gender"]) and group["birthYearFrom"] <= year <= group["birthYearTo"]:
+            return group["name"]
+    return None
+
+
+def in_age_group_section(person, section_label, section_gender, age_groups):
+    """Whether a person belongs to the PDF section titled with this age group label and gender."""
+    if person["gender"] != section_gender:
+        return False
+    group = age_group_of(person, age_groups)
+    if section_label == UNKNOWN_AGE_GROUP_SECTION:
+        return group is None
+    return group is not None and group.lower() == section_label.lower()
 
 
 def login(base, username="e2e_admin", password="e2eTestPass123"):

@@ -46,7 +46,7 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
     }
 
     private static final List<GaudiDnsEntryResponse> DNS = [
-            new GaudiDnsEntryResponse("Huber", "Elias", "TSV GLETSCHER", "U12", null, "DNF", 388, 2015),
+            GaudiDnsEntryResponse.ofPerson("Huber", "Elias", "TSV GLETSCHER", "U12", null, "DNF", 388, 2015),
     ]
 
     private static List<GaudiRankingLegResponse> legs() {
@@ -262,6 +262,43 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         48820         | 820    | "+0:00.82"
         47180         | 820    | "-0:00.82"
         48000         | 0      | " 0:00.00"
+    }
+
+    def "Los-Modus: a value that counts in Ø-Wert Gesamt but belongs to no ranked pair is printed under 'Nicht gewertet'"() {
+        given: "C was entered after the draw and rode 0:50.00; D and E are an excluded pair, only D finished"
+        switches(false, false)
+        def entries = [entry(label: "A & B", valueMs: 65000, referenceMs: 60000, diffMs: 5000, members: [
+                new GaudiTeamMemberResponse("A", 60000, null, null, null, null),
+                new GaudiTeamMemberResponse("B", 70000, null, null, null, null)])]
+        def dns = [
+                new GaudiDnsEntryResponse("C", "", null, "-", null, "nicht ausgelost", null, null, 50000, true),
+                new GaudiDnsEntryResponse("D & E", "", null, "-", null, "DNS", null, null, 55000, false),
+        ]
+
+        when:
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, entries, race, dns)).split("Nicht gewertet")[1]
+
+        then:
+        notRanked.contains("Wert")
+        notRanked.contains("0:50.00")
+        notRanked.contains("nicht ausgelost")
+        notRanked.contains("0:55.00")
+    }
+
+    def "Los-Modus: the 'Nicht gewertet' list keeps its four columns while none of its values counts"() {
+        given:
+        switches(false, false)
+        def entries = [entry(label: "A & B", valueMs: 65000, referenceMs: 65000, diffMs: 0, members: [
+                new GaudiTeamMemberResponse("A", 60000, null, null, null, null),
+                new GaudiTeamMemberResponse("B", 70000, null, null, null, null)])]
+        def dns = [new GaudiDnsEntryResponse("C", "", null, "-", null, "DNS", null, null, null, true)]
+
+        when:
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, entries, race, dns)).split("Nicht gewertet")[1]
+
+        then:
+        notRanked.contains("Position")
+        !notRanked.contains("Wert")
     }
 
     @Unroll

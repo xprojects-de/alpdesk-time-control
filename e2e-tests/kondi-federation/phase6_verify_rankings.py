@@ -177,3 +177,4 @@ if __name__ == "__main__":
 
     print()
     print("ALLES KORREKT" if all_ok else "ES GIBT ABWEICHUNGEN - siehe oben")
+    sys.exit(0 if all_ok else 1)

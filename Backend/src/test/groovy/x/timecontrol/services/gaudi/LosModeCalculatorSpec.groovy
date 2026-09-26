@@ -198,6 +198,10 @@ class LosModeCalculatorSpec extends Specification {
         dns*.lastName() == ["C & D", "E (Einzel)"]
         dns*.status() == ["DNF", "DNS"]
 
+        and: "C's time still counts in the field average, so it is listed with the pair"
+        dns*.valueMs() == [80000, null]
+        dns*.notDrawn() == [false, false]
+
         and: "the ranking itself still only contains the complete pair"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
@@ -221,9 +225,36 @@ class LosModeCalculatorSpec extends Specification {
         then: "each on their own line with their own status - there is no partner they cost anything"
         dns*.lastName() == ["C", "D"]
         dns*.status() == ["DNS", "DSQ"]
+        dns*.valueMs() == [null, null]
+        dns*.notDrawn() == [true, true]
 
         and: "the drawn pair is unaffected"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
+    }
+
+    def "someone with a result who is in no pair counts in the field average and is listed with that value"() {
+        given: "A and B were drawn; C was entered after the draw and rode 0:50.00"
+        def participants = [participant(1L, 60000), participant(2L, 70000), participant(3L, 50000)]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B"), 3L: person(3L, "C")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+        def dns = calculator.computeDnsEntries(losMode(), races)
+
+        then: "field average (60 + 70 + 50) / 3 = 60.00, pair average 65.00, Abweichung 5.00"
+        ranking.size() == 1
+        ranking[0].referenceMs() == 60000
+        ranking[0].valueMs() == 65000
+        ranking[0].diffMs() == 5000
+
+        and: "C is printed with the value the field average was built from, so it can be recomputed"
+        dns.size() == 1
+        dns[0].lastName() == "C"
+        dns[0].valueMs() == 50000
+        dns[0].status() == LosModeCalculator.NOT_DRAWN_STATUS
+        dns[0].notDrawn()
     }
 
     @Unroll

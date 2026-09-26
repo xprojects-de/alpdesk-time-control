@@ -82,3 +82,4 @@ if isinstance(pdf_bytes, (bytes, bytearray)):
 
 with open(c.results_path("gaudi_state.json"), "w") as f:
     json.dump({"gm_id": gm_id, "expected_totals": expected_totals, "expected_places": expected_places}, f)
+sys.exit(0 if ok else 1)

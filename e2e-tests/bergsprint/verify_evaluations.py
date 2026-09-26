@@ -72,3 +72,4 @@ for gender_en, gender_de in [("FEMALE", "weiblich"), ("MALE", "maennlich")]:
 
 print()
 print("GESCHLECHT x KATEGORIE: " + ("ALLES KORREKT" if all_ok else "ABWEICHUNGEN"))
+sys.exit(0 if all_ok else 1)

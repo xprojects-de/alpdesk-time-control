@@ -263,7 +263,9 @@ def compute(results, pairs, not_drawn=()):
         if v1 is None or (r2 is not None and v2 is None):
             missing = [r for r in (r1, r2) if r and r["adjusted"] is None]
             status = next((m["status"] for m in missing if m["status"]), "DNS")
-            not_ranked.append({"label": label, "status": status,
+            # The member who did finish still counts in the field average, so the list prints it.
+            finished = next((r["adjusted"] for r in (r1, r2) if r and r["adjusted"] is not None), None)
+            not_ranked.append({"label": label, "status": status, "value": finished,
                                "reason": ", ".join(f"{m['name']}: {m['status'] or 'ohne Ergebnis'}"
                                                    for m in missing)})
             continue
@@ -284,14 +286,18 @@ def compute(results, pairs, not_drawn=()):
         e["place"] = place
         prev = e["diff"]
 
-    # Step 5: entered but never drawn (the DSQ/DNF/DNS-at-draw-time group) - listed individually,
-    # not as a pair, since there is no partner they cost anything. Only those without a valid
-    # result; LosModeCalculator#computeDnsEntries applies the same filter.
+    # Step 5: entered but never drawn - listed individually, not as a pair, since there is no
+    # partner they cost anything. Without a valid result that is the DSQ/DNF/DNS-at-draw-time
+    # group; with one (a late entry) the status is "nicht ausgelost" and the value is printed,
+    # because it counts in the field average (Step 2). LosModeCalculator#computeDnsEntries does
+    # the same.
     for key in not_drawn:
         r = results[key]
         if r["adjusted"] is not None:
+            not_ranked.append({"label": r["name"], "status": "nicht ausgelost", "value": r["adjusted"],
+                               "reason": f"{r['name']}: nicht ausgelost, zaehlt im Oe-Wert Gesamt"})
             continue
-        not_ranked.append({"label": r["name"], "status": r["status"] or "DNS",
+        not_ranked.append({"label": r["name"], "status": r["status"] or "DNS", "value": None,
                            "reason": f"{r['name']}: nicht ausgelost"})
 
     # One list, sorted by label - dropped pairs and never-drawn singles interleaved, as the PDF has
@@ -343,7 +349,7 @@ def main():
     if not_ranked:
         print("\nNicht gewertet:")
         for e in not_ranked:
-            print(f"   {e['label']:<44} {e['status']:<5} ({e['reason']})")
+            print(f"   {e['label']:<44} {fmt(e['value']):>10} {e['status']:<15} ({e['reason']})")
 
     if REFERENCE_PDF_TEXT:
         mismatches = compare(ranked, overall, parse_reference_pdf(REFERENCE_PDF_TEXT))

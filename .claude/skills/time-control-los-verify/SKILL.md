@@ -183,11 +183,19 @@ discrepancy to the user, since it means this skill needs a follow-up edit.
 - Its status is the first explicitly recorded `DSQ`/`DNF`/`DNS` among the members that have no
   result; a member merely missing a time with no status recorded falls back to `DNS`
   (`RankingService.dnsStatusLabel`).
-- **Plus one entry per participant who was entered but never drawn** and has no valid result —
-  listed on their own rather than as a pair, because there is no partner they cost anything. That
-  is exactly the DSQ/DNF/DNS-at-draw-time group from Step 0: they are on the start list, and a
-  reader who finds them nowhere in the document cannot tell whether they were left out on purpose
-  or forgotten. Don't mistake such a single-name row for a malformed pair label.
+- A dropped pair whose other member **did** finish carries that member's printed value in the
+  list's "Wert" column - it still counts in the field average (Step 2).
+- **Plus one entry per participant who was entered but never drawn** — listed on their own rather
+  than as a pair, because there is no partner they cost anything. Without a valid result that is
+  the DSQ/DNF/DNS-at-draw-time group from Step 0, with its status. **With** a valid result (a late
+  entry after the draw, or a status cleared after it) the status is `nicht ausgelost` and the row
+  carries the printed value: that value counts in the field average (a rule decision - they did
+  race), so the document must show it for the average to be recomputable. Either way they are on
+  the start list, and a reader who finds them nowhere in the document cannot tell whether they
+  were left out on purpose or forgotten. Don't mistake such a single-name row for a malformed
+  pair label.
+- The "Wert" column appears in the PDF's list only when at least one row has a value; without one
+  the list keeps its four columns (Position, Paarung, Team, Status).
 - Sorted by the entry label, case-insensitively — dropped pairs and never-drawn singles interleaved
   in one list, not in two blocks.
 

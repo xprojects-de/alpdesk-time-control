@@ -83,3 +83,4 @@ for p in problems[:20]:
 with open(c.results_path("manual_device_lines.json"), "w") as f:
     json.dump([{"deviceId": d, "raceNumber": rn, "durationMs": ms} for d, rn, ms in device_lines], f, indent=2)
 print("\nSCHRITT 2: " + ("OK" if not problems else "ABWEICHUNGEN"))
+sys.exit(1 if problems else 0)

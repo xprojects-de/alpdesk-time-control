@@ -96,6 +96,27 @@ class RaceLiveServiceSpec extends Specification {
         response.startList().isEmpty()
     }
 
+    def "the public live page prints names as text, never as markup"() {
+        given: "a race name and person names carrying HTML - this page is served without a login"
+        def hostileRace = new Race(1L, "<b>Rennen</b> & 'Co'", LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null, "test-token")
+        participantService.findByRaceId(1L) >> [participant(1L, 50000), participant(2L, null, DisqualificationStatus.DSQ)]
+        personService.findByIds(_) >> [
+                1L: person(1L, "<script>alert(1)</script>", "Fast", Gender.FEMALE),
+                2L: person(2L, "\"Quote\"", "O'Brien", Gender.MALE),
+        ]
+
+        when:
+        String html = raceLiveService.renderHtml(raceLiveService.buildResponse(hostileRace, RaceLiveViewType.OVERALL, null, null, null))
+
+        then: "the ranked row, the 'nicht gewertet' row and the heading are all escaped"
+        !html.contains("<script>alert(1)</script>")
+        html.contains("&lt;script&gt;alert(1)&lt;/script&gt; Fast")
+        html.contains("&quot;Quote&quot; O&#39;Brien")
+        html.contains("&lt;b&gt;Rennen&lt;/b&gt; &amp; &#39;Co&#39;")
+        !html.contains("<b>Rennen</b>")
+    }
+
     def "GENDER view requires a gender parameter"() {
         given:
         participantService.findByRaceId(1L) >> []

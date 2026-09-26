@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import spock.lang.Unroll
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
 import x.timecontrol.entities.GaudiMode
@@ -32,6 +33,11 @@ class TimeCombinationModeCalculatorSpec extends Specification {
     private static Race race(Long id) {
         new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
                 null, null, null, ResultUnit.TIME, null, SortDirection.ASC, null, null, null, null)
+    }
+
+    private static Race raceWith(Long id, ResultUnit resultUnit, SortDirection sortDirection) {
+        new Race(id, "Rennen " + id, LocalDate.of(2026, 1, 1), null, null, null, null, null, null,
+                null, null, null, resultUnit, null, sortDirection, null, null, null, null)
     }
 
     private static Race raceOn(Long id, LocalDate date) {
@@ -114,6 +120,80 @@ class TimeCombinationModeCalculatorSpec extends Specification {
         then: "19904.5 rounds straight to 19900 (0:19.90) - NOT to 19905 first and then up to 19910 (0:19.91)"
         ranking.size() == 1
         ranking[0].valueMs() == 19900
+    }
+
+    def "a weighted leg that lands exactly on half a hundredth is rounded up, not lost to floating point"() {
+        given: "10300 ms x 0.35 = 3605 ms exactly, which a double makes 3604.9999...; leg 2 is weighted 0"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 0.35d, [participant(1L, 1L, 10300)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 0.0d, []),
+        ]
+
+        when:
+        def ranking = calculator.computeRanking(timeCombinationMode(), races)
+
+        then: "3605 ms prints as 0:03.61, as an official computes it by hand"
+        ranking.size() == 1
+        ranking[0].valueMs() == 3610
+    }
+
+    @Unroll
+    def "a leg changed to #resultUnit/#sortDirection after the mode was saved is refused instead of summed"() {
+        given: "leg 2 no longer matches leg 1 (TIME/ASC) - GaudiModeService#validate only checked it at save time"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(1L, 1L, 60000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, raceWith(2L, resultUnit, sortDirection), 1.0d, [participant(2L, 1L, 1250)]),
+        ]
+
+        when:
+        calculator."$method"(timeCombinationMode(), races)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("Rennen 2")
+
+        where:
+        resultUnit        | sortDirection      | method
+        ResultUnit.POINTS | SortDirection.ASC  | "computeRanking"
+        ResultUnit.TIME   | SortDirection.DESC | "computeRanking"
+        ResultUnit.POINTS | SortDirection.DESC | "computeDnsEntries"
+    }
+
+    def "computeDnsEntries reports the first bad leg in the configured race order, not in race id order"() {
+        given: "race 12 is configured first (DNF there), race 5 second (DSQ there)"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(12L, race(12L), 1.0d,
+                        [participantWithStatus(1L, 1L, null, DisqualificationStatus.DNF)]),
+                new GaudiModeCalculator.RaceParticipants(5L, race(5L), 1.0d,
+                        [participantWithStatus(2L, 1L, 60000, DisqualificationStatus.DSQ)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DNF"
+    }
+
+    def "computeDnsEntries reports DNS for a leg the person was never entered in, even if a later leg carries a status"() {
+        given: "Anna has no participant record in leg 1 and is DSQ in leg 2"
+        knownPersons.putAll([1L: person(1L, "Anna")])
+        def races = [
+                new GaudiModeCalculator.RaceParticipants(1L, race(1L), 1.0d, [participant(3L, 2L, 61000)]),
+                new GaudiModeCalculator.RaceParticipants(2L, race(2L), 1.0d,
+                        [participantWithStatus(1L, 1L, 60000, DisqualificationStatus.DSQ), participant(4L, 2L, 62000)]),
+        ]
+
+        when:
+        def dns = calculator.computeDnsEntries(timeCombinationMode(), races)
+
+        then:
+        dns.size() == 1
+        dns[0].status() == "DNS"
     }
 
     def "two totals that print the same share a place, even when only the double rounding separated them"() {

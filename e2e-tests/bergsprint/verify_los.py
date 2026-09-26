@@ -117,5 +117,7 @@ with open(c.results_path("los_ranking.pdf"), "wb") as f:
     f.write(pdf_bytes)
 print(f"\nPDF-Export erfolgreich ({len(pdf_bytes)} bytes)")
 
+ok = not mismatches and len(ranking) == len(expected_pairs)
 print()
-print("LOS-MODUS: " + ("KORREKT" if not mismatches and len(ranking) == len(expected_pairs) else "ABWEICHUNGEN GEFUNDEN"))
+print("LOS-MODUS: " + ("KORREKT" if ok else "ABWEICHUNGEN GEFUNDEN"))
+sys.exit(0 if ok else 1)

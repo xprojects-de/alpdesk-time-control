@@ -141,3 +141,4 @@ print(f"Abweichungen: {len(problems)}")
 for p in problems[:20]:
     print("  ", p)
 print("\nSCHRITT 3: " + ("OK" if not problems else "ABWEICHUNGEN"))
+sys.exit(1 if problems else 0)
