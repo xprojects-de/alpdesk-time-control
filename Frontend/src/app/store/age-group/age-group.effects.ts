@@ -4,6 +4,7 @@ import {Actions, createEffect, ofType} from "@ngrx/effects";
 import {of} from "rxjs";
 import {catchError, map, mergeMap, switchMap} from "rxjs/operators";
 import {AgeGroupService} from "../../services/age-group.service";
+import {STANDARD_VARIANT} from "../../models/age-group.model";
 import * as AgeGroupActions from "./age-group.actions";
 
 @Injectable()
@@ -16,7 +17,9 @@ export class AgeGroupEffects {
             ofType(AgeGroupActions.loadAgeGroups),
             mergeMap(({season, variant}) =>
                 this.ageGroupService.getAll(season, variant).pipe(
-                    map(ageGroups => AgeGroupActions.loadAgeGroupsSuccess({ageGroups})),
+                    map(ageGroups =>
+                        AgeGroupActions.loadAgeGroupsSuccess({ageGroups, season, variant: variant ?? STANDARD_VARIANT}),
+                    ),
                     catchError(error =>
                         of(
                             AgeGroupActions.loadAgeGroupsFailure({

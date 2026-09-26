@@ -676,6 +676,65 @@ class AgeGroupServiceSpec extends Specification {
         "it is the standard variant's last one, as ever" | ""      | 1               | [race(1L, "Vereinsmeisterschaft", LocalDate.of(2026, 2, 1), "")]
     }
 
+    def "update refuses to move the last age group of a used variant #move"() {
+        given:
+        def lastOne = new AgeGroup(5L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(lastOne)
+        repository.findBySeasonYearAndVariant(2026, KIDS) >> [lastOne]
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+
+        when:
+        service.update(5L, new AgeGroup(null, "Jahrgang 2016", seasonYear, variant, 2016, 2016, Gender.BOTH))
+
+        then: "for the kids' race that is the same as deleting it"
+        0 * repository.update(_)
+        def e = thrown(IllegalStateException)
+        e.message.contains("Kinderrennen")
+
+        where:
+        move                         | seasonYear | variant
+        "into the standard variant"  | 2026       | ""
+        "into another variant"       | 2026       | "Andere"
+        "into another season"        | 2027       | KIDS
+    }
+
+    def "update keeps the last age group of a used variant editable within its variant"() {
+        given:
+        def lastOne = new AgeGroup(5L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(lastOne)
+        repository.findBySeasonYearAndVariant(2026, KIDS) >> [lastOne]
+        raceService.findBetweenWithoutCoverPage(_, _) >> [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+        repository.findByNameIgnoreCaseAndSeasonYearAndVariant(_, _, _) >> Optional.empty()
+        def corrected = new AgeGroup(null, "Jahrgänge 2016-2017", 2026, KIDS, 2016, 2017, Gender.BOTH)
+
+        when:
+        service.update(5L, corrected)
+
+        then:
+        1 * repository.update({ it.id() == 5L && it.variant() == KIDS && it.birthYearTo() == 2017 }) >> { AgeGroup a -> a }
+    }
+
+    def "update moves an age group to another variant when #situation"() {
+        given:
+        def group = new AgeGroup(5L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(group)
+        repository.findBySeasonYearAndVariant(2026, KIDS) >> [group] * groupsInVariant
+        repository.findBySeasonYearAndVariant(2026, "Andere") >> []
+        repository.findByNameIgnoreCaseAndSeasonYearAndVariant(_, _, _) >> Optional.empty()
+        raceService.findBetweenWithoutCoverPage(SEASON_2026_START, SEASON_2026_END) >> races
+
+        when:
+        service.update(5L, new AgeGroup(null, "Jahrgang 2016", 2026, "Andere", 2016, 2016, Gender.BOTH))
+
+        then:
+        1 * repository.update({ it.variant() == "Andere" }) >> { AgeGroup a -> a }
+
+        where:
+        situation                      | groupsInVariant | races
+        "others of its variant remain" | 2               | [race(2L, "Kinderrennen", LocalDate.of(2026, 3, 1), KIDS)]
+        "no race uses its variant"     | 1               | []
+    }
+
     def "create and copyVariant refuse a variant that exists in the season under another spelling"() {
         given:
         groupsBySeason[2026] = [new AgeGroup(1L, "Jahrgang 2016", 2026, "Kinder", 2016, 2016, Gender.BOTH)]

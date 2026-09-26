@@ -51,11 +51,20 @@ export const ageGroupReducer = createReducer(
         loading: true,
         error: null,
     })),
-    on(AgeGroupActions.loadAgeGroupsSuccess, (state, {ageGroups}) => ({
-        ...state,
-        ageGroups,
-        loading: false,
-    })),
+    // A late answer for a season or variant that is no longer on screen is dropped, like the
+    // variants' own: requests run in parallel, and switching back and forth can deliver the older
+    // one last - the table would then show another variant's groups under the selected one's name,
+    // and an edit there would change that other variant. The request for the shown one is still
+    // on its way, so loading stays as it is.
+    on(AgeGroupActions.loadAgeGroupsSuccess, (state, {ageGroups, season, variant}) =>
+        season != null && (season !== state.selectedSeason || variant !== state.selectedVariant)
+            ? state
+            : {
+                  ...state,
+                  ageGroups,
+                  loading: false,
+              },
+    ),
     on(AgeGroupActions.loadAgeGroupsFailure, (state, {error}) => ({
         ...state,
         loading: false,

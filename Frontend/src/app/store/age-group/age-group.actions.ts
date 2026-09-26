@@ -5,7 +5,12 @@ import {AgeGroup, AgeGroupRequest, AgeGroupVariant, AgeGroupVariants} from "../.
 // A season of undefined means "every season" - what anything outside the configuration UI wants.
 // With a season, only the given variant's groups (the standard one if omitted).
 export const loadAgeGroups = createAction("[AgeGroup] Load AgeGroups", props<{season?: number; variant?: string}>());
-export const loadAgeGroupsSuccess = createAction("[AgeGroup] Load AgeGroups Success", props<{ageGroups: AgeGroup[]}>());
+// Carries the season and variant it was asked for, so the reducer can tell a late answer for a
+// selection that is no longer on screen.
+export const loadAgeGroupsSuccess = createAction(
+    "[AgeGroup] Load AgeGroups Success",
+    props<{ageGroups: AgeGroup[]; season?: number; variant?: string}>(),
+);
 export const loadAgeGroupsFailure = createAction("[AgeGroup] Load AgeGroups Failure", props<{error: string}>());
 
 // Create age group

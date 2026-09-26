@@ -117,6 +117,22 @@ class AgeGroupControllerSpec extends Specification {
         0 * repository.deleteById(_)
     }
 
+    def "update moving the last age group of a used variant elsewhere is a 409, and the group stays"() {
+        given:
+        def lastOne = new AgeGroup(5L, "Jahrgang 2016", 2026, KIDS, 2016, 2016, Gender.BOTH)
+        repository.findById(5L) >> Optional.of(lastOne)
+        repository.findBySeasonYearAndVariant(2026, KIDS) >> [lastOne]
+        raceService.findBetweenWithoutCoverPage(_, _) >> [race("Kinderrennen", KIDS)]
+
+        when: "an old client leaves the variant out, which means the standard one"
+        def response = controller.update(5L, new AgeGroupRequest("Jahrgang 2016", 2026, null, 2016, 2016, Gender.BOTH))
+
+        then:
+        response.status() == HttpStatus.CONFLICT
+        response.body().message().contains("Kinderrennen")
+        0 * repository.update(_)
+    }
+
     def "delete of an unknown age group is a 404"() {
         given:
         repository.findById(99L) >> Optional.empty()

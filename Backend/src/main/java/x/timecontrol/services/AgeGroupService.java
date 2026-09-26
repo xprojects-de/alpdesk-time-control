@@ -189,9 +189,17 @@ public class AgeGroupService {
         return repository.findByNameIgnoreCaseAndSeasonYearAndVariant(name, seasonYear, variant);
     }
 
+    /**
+     * @throws IllegalStateException if the update moves the last age group of a variant that races
+     *                               still use into another season or variant - for those races it
+     *                               is the same as deleting it (see {@link #delete}).
+     */
     public Optional<AgeGroup> update(Long id, AgeGroup ageGroup) {
         Optional<AgeGroup> existing = repository.findById(id);
         if (existing.isPresent()) {
+            if (leavesItsVariant(existing.get(), ageGroup)) {
+                assertNotLastOfUsedVariant(existing.get());
+            }
             assertValidVariantName(ageGroup.seasonYear(), ageGroup.variant());
             assertNameAvailable(ageGroup.name(), ageGroup.seasonYear(), ageGroup.variant(), id);
             assertNoOverlap(ageGroup, id);
@@ -219,13 +227,22 @@ public class AgeGroupService {
      */
     public void delete(Long id) {
         Optional<AgeGroup> ageGroup = repository.findById(id);
-        if (ageGroup.isPresent() && isLastOfUsedVariant(ageGroup.get())) {
-            AgeGroup last = ageGroup.get();
-            throw new IllegalStateException("\"" + last.name() + "\" is the last age group of variant \""
-                    + last.variant() + "\", which is still used by: "
-                    + String.join(", ", raceNamesUsing(racesOfSeason(last.seasonYear()), last.variant())));
+        if (ageGroup.isPresent()) {
+            assertNotLastOfUsedVariant(ageGroup.get());
         }
         repository.deleteById(id);
+    }
+
+    private static boolean leavesItsVariant(AgeGroup existing, AgeGroup updated) {
+        return !existing.seasonYear().equals(updated.seasonYear()) || !existing.variant().equals(updated.variant());
+    }
+
+    private void assertNotLastOfUsedVariant(AgeGroup ageGroup) {
+        if (isLastOfUsedVariant(ageGroup)) {
+            throw new IllegalStateException("\"" + ageGroup.name() + "\" is the last age group of variant \""
+                    + ageGroup.variant() + "\", which is still used by: "
+                    + String.join(", ", raceNamesUsing(racesOfSeason(ageGroup.seasonYear()), ageGroup.variant())));
+        }
     }
 
     private boolean isLastOfUsedVariant(AgeGroup ageGroup) {
