@@ -36,6 +36,9 @@ import java.util.stream.StreamSupport;
 @Singleton
 public class LosModeCalculator implements GaudiModeCalculator {
 
+    /** Status printed for someone with a result who is in no drawn pair. */
+    static final String NOT_DRAWN_STATUS = "nicht ausgelost";
+
     private final GaudiLosPairingRepository pairingRepository;
     private final PersonService personService;
     private final RankingService rankingService;
@@ -179,6 +182,11 @@ public class LosModeCalculator implements GaudiModeCalculator {
      * not ranked at all - it's listed here as "nicht gewertet" instead of silently disappearing, with
      * the status of the member(s) that didn't finish. A pairing whose first member no longer exists
      * in the race (e.g. a stale pairing) is skipped, since there's nobody left to report.
+     * <p>
+     * Every value that counts in "Ø-Wert Gesamt" but belongs to no ranked pair is listed with it -
+     * the finished member of an excluded pair and anyone with a result who was never drawn. The
+     * field average is taken over everyone who has a result (a rule decision: they did race), and a
+     * race official must be able to recompute it from the printed document alone (E12).
      */
     @Override
     public List<GaudiDnsEntryResponse> computeDnsEntries(GaudiMode gaudiMode, List<RaceParticipants> races) {
@@ -209,13 +217,14 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         // Entered but never drawn: GaudiModeService#drawLosPairing leaves out anyone already marked
-        // DNS/DNF/DSQ at draw time, since pairing a known non-starter costs their partner a placing.
-        // They still belong on this list - they are on the start list, and a reader who finds them
-        // nowhere in the document cannot tell whether they were left out on purpose or forgotten.
+        // DNS/DNF/DSQ at draw time, since pairing a known non-starter costs their partner a placing,
+        // and a late entry added after the draw is in no pair either. They still belong on this
+        // list - they are on the start list, and a reader who finds them nowhere in the document
+        // cannot tell whether they were left out on purpose or forgotten. One who did race is
+        // listed with the value that counts in the field average.
         // Listed one by one rather than as a pair, because there is no partner they cost anything.
         List<Participant> notDrawn = races.getFirst().participants().stream()
                 .filter(p -> !drawnIds.contains(p.id()))
-                .filter(p -> rankingService.adjustedValue(race, p) == null)
                 .toList();
 
         if (excludedPairs.isEmpty() && notDrawn.isEmpty()) {
@@ -251,19 +260,28 @@ public class LosModeCalculator implements GaudiModeCalculator {
                     ? formatName(p1, personsById) + " & " + formatName(p2, personsById)
                     : formatName(p1, personsById) + " (Einzel)";
             List<Participant> withoutResult = new ArrayList<>();
+            Integer finishedValue = null;
             for (Participant p : pair) {
-                if (p != null && rankingService.adjustedValue(race, p) == null) {
+                if (p == null) {
+                    continue;
+                }
+                Integer value = printedValue(race, p);
+                if (value == null) {
                     withoutResult.add(p);
+                } else {
+                    finishedValue = value;
                 }
             }
             // Pairs aren't persons, so lastName carries the whole pair label (PdfExportService joins
             // lastName + firstName into the printed name) and there's no single age group to show.
             dns.add(new GaudiDnsEntryResponse(label, "", formatTeam(p1, p2, teamsById), "-", null,
-                    rankingService.dnsStatusLabel(withoutResult), null, null));
+                    rankingService.dnsStatusLabel(withoutResult), null, null, finishedValue, false));
         }
         for (Participant p : notDrawn) {
+            Integer value = printedValue(race, p);
+            String status = value != null ? NOT_DRAWN_STATUS : rankingService.dnsStatusLabel(p);
             dns.add(new GaudiDnsEntryResponse(formatName(p, personsById), "", formatTeam(p, null, teamsById),
-                    "-", null, rankingService.dnsStatusLabel(List.of(p)), null, null));
+                    "-", null, status, null, null, value, true));
         }
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
         return dns;

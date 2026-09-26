@@ -9,6 +9,7 @@ import x.timecontrol.entities.Race;
 import x.timecontrol.entities.GaudiModeType;
 import x.timecontrol.services.RankingService;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,6 +88,16 @@ public interface GaudiModeCalculator {
             }
         }
         return null;
+    }
+
+    /**
+     * A leg's value times its race weight, computed exactly. In {@code double}, 45 points x 0.7 is
+     * 31.499999999999996 and rounds to 31, although an official multiplying by hand gets 31.5 and
+     * rounds up to 32; the same happens to a hundredth of a weighted time. {@code BigDecimal.valueOf}
+     * takes the weight as it was typed (0.7), so a half stays an exact half.
+     */
+    static BigDecimal weighted(long value, double weight) {
+        return BigDecimal.valueOf(value).multiply(BigDecimal.valueOf(weight));
     }
 
     static Integer birthYearOf(Person person) {

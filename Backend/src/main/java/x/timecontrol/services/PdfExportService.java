@@ -103,17 +103,39 @@ public class PdfExportService {
         return new PersonColumns(settings.pdfShowRaceNumber(), settings.pdfShowBirthYear());
     }
 
+    /** One numbered line of the Los-Modus "Nicht gewertet" list. */
+    private record LosDnsRow(int position, GaudiDnsEntryResponse entry) {
+    }
+
     /**
-     * "Nicht gewertet" columns for Los-Modus, whose rows are whole pairs (see
-     * LosModeCalculator#computeDnsEntries) - no single person's ID or age group to show, and the pair
-     * label needs the extra width instead.
+     * "Nicht gewertet" columns for Los-Modus, whose rows are whole pairs or single undrawn
+     * participants (see LosModeCalculator#computeDnsEntries) - no single person's ID or age group
+     * to show, and the pair label needs the extra width instead. "Wert" appears once a listed value
+     * still counts in "Ø-Wert Gesamt", so the printed field average can be recomputed from the
+     * document; without one the list keeps its old four columns.
      */
-    private static final List<PdfColumn<RankingViewService.DnsRow>> LOS_DNS_COLUMNS = List.of(
-            new PdfColumn<>("Position", 0.6f, e -> String.valueOf(e.position())),
-            new PdfColumn<>("Paarung", 3.2f, e -> truncate(e.name(), 48)),
-            new PdfColumn<>("Team", 1.5f, e -> truncate(e.team(), 20)),
-            new PdfColumn<>("Status", 0.8f, RankingViewService.DnsRow::status)
-    );
+    private static List<PdfColumn<LosDnsRow>> losDnsColumns(Race race, List<GaudiDnsEntryResponse> dnsEntries) {
+        List<PdfColumn<LosDnsRow>> columns = new ArrayList<>(List.of(
+                new PdfColumn<>("Position", 0.6f, r -> String.valueOf(r.position())),
+                new PdfColumn<>("Paarung", 3.2f, r -> truncate(r.entry().lastName(), 48)),
+                new PdfColumn<>("Team", 1.5f, r -> truncate(r.entry().team() != null ? r.entry().team() : "-", 20))));
+        if (dnsEntries.stream().noneMatch(e -> e.valueMs() != null)) {
+            columns.add(new PdfColumn<>("Status", 0.8f, r -> r.entry().status()));
+            return columns;
+        }
+        columns.add(new PdfColumn<>("Wert", 1f, r -> RankingViewService.formatValue(race, r.entry().valueMs())));
+        // Wide enough for "nicht ausgelost", which only occurs together with a value.
+        columns.add(new PdfColumn<>("Status", 1.1f, r -> r.entry().status()));
+        return columns;
+    }
+
+    private static List<LosDnsRow> losDnsRows(List<GaudiDnsEntryResponse> dnsEntries) {
+        List<LosDnsRow> rows = new ArrayList<>();
+        for (int i = 0; i < dnsEntries.size(); i++) {
+            rows.add(new LosDnsRow(i + 1, dnsEntries.get(i)));
+        }
+        return rows;
+    }
 
     private static final List<PdfColumn<RankingViewService.RankingEntry>> RANKING_COLUMNS = List.of(
             new PdfColumn<>("Platz", 0.4f, e -> String.valueOf(e.place())),
@@ -443,7 +465,7 @@ public class PdfExportService {
                 .toList();
         return renderDocument(race, gaudiMode, true, ctx -> {
             drawPairedSection(ctx, columns, pairs);
-            drawDnsSection(ctx, toDnsRows(dnsEntries), LOS_DNS_COLUMNS);
+            drawDnsSection(ctx, losDnsRows(dnsEntries), losDnsColumns(race, dnsEntries));
         });
     }
 
@@ -981,8 +1003,7 @@ public class PdfExportService {
         drawDnsSection(ctx, rows, dnsColumns(rows, personColumns));
     }
 
-    private void drawDnsSection(PdfContext ctx, List<RankingViewService.DnsRow> rows,
-                                List<PdfColumn<RankingViewService.DnsRow>> columns) throws IOException {
+    private <T> void drawDnsSection(PdfContext ctx, List<T> rows, List<PdfColumn<T>> columns) throws IOException {
         if (rows.isEmpty()) {
             return;
         }

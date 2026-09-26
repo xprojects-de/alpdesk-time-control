@@ -93,6 +93,10 @@ export interface GaudiNotRankedEntry {
     ageGroup: string;
     externalId?: string;
     status: string;
+    /** Los-Modus: a value that still counts in the field average although it belongs to no ranked pair. */
+    valueMs?: number;
+    /** Los-Modus: the participant is in no drawn pair. */
+    notDrawn?: boolean;
 }
 
 export interface GaudiRankingEntry {

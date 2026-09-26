@@ -272,6 +272,11 @@ public class GaudiModeService {
                 throw new IllegalArgumentException("All races combined in a TIME_COMBINATION must use the same sort direction");
             }
         }
+        // With every weight at 0 no race counts, and PointsCombinationModeCalculator would rank the
+        // whole field - people without any result included - on place 1 with 0 points.
+        if (type == GaudiModeType.POINTS_COMBINATION && races.stream().noneMatch(entry -> entry.weight() == null || entry.weight() > 0)) {
+            throw new IllegalArgumentException("At least one race of a POINTS_COMBINATION must have a weight above 0");
+        }
         if (type == GaudiModeType.TEAM && (teamSize == null || teamSize < 1)) {
             throw new IllegalArgumentException("teamSize must be at least 1 for TEAM mode");
         }

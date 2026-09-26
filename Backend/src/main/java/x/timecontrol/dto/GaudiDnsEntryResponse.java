@@ -37,6 +37,22 @@ public record GaudiDnsEntryResponse(
 
         @Nullable
         @Schema(description = "Birth year; null for a Los-Modus pair", example = "2012", nullable = true)
-        Integer birthYear
+        Integer birthYear,
+
+        @Nullable
+        @Schema(description = "Los-Modus only: the printed value that still counts in the field average " +
+                "(\"Ø-Wert Gesamt\") - of a participant who was not drawn, or of the pair member who finished " +
+                "when the partner did not; null when nobody on the row has a result", example = "45120", nullable = true)
+        Integer valueMs,
+
+        @Schema(description = "Los-Modus only: the participant is in no drawn pair", example = "false")
+        boolean notDrawn
 ) {
+
+    /** An entry of the multi-race modes, which have no field average and no draw. */
+    public static GaudiDnsEntryResponse ofPerson(String lastName, String firstName, String team, String ageGroup,
+                                                 String externalId, String status, Integer raceNumber, Integer birthYear) {
+        return new GaudiDnsEntryResponse(lastName, firstName, team, ageGroup, externalId, status, raceNumber, birthYear,
+                null, false);
+    }
 }
