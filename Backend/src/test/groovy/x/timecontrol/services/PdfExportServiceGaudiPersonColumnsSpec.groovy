@@ -5,6 +5,7 @@ import org.apache.pdfbox.text.PDFTextStripper
 import spock.lang.Specification
 import spock.lang.Unroll
 import x.timecontrol.dto.GaudiDnsEntryResponse
+import x.timecontrol.dto.GaudiDnsMemberResponse
 import x.timecontrol.dto.GaudiRankingEntryResponse
 import x.timecontrol.dto.GaudiRankingLegResponse
 import x.timecontrol.dto.GaudiTeamMemberResponse
@@ -264,41 +265,96 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         48000         | 0      | " 0:00.00"
     }
 
-    def "Los-Modus: a value that counts in Ø-Wert Gesamt but belongs to no ranked pair is printed under 'Nicht gewertet'"() {
-        given: "C was entered after the draw and rode 0:50.00; D and E are an excluded pair, only D finished"
-        switches(false, false)
-        def entries = [entry(label: "A & B", valueMs: 65000, referenceMs: 60000, diffMs: 5000, members: [
-                new GaudiTeamMemberResponse("A", 60000, null, null, null, null),
-                new GaudiTeamMemberResponse("B", 70000, null, null, null, null)])]
-        def dns = [
-                new GaudiDnsEntryResponse("C", "", null, "-", null, "nicht ausgelost", null, null, 50000, true),
-                new GaudiDnsEntryResponse("D & E", "", null, "-", null, "DNS", null, null, 55000, false),
-        ]
-
-        when:
-        String notRanked = text(service.generateLosModeRanking(gaudiMode, entries, race, dns)).split("Nicht gewertet")[1]
-
-        then:
-        notRanked.contains("Wert")
-        notRanked.contains("0:50.00")
-        notRanked.contains("nicht ausgelost")
-        notRanked.contains("0:55.00")
+    private static GaudiDnsEntryResponse losDns(String label, String status, Integer valueMs, boolean notDrawn,
+                                                List<GaudiDnsMemberResponse> members) {
+        new GaudiDnsEntryResponse(label, "", members[0].team(), "-", null, status, null, null, valueMs, notDrawn, members)
     }
 
-    def "Los-Modus: the 'Nicht gewertet' list keeps its four columns while none of its values counts"() {
-        given:
-        switches(false, false)
-        def entries = [entry(label: "A & B", valueMs: 65000, referenceMs: 65000, diffMs: 0, members: [
-                new GaudiTeamMemberResponse("A", 60000, null, null, null, null),
-                new GaudiTeamMemberResponse("B", 70000, null, null, null, null)])]
-        def dns = [new GaudiDnsEntryResponse("C", "", null, "-", null, "DNS", null, null, null, true)]
+    private static String line(String text, String name) {
+        text.readLines().find { it.contains(name) }
+    }
+
+    private List<GaudiRankingEntryResponse> onePair() {
+        [entry(label: "A & B", valueMs: 65000, referenceMs: 60000, diffMs: 5000, members: [
+                new GaudiTeamMemberResponse("Anna A", 60000, null, null, null, null),
+                new GaudiTeamMemberResponse("Bert B", 70000, null, null, null, null)])]
+    }
+
+    @Unroll
+    def "Los-Modus: an excluded pair is listed one line per person under 'Nicht gewertet', each with value and #status"() {
+        given: "only Schmeiser finished; the pair is not ranked, his time still counts in Ø-Wert Gesamt"
+        switches(true, true)
+        def dns = [losDns("Schmeiser Jonas & Hummel Marleen", status, 1858350, false, [
+                new GaudiDnsMemberResponse("Schmeiser Jonas", 1858350, "SC THALKIRCHDORF", 17, 2013, null, null),
+                new GaudiDnsMemberResponse("Hummel Marleen", null, "SC THALKIRCHDORF", 18, 2014, null, status)])]
 
         when:
-        String notRanked = text(service.generateLosModeRanking(gaudiMode, entries, race, dns)).split("Nicht gewertet")[1]
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, onePair(), race, dns)).split("Nicht gewertet")[1]
+
+        then: "the finisher's line carries position, race number, birth year, team and value"
+        def first = line(notRanked, "Schmeiser Jonas")
+        first.startsWith("1 ")
+        ["17", "2013", "SC THALKIRCHDORF", "30:58.35"].every { first.contains(it) }
+
+        and: "the partner's line carries the full status, not cut off"
+        def second = line(notRanked, "Hummel Marleen")
+        ["18", "2014", "SC THALKIRCHDORF"].every { second.contains(it) }
+        second.trim().endsWith(status)
+        !second.startsWith("1 ")
+
+        where:
+        status << ["DNS", "DNF", "DSQ"]
+    }
+
+    def "Los-Modus: someone with a result who was not drawn is listed with that value as 'nicht ausgelost'"() {
+        given:
+        switches(false, false)
+        def dns = [losDns("Carl C", "nicht ausgelost", 50000, true, [
+                new GaudiDnsMemberResponse("Carl C", 50000, null, null, null, null, "nicht ausgelost")])]
+
+        when:
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, onePair(), race, dns)).split("Nicht gewertet")[1]
+
+        then: "a single line, without the '(Einzel)' marker of a self-paired leftover"
+        def row = line(notRanked, "Carl C")
+        row.contains("0:50.00")
+        row.contains("nicht ausgelost")
+        !row.contains("(Einzel)")
+    }
+
+    def "Los-Modus: an excluded self-paired leftover keeps its '(Einzel)' marker"() {
+        given:
+        switches(false, false)
+        def dns = [losDns("Dora D (Einzel)", "DNF", null, false, [
+                new GaudiDnsMemberResponse("Dora D", null, null, null, null, null, "DNF")])]
+
+        when:
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, onePair(), race, dns)).split("Nicht gewertet")[1]
+
+        then:
+        line(notRanked, "Dora D").contains("Dora D (Einzel)")
+    }
+
+    def "Los-Modus: the 'Nicht gewertet' list has no 'Wert' column while none of its values counts"() {
+        given:
+        switches(false, false)
+        def dns = [losDns("Carl C", "DNS", null, true, [new GaudiDnsMemberResponse("Carl C", null, null, null, null, null, "DNS")])]
+
+        when:
+        String notRanked = text(service.generateLosModeRanking(gaudiMode, onePair(), race, dns)).split("Nicht gewertet")[1]
 
         then:
         notRanked.contains("Position")
         !notRanked.contains("Wert")
+        line(notRanked, "Carl C").trim().endsWith("DNS")
+    }
+
+    def "Los-Modus: without anybody not ranked there is no 'Nicht gewertet' section"() {
+        given:
+        switches(false, false)
+
+        expect:
+        !text(service.generateLosModeRanking(gaudiMode, onePair(), race, [])).contains("Nicht gewertet")
     }
 
     @Unroll

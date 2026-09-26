@@ -202,6 +202,13 @@ class LosModeCalculatorSpec extends Specification {
         dns*.valueMs() == [80000, null]
         dns*.notDrawn() == [false, false]
 
+        and: "each person of the pair on their own, the one who didn't finish with their own status"
+        dns[0].members()*.label() == ["C", "D"]
+        dns[0].members()*.valueMs() == [80000, null]
+        dns[0].members()*.status() == [null, "DNF"]
+        dns[1].members()*.label() == ["E"]
+        dns[1].members()*.status() == ["DNS"]
+
         and: "the ranking itself still only contains the complete pair"
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
@@ -255,6 +262,8 @@ class LosModeCalculatorSpec extends Specification {
         dns[0].valueMs() == 50000
         dns[0].status() == LosModeCalculator.NOT_DRAWN_STATUS
         dns[0].notDrawn()
+        dns[0].members()*.valueMs() == [50000]
+        dns[0].members()*.status() == [LosModeCalculator.NOT_DRAWN_STATUS]
     }
 
     @Unroll
