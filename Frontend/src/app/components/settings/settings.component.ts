@@ -15,6 +15,7 @@ import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatSnackBar, MatSnackBarModule} from "@angular/material/snack-bar";
 import {TimingProviderLabels, TimingProviderSettings, TimingProviderType} from "../../models/timing-provider.model";
 import {SeasonSettingsComponent} from "./season-settings.component";
+import {PdfExportSettingsComponent} from "./pdf-export-settings.component";
 import * as SettingsActions from "../../store/settings/settings.actions";
 import * as SettingsSelectors from "../../store/settings/settings.selectors";
 
@@ -35,9 +36,12 @@ const ALPDESK_CONFIG_FIELDS: {key: string; label: string; placeholder: string}[]
         MatProgressSpinnerModule,
         MatSnackBarModule,
         SeasonSettingsComponent,
+        PdfExportSettingsComponent,
     ],
     template: `
         <app-season-settings />
+
+        <app-pdf-export-settings />
 
         <mat-card>
             <mat-card-header>

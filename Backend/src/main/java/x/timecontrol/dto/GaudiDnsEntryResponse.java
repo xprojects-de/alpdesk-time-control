@@ -29,6 +29,14 @@ public record GaudiDnsEntryResponse(
         @Schema(description = "Reason label: the explicit DSQ/DNF/DNS status of the first combined-race leg that " +
                 "carries one, or the generic \"DNS\" fallback when none of their legs has an explicit status",
                 example = "DNS")
-        String status
+        String status,
+
+        @Nullable
+        @Schema(description = "Race number - from the first combined race in which the person has one; null for a Los-Modus pair", example = "17", nullable = true)
+        Integer raceNumber,
+
+        @Nullable
+        @Schema(description = "Birth year; null for a Los-Modus pair", example = "2012", nullable = true)
+        Integer birthYear
 ) {
 }

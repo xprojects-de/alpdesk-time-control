@@ -42,8 +42,16 @@ for p in pairings:
     drawn_ids.append(p["participant1Id"])
     if p.get("participant2Id"):
         drawn_ids.append(p["participant2Id"])
-if sorted(drawn_ids) != sorted(r["participantId"] for r in roster):
-    problems.append("Auslosung deckt nicht jeden Teilnehmer genau einmal ab")
+# Anyone already marked DNS/DNF/DSQ at draw time is left out on purpose (see
+# GaudiModeService#drawLosPairing): a known non-starter would only cost their partner the placing.
+# Here that is bib 17 (DNF) and bib 27 (DSQ), both set by manual_setup.py before the draw. Bib 16
+# (never started, but no status) is still drawn - the draw goes by status alone.
+expected_drawn = sorted(r["participantId"] for r in roster if r["status"] is None)
+if sorted(drawn_ids) != expected_drawn:
+    problems.append("Auslosung deckt nicht jeden Teilnehmer ohne Status genau einmal ab")
+not_drawn = [r for r in roster if r["participantId"] not in drawn_ids]
+print("nicht ausgelost (Status vor der Auslosung): "
+      + ", ".join(f"StNr {r['raceNumber']} {r['status']}" for r in not_drawn))
 if len(set(drawn_ids)) != len(drawn_ids):
     problems.append("Ein Teilnehmer wurde in mehr als ein Paar gelost")
 

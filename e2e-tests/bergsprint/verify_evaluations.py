@@ -55,7 +55,9 @@ for gender_en, gender_de in [("FEMALE", "weiblich"), ("MALE", "maennlich")]:
         body_ranked = body.split("Nicht gewertet")[0]
         pdf_places = {}
         for line in body_ranked.splitlines():
-            m = re.match(r"^\s*(\d+)\s+\S+?(\d+)\s", line)
+            # Place, the optional "StNr." column, then the name, whose first part carries the race
+            # number in this suite's synthetic field ("Klein9 Ivo").
+            m = re.match(r"^\s*(\d+)\s+(?:(?:\d+|-)\s+)?\D+?(\d+)\s", line)
             if m:
                 pdf_places[int(m.group(2))] = int(m.group(1))
 

@@ -35,7 +35,7 @@ sleep 8
 echo ""
 echo "Health check:"
 for port in "${PORTS[@]}"; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/" || echo "000")
+  code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/watchdog" || echo "000")
   echo "  port $port: HTTP $code"
 done
 echo ""

@@ -90,6 +90,42 @@ export class SettingsEffects {
         ),
     );
 
+    loadPdfExport$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(SettingsActions.loadPdfExport),
+            mergeMap(() =>
+                this.settingsService.getPdfExport().pipe(
+                    map(pdfExport => SettingsActions.loadPdfExportSuccess({pdfExport})),
+                    catchError(error =>
+                        of(
+                            SettingsActions.loadPdfExportFailure({
+                                error: extractErrorMessage(error, "PDF-Einstellungen konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    updatePdfExport$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(SettingsActions.updatePdfExport),
+            mergeMap(({request}) =>
+                this.settingsService.updatePdfExport(request).pipe(
+                    map(pdfExport => SettingsActions.updatePdfExportSuccess({pdfExport})),
+                    catchError(error =>
+                        of(
+                            SettingsActions.updatePdfExportFailure({
+                                error: extractErrorMessage(error, "PDF-Einstellungen konnten nicht gespeichert werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
     /**
      * Race.seasonYear is computed by the backend alone - and it is exactly what the season boundary
      * changes, so every race in the store is stale afterwards. The race and participant pages do

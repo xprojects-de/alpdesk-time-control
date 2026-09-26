@@ -4,10 +4,11 @@ This folder contains everything needed to run the backend (with the Angular fron
 as a container - either as a quick local test with Podman, or in production behind Caddy on a
 Hetzner server.
 
-All commands below assume the project is already built once for the frontend, i.e.
-`src/main/resources/public` already contains the compiled Angular app (see the
-[Backend README](../README.md) / `Frontend/npm run deploy` + `./gradlew copyFrontend`). The
-Dockerfiles just package what's already on disk, they don't build the frontend themselves.
+All commands below assume the frontend is already built and copied, i.e.
+`src/main/resources/public` contains the compiled Angular app (`Frontend/npm run deploy` +
+`./gradlew copyFrontend`). That directory is not in the repository (it is gitignored), so on a
+fresh checkout run both first. The Dockerfiles just package what's already on disk, they don't
+build the frontend themselves - without it the image serves the API but no UI.
 
 ## Quick start (JVM image)
 

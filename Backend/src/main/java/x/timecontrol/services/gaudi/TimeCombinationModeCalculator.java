@@ -72,7 +72,7 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(participantByPersonAndRace));
 
         record PersonResult(Long personId, String label, String externalId, int totalMs, List<GaudiRankingLegResponse> legs,
-                            String team) {
+                            String team, Integer raceNumber, Integer birthYear) {
         }
 
         List<PersonResult> results = new ArrayList<>();
@@ -133,7 +133,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             String label = person.map(personService::displayName).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String team = teamOf(races, byRace, teamsById);
-            results.add(new PersonResult(personId, label, externalId, total, legs, team));
+            results.add(new PersonResult(personId, label, externalId, total, legs, team,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
         // GaudiModeService.validate() guarantees every combined race shares the same sortDirection,
@@ -168,7 +169,9 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
                     r.team(),
                     null,
                     r.personId(),
-                    r.externalId()
+                    r.externalId(),
+                    r.raceNumber(),
+                    r.birthYear()
             ));
         }
 
@@ -226,7 +229,8 @@ public class TimeCombinationModeCalculator implements GaudiModeCalculator {
             String ageGroup = person.map(p -> ageGroupService.calculateAgeGroupName(p.birthDate(), p.gender(), ageGroups)).orElse("Unbekannt");
             String externalId = person.map(Person::externalId).orElse(null);
             String status = rankingService.dnsStatusLabel(byRace.values());
-            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status));
+            dns.add(new GaudiDnsEntryResponse(lastName, firstName, teamOf(races, byRace, teamsById), ageGroup, externalId, status,
+                    GaudiModeCalculator.raceNumberOf(races, byRace), GaudiModeCalculator.birthYearOf(person.orElse(null))));
         }
 
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))

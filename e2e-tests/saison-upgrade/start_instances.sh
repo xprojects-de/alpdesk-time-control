@@ -40,7 +40,7 @@ grep -E "Migrating schema|Successfully applied|Current version" "$WORK_DIR/app/b
   echo "  (nothing found - check $WORK_DIR/app/backend.log)"
 echo ""
 echo "Health check:"
-curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/" || true
+curl -s -o /dev/null -w "  app port $APP_PORT: HTTP %{http_code}\n" "http://localhost:$APP_PORT/watchdog" || true
 echo ""
 echo "DB (for the verification step): $WORK_DIR/app/database/time-control.db"
 echo "To stop: pkill -f 'time-control.jar'"

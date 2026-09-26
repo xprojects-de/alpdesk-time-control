@@ -101,7 +101,7 @@ found.
    another's ports/PIDs/work dir), each from its own directory:
    a. `./start_instances.sh <absolute-path-to-time-control.jar>` — let it create its own temp
       work dir; note the work dir and PIDs it prints.
-   b. Check the printed health-check output shows the expected ports responding (HTTP 200/302
+   b. Check the printed health-check output (it probes `/watchdog`) shows the expected ports responding (HTTP 200
       etc., not connection failures) before continuing.
    c. `./run_all.sh` — record pass/fail. The scripts use `set -euo pipefail`, so they stop at
       the first failed step/verification. For `saison-upgrade` only, pass the instance database

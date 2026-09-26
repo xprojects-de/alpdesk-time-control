@@ -35,7 +35,7 @@ class GaudiModeServiceLosDrawSpec extends Specification {
     TransactionOperations transactionOperations = Mock()
 
     SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
     }
     SeasonService seasonService = new SeasonService(settingsService, raceService)
 

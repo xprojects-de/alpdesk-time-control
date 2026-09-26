@@ -17,7 +17,42 @@ The repo has two independent projects:
 - `Frontend/` — Angular 22 SPA, npm/Angular CLI build.
 
 `Backend/build.gradle`'s `copyFrontend` task copies `Frontend/dist/time-control/browser` into
-`Backend/src/main/resources/public`, so a full production build is Frontend-then-Backend.
+`Backend/src/main/resources/public`, so a full production build is Frontend-then-Backend
+(`npm run deploy`, then `./gradlew copyFrontend shadowJar`; `copyFrontend` is not wired into the build).
+That directory is **gitignored** - never commit the built frontend; the release workflow
+(`build-installers.yml`) builds it itself. A jar built without it serves the API but no UI (`/`
+answers 500, `/watchdog` still 200) - enough for the e2e suites, whose readiness checks use `/watchdog`.
+
+## Git (always)
+
+**Never commit, amend or push on your own** - not after a finished change, not when a plan was agreed, not when
+"let's continue" follows. The user reviews every change in the working tree first and commits it themselves. Leave the
+changes uncommitted, report what changed, and commit only when the user explicitly asks for that commit.
+
+## Code style (always)
+
+Code is written to be read: someone new to the project must follow a class from top to bottom without
+jumping around. Lean and readable beats clever and general.
+- **Names say what, comments say why.** A method or variable named after its purpose needs no comment; a comment
+  explains a reason, a rule or a quirk (of a timing device, a race rule, the PDF layout) the code cannot show. No
+  comments that repeat the code.
+- **Small, flat methods**: one level of abstraction per method, early returns instead of nested ifs, a helper
+  method with a good name instead of a block with a comment above it.
+- **No abstraction in advance**: no interface with one implementation, no generic framework for one use, no
+  configuration option nobody asked for. Add it when the second case is there. (The timing-provider and
+  Gaudi-Modus seams below exist because there are several cases.)
+- **Plain Java where it is clearer**: a loop instead of a stream chain that needs reading twice; records for data;
+  a `switch` over an enum instead of a class hierarchy.
+- **Follow the neighbours**: a new class looks like the existing ones of its layer - services take their
+  dependencies through the constructor (the `@Inject` fields of `DataImportScheduler` and
+  `AlpdeskTimeControlDataImportService` are the exception, not the model), controllers through `@Inject` fields; settings via `@Value`; a service
+  signals bad input with `IllegalArgumentException` (and a broken invariant with `IllegalStateException`), which
+  the controller turns into an `ErrorResponse` with the matching status; the same package layout.
+- **Imports, no fully qualified class names in code** (Java and Groovy): `import java.util.List;` and `List<...>`,
+  never `java.util.List<...>` inline. Only when two classes of the same simple name meet in one file does the
+  second one stay qualified.
+- **Readable specs**: a feature method reads like the rule it tests (given/when/then with plain helpers), data
+  tables for variants.
 
 ## Commands
 
@@ -37,8 +72,34 @@ Tests are Spock specs under `Backend/src/test/groovy/x/timecontrol/...`, mirrori
 `src/main/java/x/timecontrol/...` package layout (mostly `services/`). `failOnNoDiscoveredTests` is
 enabled, so a misconfigured test source set fails the build instead of silently passing.
 
-Default login is `time-control` / `time-control` unless overridden via `APP_USERNAME`/`APP_PASSWORD`
-env vars — see [application.properties](Backend/src/main/resources/application.properties).
+Login: the username defaults to `time-control` (`APP_USERNAME` overrides it). The password is **not**
+the `time-control` example value in [application.properties](Backend/src/main/resources/application.properties):
+unless `APP_PASSWORD` is set, the first start generates a random one and stores it next to the DB
+(`database/app-password.txt` in dev, `~/alpdesk-time-control/` when packaged - `ensureAppPassword` in
+`Application.java`); it is logged at startup and shown in the desktop status window. The e2e suites
+and throwaway instances set `APP_USERNAME`/`APP_PASSWORD` explicitly.
+
+### Backend tests (always)
+
+**Every backend change comes with enough Spock specs in the same change** - a feature or fix is not
+done without them, and `./gradlew test` must be green before it is reported as done. "Enough"
+means, for every new or changed service/endpoint:
+
+- the happy path;
+- every validation rule (`IllegalArgumentException` → 400), preferably as a data-driven `where:` table;
+- the business rules: ranking and places (ties, sort direction, penalties, DNS/DNF/DSQ), rounding,
+  age-group/season scoping - whatever the change touches;
+- printed output that carries the change: render the PDF and read its text back with PDFBox's
+  `PDFTextStripper` (see `PdfExportServiceRaceNumberBirthYearSpec`), and for the public live view
+  both the response and `renderHtml`.
+
+A bug fix starts with a spec that fails without the fix.
+
+A change that shows up end to end (rankings, PDF or live layout, imports, Gaudi-Modus scoring) is
+also run through `/time-control-e2e`. **Read the suites' output, not just their exit codes**: some
+verification steps print `MISMATCH`/`ABWEICHUNGEN` and still exit 0. A PDF or HTML layout change
+usually needs the suites' parsers adjusted - keep them reading the old layout too (the kondi
+reference PDF and printed results of real events use it).
 
 ### Frontend (run from `Frontend/`)
 
@@ -105,6 +166,9 @@ Micronaut app (`x.timecontrol` package), annotation-driven, no Spring:
 - Auth is JWT bearer (`micronaut-security-jwt`); the JWT signing secret is auto-generated once and
   persisted next to the DB (`ensureJwtSecret` in `Application.java`) rather than using the
   insecure default that ships in `application.properties`.
+- Micronaut's management endpoints (`/health`, `/beans`, ...) come in through `micronaut-flyway`
+  (which pulls in `micronaut-management`) and are switched off (`endpoints.all.enabled=false`);
+  `/watchdog` (`HealthController`) is the liveness probe the frontend polls.
 
 **Domain model**: a `Race` groups `Participant` rows (one per `Person` entered in that race),
 each optionally in a `Team`/`Category`/`AgeGroup`. Raw finish-line events land in `Measurement`;
@@ -182,7 +246,10 @@ results across multiple races per `GaudiModeType` (points combination, time comb
 `~/alpdesk-time-control/` instead — see README). Foreign keys, WAL mode, and a busy-timeout are set
 via JDBC URL query params, not `connection-init-sql` (the SQLite JDBC driver only executes the first
 `;`-separated statement of a multi-pragma string). Schema is managed by Flyway migrations under
-`src/main/resources/db/migration/`.
+`src/main/resources/db/migration/` — add a new `V<n>__<description>.sql`, **never edit one that may
+already have run anywhere**, not even its comments: Flyway checksums the whole file, and every
+database that applied the old version refuses to start afterwards (the operator's laptop at the next
+race included).
 
 ## Frontend architecture
 

@@ -36,6 +36,7 @@ const REPEAT_SUPPRESSION_MS = 15000;
  * would show two snackbars for one failure:
  * - SettingsActions.loadTimingProviderFailure (settings.component.ts)
  * - SettingsActions.loadSeasonFailure (season-settings.component.ts)
+ * - SettingsActions.loadPdfExportFailure (pdf-export-settings.component.ts)
  * - PointsScaleActions.loadPointsScalesFailure (gaudi-mode-dialog / points-scale-manager-dialog)
  * - GaudiModeActions.loadRankingFailure, RaceActions.loadLiveLinksFailure (their own views)
  * Backend-health failures are excluded too - they are expected while the backend is down and are

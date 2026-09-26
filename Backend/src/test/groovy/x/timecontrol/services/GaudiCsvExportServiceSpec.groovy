@@ -26,7 +26,7 @@ class GaudiCsvExportServiceSpec extends Specification {
     // the actual date -> season mapping. With the default 1 January boundary, every race date used
     // in these specs (2026-..-..) resolves to season 2026.
     SettingsService settingsService = Stub(SettingsService) {
-        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1)
+        getSettings() >> new AppSettings(1L, TimingProviderType.NONE, null, 1, 1, true, true)
     }
     SeasonService seasonService = new SeasonService(settingsService, Stub(RaceService))
 
@@ -44,7 +44,7 @@ class GaudiCsvExportServiceSpec extends Specification {
     }
 
     private static GaudiRankingEntryResponse entry(int place, Long personId, String team, Integer valueMs, Integer points, String externalId) {
-        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId)
+        new GaudiRankingEntryResponse(place, "label" + personId, null, null, valueMs, null, null, points, [], team, null, personId, externalId, null, null)
     }
 
     private static List<String> lines(byte[] bytes) {
