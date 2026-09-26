@@ -17,23 +17,28 @@ public record GaudiRankingEntryResponse(
         String label,
 
         @Nullable
-        @Schema(description = "Individual time of the first participant in milliseconds (Los-Modus only)", example = "120000", nullable = true)
+        @Schema(description = "Value of the first participant in milliseconds, rounded to the printed hundredth for TIME races - " +
+                "what the pair average is built from (Los-Modus only)", example = "120000", nullable = true)
         Integer time1Ms,
 
         @Nullable
-        @Schema(description = "Individual time of the second participant in milliseconds (Los-Modus only, null for a self-paired leftover)", example = "130000", nullable = true)
+        @Schema(description = "Value of the second participant in milliseconds, rounded like time1Ms " +
+                "(Los-Modus only, null for a self-paired leftover)", example = "130000", nullable = true)
         Integer time2Ms,
 
         @Nullable
-        @Schema(description = "The computed metric for this entry in milliseconds (e.g. pair average time, team total time, or Zeit-Kombination total time)", example = "125000", nullable = true)
+        @Schema(description = "The computed metric for this entry in milliseconds (e.g. pair average time, team total time, or Zeit-Kombination total time). " +
+                "Los-Modus: the average of time1Ms/time2Ms, rounded to the printed hundredth", example = "125000", nullable = true)
         Integer valueMs,
 
         @Nullable
-        @Schema(description = "Reference value this entry was compared against, in milliseconds (e.g. overall average for Los-Modus)", example = "120000", nullable = true)
+        @Schema(description = "Reference value this entry was compared against, in milliseconds (e.g. overall average for Los-Modus: " +
+                "the average of every participant's rounded value, rounded to the printed hundredth)", example = "120000", nullable = true)
         Integer referenceMs,
 
         @Nullable
-        @Schema(description = "Absolute difference between valueMs and referenceMs in milliseconds, used for ranking where applicable", example = "5000", nullable = true)
+        @Schema(description = "Absolute difference between valueMs and referenceMs in milliseconds, used for ranking where applicable. " +
+                "Always unsigned - the PDF and the frontend derive the sign from valueMs vs. referenceMs", example = "5000", nullable = true)
         Integer diffMs,
 
         @Nullable

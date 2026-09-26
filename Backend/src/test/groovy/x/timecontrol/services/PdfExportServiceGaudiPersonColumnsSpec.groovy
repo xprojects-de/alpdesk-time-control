@@ -263,5 +263,27 @@ class PdfExportServiceGaudiPersonColumnsSpec extends Specification {
         47180         | 820    | "-0:00.82"
         48000         | 0      | " 0:00.00"
     }
-}
 
+    @Unroll
+    def "Los-Modus: 'Team' is printed only once somebody has one (#teams)"() {
+        given:
+        switches(true, true)
+        def members = [
+                new GaudiTeamMemberResponse("Meier Paul", 47650, teams[0], 417, 2013, null),
+                new GaudiTeamMemberResponse("Huber Elias", 49980, teams[1], 388, 2015, null),
+        ]
+        def entries = [entry(label: "Meier Paul & Huber Elias", valueMs: 48820, referenceMs: 48000, diffMs: 820, members: members)]
+
+        when:
+        String t = text(service.generateLosModeRanking(gaudiMode, entries, race, []))
+
+        then:
+        t.contains("Team") == printed
+
+        where:
+        teams         | printed
+        ["SV", "TSV"] | true
+        ["SV", null]  | true
+        [null, null]  | false
+    }
+}

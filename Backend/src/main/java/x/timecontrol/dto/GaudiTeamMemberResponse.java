@@ -11,7 +11,9 @@ public record GaudiTeamMemberResponse(
         String label,
 
         @Nullable
-        @Schema(description = "Member's individual adjusted result in milliseconds", example = "65000", nullable = true)
+        @Schema(description = "Member's individual adjusted result in milliseconds (start-group offset and penalty applied). " +
+                "Los-Modus: rounded to the printed hundredth for TIME races, the value the pair and field averages are built from. " +
+                "Mannschaftswertung: unrounded", example = "65000", nullable = true)
         Integer valueMs,
 
         @Nullable

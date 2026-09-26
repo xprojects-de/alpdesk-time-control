@@ -155,7 +155,7 @@ public class RankingService {
         return roundForDisplay(race, adjustedValue(race, participant));
     }
 
-    private static double roundToTensOfMs(double valueMs) {
+    static double roundToTensOfMs(double valueMs) {
         return Math.round(valueMs / 10.0) * 10.0;
     }
 

@@ -413,13 +413,14 @@ public class PdfExportService {
      * Los-Modus: one line per person rather than one "A & B" line per pair, so each member's own
      * race number, birth year, team and value can stand next to their name. The pair's shared
      * values (Platz, Ø-Wert Paar, Ø-Wert Gesamt, Abweichung) are printed on its first line only,
-     * and a pair is never split across a page break - see {@link #drawPairedSection}. "Kategorie" is
-     * only printed once somebody has one.
+     * and a pair is never split across a page break - see {@link #drawPairedSection}. "Team" and
+     * "Kategorie" are only printed once somebody has one.
      */
     public byte[] generateLosModeRanking(GaudiMode gaudiMode, List<GaudiRankingEntryResponse> entries, Race race,
                                          List<GaudiDnsEntryResponse> dnsEntries) throws IOException {
         PersonColumns personColumns = personColumns();
         List<List<LosPdfRow>> pairs = entries.stream().map(PdfExportService::losPdfRows).toList();
+        boolean anyTeam = pairs.stream().flatMap(List::stream).anyMatch(r -> r.member().team() != null);
         boolean anyCategory = pairs.stream().flatMap(List::stream).anyMatch(r -> r.member().category() != null);
         List<PdfColumn<LosPdfRow>> allColumns = personColumns.apply(List.of(
                 new PdfColumn<>("Platz", 0.6f, r -> r.first() ? String.valueOf(r.pair().place()) : ""),
@@ -436,9 +437,10 @@ public class PdfExportService {
                 new PdfColumn<>("Ø-Wert Gesamt", 1f, r -> r.first() ? RankingViewService.formatValue(race, r.pair().referenceMs()) : ""),
                 new PdfColumn<>("Abweichung (±)", 1f, r -> r.first() ? signedDiff(race, r.pair()) : "")
         ));
-        List<PdfColumn<LosPdfRow>> columns = anyCategory
-                ? allColumns
-                : allColumns.stream().filter(c -> !c.header().equals("Kategorie")).toList();
+        List<PdfColumn<LosPdfRow>> columns = allColumns.stream()
+                .filter(c -> anyTeam || !c.header().equals("Team"))
+                .filter(c -> anyCategory || !c.header().equals("Kategorie"))
+                .toList();
         return renderDocument(race, gaudiMode, true, ctx -> {
             drawPairedSection(ctx, columns, pairs);
             drawDnsSection(ctx, toDnsRows(dnsEntries), LOS_DNS_COLUMNS);
@@ -504,7 +506,7 @@ public class PdfExportService {
                 new PdfColumn<>("Wert", 1.0f, m -> RankingViewService.formatValue(race, m.valueMs()))
         ));
         return renderDocument(race, gaudiMode, false,
-                ctx -> drawSectionWithDetailTable(ctx, columns, null, entries, true,
+                ctx -> drawSectionWithDetailTable(ctx, columns, entries,
                         memberColumns, e -> e.members() != null ? e.members() : List.of()));
     }
 
@@ -566,7 +568,7 @@ public class PdfExportService {
         PersonColumns personColumns = personColumns();
         boolean showStrafe = anyLegHasPenalty(entries);
         return renderDocument(headerRace, gaudiMode, true, ctx -> {
-            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), null, entries, true,
+            drawSectionWithDetailTable(ctx, pointsCombinationColumns(anyHasExternalId(entries), personColumns), entries,
                     pointsCombinationDetailColumns(showStrafe), e -> pointsCombinationDetailRows(e, legRaces));
             drawDnsSection(ctx, toDnsRows(dnsEntries), personColumns);
         });
@@ -1129,22 +1131,35 @@ public class PdfExportService {
      * Like {@link #drawSectionWithDetails}, but the per-entry breakdown is drawn as a small,
      * column-aligned sub-table (one row per race) instead of wrapped "Rennen: Wert X, Platz Y"
      * text - used by Punkte-Mischwertung so the per-race breakdown reads as a table, not a
-     * comma-separated string. A {@code null} title draws none, for a table the page header's
-     * Gaudi-Modus name already heads (the whole-field Punkte-Mischwertung, the Mannschaftswertung).
+     * comma-separated string.
      */
     private <T, D> void drawSectionWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, String title,
                                                     List<T> entries, boolean mainTitle,
                                                     List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
-        if (title == null) {
-            ctx.ensureSpace(60);
-            ctx.y -= UNTITLED_SECTION_GAP;
-        } else {
-            ctx.ensureSpace(mainTitle ? 90 : 100);
-            ctx.y -= mainTitle ? 10 : 15;
-            ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
-            ctx.y -= mainTitle ? 30 : 25;
-        }
+        ctx.ensureSpace(mainTitle ? 90 : 100);
 
+        ctx.y -= mainTitle ? 10 : 15;
+        ctx.text(FONT_BOLD, mainTitle ? 14 : 11, MARGIN, ctx.y, title);
+        ctx.y -= mainTitle ? 30 : 25;
+
+        drawDetailTable(ctx, columns, entries, detailColumns, detailRowsFn);
+    }
+
+    /**
+     * The same table without a title of its own, for one the page header's Gaudi-Modus name already
+     * heads (the whole-field Punkte-Mischwertung, the Mannschaftswertung).
+     */
+    private <T, D> void drawSectionWithDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, List<T> entries,
+                                                    List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
+        ctx.ensureSpace(60);
+
+        ctx.y -= UNTITLED_SECTION_GAP;
+
+        drawDetailTable(ctx, columns, entries, detailColumns, detailRowsFn);
+    }
+
+    private <T, D> void drawDetailTable(PdfContext ctx, List<PdfColumn<T>> columns, List<T> entries,
+                                        List<PdfColumn<D>> detailColumns, Function<T, List<D>> detailRowsFn) throws IOException {
         float[] colX = computeColumnX(columns, ctx.page.getMediaBox().getWidth());
         drawTableHeader(ctx, columns, colX);
         drawRowsWithDetailTable(ctx, columns, colX, entries, detailColumns, detailRowsFn);

@@ -457,8 +457,9 @@ public class RankingViewService {
         // Round to the nearest 10ms (hundredth of a second) before splitting into
         // minutes/seconds/hundredths, rather than truncating - a thousandths digit >= 5 rounds the
         // hundredths up, otherwise down, and a carry (e.g. 0:00.996 -> 0:01.00) falls out correctly
-        // since it's applied to the total milliseconds first.
-        int roundedMs = Math.round(timeMs / 10.0f) * 10;
+        // since it's applied to the total milliseconds first. The same routine RankingService ties
+        // places on and the Los-Modus averages from, so a printed time is always that value.
+        int roundedMs = (int) RankingService.roundToTensOfMs(timeMs);
         int totalSeconds = roundedMs / 1000;
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;
