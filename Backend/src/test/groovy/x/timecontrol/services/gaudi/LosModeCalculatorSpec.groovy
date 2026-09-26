@@ -1,6 +1,7 @@
 package x.timecontrol.services.gaudi
 
 import spock.lang.Specification
+import spock.lang.Unroll
 import x.timecontrol.entities.Category
 import x.timecontrol.entities.DisqualificationStatus
 import x.timecontrol.entities.Gender
@@ -133,10 +134,10 @@ class LosModeCalculatorSpec extends Specification {
     }
 
     def "diffMs is derived from the printed (rounded) Ø-Werte, not from independently rounding the raw gap"() {
-        given: "overall average of all four participants (4083,4083,33525,33525) is 18804ms -> prints as 0:18.80; the tested pair's average is 4083ms -> prints as 0:04.08"
+        given: "the pair averages 4085ms -> prints as 0:04.09; the whole field (4080,4090,33520,33520) averages 18802.5ms -> prints as 0:18.80"
         def participants = [
-                participant(1L, 4083), participant(2L, 4083),   // this pair: average 4083ms
-                participant(3L, 33525), participant(4L, 33525), // only present to shift the overall average, not part of a tested pairing
+                participant(1L, 4080), participant(2L, 4090),   // this pair: average 4085ms
+                participant(3L, 33520), participant(4L, 33520), // only present to shift the overall average, not part of a tested pairing
         ]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
         knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
@@ -145,11 +146,11 @@ class LosModeCalculatorSpec extends Specification {
         when:
         def ranking = calculator.computeRanking(losMode(), races)
 
-        then: "the raw gap |4083-18804|=14721ms (the old, now-wrong behaviour) does not equal the difference of the two printed values 0:18.80-0:04.08=0:14.72=14720ms, which is what's now returned - alongside the printed averages themselves"
+        then: "the gap |4085-18802.5|=14717.5ms rounded on its own would be 0:14.72, but the two printed values differ by 0:18.80-0:04.09=0:14.71, which is what's returned - alongside the printed averages themselves"
         ranking.size() == 1
-        ranking[0].valueMs() == 4080
+        ranking[0].valueMs() == 4090
         ranking[0].referenceMs() == 18800
-        ranking[0].diffMs() == 14720
+        ranking[0].diffMs() == 14710
     }
 
     def "diffMs is derived from the printed values for POINTS races too, not just TIME"() {
@@ -225,11 +226,36 @@ class LosModeCalculatorSpec extends Specification {
         calculator.computeRanking(losMode(), races)*.label() == ["A & B"]
     }
 
-    def "a pair average is rounded once, straight to the printed hundredth - not to a whole ms first"() {
-        given: "10004 and 10005 average 10004.5ms: rounding to 10005ms first would print 0:10.01, but the value is closer to 0:10.00"
+    @Unroll
+    def "a pair average is built from the printed hundredths, so it can be recomputed from the PDF by hand (#v1 + #v2)"() {
+        given:
+        def participants = [participant(1L, v1), participant(2L, v2)]
+        pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
+        knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
+        def races = [new GaudiModeCalculator.RaceParticipants(1L, race, 1.0d, participants)]
+
+        when:
+        def ranking = calculator.computeRanking(losMode(), races)
+
+        then: "the printed values' average, commercially rounded - the raw ms would round the other way"
+        ranking[0].valueMs() == printedAverage
+
+        and: "each member carries the value that counted, i.e. the printed one"
+        ranking[0].time1Ms() == printed1
+        ranking[0].time2Ms() == printed2
+        ranking[0].members()*.valueMs() == [printed1, printed2]
+
+        where: "raw average 27:31.7025 / 0:10.0045, printed values average 27:31.705 / 0:10.005"
+        v1      | v2      | printed1 | printed2 | printedAverage
+        1130266 | 2173139 | 1130270  | 2173140  | 1651710 // 18:50.27 + 36:13.14 -> 27:31.71
+        10004   | 10005   | 10000    | 10010    | 10010   // 0:10.00 + 0:10.01 -> 0:10.01
+    }
+
+    def "the field average is built from the printed hundredths as well"() {
+        given: "raw average 10004.5ms would print 0:10.00, the printed values 0:10.01/0:10.00 average 0:10.005"
         def participants = [
-                participant(1L, 10004), participant(2L, 10005), // this pair: average 10004.5ms
-                participant(3L, 10000), participant(4L, 10000), // overall average 10002.25ms -> 0:10.00
+                participant(1L, 10005), participant(2L, 10004),
+                participant(3L, 10005), participant(4L, 10004),
         ]
         pairingRepository.findByGaudiModeId(1L) >> [new GaudiLosPairing(1L, 1L, 1L, 2L)]
         knownPersons.putAll([1L: person(1L, "A"), 2L: person(2L, "B")])
@@ -238,11 +264,8 @@ class LosModeCalculatorSpec extends Specification {
         when:
         def ranking = calculator.computeRanking(losMode(), races)
 
-        then: "pair and overall average both print as 0:10.00, so the pair hits the average exactly"
-        ranking.size() == 1
-        ranking[0].valueMs() == 10000
-        ranking[0].referenceMs() == 10000
-        ranking[0].diffMs() == 0
+        then:
+        ranking[0].referenceMs() == 10010
     }
 
     def "each pair carries its members one by one - own value, team, race number, birth year and category - for the PDF's one-line-per-person layout"() {

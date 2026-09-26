@@ -83,7 +83,7 @@ public class LosModeCalculator implements GaudiModeCalculator {
                 .toList();
 
         List<Integer> allValues = raceParticipants.stream()
-                .map(p -> rankingService.adjustedValue(race, p))
+                .map(p -> printedValue(race, p))
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -92,13 +92,12 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
 
         double overallAverage = allValues.stream().mapToInt(Integer::intValue).average().orElse(0);
-        // Rounded once, straight from the raw average to the printed precision of the "Ø-Wert
-        // Gesamt"/"Ø-Wert Paar" columns (RankingService#roundForDisplay) - rounding to a whole ms
-        // first would round twice and can land a printed hundredth off. That same rounded value is
+        // Rounded once, straight from the average to the printed precision of the "Ø-Wert
+        // Gesamt"/"Ø-Wert Paar" columns (RankingService#roundForDisplay). That same rounded value is
         // both what's returned/printed and what "Abweichung" is derived from, instead of
-        // independently rounding the raw gap: rounding does not distribute over subtraction, so a
-        // diff computed from the raw values first and rounded once at the end can differ by a
-        // printed hundredth from the difference of the two already-rounded printed values.
+        // independently rounding the gap: rounding does not distribute over subtraction, so a diff
+        // computed first and rounded once at the end can differ by a printed hundredth from the
+        // difference of the two already-rounded printed values.
         int overallAverageDisplay = rankingService.roundForDisplay(race, overallAverage);
 
         record PairResult(String label, Integer value1, Integer value2, int pairAverageDisplay, int diffDisplay, String team,
@@ -111,8 +110,8 @@ public class LosModeCalculator implements GaudiModeCalculator {
             Participant p1 = participantsById.get(pairing.participant1Id());
             Participant p2 = pairing.participant2Id() != null ? participantsById.get(pairing.participant2Id()) : null;
 
-            Integer value1 = p1 != null ? rankingService.adjustedValue(race, p1) : null;
-            Integer value2 = p2 != null ? rankingService.adjustedValue(race, p2) : null;
+            Integer value1 = p1 != null ? printedValue(race, p1) : null;
+            Integer value2 = p2 != null ? printedValue(race, p2) : null;
 
             if (value1 == null) {
                 continue;
@@ -268,6 +267,18 @@ public class LosModeCalculator implements GaudiModeCalculator {
         }
         dns.sort(Comparator.comparing(GaudiDnsEntryResponse::lastName, String.CASE_INSENSITIVE_ORDER));
         return dns;
+    }
+
+    /**
+     * A participant's value as the results list prints it (to the hundredth for TIME races), which is
+     * what every average here is built from - not the raw milliseconds. A race official recomputes
+     * the pair and field averages from the printed list by hand; averaging the raw ms instead lands
+     * a hundredth apart whenever the printed values' average ends on exactly half a hundredth, and
+     * a correct result then looks like a miscalculation. It is the same precision the individual
+     * ranking ties on (RankingService#placeTieValue).
+     */
+    private Integer printedValue(Race race, Participant p) {
+        return rankingService.roundForDisplay(race, rankingService.adjustedValue(race, p));
     }
 
     /**
