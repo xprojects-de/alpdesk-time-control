@@ -13,7 +13,6 @@ import x.timecontrol.entities.Person;
 import x.timecontrol.entities.PointsScale;
 import x.timecontrol.entities.Team;
 import x.timecontrol.services.AgeGroupService;
-import x.timecontrol.services.SeasonService;
 import x.timecontrol.services.PersonService;
 import x.timecontrol.services.PointsScaleService;
 import x.timecontrol.services.RankingService;
@@ -47,17 +46,15 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
     private final PointsScaleService pointsScaleService;
     private final TeamService teamService;
     private final AgeGroupService ageGroupService;
-    private final SeasonService seasonService;
 
     public PointsCombinationModeCalculator(RankingService rankingService, PersonService personService,
                                             PointsScaleService pointsScaleService, TeamService teamService,
-                                            AgeGroupService ageGroupService, SeasonService seasonService) {
+                                            AgeGroupService ageGroupService) {
         this.rankingService = rankingService;
         this.personService = personService;
         this.pointsScaleService = pointsScaleService;
         this.teamService = teamService;
         this.ageGroupService = ageGroupService;
-        this.seasonService = seasonService;
     }
 
     @Override
@@ -199,10 +196,9 @@ public class PointsCombinationModeCalculator implements GaudiModeCalculator {
             return List.of();
         }
 
-        // Scoped to the season these races are scored in; a combination spanning two is scored
-        // against the first race's season, which SeasonService also reports (see #scoringSeasonOf).
-        List<AgeGroup> ageGroups = ageGroupService.findBySeason(
-                seasonService.scoringSeasonOf(races.stream().map(RaceParticipants::race).toList()));
+        // Scoped to the season and variant these races are scored in; a combination spanning two is
+        // scored against the first race's (see AgeGroupService#findForScoring).
+        List<AgeGroup> ageGroups = ageGroupService.findForScoring(races.stream().map(RaceParticipants::race).toList());
         Map<Long, Person> personsById = personService.findByIds(notRanked.keySet());
         Map<Long, Team> teamsById = teamService.findByIds(collectTeamIds(notRanked));
 

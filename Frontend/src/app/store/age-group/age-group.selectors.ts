@@ -17,6 +17,26 @@ export const selectCurrentSeason = createSelector(selectAgeGroupState, state => 
 
 export const selectSelectedSeason = createSelector(selectAgeGroupState, state => state.selectedSeason);
 
+export const selectSelectedVariant = createSelector(selectAgeGroupState, state => state.selectedVariant);
+
+export const selectVariants = createSelector(selectAgeGroupState, state => state.variants);
+
+/**
+ * The season and variant the table shows, as one value: switching seasons also resets the variant,
+ * and two separate selectors would report that as two changes - loading the new season's groups
+ * for the old variant first.
+ */
+export const selectShownSeasonVariant = createSelector(
+    selectSelectedSeason,
+    selectSelectedVariant,
+    (season, variant) => ({
+        season,
+        variant,
+    }),
+);
+
+export const selectRaceDialogVariants = createSelector(selectAgeGroupState, state => state.raceDialogVariants);
+
 /**
  * The season offered as the source of a rollover: the configured season closest to the selected
  * one, preferring an earlier one (the normal case - roll last season forward). An earlier season

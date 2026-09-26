@@ -2,7 +2,7 @@ import {inject, Injectable} from "@angular/core";
 import {extractErrorMessage} from "../../utils/http-error.util";
 import {Actions, createEffect, ofType} from "@ngrx/effects";
 import {of} from "rxjs";
-import {catchError, map, mergeMap} from "rxjs/operators";
+import {catchError, map, mergeMap, switchMap} from "rxjs/operators";
 import {AgeGroupService} from "../../services/age-group.service";
 import * as AgeGroupActions from "./age-group.actions";
 
@@ -14,8 +14,8 @@ export class AgeGroupEffects {
     loadAgeGroups$ = createEffect(() =>
         this.actions$.pipe(
             ofType(AgeGroupActions.loadAgeGroups),
-            mergeMap(({season}) =>
-                this.ageGroupService.getAll(season).pipe(
+            mergeMap(({season, variant}) =>
+                this.ageGroupService.getAll(season, variant).pipe(
                     map(ageGroups => AgeGroupActions.loadAgeGroupsSuccess({ageGroups})),
                     catchError(error =>
                         of(
@@ -94,13 +94,68 @@ export class AgeGroupEffects {
     copySeason$ = createEffect(() =>
         this.actions$.pipe(
             ofType(AgeGroupActions.copySeason),
-            mergeMap(({fromSeason, toSeason}) =>
-                this.ageGroupService.copySeason({fromSeason, toSeason}).pipe(
-                    map(ageGroups => AgeGroupActions.copySeasonSuccess({toSeason, ageGroups})),
+            mergeMap(({fromSeason, fromVariant, toSeason, toVariant}) =>
+                this.ageGroupService.copySeason({fromSeason, fromVariant, toSeason, toVariant}).pipe(
+                    map(ageGroups => AgeGroupActions.copySeasonSuccess({toSeason, toVariant, ageGroups})),
                     catchError(error =>
                         of(
                             AgeGroupActions.copySeasonFailure({
-                                error: extractErrorMessage(error, "Saison konnte nicht übernommen werden"),
+                                error: extractErrorMessage(error, "Altersgruppen konnten nicht übernommen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    loadVariants$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(AgeGroupActions.loadVariants),
+            mergeMap(({season}) =>
+                this.ageGroupService.getVariants(season).pipe(
+                    map(({variants}) => AgeGroupActions.loadVariantsSuccess({season, variants})),
+                    catchError(error =>
+                        of(
+                            AgeGroupActions.loadVariantsFailure({
+                                error: extractErrorMessage(error, "Varianten konnten nicht geladen werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    deleteVariant$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(AgeGroupActions.deleteVariant),
+            mergeMap(({season, variant}) =>
+                this.ageGroupService.deleteVariant(season, variant).pipe(
+                    map(() => AgeGroupActions.deleteVariantSuccess({season, variant})),
+                    catchError(error =>
+                        of(
+                            AgeGroupActions.deleteVariantFailure({
+                                error: extractErrorMessage(error, "Variante konnte nicht gelöscht werden"),
+                            }),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+    // switchMap: while the date is being typed, only the answer for the latest one matters.
+    loadVariantsForDate$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(AgeGroupActions.loadVariantsForDate),
+            switchMap(({date}) =>
+                this.ageGroupService.getVariantsForDate(date).pipe(
+                    map(variants => AgeGroupActions.loadVariantsForDateSuccess({date, variants})),
+                    catchError(error =>
+                        of(
+                            AgeGroupActions.loadVariantsForDateFailure({
+                                error: extractErrorMessage(error, "Varianten konnten nicht geladen werden"),
                             }),
                         ),
                     ),

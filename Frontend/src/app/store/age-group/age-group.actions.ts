@@ -1,9 +1,10 @@
 import {createAction, props} from "@ngrx/store";
-import {AgeGroup, AgeGroupRequest} from "../../models/age-group.model";
+import {AgeGroup, AgeGroupRequest, AgeGroupVariant, AgeGroupVariants} from "../../models/age-group.model";
 
 // Load all age groups
 // A season of undefined means "every season" - what anything outside the configuration UI wants.
-export const loadAgeGroups = createAction("[AgeGroup] Load AgeGroups", props<{season?: number}>());
+// With a season, only the given variant's groups (the standard one if omitted).
+export const loadAgeGroups = createAction("[AgeGroup] Load AgeGroups", props<{season?: number; variant?: string}>());
 export const loadAgeGroupsSuccess = createAction("[AgeGroup] Load AgeGroups Success", props<{ageGroups: AgeGroup[]}>());
 export const loadAgeGroupsFailure = createAction("[AgeGroup] Load AgeGroups Failure", props<{error: string}>());
 
@@ -36,10 +37,43 @@ export const loadSeasonsSuccess = createAction(
 );
 export const loadSeasonsFailure = createAction("[AgeGroup] Load Seasons Failure", props<{error: string}>());
 
-// Rolls a season's configuration over to the next one, shifting the birth years by the difference.
-export const copySeason = createAction("[AgeGroup] Copy Season", props<{fromSeason: number; toSeason: number}>());
+// Copies one variant's groups to another season and/or variant, shifting the birth years by the
+// difference between the seasons: rolls a season over, or starts a new variant from an existing one.
+export const copySeason = createAction(
+    "[AgeGroup] Copy Season",
+    props<{fromSeason: number; fromVariant: string; toSeason: number; toVariant: string}>(),
+);
 export const copySeasonSuccess = createAction(
     "[AgeGroup] Copy Season Success",
-    props<{toSeason: number; ageGroups: AgeGroup[]}>(),
+    props<{toSeason: number; toVariant: string; ageGroups: AgeGroup[]}>(),
 );
 export const copySeasonFailure = createAction("[AgeGroup] Copy Season Failure", props<{error: string}>());
+
+// Which variant of the selected season the configuration UI is showing. A variant that has no age
+// groups yet (just named via "Neue Variante") exists only here until its first group is saved.
+export const selectVariant = createAction("[AgeGroup] Select Variant", props<{variant: string}>());
+
+export const loadVariants = createAction("[AgeGroup] Load Variants", props<{season: number}>());
+export const loadVariantsSuccess = createAction(
+    "[AgeGroup] Load Variants Success",
+    props<{season: number; variants: AgeGroupVariant[]}>(),
+);
+export const loadVariantsFailure = createAction("[AgeGroup] Load Variants Failure", props<{error: string}>());
+
+export const deleteVariant = createAction("[AgeGroup] Delete Variant", props<{season: number; variant: string}>());
+export const deleteVariantSuccess = createAction(
+    "[AgeGroup] Delete Variant Success",
+    props<{season: number; variant: string}>(),
+);
+export const deleteVariantFailure = createAction("[AgeGroup] Delete Variant Failure", props<{error: string}>());
+
+// The variants the race dialog offers: those of the season the race's date falls into.
+export const loadVariantsForDate = createAction("[AgeGroup] Load Variants For Date", props<{date: string}>());
+export const loadVariantsForDateSuccess = createAction(
+    "[AgeGroup] Load Variants For Date Success",
+    props<{date: string; variants: AgeGroupVariants}>(),
+);
+export const loadVariantsForDateFailure = createAction(
+    "[AgeGroup] Load Variants For Date Failure",
+    props<{error: string}>(),
+);

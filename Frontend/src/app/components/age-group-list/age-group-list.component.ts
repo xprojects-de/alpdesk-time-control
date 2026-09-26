@@ -14,11 +14,17 @@ import {MatSortModule, MatSort} from "@angular/material/sort";
 import {MatPaginatorModule, MatPaginator} from "@angular/material/paginator";
 import {MatSelectModule} from "@angular/material/select";
 import {MatFormFieldModule} from "@angular/material/form-field";
-import {AgeGroup} from "../../models/age-group.model";
+import {MatMenuModule} from "@angular/material/menu";
+import {AgeGroup, AgeGroupVariant, STANDARD_VARIANT, variantLabel} from "../../models/age-group.model";
 import {Gender, GenderLabels} from "../../models/gender.model";
 import * as AgeGroupActions from "../../store/age-group/age-group.actions";
 import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {AgeGroupDialogComponent} from "./age-group-dialog.component";
+import {
+    AgeGroupVariantDialogComponent,
+    AgeGroupVariantDialogData,
+    AgeGroupVariantDialogResult,
+} from "./age-group-variant-dialog.component";
 import {ConfirmDialogComponent} from "../shared/confirm-dialog/confirm-dialog.component";
 import {takeUntil} from "rxjs/operators";
 import {Actions, ofType} from "@ngrx/effects";
@@ -39,6 +45,7 @@ import {Actions, ofType} from "@ngrx/effects";
         MatPaginatorModule,
         MatSelectModule,
         MatFormFieldModule,
+        MatMenuModule,
     ],
     template: `
         <mat-card>
@@ -61,10 +68,54 @@ import {Actions, ofType} from "@ngrx/effects";
                         </mat-select>
                     </mat-form-field>
 
-                    @if (rolloverSource$ | async; as rolloverSource) {
+                    <mat-form-field appearance="outline" class="variant-select" subscriptSizing="dynamic">
+                        <mat-label>Variante</mat-label>
+                        <mat-select
+                            [value]="selectedVariant$ | async"
+                            (selectionChange)="onVariantChange($event.value)"
+                        >
+                            @for (option of variantOptions(); track option.variant) {
+                                <mat-option [value]="option.variant">{{ label(option.variant) }}</mat-option>
+                            }
+                        </mat-select>
+                    </mat-form-field>
+                    <button
+                        mat-icon-button
+                        [matMenuTriggerFor]="variantMenu"
+                        [disabled]="(selectedSeason$ | async) === null"
+                        matTooltip="Varianten verwalten"
+                    >
+                        <mat-icon>more_vert</mat-icon>
+                    </button>
+                    <mat-menu #variantMenu="matMenu">
+                        <button mat-menu-item (click)="openNewVariantDialog()">
+                            <mat-icon>add</mat-icon>
+                            Neue Variante …
+                        </button>
+                        <button
+                            mat-menu-item
+                            (click)="openCopyVariantDialog()"
+                            [disabled]="(ageGroups$ | async)?.length === 0"
+                        >
+                            <mat-icon>content_copy</mat-icon>
+                            Variante kopieren …
+                        </button>
+                        <button
+                            mat-menu-item
+                            (click)="deleteSelectedVariant()"
+                            [disabled]="!canDeleteSelectedVariant()"
+                        >
+                            <mat-icon>delete</mat-icon>
+                            Variante löschen
+                        </button>
+                    </mat-menu>
+
+                    @if ((rolloverSource$ | async) !== null && (selectedVariant$ | async) === standardVariant) {
                         <!-- Same condition as the hint below, loading included: without it the
                              button flashes up on every season switch, for as long as the list is
-                             still empty. -->
+                             still empty. Only for the standard variant: a variant is copied with
+                             "Variante kopieren", which lets the source and target be picked. -->
+                        @let rolloverSource = (rolloverSource$ | async)!;
                         @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
                             <button
                                 mat-raised-button
@@ -81,6 +132,17 @@ import {Actions, ofType} from "@ngrx/effects";
                     }
                 </div>
 
+                <p class="variant-usage">
+                    @if (selectedVariantRaceNames().length > 0) {
+                        Verwendet von {{ selectedVariantRaceNames().length }} Rennen:
+                        {{ selectedVariantRaceNames().join(", ") }}. Änderungen wirken sich auf deren Auswertung aus.
+                    } @else if ((selectedVariant$ | async) === standardVariant) {
+                        Gilt für alle Rennen der Saison, die keine eigene Variante gewählt haben.
+                    } @else {
+                        Noch von keinem Rennen verwendet. Die Variante wählst du im Rennen aus.
+                    }
+                </p>
+
                 <!-- Only with a selected season: without one the season list never loaded at all
                      (backend unreachable), and the hint would stand there with a blank year, making
                      a statement about a season nobody has selected yet. -->
@@ -88,10 +150,17 @@ import {Actions, ofType} from "@ngrx/effects";
                     @if ((ageGroups$ | async)?.length === 0 && (loading$ | async) === false) {
                         <div class="empty-season">
                             <mat-icon>info</mat-icon>
-                            <span>
-                                Für die Saison {{ shownSeason }} sind keine Altersgruppen angelegt. Rennen dieser Saison
-                                werden ohne Altersklasse ausgewertet, bis hier welche existieren.
-                            </span>
+                            @if ((selectedVariant$ | async) === standardVariant) {
+                                <span>
+                                    Für die Saison {{ shownSeason }} sind keine Altersgruppen angelegt. Rennen dieser
+                                    Saison werden ohne Altersklasse ausgewertet, bis hier welche existieren.
+                                </span>
+                            } @else {
+                                <span>
+                                    Die Variante „{{ label((selectedVariant$ | async) ?? "") }}“ hat noch keine
+                                    Altersgruppen. Sie wird gespeichert, sobald die erste angelegt ist.
+                                </span>
+                            }
                         </div>
                     }
                 }
@@ -202,6 +271,16 @@ import {Actions, ofType} from "@ngrx/effects";
                 width: 160px;
             }
 
+            .variant-select {
+                width: 240px;
+            }
+
+            .variant-usage {
+                margin: 8px 0 0;
+                color: rgba(0, 0, 0, 0.6);
+                font-size: 13px;
+            }
+
             .season-hint {
                 opacity: 0.6;
                 font-size: 0.85em;
@@ -267,6 +346,14 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     selectedSeason$: Observable<number | null>;
     currentSeason$: Observable<number | null>;
     rolloverSource$: Observable<number | null>;
+    selectedVariant$: Observable<string>;
+    standardVariant = STANDARD_VARIANT;
+    label = variantLabel;
+    // The variants to offer: the season's stored ones, plus the selected one even when it has no
+    // age groups yet - that is where a just-named variant lives until its first group is saved.
+    variantOptions = signal<AgeGroupVariant[]>([]);
+    selectedVariantRaceNames = signal<string[]>([]);
+    private selectedVariant: string = STANDARD_VARIANT;
     // The seasons to offer: everything already configured, plus the current one even when it has
     // nothing yet - otherwise there would be no way to select the season you want to set up.
     seasonOptions = signal<number[]>([]);
@@ -285,6 +372,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         this.selectedSeason$ = this.store.select(AgeGroupSelectors.selectSelectedSeason);
         this.currentSeason$ = this.store.select(AgeGroupSelectors.selectCurrentSeason);
         this.rolloverSource$ = this.store.select(AgeGroupSelectors.selectRolloverSourceSeason);
+        this.selectedVariant$ = this.store.select(AgeGroupSelectors.selectSelectedVariant);
 
         combineLatest([
             this.store.select(AgeGroupSelectors.selectAgeGroupSeasons),
@@ -321,19 +409,67 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         // Kept around for openCreateDialog(), which has no async pipe outside the template.
         this.currentSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => (this.currentSeason = season));
 
-        // Reload whenever the selected season changes - the table only ever shows one season.
+        // A season's variants are reloaded whenever the season changes.
         this.selectedSeason$.pipe(takeUntil(this.destroy$)).subscribe(season => {
             this.selectedSeason = season;
-            if (season != null) {
-                this.store.dispatch(AgeGroupActions.loadAgeGroups({season}));
-            }
+            this.loadVariants();
         });
+
+        // Reload whenever the selected season or variant changes - the table only ever shows one
+        // variant of one season.
+        this.store
+            .select(AgeGroupSelectors.selectShownSeasonVariant)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(({season, variant}) => {
+                this.selectedVariant = variant;
+                if (season != null) {
+                    this.store.dispatch(AgeGroupActions.loadAgeGroups({season, variant}));
+                }
+            });
+
+        combineLatest([this.store.select(AgeGroupSelectors.selectVariants), this.selectedVariant$])
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(([variants, selectedVariant]) => {
+                const selected = variants.find(v => v.variant === selectedVariant);
+                this.variantOptions.set(selected ? variants : [...variants, {variant: selectedVariant, raceNames: []}]);
+                this.selectedVariantRaceNames.set(selected?.raceNames ?? []);
+            });
+
+        // Anything that can make a variant appear, disappear or change hands reloads the list -
+        // a first group turns a just-named variant into a stored one, a copy creates one.
+        this.actions$
+            .pipe(
+                ofType(
+                    AgeGroupActions.createAgeGroupSuccess,
+                    AgeGroupActions.deleteAgeGroupSuccess,
+                    AgeGroupActions.copySeasonSuccess,
+                    AgeGroupActions.deleteVariantSuccess,
+                ),
+                takeUntil(this.destroy$),
+            )
+            .subscribe(() => {
+                this.store.dispatch(AgeGroupActions.loadSeasons());
+                this.loadVariants();
+            });
+
+        this.actions$
+            .pipe(ofType(AgeGroupActions.deleteVariantSuccess), takeUntil(this.destroy$))
+            .subscribe(({variant}) => {
+                this.snackBar.open(`Variante „${variant}“ gelöscht`, "OK", {duration: 3000});
+            });
+        this.actions$
+            .pipe(ofType(AgeGroupActions.deleteVariantFailure), takeUntil(this.destroy$))
+            .subscribe(({error}) => {
+                this.snackBar.open(`FEHLER beim Löschen der Variante: ${error}`, "OK", {duration: 5000});
+            });
 
         this.actions$
             .pipe(ofType(AgeGroupActions.copySeasonSuccess), takeUntil(this.destroy$))
-            .subscribe(({toSeason, ageGroups}) => {
+            .subscribe(({toSeason, toVariant, ageGroups}) => {
+                const target =
+                    toVariant === STANDARD_VARIANT ? `Saison ${toSeason}` : `„${toVariant}“ (Saison ${toSeason})`;
                 this.snackBar.open(
-                    `${ageGroups.length} Altersgruppen nach Saison ${toSeason} übernommen - bitte Jahrgänge prüfen`,
+                    `${ageGroups.length} Altersgruppen nach ${target} übernommen - bitte Jahrgänge prüfen`,
                     "OK",
                     {duration: 6000},
                 );
@@ -400,6 +536,89 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         this.store.dispatch(AgeGroupActions.selectSeason({season}));
     }
 
+    onVariantChange(variant: string): void {
+        this.store.dispatch(AgeGroupActions.selectVariant({variant}));
+    }
+
+    canDeleteSelectedVariant(): boolean {
+        return this.selectedVariant !== STANDARD_VARIANT && this.selectedVariantRaceNames().length === 0;
+    }
+
+    openNewVariantDialog(): void {
+        this.openVariantDialog("new").subscribe(result => {
+            if (result) {
+                this.store.dispatch(AgeGroupActions.selectVariant({variant: result.variant}));
+            }
+        });
+    }
+
+    openCopyVariantDialog(): void {
+        const fromSeason = this.selectedSeason;
+        if (fromSeason == null) {
+            return;
+        }
+        const fromVariant = this.selectedVariant;
+        this.openVariantDialog("copy").subscribe(result => {
+            if (result) {
+                this.store.dispatch(
+                    AgeGroupActions.copySeason({
+                        fromSeason,
+                        fromVariant,
+                        toSeason: result.season,
+                        toVariant: result.variant,
+                    }),
+                );
+            }
+        });
+    }
+
+    deleteSelectedVariant(): void {
+        const season = this.selectedSeason;
+        const variant = this.selectedVariant;
+        if (season == null) {
+            return;
+        }
+        this.dialog
+            .open(ConfirmDialogComponent, {
+                width: "450px",
+                data: {
+                    message: `Variante „${variant}“ mit allen ihren Altersgruppen löschen?`,
+                    confirmLabel: "Löschen",
+                    confirmColor: "warn",
+                },
+            })
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(confirmed => {
+                if (confirmed) {
+                    this.store.dispatch(AgeGroupActions.deleteVariant({season, variant}));
+                }
+            });
+    }
+
+    private openVariantDialog(mode: "new" | "copy"): Observable<AgeGroupVariantDialogResult | undefined> {
+        const data: AgeGroupVariantDialogData = {
+            mode,
+            season: this.selectedSeason!,
+            variant: this.selectedVariant,
+            existingVariants: this.variantOptions().map(v => v.variant),
+            seasonOptions: this.seasonOptions(),
+        };
+        return this.dialog
+            .open<AgeGroupVariantDialogComponent, AgeGroupVariantDialogData, AgeGroupVariantDialogResult>(
+                AgeGroupVariantDialogComponent,
+                {width: "500px", data},
+            )
+            .afterClosed()
+            .pipe(takeUntil(this.destroy$));
+    }
+
+    private loadVariants(): void {
+        if (this.selectedSeason != null) {
+            this.store.dispatch(AgeGroupActions.loadVariants({season: this.selectedSeason}));
+        }
+    }
+
     copyFromSeason(fromSeason: number): void {
         const toSeason = this.selectedSeason;
         if (toSeason == null) {
@@ -427,7 +646,14 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe(confirmed => {
                 if (confirmed) {
-                    this.store.dispatch(AgeGroupActions.copySeason({fromSeason, toSeason}));
+                    this.store.dispatch(
+                        AgeGroupActions.copySeason({
+                            fromSeason,
+                            fromVariant: STANDARD_VARIANT,
+                            toSeason,
+                            toVariant: STANDARD_VARIANT,
+                        }),
+                    );
                 }
             });
     }
@@ -452,7 +678,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
         }
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {
             width: "500px",
-            data: {ageGroup: null, seasonYear},
+            data: {ageGroup: null, seasonYear, variant: this.selectedVariant},
         });
 
         dialogRef
@@ -468,7 +694,7 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
     openEditDialog(ageGroup: AgeGroup): void {
         const dialogRef = this.dialog.open(AgeGroupDialogComponent, {
             width: "500px",
-            data: {ageGroup, seasonYear: ageGroup.seasonYear},
+            data: {ageGroup, seasonYear: ageGroup.seasonYear, variant: ageGroup.variant},
         });
 
         dialogRef
@@ -507,8 +733,11 @@ export class AgeGroupListComponent implements AfterViewInit, OnDestroy {
 
     refreshData(): void {
         this.store.dispatch(AgeGroupActions.loadSeasons());
+        this.loadVariants();
         if (this.selectedSeason != null) {
-            this.store.dispatch(AgeGroupActions.loadAgeGroups({season: this.selectedSeason}));
+            this.store.dispatch(
+                AgeGroupActions.loadAgeGroups({season: this.selectedSeason, variant: this.selectedVariant}),
+            );
         }
         this.snackBar.open("Daten werden aktualisiert...", "OK", {
             duration: 2000,

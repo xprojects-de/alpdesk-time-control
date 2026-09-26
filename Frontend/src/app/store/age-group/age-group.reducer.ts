@@ -1,5 +1,5 @@
 import {createReducer, on} from "@ngrx/store";
-import {AgeGroup} from "../../models/age-group.model";
+import {AgeGroup, AgeGroupVariant, AgeGroupVariants, STANDARD_VARIANT} from "../../models/age-group.model";
 import * as AgeGroupActions from "./age-group.actions";
 
 export interface AgeGroupState {
@@ -15,6 +15,12 @@ export interface AgeGroupState {
      * sensible default picked (the current season, or the newest configured one).
      */
     selectedSeason: number | null;
+    /** The variant of selectedSeason the configuration UI is showing - the standard one by default. */
+    selectedVariant: string;
+    /** The variants of selectedSeason, standard first, with the races using each. */
+    variants: AgeGroupVariant[];
+    /** The variants the race dialog offers, for the date it last asked about. */
+    raceDialogVariants: {date: string; variants: AgeGroupVariants} | null;
     loading: boolean;
     error: string | null;
 }
@@ -25,6 +31,9 @@ export const initialState: AgeGroupState = {
     seasonsWithRaces: [],
     currentSeason: null,
     selectedSeason: null,
+    selectedVariant: STANDARD_VARIANT,
+    variants: [],
+    raceDialogVariants: null,
     loading: false,
     error: null,
 };
@@ -61,12 +70,13 @@ export const ageGroupReducer = createReducer(
     })),
     on(AgeGroupActions.createAgeGroupSuccess, (state, {ageGroup}) => ({
         ...state,
-        // Only taken over when the new group belongs to the season currently on screen: the table
-        // always shows exactly one season, and a row from another one would not be recognisable as
-        // such there. The dialog only ever creates in the shown season anyway; this covers the case
-        // where the season was switched while it was open.
+        // Only taken over when the new group belongs to the season and variant currently on screen:
+        // the table always shows exactly one of them, and a row from another one would not be
+        // recognisable as such there. The dialog only ever creates in the shown one anyway; this
+        // covers the case where the selection was switched while it was open.
         ageGroups:
-            state.selectedSeason == null || ageGroup.seasonYear === state.selectedSeason
+            state.selectedSeason == null ||
+            (ageGroup.seasonYear === state.selectedSeason && ageGroup.variant === state.selectedVariant)
                 ? [...state.ageGroups, ageGroup]
                 : state.ageGroups,
         // A season that so far only had races becomes a configured one with its first group - and
@@ -103,21 +113,14 @@ export const ageGroupReducer = createReducer(
         loading: true,
         error: null,
     })),
-    on(AgeGroupActions.deleteAgeGroupSuccess, (state, {id}) => {
-        const remaining = state.ageGroups.filter(a => a.id !== id);
-        return {
-            ...state,
-            ageGroups: remaining,
-            // If that was the season's last group it is no longer a configured one - otherwise it
-            // would stay on offer as a rollover source and the server would reject it. It remains
-            // selectable regardless (selectedSeason feeds into the options).
-            seasons:
-                remaining.length === 0 && state.selectedSeason != null
-                    ? state.seasons.filter(s => s !== state.selectedSeason)
-                    : state.seasons,
-            loading: false,
-        };
-    }),
+    // Whether that was the season's last group - and it therefore stops being a rollover source -
+    // depends on its other variants too, which this slice does not hold; the list reloads the
+    // seasons after a delete instead of guessing here.
+    on(AgeGroupActions.deleteAgeGroupSuccess, (state, {id}) => ({
+        ...state,
+        ageGroups: state.ageGroups.filter(a => a.id !== id),
+        loading: false,
+    })),
     on(AgeGroupActions.deleteAgeGroupFailure, (state, {error}) => ({
         ...state,
         loading: false,
@@ -125,9 +128,52 @@ export const ageGroupReducer = createReducer(
     })),
 
     // Seasons
+    // A variant belongs to one season, so switching seasons starts over at the standard variant.
     on(AgeGroupActions.selectSeason, (state, {season}) => ({
         ...state,
         selectedSeason: season,
+        selectedVariant: STANDARD_VARIANT,
+        variants: [],
+    })),
+    on(AgeGroupActions.selectVariant, (state, {variant}) => ({
+        ...state,
+        selectedVariant: variant,
+    })),
+    on(AgeGroupActions.loadVariantsSuccess, (state, {season, variants}) => ({
+        ...state,
+        // A late answer for a season that is no longer on screen is dropped.
+        variants: season === state.selectedSeason ? variants : state.variants,
+    })),
+    on(AgeGroupActions.loadVariantsFailure, (state, {error}) => ({
+        ...state,
+        error,
+    })),
+    on(AgeGroupActions.deleteVariant, state => ({
+        ...state,
+        loading: true,
+        error: null,
+    })),
+    on(AgeGroupActions.deleteVariantSuccess, (state, {season, variant}) => ({
+        ...state,
+        // Back to the standard variant, which always exists.
+        selectedVariant:
+            season === state.selectedSeason && variant === state.selectedVariant
+                ? STANDARD_VARIANT
+                : state.selectedVariant,
+        loading: false,
+    })),
+    on(AgeGroupActions.deleteVariantFailure, (state, {error}) => ({
+        ...state,
+        loading: false,
+        error,
+    })),
+    on(AgeGroupActions.loadVariantsForDate, state => ({
+        ...state,
+        raceDialogVariants: null,
+    })),
+    on(AgeGroupActions.loadVariantsForDateSuccess, (state, {date, variants}) => ({
+        ...state,
+        raceDialogVariants: {date, variants},
     })),
     on(AgeGroupActions.loadSeasonsSuccess, (state, {seasons, seasonsWithRaces, currentSeason}) => ({
         ...state,
@@ -150,12 +196,13 @@ export const ageGroupReducer = createReducer(
         loading: true,
         error: null,
     })),
-    on(AgeGroupActions.copySeasonSuccess, (state, {toSeason, ageGroups}) => ({
+    on(AgeGroupActions.copySeasonSuccess, (state, {toSeason, toVariant, ageGroups}) => ({
         ...state,
-        // Jump straight to the season that was just created - it is what the operator wants to
-        // look at and adjust next.
+        // Jump straight to the season and variant that was just created - it is what the operator
+        // wants to look at and adjust next.
         ageGroups,
         selectedSeason: toSeason,
+        selectedVariant: toVariant,
         seasons: withSeason(state.seasons, toSeason),
         loading: false,
     })),

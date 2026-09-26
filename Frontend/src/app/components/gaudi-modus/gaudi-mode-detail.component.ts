@@ -22,6 +22,7 @@ import {
     GaudiRankingEntry,
     GaudiRankingLeg,
 } from "../../models/gaudi-mode.model";
+import {variantLabel} from "../../models/age-group.model";
 import {Race, ResultUnit, SortDirection} from "../../models/race.model";
 import * as GaudiModeActions from "../../store/gaudi-mode/gaudi-mode.actions";
 import * as GaudiModeSelectors from "../../store/gaudi-mode/gaudi-mode.selectors";
@@ -71,6 +72,17 @@ import {selectAllRaces} from "../../store/race/race.selectors";
                             <strong>{{ seasonSpanInfo.scoredIn }}</strong> ausgewertet - der des ersten Rennens. Sollen
                             die Rennen zur selben Saison gehören, passe unter <strong>Einstellungen</strong> den
                             Saisonstart an.
+                        </span>
+                    </div>
+                } @else if (variantSpan(); as variantSpanInfo) {
+                    <div class="season-span-warning">
+                        <mat-icon>warning</mat-icon>
+                        <span>
+                            Die Rennen dieser Wertung verwenden verschiedene Altersklassen-Varianten ({{
+                                variantSpanInfo.all.join(", ")
+                            }}). Ausgewertet wird nach <strong>{{ variantSpanInfo.scoredIn }}</strong> - der Variante
+                            des ersten Rennens. Sollen alle gleich gewertet werden, wähle in den Rennen dieselbe
+                            Variante.
                         </span>
                     </div>
                 }
@@ -456,6 +468,21 @@ export class GaudiModeDetailComponent {
             .filter((season): season is number => season != null);
         const distinct = [...new Set(seasons)].sort((a, b) => a - b);
         return distinct.length > 1 ? {scoredIn: seasons[0], all: distinct} : null;
+    });
+
+    /**
+     * The age-group variants this mode's races use - null as long as there is only one. Like
+     * seasons, the backend scores against the first race's variant (AgeGroupService#findForScoring).
+     * Only looked at within one season: across seasons, seasonSpan already explains the mismatch.
+     */
+    variantSpan = computed(() => {
+        const byId = new Map(this.races().map(r => [r.id, r]));
+        const variants = this.gaudiMode()
+            .races.map(r => byId.get(r.raceId)?.ageGroupVariant)
+            .filter((variant): variant is string => variant != null)
+            .map(variantLabel);
+        const distinct = [...new Set(variants)];
+        return distinct.length > 1 ? {scoredIn: variants[0], all: distinct} : null;
     });
 
     constructor() {

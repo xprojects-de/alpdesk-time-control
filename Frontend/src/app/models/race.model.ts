@@ -53,6 +53,8 @@ export interface Race {
     startOrderMode?: StartOrderMode;
     /** Number of top-placed previousRaceId finishers (per age group) started in reverse order, if startOrderMode is REVERSE_TOP_N. */
     startOrderReverseTopCount?: number;
+    /** Age-group variant of `seasonYear` this race is categorised with; empty for the season's standard one. */
+    ageGroupVariant: string;
 }
 
 /** One discoverable public live-results view for a race - see RaceService.getLiveLinks. */
@@ -87,4 +89,6 @@ export interface RaceRequest {
     startOrderMode?: StartOrderMode;
     /** Number of top-placed previousRaceId finishers (per age group) to start in reverse order when startOrderMode is REVERSE_TOP_N. */
     startOrderReverseTopCount?: number;
+    /** Age-group variant of the race's season; empty or omitted for the standard one. Any other must exist in that season. */
+    ageGroupVariant?: string;
 }

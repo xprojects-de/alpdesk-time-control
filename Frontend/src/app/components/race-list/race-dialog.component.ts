@@ -1,4 +1,6 @@
-import {Component, inject, ChangeDetectorRef} from "@angular/core";
+import {Component, inject, ChangeDetectorRef, signal} from "@angular/core";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
+import {Store} from "@ngrx/store";
 import {CommonModule} from "@angular/common";
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from "@angular/forms";
 import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/dialog";
@@ -18,6 +20,9 @@ import {
     SortDirectionLabels,
     StartOrderMode,
 } from "../../models/race.model";
+import {AgeGroupVariant, STANDARD_VARIANT} from "../../models/age-group.model";
+import * as AgeGroupActions from "../../store/age-group/age-group.actions";
+import * as AgeGroupSelectors from "../../store/age-group/age-group.selectors";
 import {readFileAsBase64} from "../../utils/file-base64.util";
 import {RaceSelectComponent} from "../shared/race-select/race-select.component";
 
@@ -66,6 +71,24 @@ export interface RaceDialogData {
                         <mat-error>Datum ist erforderlich</mat-error>
                     }
                 </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Altersklassen</mat-label>
+                    <mat-select formControlName="ageGroupVariant">
+                        @for (option of variantOptions(); track option.variant) {
+                            <mat-option [value]="option.variant">{{ variantOptionLabel(option.variant) }}</mat-option>
+                        }
+                    </mat-select>
+                    <mat-hint>
+                        @if (variantSeason(); as season) {
+                            Saison {{ season }} ·
+                        }
+                        Varianten verwalten unter „Altersgruppen“
+                    </mat-hint>
+                </mat-form-field>
+                @if (variantResetNote(); as note) {
+                    <p class="hint warn">{{ note }}</p>
+                }
 
                 <h3 class="section-title">Wertung</h3>
                 <div class="race-form-grid">
@@ -234,6 +257,10 @@ export interface RaceDialogData {
                 color: rgba(0, 0, 0, 0.6);
             }
 
+            .hint.warn {
+                color: #b26a00;
+            }
+
             .cover-page-row {
                 display: flex;
                 align-items: center;
@@ -253,7 +280,17 @@ export class RaceDialogComponent {
     private fb = inject(FormBuilder);
     private dialogRef = inject(MatDialogRef<RaceDialogComponent>);
     private cdr = inject(ChangeDetectorRef);
+    private store = inject(Store);
     public data = inject<RaceDialogData>(MAT_DIALOG_DATA);
+
+    /**
+     * The age-group variants of the season the entered date falls into. Until they have loaded,
+     * only the race's own variant is offered, so the select does not show up empty.
+     */
+    variantOptions = signal<AgeGroupVariant[]>([]);
+    variantSeason = signal<number | null>(null);
+    /** Set when a date change moved the race into a season that lacks its variant. */
+    variantResetNote = signal<string | null>(null);
 
     form: FormGroup;
     /** Every other race this one could link to as its "previous race" - excludes itself. */
@@ -309,9 +346,66 @@ export class RaceDialogComponent {
             sortDirection: [race?.sortDirection || SortDirection.ASC],
             previousRaceId: [race?.previousRaceId ?? null],
             startOrderReverseTopCount: [race?.startOrderReverseTopCount ?? 15, Validators.min(0)],
+            ageGroupVariant: [race?.ageGroupVariant ?? STANDARD_VARIANT],
         });
 
         this.coverPageActive = race?.hasCoverPage ?? false;
+        this.watchAgeGroupVariants();
+    }
+
+    variantOptionLabel(variant: string): string {
+        return variant === STANDARD_VARIANT ? "Standard der Saison" : variant;
+    }
+
+    /**
+     * Which variants can be picked depends on the season, and the season on the date - worked out
+     * by the backend, which knows the configured season boundary. A variant belongs to one season,
+     * so a date moved into another season that lacks the chosen one falls back to the standard.
+     */
+    private watchAgeGroupVariants(): void {
+        this.variantOptions.set([{variant: this.form.value.ageGroupVariant, raceNames: []}]);
+
+        this.store
+            .select(AgeGroupSelectors.selectRaceDialogVariants)
+            .pipe(takeUntilDestroyed())
+            .subscribe(loaded => {
+                if (loaded == null || loaded.date !== this.formattedDate()) {
+                    return;
+                }
+                const {seasonYear, variants} = loaded.variants;
+                this.variantOptions.set(variants);
+                this.variantSeason.set(seasonYear);
+                this.variantResetNote.set(null);
+                const chosen = this.form.value.ageGroupVariant as string;
+                if (!variants.some(v => v.variant === chosen)) {
+                    this.form.patchValue({ageGroupVariant: STANDARD_VARIANT});
+                    this.variantResetNote.set(
+                        `Die Variante „${chosen}“ gibt es in Saison ${seasonYear} nicht - zurück auf Standard gesetzt.`,
+                    );
+                }
+            });
+
+        this.form
+            .get("date")!
+            .valueChanges.pipe(takeUntilDestroyed())
+            .subscribe(() => this.loadVariantsForDate());
+        this.loadVariantsForDate();
+    }
+
+    private loadVariantsForDate(): void {
+        const date = this.formattedDate();
+        if (date != null) {
+            this.store.dispatch(AgeGroupActions.loadVariantsForDate({date}));
+        }
+    }
+
+    /** The entered date as the backend expects it, or null while it is empty or not a valid date. */
+    private formattedDate(): string | null {
+        const date = this.form.get("date")?.value;
+        if (!date || (date instanceof Date && isNaN(date.getTime()))) {
+            return null;
+        }
+        return this.formatDate(date);
     }
 
     onCancel(): void {
@@ -365,6 +459,7 @@ export class RaceDialogComponent {
                 previousRaceId: formValue.previousRaceId || null,
                 startOrderMode: formValue.previousRaceId ? StartOrderMode.REVERSE_TOP_N : undefined,
                 startOrderReverseTopCount: formValue.previousRaceId ? formValue.startOrderReverseTopCount : undefined,
+                ageGroupVariant: formValue.ageGroupVariant,
             };
             this.dialogRef.close(race);
         }

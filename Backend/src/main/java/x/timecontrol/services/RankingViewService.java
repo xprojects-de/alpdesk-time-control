@@ -152,7 +152,7 @@ public class RankingViewService {
      * classes it was run under rather than whatever is configured now.
      */
     public List<AgeGroup> loadAgeGroups(Race race) {
-        return ageGroupService.findBySeason(seasonService.seasonOf(race));
+        return ageGroupService.findBySeasonAndVariant(seasonService.seasonOf(race), race.ageGroupVariant());
     }
 
     public List<Category> sortedCategories() {

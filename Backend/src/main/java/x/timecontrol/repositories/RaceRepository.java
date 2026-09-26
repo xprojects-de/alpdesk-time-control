@@ -22,7 +22,7 @@ public interface RaceRepository extends CrudRepository<Race, Long> {
     @Query(value = "SELECT id, name, date, organisation, referee, race_director, time_control, route_name, " +
             "elevation_difference, route_length, course_setter, weather, result_unit, result_unit_label, " +
             "sort_direction, NULL AS cover_page_pdf, previous_race_id, start_order_mode, " +
-            "start_order_reverse_top_count, live_token FROM race WHERE live_token = :liveToken",
+            "start_order_reverse_top_count, live_token, age_group_variant FROM race WHERE live_token = :liveToken",
             nativeQuery = true)
     Optional<Race> findByLiveTokenWithoutCoverPage(String liveToken);
 
@@ -49,7 +49,7 @@ public interface RaceRepository extends CrudRepository<Race, Long> {
     @Query(value = "SELECT id, name, date, organisation, referee, race_director, time_control, route_name, " +
             "elevation_difference, route_length, course_setter, weather, result_unit, result_unit_label, " +
             "sort_direction, NULL AS cover_page_pdf, previous_race_id, start_order_mode, " +
-            "start_order_reverse_top_count, live_token FROM race",
+            "start_order_reverse_top_count, live_token, age_group_variant FROM race",
             nativeQuery = true)
     List<Race> findAllWithoutCoverPage();
 

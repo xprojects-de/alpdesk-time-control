@@ -67,7 +67,7 @@ public class RaceService {
                 race.raceDirector(), race.timeControl(), race.routeName(), race.elevationDifference(),
                 race.routeLength(), race.courseSetter(), race.weather(), race.resultUnit(), race.resultUnitLabel(),
                 race.sortDirection(), race.coverPagePdf(), race.previousRaceId(), race.startOrderMode(),
-                race.startOrderReverseTopCount(), liveToken);
+                race.startOrderReverseTopCount(), liveToken, race.ageGroupVariant());
     }
 
     public Iterable<Race> findAll() {
@@ -173,7 +173,8 @@ public class RaceService {
                     startOrder.reverseTopCount(),
                     // liveToken isn't exposed in RaceRequest at all - always carried over from the
                     // existing row, never regenerated or cleared by an unrelated edit.
-                    existing.get().liveToken()
+                    existing.get().liveToken(),
+                    race.ageGroupVariant()
             );
             return Optional.of(repository.update(updated));
         }
@@ -225,7 +226,9 @@ public class RaceService {
                 request.coverPagePdf(),
                 request.previousRaceId(),
                 startOrder.mode(),
-                startOrder.reverseTopCount()
+                startOrder.reverseTopCount(),
+                null,
+                AgeGroupService.normalizeVariant(request.ageGroupVariant())
         );
     }
 
