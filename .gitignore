@@ -34,11 +34,12 @@ local-data/
 # ---------------------------------------------------------------------------
 # Build-Ergebnisse
 #
-# Ausnahme: Backend/src/main/resources/public ist bewusst eingecheckt, obwohl es das
-# gebaute Frontend ist - so kommt man ohne npm zu einem lauffaehigen Jar. Warum, steht
-# in CONTRIBUTING.md.
+# Dazu gehoert auch das gebaute Frontend unter Backend/src/main/resources/public: es
+# entsteht per `npm run deploy` + `./gradlew copyFrontend`, und die GitHub-Workflows,
+# die ein ausgeliefertes Jar bauen, erzeugen es selbst (build-installers.yml).
 # ---------------------------------------------------------------------------
 /Backend/build/
+/Backend/src/main/resources/public/
 /Backend/.gradle/
 /Backend/dist/
 /Frontend/.angular/

@@ -28,13 +28,13 @@ diesen Origin zu.
 
 Für einen vollständigen Produktionsbuild zuerst das Frontend, dann das Backend: `npm run deploy`
 erzeugt `Frontend/dist/time-control/browser`, und die Gradle-Aufgabe `copyFrontend` kopiert das nach
-`Backend/src/main/resources/public`, von wo aus das Jar es ausliefert.
+`Backend/src/main/resources/public`, von wo aus das Jar es ausliefert (`./gradlew copyFrontend shadowJar`).
 
-> **Warum das gebaute Frontend im Repository liegt:** `Backend/src/main/resources/public` ist
-> eingecheckt, obwohl es Build-Ergebnis ist. Das ist Absicht — so lässt sich `./gradlew shadowJar`
-> ohne vorherigen npm-Build ausführen und man kommt mit einem reinen Java-Setup zu einem lauffähigen
-> Jar. Der Preis: Nach einem Frontend-Build tauchen die neu gehashten Bundles im Diff auf. Wenn du
-> nur am Backend arbeitest, lass diese Dateien aus deinem Commit heraus.
+> **Das gebaute Frontend ist nicht eingecheckt:** `Backend/src/main/resources/public` steht in der
+> `.gitignore`. Die GitHub-Workflows, die ein ausgeliefertes Jar oder einen Installer bauen
+> (`build-installers.yml`), bauen das Frontend selbst. Ein lokal ohne Frontend-Build erzeugtes Jar
+> startet und bedient die API, hat aber keine Oberfläche - `/` antwortet dann mit einem Fehler,
+> `/watchdog` weiterhin mit 200. Für die e2e-Suiten reicht so ein Jar.
 
 ## Tests
 

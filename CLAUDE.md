@@ -17,7 +17,11 @@ The repo has two independent projects:
 - `Frontend/` — Angular 22 SPA, npm/Angular CLI build.
 
 `Backend/build.gradle`'s `copyFrontend` task copies `Frontend/dist/time-control/browser` into
-`Backend/src/main/resources/public`, so a full production build is Frontend-then-Backend.
+`Backend/src/main/resources/public`, so a full production build is Frontend-then-Backend
+(`npm run deploy`, then `./gradlew copyFrontend shadowJar`; `copyFrontend` is not wired into the build).
+That directory is **gitignored** - never commit the built frontend; the release workflow
+(`build-installers.yml`) builds it itself. A jar built without it serves the API but no UI (`/`
+answers 500, `/watchdog` still 200) - enough for the e2e suites, whose readiness checks use `/watchdog`.
 
 ## Git (always)
 
