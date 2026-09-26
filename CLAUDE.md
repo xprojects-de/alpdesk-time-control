@@ -161,9 +161,9 @@ Micronaut app (`x.timecontrol` package), annotation-driven, no Spring:
 - Auth is JWT bearer (`micronaut-security-jwt`); the JWT signing secret is auto-generated once and
   persisted next to the DB (`ensureJwtSecret` in `Application.java`) rather than using the
   insecure default that ships in `application.properties`.
-- Micronaut's management endpoints (`/health`, `/beans`, ...) come in through a dependency and are
-  switched off (`endpoints.all.enabled=false`); `/watchdog` (`HealthController`) is the liveness probe
-  the frontend polls.
+- Micronaut's management endpoints (`/health`, `/beans`, ...) come in through `micronaut-flyway`
+  (which pulls in `micronaut-management`) and are switched off (`endpoints.all.enabled=false`);
+  `/watchdog` (`HealthController`) is the liveness probe the frontend polls.
 
 **Domain model**: a `Race` groups `Participant` rows (one per `Person` entered in that race),
 each optionally in a `Team`/`Category`/`AgeGroup`. Raw finish-line events land in `Measurement`;
