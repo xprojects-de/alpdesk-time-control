@@ -287,6 +287,18 @@ current branch, `/time-control-code-review <PR#>` for a PR, or `/time-control-co
 review. Group the resulting findings under these five categories: **Best Practice**, **Stabilität**,
 **Performance**, **Funktionalität**, **Memory-Leaks**.
 
+Reviews of the **current working tree as a whole** (not a diff) are separate skills:
+
+- `/time-control-ultra-code-review` - every area against seven criteria, no finding budget, with a test-coverage matrix.
+- Focused reviews with at most 10 verified findings and at most three fix packages each:
+  - `/time-control-auswertung-review` - rankings and Gaudi-Modi, and whether UI, PDF, CSV and live view agree (the main focus);
+  - `/time-control-bedienung-review` - setting up races, participants, age groups, imports and start lists, and what each action does to the evaluation;
+  - `/time-control-zeitmessung-review` - a finish time's way from the device onto the participant, including concurrency.
+
+They share their rules in [.claude/review-base.md](.claude/review-base.md) and read the decision register
+[docs/review/entscheidungen.md](docs/review/entscheidungen.md): what it lists as deliberately accepted is not reported
+again. Add an entry there when you accept a finding as intended; entries are never renumbered.
+
 ## Full e2e
 
 For end-to-end verification against real (throwaway) backend instances — as opposed to the Spock
