@@ -134,11 +134,15 @@ public class MeasurementController {
                 null,
                 request.participantId(),
                 request.durationMs(),
-                request.measuredAt()
+                request.measuredAt(),
+                Boolean.TRUE.equals(request.locked()),
+                request.comment()
         );
         try {
             Measurement created = service.create(measurement);
             return HttpResponse.created(MeasurementResponse.from(created));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }
@@ -172,12 +176,16 @@ public class MeasurementController {
                 null,
                 request.participantId(),
                 request.durationMs(),
-                request.measuredAt()
+                request.measuredAt(),
+                Boolean.TRUE.equals(request.locked()),
+                request.comment()
         );
         try {
             Optional<Measurement> updated = service.update(id, measurement);
             return updated.map(m -> HttpResponse.ok((Object) MeasurementResponse.from(m)))
                     .orElse(HttpResponse.notFound());
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(new ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
             return HttpResponse.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
         }

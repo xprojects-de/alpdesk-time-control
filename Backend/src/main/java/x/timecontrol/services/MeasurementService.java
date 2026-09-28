@@ -26,25 +26,31 @@ public class MeasurementService {
         this.measurementTableLock = measurementTableLock;
     }
 
+    // Long enough for a sentence about what went wrong at the finish line, short enough to fit a
+    // tooltip.
+    static final int COMMENT_MAX_LENGTH = 500;
+
     /**
      * @throws IllegalStateException if participantId is already assigned to another measurement
+     * @throws IllegalArgumentException if the comment is longer than {@link #COMMENT_MAX_LENGTH}
      */
     public Measurement create(Measurement measurement) {
+        String comment = normalizeComment(measurement.comment());
         return measurementTableLock.get(() -> {
             if (measurement.participantId() != null) {
                 assertParticipantNotAlreadyAssigned(measurement.participantId(), null);
             }
-            Measurement toSave = measurement;
-            if (toSave.deviceMeasurementId() != null) {
+            Long deviceMeasurementId = measurement.deviceMeasurementId();
+            if (deviceMeasurementId != null) {
                 // Checked here, inside the table lock, rather than by the caller: device_measurement_id
                 // is unique-indexed (see V1__create_participant.sql), so a duplicate would otherwise
                 // surface as a raw constraint violation from repository.save() - which the CSV import
                 // (the only path that supplies an explicit id, see #importMapped) cannot turn into a
                 // per-row message. Under the lock it also can't race a device poll writing the same id
                 // between a pre-check and the insert.
-                assertDeviceMeasurementIdFree(toSave.deviceMeasurementId());
+                assertDeviceMeasurementIdFree(deviceMeasurementId);
             }
-            if (toSave.deviceMeasurementId() == null) {
+            if (deviceMeasurementId == null) {
                 // device_measurement_id is NOT NULL (see V1__create_participant.sql), so this must be
                 // resolved before the insert, not after - repository.save() would otherwise fail the
                 // constraint outright. Covers every creation path with no real device id: manual entry
@@ -52,11 +58,12 @@ public class MeasurementService {
                 // TimingDataImporter that can't supply a stable one (it should call create() rather
                 // than MeasurementService#upsertByDeviceMeasurementId in that case, since there's no
                 // id to upsert against anyway).
-                toSave = new Measurement(
-                        toSave.id(), nextSyntheticDeviceMeasurementId(), toSave.participantId(), toSave.durationMs(), toSave.measuredAt()
-                );
+                deviceMeasurementId = nextSyntheticDeviceMeasurementId();
             }
-            return repository.save(toSave);
+            return repository.save(new Measurement(
+                    measurement.id(), deviceMeasurementId, measurement.participantId(), measurement.durationMs(),
+                    measurement.measuredAt(), measurement.locked(), comment
+            ));
         });
     }
 
@@ -107,9 +114,15 @@ public class MeasurementService {
     }
 
     /**
+     * A manual edit by the operator - allowed on a locked row too, since the lock only keeps the
+     * device and auto-assign out; locked and comment are taken from {@code measurement} like every
+     * other field.
+     *
      * @throws IllegalStateException if participantId is already assigned to another measurement
+     * @throws IllegalArgumentException if the comment is longer than {@link #COMMENT_MAX_LENGTH}
      */
     public Optional<Measurement> update(Long id, Measurement measurement) {
+        String comment = normalizeComment(measurement.comment());
         return measurementTableLock.get(() -> {
             Optional<Measurement> existing = repository.findById(id);
             if (existing.isPresent()) {
@@ -127,12 +140,29 @@ public class MeasurementService {
                         existing.get().deviceMeasurementId(),
                         measurement.participantId(),
                         measurement.durationMs(),
-                        measurement.measuredAt()
+                        measurement.measuredAt(),
+                        measurement.locked(),
+                        comment
                 );
                 return Optional.of(repository.update(updated));
             }
             return Optional.empty();
         });
+    }
+
+    /**
+     * @return the comment as stored: trimmed, and null instead of blank so the list shows no empty
+     * comment badge
+     */
+    private static String normalizeComment(String comment) {
+        if (comment == null || comment.isBlank()) {
+            return null;
+        }
+        String trimmed = comment.strip();
+        if (trimmed.length() > COMMENT_MAX_LENGTH) {
+            throw new IllegalArgumentException("comment must not be longer than " + COMMENT_MAX_LENGTH + " characters");
+        }
+        return trimmed;
     }
 
     public void delete(Long id) {
@@ -268,7 +298,7 @@ public class MeasurementService {
                 // A non-null device id is passed through to create() as-is, which rejects one that
                 // is already taken (including by an earlier row of this same file) with a per-row
                 // error instead of failing the whole import.
-                imported.add(create(new Measurement(null, deviceMeasurementId, participantId, durationMs, measuredAt)));
+                imported.add(create(new Measurement(null, deviceMeasurementId, participantId, durationMs, measuredAt, false, null)));
             } catch (IllegalStateException e) {
                 errors.add(new MeasurementImportRowError(rowNumber, row.toString(), e.getMessage()));
             }

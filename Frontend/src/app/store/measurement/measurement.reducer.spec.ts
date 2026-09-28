@@ -9,6 +9,7 @@ const messung = (id: number): Measurement => ({
     participantId: null,
     durationMs: 60000 + id,
     measuredAt: "2026-09-20T09:00:00",
+    locked: false,
 });
 
 const poll = (measurements: Measurement[], writeSeq: number) =>
@@ -23,7 +24,7 @@ describe("measurementReducer - stale poll vs. write", () => {
         state = measurementReducer(
             state,
             MeasurementActions.createMeasurement({
-                measurement: {durationMs: 60002, measuredAt: "2026-09-20T09:00:02"},
+                measurement: {durationMs: 60002, measuredAt: "2026-09-20T09:00:02", locked: false, comment: null},
             }),
         );
         // The poll answers with the pre-create list while the POST is still open.
@@ -42,7 +43,7 @@ describe("measurementReducer - stale poll vs. write", () => {
         state = measurementReducer(
             state,
             MeasurementActions.createMeasurement({
-                measurement: {durationMs: 60002, measuredAt: "2026-09-20T09:00:02"},
+                measurement: {durationMs: 60002, measuredAt: "2026-09-20T09:00:02", locked: false, comment: null},
             }),
         );
         state = measurementReducer(state, MeasurementActions.createMeasurementSuccess({measurement: messung(2)}));

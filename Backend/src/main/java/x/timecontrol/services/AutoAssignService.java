@@ -241,8 +241,10 @@ public class AutoAssignService {
 
             List<Measurement> all = measurementRepository.findAll();
 
+            // A locked row stays exactly as the operator left it - including unassigned, e.g. a
+            // false trigger kept for the record instead of deleted.
             List<Measurement> pending = all.stream()
-                    .filter(m -> m.participantId() == null)
+                    .filter(m -> m.participantId() == null && !m.locked())
                     .sorted(Comparator.comparing(Measurement::id))
                     .toList();
 
@@ -272,7 +274,8 @@ public class AutoAssignService {
                 }
                 measurementRepository.update(new Measurement(
                         measurement.id(), measurement.deviceMeasurementId(), participant.id(),
-                        measurement.durationMs(), measurement.measuredAt()
+                        measurement.durationMs(), measurement.measuredAt(),
+                        measurement.locked(), measurement.comment()
                 ));
                 assignedParticipantIds.add(participant.id());
                 nextRaceNumber = skipAlreadyAssigned(roster, firstAfter(roster, nextRaceNumber), assignedParticipantIds);
