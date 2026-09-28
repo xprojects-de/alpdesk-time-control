@@ -29,7 +29,14 @@ public record Measurement(
 
         Integer durationMs,
 
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        // Set by the operator to keep the device and auto-assign from changing this row - see
+        // V8__measurement_lock_and_comment.sql.
+        boolean locked,
+
+        @Nullable
+        String comment
 ) {
 }
 

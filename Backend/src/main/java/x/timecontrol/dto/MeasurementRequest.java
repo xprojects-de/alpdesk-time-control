@@ -17,7 +17,17 @@ public record MeasurementRequest(
         Integer durationMs,
 
         @Schema(description = "Time when the measurement was taken", example = "2026-08-13T10:30:00", requiredMode = Schema.RequiredMode.REQUIRED)
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        @Schema(description = "Keeps the timing device and auto-assign from changing this measurement. "
+                + "Omitted means not locked.", example = "true", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        @Nullable
+        Boolean locked,
+
+        @Schema(description = "Operator's note on this measurement, at most 500 characters. Blank or omitted "
+                + "means no comment.", example = "Lichtschranke doppelt ausgelöst", requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+        @Nullable
+        String comment
 ) {
 }
 

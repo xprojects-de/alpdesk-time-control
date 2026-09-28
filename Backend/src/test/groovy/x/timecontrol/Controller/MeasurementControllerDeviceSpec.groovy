@@ -196,8 +196,8 @@ class MeasurementControllerDeviceSpec extends Specification {
         given:
         def measuredAt = LocalDateTime.of(2026, 1, 2, 10, 0, 0)
         device.importDataFromDevice() >> [
-                new Measurement(7L, 1L, 42L, 50000, measuredAt),
-                new Measurement(8L, 2L, null, 51000, measuredAt),
+                new Measurement(7L, 1L, 42L, 50000, measuredAt, false, null),
+                new Measurement(8L, 2L, null, 51000, measuredAt, false, null),
         ]
 
         when:

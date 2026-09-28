@@ -342,6 +342,30 @@ interface MeasurementWithParticipant extends Measurement {
                             </td>
                         </ng-container>
 
+                        <!-- Note Column: the operator's lock and comment -->
+                        <ng-container matColumnDef="note">
+                            <th mat-header-cell *matHeaderCellDef>Hinweis</th>
+                            <td mat-cell *matCellDef="let measurement">
+                                <div class="note-badges">
+                                    @if (measurement.locked) {
+                                        <span
+                                            class="badge badge-locked"
+                                            matTooltip="Gesperrt: Zeitmessung und automatische Zuordnung ändern diese Zeile nicht"
+                                        >
+                                            <mat-icon>lock</mat-icon>
+                                            Gesperrt
+                                        </span>
+                                    }
+                                    @if (measurement.comment) {
+                                        <span class="badge badge-comment" [matTooltip]="measurement.comment">
+                                            <mat-icon>comment</mat-icon>
+                                            <span class="badge-text">{{ measurement.comment }}</span>
+                                        </span>
+                                    }
+                                </div>
+                            </td>
+                        </ng-container>
+
                         <!-- Participant Column -->
                         <ng-container matColumnDef="participant">
                             <th mat-header-cell *matHeaderCellDef>Teilnehmer</th>
@@ -366,6 +390,13 @@ interface MeasurementWithParticipant extends Measurement {
                         <ng-container matColumnDef="actions">
                             <th mat-header-cell *matHeaderCellDef>Aktionen</th>
                             <td mat-cell *matCellDef="let measurement">
+                                <button
+                                    mat-icon-button
+                                    (click)="toggleLock(measurement)"
+                                    [matTooltip]="measurement.locked ? 'Sperre aufheben' : 'Sperren'"
+                                >
+                                    <mat-icon>{{ measurement.locked ? "lock_open" : "lock" }}</mat-icon>
+                                </button>
                                 <button mat-icon-button (click)="openEditDialog(measurement)" matTooltip="Bearbeiten">
                                     <mat-icon>edit</mat-icon>
                                 </button>
@@ -381,7 +412,12 @@ interface MeasurementWithParticipant extends Measurement {
                         </ng-container>
 
                         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+                        <tr
+                            mat-row
+                            *matRowDef="let row; columns: displayedColumns"
+                            [class.locked-row]="row.locked"
+                            [class.commented-row]="!row.locked && row.comment"
+                        ></tr>
                     </table>
                 </div>
 
@@ -528,6 +564,55 @@ interface MeasurementWithParticipant extends Measurement {
                 opacity: 0.6;
             }
 
+            .locked-row {
+                background-color: #fff4e5;
+            }
+
+            .commented-row {
+                background-color: #f3f6fd;
+            }
+
+            .note-badges {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                max-width: 260px;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 500;
+                line-height: 20px;
+            }
+
+            .badge mat-icon {
+                flex-shrink: 0;
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+            }
+
+            .badge-locked {
+                background-color: #ffe0b2;
+                color: #8a4b00;
+            }
+
+            .badge-comment {
+                background-color: #e3eafc;
+                color: #1f3a8a;
+            }
+
+            .badge-text {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
             mat-card {
                 margin: 20px;
             }
@@ -587,7 +672,7 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
     // timing device is confirmed not configured (NONE).
     timingProviderActive$: Observable<boolean>;
     importLoading$: Observable<boolean>;
-    displayedColumns = ["deviceMeasurementId", "duration", "measuredAt", "participant", "actions"];
+    displayedColumns = ["deviceMeasurementId", "duration", "note", "measuredAt", "participant", "actions"];
     lastUpdate = "";
     autoRefreshEnabled = false;
     /** Bound to the bib input next to "Überspringen" - cleared once the backend accepted it. */
@@ -1197,6 +1282,21 @@ export class MeasurementListComponent implements AfterViewInit, OnDestroy {
                     );
                 }
             });
+    }
+
+    toggleLock(measurement: Measurement): void {
+        this.store.dispatch(
+            MeasurementActions.updateMeasurement({
+                id: measurement.id,
+                measurement: {
+                    participantId: measurement.participantId,
+                    durationMs: measurement.durationMs,
+                    measuredAt: measurement.measuredAt,
+                    locked: !measurement.locked,
+                    comment: measurement.comment ?? null,
+                },
+            }),
+        );
     }
 
     deleteMeasurement(measurement: Measurement): void {

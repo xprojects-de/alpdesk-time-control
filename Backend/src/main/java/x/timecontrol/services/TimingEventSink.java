@@ -259,13 +259,24 @@ public class TimingEventSink {
         if (deviceId == null) {
             // No stable per-event id to upsert against - insert, letting MeasurementService
             // generate a synthetic (negative) device id for the NOT NULL column.
-            return measurementService.create(
-                    new Measurement(null, null, event.participantId(), event.durationMs(), measuredAt));
+            return measurementService.create(new Measurement(
+                    null, null, event.participantId(), event.durationMs(), measuredAt, false, null));
         }
 
         // Keyed by the device's own id, kept in a column separate from this table's own `id` PK -
         // see Measurement#deviceMeasurementId.
         Measurement existing = storedByDeviceId.get(deviceId);
+
+        // The operator locked this row, typically after correcting a time the device got wrong - the
+        // device keeps reporting its own value on every poll, and taking it would undo the
+        // correction. Reported back like an unchanged row, so a manual import still lists it.
+        if (existing != null && existing.locked()) {
+            if (existing.durationMs() != event.durationMs()) {
+                LOG.debug("Measurement with device ID {} is locked - keeping {} ms, ignoring device's {} ms",
+                        deviceId, existing.durationMs(), event.durationMs());
+            }
+            return existing;
+        }
 
         // participantId and measuredAt are carried over from the stored row, so the duration is the
         // only thing an upsert could actually change. When it matches, the write would rewrite the

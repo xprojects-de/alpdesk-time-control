@@ -28,7 +28,14 @@ public record MeasurementResponse(
         Integer durationMs,
 
         @Schema(description = "Time when the measurement was taken", example = "2026-08-13T10:30:00")
-        LocalDateTime measuredAt
+        LocalDateTime measuredAt,
+
+        @Schema(description = "Whether the operator locked this measurement against the timing device and auto-assign", example = "false")
+        boolean locked,
+
+        @Schema(description = "Operator's note on this measurement", example = "Lichtschranke doppelt ausgelöst", nullable = true)
+        @Nullable
+        String comment
 ) {
     public static MeasurementResponse from(Measurement measurement) {
         return new MeasurementResponse(
@@ -36,7 +43,9 @@ public record MeasurementResponse(
                 measurement.deviceMeasurementId(),
                 measurement.participantId(),
                 measurement.durationMs(),
-                measurement.measuredAt()
+                measurement.measuredAt(),
+                measurement.locked(),
+                measurement.comment()
         );
     }
 }
