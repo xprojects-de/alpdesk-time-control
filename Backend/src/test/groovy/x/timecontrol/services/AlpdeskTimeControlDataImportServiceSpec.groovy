@@ -75,6 +75,24 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         imported.size() == 1
     }
 
+    def "a locked row keeps the corrected time although the device still reports its wrong one"() {
+        given: "device line 1 measured 50.000, the operator corrected it to 48.200 and locked the row"
+        deviceReports("1,50000\n2,51700\n")
+        measurementService.findAll() >> [
+                new Measurement(7L, 1L, 42L, 48200, MEASURED_AT, true, "Zeitnahme falsch"),
+                new Measurement(8L, 2L, 43L, 51000, MEASURED_AT, false, null)
+        ]
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "line 1 is left alone, line 2 is still updated"
+        0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
+        1 * measurementService.upsertByDeviceMeasurementId(2L, 43L, 51700, MEASURED_AT) >>
+                new Measurement(8L, 2L, 43L, 51700, MEASURED_AT, false, null)
+        imported*.durationMs() == [48200, 51700]
+    }
+
     def "a negative device id is skipped instead of overwriting a manually entered time"() {
         given: "MeasurementService hands manual/CSV rows synthetic NEGATIVE device ids"
         deviceReports("-3,51000\n")
