@@ -28,7 +28,7 @@ class TimingEventSinkSpec extends Specification {
 
     def "an event matching the stored row is reported back but not written again"() {
         given:
-        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null)]
 
         when:
         def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 50000)])
@@ -41,27 +41,71 @@ class TimingEventSinkSpec extends Specification {
 
     def "a changed duration keeps the stored row's participant and timestamp"() {
         given:
-        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null)]
 
         when:
         def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 51500)])
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, 42L, 51500, MEASURED_AT) >>
-                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT)
+                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT, false, null)
         accepted[0].durationMs() == 51500
     }
 
     def "a participant the event carries is only used for a device id that is not stored yet"() {
         given: "the stored row was corrected by hand to participant 42, the pushing device still says 99"
-        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null)]
 
         when:
         sink.acceptBatch([new TimingEvent(1L, 51500, MEASURED_AT, 99L)])
 
         then: "the manual correction survives - a re-delivered measurement must not undo it"
         1 * measurementService.upsertByDeviceMeasurementId(1L, 42L, 51500, MEASURED_AT) >>
-                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT)
+                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT, false, null)
+    }
+
+    def "a locked row keeps the operator's time when a poll reports a different one"() {
+        given: "the device measured 50.000 wrongly, the operator corrected it to 48.200 and locked the row"
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 48200, MEASURED_AT, true, "Zeitnahme falsch")]
+
+        when: "the device keeps reporting its own value on every poll"
+        def accepted = sink.acceptBatch([TimingEvent.fromDevice(1L, 50000)])
+
+        then: "nothing is written, and the manual import still lists the row as it is stored"
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        0 * measurementService.create(_)
+        accepted.size() == 1
+        accepted[0].durationMs() == 48200
+        accepted[0].comment() == "Zeitnahme falsch"
+    }
+
+    def "a locked row keeps the operator's time when a device pushes a different one"() {
+        given:
+        measurementService.findByDeviceMeasurementId(1L) >>
+                Optional.of(new Measurement(7L, 1L, 42L, 48200, MEASURED_AT, true, null))
+
+        when:
+        def accepted = sink.accept(TimingEvent.fromDevice(1L, 50000))
+
+        then:
+        0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
+        accepted.get().durationMs() == 48200
+    }
+
+    def "a locked row only protects its own device id - other rows of the same poll are still written"() {
+        given:
+        measurementService.findAll() >> [
+                new Measurement(7L, 1L, 42L, 48200, MEASURED_AT, true, null),
+                new Measurement(8L, 2L, 43L, 51000, MEASURED_AT, false, null)
+        ]
+
+        when:
+        sink.acceptBatch([TimingEvent.fromDevice(1L, 50000), TimingEvent.fromDevice(2L, 51700)])
+
+        then:
+        0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
+        1 * measurementService.upsertByDeviceMeasurementId(2L, 43L, 51700, MEASURED_AT) >>
+                new Measurement(8L, 2L, 43L, 51700, MEASURED_AT, false, null)
     }
 
     def "an event without a device id is inserted instead of upserted"() {
@@ -72,13 +116,13 @@ class TimingEventSinkSpec extends Specification {
         0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
         1 * measurementService.create({ Measurement m ->
             m.deviceMeasurementId() == null && m.participantId() == 42L && m.durationMs() == 33000
-        }) >> new Measurement(3L, -1L, 42L, 33000, MEASURED_AT)
+        }) >> new Measurement(3L, -1L, 42L, 33000, MEASURED_AT, false, null)
         accepted.present
     }
 
     def "a single pushed measurement is matched by an indexed lookup, not by reading the table"() {
         given: "a streaming provider calls this once per finish - a full read here would be one scan per racer"
-        measurementService.findByDeviceMeasurementId(1L) >> Optional.of(new Measurement(7L, 1L, 42L, 50000, MEASURED_AT))
+        measurementService.findByDeviceMeasurementId(1L) >> Optional.of(new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null))
 
         when:
         def accepted = sink.accept(TimingEvent.fromDevice(1L, 51500))
@@ -86,7 +130,7 @@ class TimingEventSinkSpec extends Specification {
         then:
         0 * measurementService.findAll()
         1 * measurementService.upsertByDeviceMeasurementId(1L, 42L, 51500, MEASURED_AT) >>
-                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT)
+                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT, false, null)
         accepted.get().durationMs() == 51500
     }
 
@@ -97,7 +141,7 @@ class TimingEventSinkSpec extends Specification {
         then:
         0 * measurementService.findAll()
         0 * measurementService.findByDeviceMeasurementId(_)
-        1 * measurementService.create(_) >> new Measurement(3L, -1L, null, 33000, MEASURED_AT)
+        1 * measurementService.create(_) >> new Measurement(3L, -1L, null, 33000, MEASURED_AT, false, null)
     }
 
     def "a zero duration is rejected instead of stored"() {
@@ -133,7 +177,7 @@ class TimingEventSinkSpec extends Specification {
 
         then: "the table lock decides where it lands: before the copy or after the wipe, never mid-way"
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         accepted.present
     }
 
@@ -159,7 +203,7 @@ class TimingEventSinkSpec extends Specification {
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         accepted.size() == 1
     }
 
@@ -172,7 +216,7 @@ class TimingEventSinkSpec extends Specification {
 
         then: "these are the times the pull exists to rescue - dropping them loses a racer's finish"
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         rescued.size() == 1
     }
 
@@ -201,7 +245,7 @@ class TimingEventSinkSpec extends Specification {
 
         then: "the epoch check must not cost a finish time in ordinary operation"
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         accepted.size() == 1
     }
 
@@ -216,7 +260,7 @@ class TimingEventSinkSpec extends Specification {
 
         then: "these are the times the pull exists to rescue - the epoch must not discard them"
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         rescued.size() == 1
     }
 
@@ -230,7 +274,7 @@ class TimingEventSinkSpec extends Specification {
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >> { throw new IllegalStateException("boom") }
         1 * measurementService.upsertByDeviceMeasurementId(2L, null, 51000, _) >>
-                new Measurement(8L, 2L, null, 51000, MEASURED_AT)
+                new Measurement(8L, 2L, null, 51000, MEASURED_AT, false, null)
         accepted.size() == 1
         accepted[0].id() == 8L
     }
@@ -244,7 +288,7 @@ class TimingEventSinkSpec extends Specification {
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50000, _) >>
-                new Measurement(7L, 1L, null, 50000, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50000, MEASURED_AT, false, null)
         accepted.size() == 2
     }
 

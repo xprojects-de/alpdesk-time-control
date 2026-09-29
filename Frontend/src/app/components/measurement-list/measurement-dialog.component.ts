@@ -5,11 +5,20 @@ import {MatDialogRef, MAT_DIALOG_DATA, MatDialogModule} from "@angular/material/
 import {MatFormFieldModule} from "@angular/material/form-field";
 import {MatInputModule} from "@angular/material/input";
 import {MatButtonModule} from "@angular/material/button";
-import {Measurement, MeasurementRequest} from "../../models/measurement.model";
+import {MatCheckboxModule} from "@angular/material/checkbox";
+import {Measurement, MEASUREMENT_COMMENT_MAX_LENGTH, MeasurementRequest} from "../../models/measurement.model";
 
 @Component({
     selector: "app-measurement-dialog",
-    imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
+    imports: [
+        CommonModule,
+        ReactiveFormsModule,
+        MatDialogModule,
+        MatFormFieldModule,
+        MatInputModule,
+        MatButtonModule,
+        MatCheckboxModule,
+    ],
     template: `
         <h2 mat-dialog-title>{{ data ? "Messung bearbeiten" : "Neue Messung" }}</h2>
         <mat-dialog-content>
@@ -56,6 +65,28 @@ import {Measurement, MeasurementRequest} from "../../models/measurement.model";
                         <mat-error>Messzeit ist erforderlich</mat-error>
                     }
                 </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                    <mat-label>Kommentar</mat-label>
+                    <textarea
+                        matInput
+                        formControlName="comment"
+                        rows="2"
+                        [maxlength]="commentMaxLength"
+                        placeholder="z. B. Zeitnahme falsch, von Hand korrigiert"
+                    ></textarea>
+                    <mat-hint align="end"
+                        >{{ form.get("comment")?.value?.length || 0 }} / {{ commentMaxLength }}</mat-hint
+                    >
+                </mat-form-field>
+
+                <div class="lock-option">
+                    <mat-checkbox formControlName="locked">Zeile sperren</mat-checkbox>
+                    <span class="hint">
+                        Die Zeitmessung überschreibt die Zeit nicht mehr und die automatische Zuordnung lässt die Zeile
+                        aus. Von Hand bleibt sie bearbeitbar.
+                    </span>
+                </div>
             </form>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -86,6 +117,17 @@ import {Measurement, MeasurementRequest} from "../../models/measurement.model";
             mat-form-field {
                 width: 100%;
             }
+
+            .lock-option {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .lock-option .hint {
+                margin-left: 40px;
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.6);
+            }
         `,
     ],
 })
@@ -95,6 +137,7 @@ export class MeasurementDialogComponent {
     public data = inject<Measurement | null>(MAT_DIALOG_DATA);
 
     form: FormGroup;
+    readonly commentMaxLength = MEASUREMENT_COMMENT_MAX_LENGTH;
 
     constructor() {
         const timeComponents = this.splitMilliseconds(this.data?.durationMs || 0);
@@ -104,6 +147,8 @@ export class MeasurementDialogComponent {
             seconds: [timeComponents.seconds, [Validators.required, Validators.min(0), Validators.max(59)]],
             milliseconds: [timeComponents.milliseconds, [Validators.required, Validators.min(0), Validators.max(999)]],
             measuredAt: [this.formatDateTimeForInput(this.data?.measuredAt), Validators.required],
+            comment: [this.data?.comment ?? "", Validators.maxLength(MEASUREMENT_COMMENT_MAX_LENGTH)],
+            locked: [this.data?.locked ?? false],
         });
     }
 
@@ -124,6 +169,8 @@ export class MeasurementDialogComponent {
                 participantId: this.data?.participantId ?? null,
                 durationMs: durationMs,
                 measuredAt: this.formatDateTimeForBackend(formValue.measuredAt),
+                locked: formValue.locked === true,
+                comment: formValue.comment?.trim() || null,
             };
             this.dialogRef.close(measurement);
         }

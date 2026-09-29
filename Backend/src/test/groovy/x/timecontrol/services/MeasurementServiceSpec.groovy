@@ -17,7 +17,7 @@ class MeasurementServiceSpec extends Specification {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 1, 10, 0)
 
     private static Measurement measurement(Long id, Long deviceMeasurementId, Long participantId = null) {
-        new Measurement(id, deviceMeasurementId, participantId, 5000, NOW)
+        new Measurement(id, deviceMeasurementId, participantId, 5000, NOW, false, null)
     }
 
     def "create leaves an explicit deviceMeasurementId untouched"() {
@@ -132,6 +132,80 @@ class MeasurementServiceSpec extends Specification {
 
         then:
         1 * repository.update(_) >> measurement(1L, 5L, 42L)
+    }
+
+    def "update stores lock and comment and keeps the device number"() {
+        given:
+        repository.findById(1L) >> Optional.of(measurement(1L, 5L))
+
+        when: "the operator corrects the time, locks the row and notes why"
+        service.update(1L, new Measurement(null, null, null, 48200, NOW, true, "Zeitnahme falsch"))
+
+        then:
+        1 * repository.update({ Measurement m ->
+            m.id() == 1L && m.deviceMeasurementId() == 5L && m.durationMs() == 48200 &&
+                    m.locked() && m.comment() == "Zeitnahme falsch"
+        }) >> { Measurement m -> m }
+    }
+
+    def "a locked measurement can still be edited and unlocked by hand"() {
+        given: "the lock keeps automation out, not the operator"
+        repository.findById(1L) >> Optional.of(new Measurement(1L, 5L, null, 48200, NOW, true, "Zeitnahme falsch"))
+
+        when:
+        service.update(1L, new Measurement(null, null, null, 48300, NOW, false, null))
+
+        then:
+        1 * repository.update({ Measurement m -> m.durationMs() == 48300 && !m.locked() && m.comment() == null }) >> { Measurement m -> m }
+    }
+
+    def "create stores lock and comment of a manually entered measurement"() {
+        given:
+        repository.findMinDeviceMeasurementId() >> null
+
+        when:
+        service.create(new Measurement(null, null, null, 5000, NOW, true, "von Hand gestoppt"))
+
+        then:
+        1 * repository.save({ Measurement m -> m.locked() && m.comment() == "von Hand gestoppt" && m.deviceMeasurementId() == -1L }) >> { Measurement m -> m }
+    }
+
+    def "the comment is stored as #stored when given as #description"() {
+        given:
+        repository.findById(1L) >> Optional.of(measurement(1L, 5L))
+
+        when:
+        service.update(1L, new Measurement(null, null, null, 5000, NOW, false, given))
+
+        then:
+        1 * repository.update({ Measurement m -> m.comment() == stored }) >> { Measurement m -> m }
+
+        where:
+        description               | given                         || stored
+        "null"                    | null                          || null
+        "empty"                   | ""                            || null
+        "blank"                   | "   "                         || null
+        "padded"                  | "  Zeitnahme falsch \n"       || "Zeitnahme falsch"
+        "exactly the max length"  | "x" * MeasurementService.COMMENT_MAX_LENGTH || "x" * MeasurementService.COMMENT_MAX_LENGTH
+    }
+
+    def "a comment longer than the maximum is rejected on #operation"() {
+        given:
+        repository.findById(1L) >> Optional.of(measurement(1L, 5L))
+        String tooLong = "x" * (MeasurementService.COMMENT_MAX_LENGTH + 1)
+
+        when:
+        call(service, new Measurement(null, null, null, 5000, NOW, false, tooLong))
+
+        then:
+        thrown(IllegalArgumentException)
+        0 * repository.save(_)
+        0 * repository.update(_)
+
+        where:
+        operation | call
+        "create"  | { MeasurementService s, Measurement m -> s.create(m) }
+        "update"  | { MeasurementService s, Measurement m -> s.update(1L, m) }
     }
 
     private static byte[] csv(String content) {

@@ -71,14 +71,32 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         then: "the bad line is dropped, the good one is not"
         0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
         1 * measurementService.upsertByDeviceMeasurementId(2L, null, 51000, _) >>
-                new Measurement(8L, 2L, null, 51000, MEASURED_AT)
+                new Measurement(8L, 2L, null, 51000, MEASURED_AT, false, null)
         imported.size() == 1
+    }
+
+    def "a locked row keeps the corrected time although the device still reports its wrong one"() {
+        given: "device line 1 measured 50.000, the operator corrected it to 48.200 and locked the row"
+        deviceReports("1,50000\n2,51700\n")
+        measurementService.findAll() >> [
+                new Measurement(7L, 1L, 42L, 48200, MEASURED_AT, true, "Zeitnahme falsch"),
+                new Measurement(8L, 2L, 43L, 51000, MEASURED_AT, false, null)
+        ]
+
+        when:
+        def imported = service.importDataFromDevice()
+
+        then: "line 1 is left alone, line 2 is still updated"
+        0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
+        1 * measurementService.upsertByDeviceMeasurementId(2L, 43L, 51700, MEASURED_AT) >>
+                new Measurement(8L, 2L, 43L, 51700, MEASURED_AT, false, null)
+        imported*.durationMs() == [48200, 51700]
     }
 
     def "a negative device id is skipped instead of overwriting a manually entered time"() {
         given: "MeasurementService hands manual/CSV rows synthetic NEGATIVE device ids"
         deviceReports("-3,51000\n")
-        measurementService.findAll() >> [new Measurement(7L, -3L, 42L, 33000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, -3L, 42L, 33000, MEASURED_AT, false, null)]
 
         when:
         def imported = service.importDataFromDevice()
@@ -118,7 +136,7 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
 
         then: "only the readable line is written"
         1 * measurementService.upsertByDeviceMeasurementId(2L, null, 51000, _) >>
-                new Measurement(8L, 2L, null, 51000, MEASURED_AT)
+                new Measurement(8L, 2L, null, 51000, MEASURED_AT, false, null)
         0 * measurementService.upsertByDeviceMeasurementId(_, _, _, _)
         imported*.deviceMeasurementId() == [2L]
 
@@ -143,9 +161,9 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, null, 50001, _) >>
-                new Measurement(7L, 1L, null, 50001, MEASURED_AT)
+                new Measurement(7L, 1L, null, 50001, MEASURED_AT, false, null)
         1 * measurementService.upsertByDeviceMeasurementId(2L, null, 50000, _) >>
-                new Measurement(8L, 2L, null, 50000, MEASURED_AT)
+                new Measurement(8L, 2L, null, 50000, MEASURED_AT, false, null)
     }
 
     def "a device holding no measurements is not treated as a device failure"() {
@@ -168,7 +186,7 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
     def "a line matching the stored row is reported back but not written again"() {
         given:
         deviceReports("1,50000\n")
-        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null)]
 
         when:
         def imported = service.importDataFromDevice()
@@ -185,14 +203,14 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
     def "a changed duration is written, keeping the row's participant and timestamp"() {
         given:
         deviceReports("1,51500\n")
-        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT)]
+        measurementService.findAll() >> [new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null)]
 
         when:
         def imported = service.importDataFromDevice()
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(1L, 42L, 51500, MEASURED_AT) >>
-                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT)
+                new Measurement(7L, 1L, 42L, 51500, MEASURED_AT, false, null)
         imported.size() == 1
         imported[0].durationMs() == 51500
     }
@@ -207,7 +225,7 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(9L, null, 33000, _) >>
-                new Measurement(3L, 9L, null, 33000, MEASURED_AT)
+                new Measurement(3L, 9L, null, 33000, MEASURED_AT, false, null)
         imported.size() == 1
     }
 
@@ -215,9 +233,9 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
         given:
         deviceReports("1,50000\n2,51000\n3,52000\n")
         measurementService.findAll() >> [
-                new Measurement(7L, 1L, 42L, 50000, MEASURED_AT),
-                new Measurement(8L, 2L, 43L, 49000, MEASURED_AT),
-                new Measurement(9L, 3L, 44L, 52000, MEASURED_AT),
+                new Measurement(7L, 1L, 42L, 50000, MEASURED_AT, false, null),
+                new Measurement(8L, 2L, 43L, 49000, MEASURED_AT, false, null),
+                new Measurement(9L, 3L, 44L, 52000, MEASURED_AT, false, null),
         ]
 
         when:
@@ -225,7 +243,7 @@ class AlpdeskTimeControlDataImportServiceSpec extends Specification {
 
         then:
         1 * measurementService.upsertByDeviceMeasurementId(2L, 43L, 51000, MEASURED_AT) >>
-                new Measurement(8L, 2L, 43L, 51000, MEASURED_AT)
+                new Measurement(8L, 2L, 43L, 51000, MEASURED_AT, false, null)
         0 * measurementService.upsertByDeviceMeasurementId(1L, _, _, _)
         0 * measurementService.upsertByDeviceMeasurementId(3L, _, _, _)
         imported.size() == 3

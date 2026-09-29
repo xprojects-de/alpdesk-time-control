@@ -17,7 +17,8 @@ there. What the skill *can* check about the draw itself is coverage: every parti
 appears in exactly one pair (see Step 0).
 
 This skill only covers `LOS`. For `POINTS_COMBINATION` use `time-control-punktemischung-verify`;
-for `TIME_COMBINATION` or Mannschaftswertung there is no skill yet.
+for `TIME_COMBINATION` or Mannschaftswertung there is no skill yet. A single race's own result
+PDF (Einzelwertung) is `time-control-einzelwertung-verify`.
 
 ## Inputs to collect first
 

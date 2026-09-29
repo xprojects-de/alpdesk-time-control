@@ -31,7 +31,7 @@ class AutoAssignServiceSpec extends Specification {
     }
 
     private static Measurement measurement(Long id, Long participantId, int durationMs) {
-        new Measurement(id, null, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0))
+        new Measurement(id, null, participantId, durationMs, LocalDateTime.of(2026, 1, 1, 10, 0), false, null)
     }
 
     def setup() {
@@ -153,7 +153,7 @@ class AutoAssignServiceSpec extends Specification {
         given:
         participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
         measurementRepository.findAll() >> []
-        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now(), false, null)]
         service.enable(1L, 1)
 
         when:
@@ -169,7 +169,7 @@ class AutoAssignServiceSpec extends Specification {
         given:
         participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 5)]
         measurementRepository.findAll() >> []
-        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now())]
+        measurementRepository.findByParticipantId(11L) >> [new Measurement(7L, null, 11L, 42000, LocalDateTime.now(), false, null)]
         service.enable(1L, 1)
 
         when:
@@ -227,6 +227,39 @@ class AutoAssignServiceSpec extends Specification {
         1 * measurementRepository.update({ Measurement m -> m.id() == 101L && m.participantId() == 10L })
         1 * measurementRepository.update({ Measurement m -> m.id() == 102L && m.participantId() == 11L })
         service.getStatus().nextRaceNumber() == null
+    }
+
+    def "processNewMeasurements skips a locked unassigned measurement and gives the starter the next one"() {
+        given: "row 101 is a false trigger the operator locked and kept for the record"
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1), participant(11L, 2)]
+        measurementRepository.findAll() >> [
+                new Measurement(101L, null, null, 800, LocalDateTime.of(2026, 1, 1, 10, 0), true, "Fehlauslösung"),
+                measurement(102L, null, 6000)
+        ]
+        service.enable(1L, 1)
+
+        when:
+        service.processNewMeasurements()
+
+        then:
+        0 * measurementRepository.update({ Measurement m -> m.id() == 101L })
+        1 * measurementRepository.update({ Measurement m -> m.id() == 102L && m.participantId() == 10L })
+        service.getStatus().nextRaceNumber() == 2
+    }
+
+    def "processNewMeasurements keeps a matched measurement's comment"() {
+        given:
+        participantRepository.findByRaceId(1L) >> [participant(10L, 1)]
+        measurementRepository.findAll() >> [
+                new Measurement(101L, null, null, 5000, LocalDateTime.of(2026, 1, 1, 10, 0), false, "knapp")
+        ]
+        service.enable(1L, 1)
+
+        when:
+        service.processNewMeasurements()
+
+        then:
+        1 * measurementRepository.update({ Measurement m -> m.participantId() == 10L && m.comment() == "knapp" && !m.locked() })
     }
 
     def "processNewMeasurements leaves already-assigned measurements untouched"() {
